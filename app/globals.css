@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #F5F4F3;
+    --foreground: #444444;
+    --card: #EBEDF0    ;
+    --card-border: #0F49A0    ;
+    --card-foreground: #F7F4EC;
+    --secondary: #EBEDF0    ;
+    --muted: #EBEDF0
+    ;
+    --accent: #0F49A0;
+    --accent-foreground: #0F49A0;
+    --border: #D4D4D4;
+    --input: #0F49A0
+    ;
+    --ring: #0F49A0
+    ;
+    --text-color-primary: #2C4E80;
+    --text-color-secondary: #444444;
+    --text-color-tertiary: #0F49A0    ;
+    --text-color-accent: #FFFFFF;
+    --text-color-icons: #005C78;
+    --radius: 0.5rem;
+  }
+
+  /* define dark theme color scheme later to use that */
+
+  /* .dark {
+    --background: #F5F4F3;
+    --foreground: #444444;
+    --card: #F7F4EC;
+    --card-border: #E88D67;
+    --card-foreground: #F7F4EC;
+    --secondary: #F7F4EC;
+    --muted: #F7F4EC;
+    --accent: #E88D67;
+    --accent-foreground: #F27400;
+    --border: #D4D4D4;
+    --input: #E88D67;
+    --ring: #F27400;
+    --text-color-primary: #2C4E80;
+    --text-color-secondary: #444444;
+    --text-color-tertiary: #FA4A00;
+    --text-color-accent: #FFFFFF;
+    --text-color-icons: #005C78;
+    --radius: 0.5rem;
+  } */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-mulish);
+  }
+}
+
+.react-flow__minimap {
+  background-color: #F7F4EC!important;
+}
+
+.react-flow__attribution {
+  display: none;
+}

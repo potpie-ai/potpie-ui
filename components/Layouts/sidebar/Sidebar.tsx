@@ -34,7 +34,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import Image from "next/image";
-import { MomentumLogo } from "@/public";
+import { HundredmarksLogo } from "@/public";
 import PlanModal from "@/components/Subscription/PlanModal";
 import Link from "next/link";
 import { useSelector } from "react-redux";
@@ -65,7 +65,7 @@ const Sidebar = () => {
             aria-label="Home"
             onClick={() => router.push("/")}
           >
-            <Image src={MomentumLogo} alt="momentum" width={30} />{" "}
+            <Image src={HundredmarksLogo} alt="momentum" width={30} />{" "}
             
           </Button>
         </div>

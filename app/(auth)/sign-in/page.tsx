@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/form";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
-import { MomentumBG } from "@/public";
 import axios from "@/app/api/interceptors/httpInterceptor";
 
 export default function Signin() {

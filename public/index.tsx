@@ -1,6 +1,6 @@
-import MomentumLogo from "./momentumLogo.svg";
+import HundredmarksLogo from "./hundermarks-logo.svg";
 import ExportIcon from "./images/expand.svg";
 import CloseTab from "./images/closeTab.svg";
 import SendIcon from "./images/send.svg";
-import MomentumBG from "./images/momentum-bg.svg";
-export { MomentumLogo, ExportIcon, CloseTab, SendIcon, MomentumBG };
+import HundredmarksBG from "./images/hundredmarks-bg.svg";
+export { HundredmarksLogo, ExportIcon, CloseTab, SendIcon, HundredmarksBG };

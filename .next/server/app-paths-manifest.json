@@ -1,3 +1,10 @@
 {
-  "/(main)/page": "app/(main)/page.js"
+  "/_not-found": "app/_not-found.js",
+  "/api/graph/route": "app/api/graph/route.js",
+  "/(main)/page": "app/(main)/page.js",
+  "/(main)/account/page": "app/(main)/account/page.js",
+  "/(main)/github-setup-complete/page": "app/(main)/github-setup-complete/page.js",
+  "/(main)/key-management/page": "app/(main)/key-management/page.js",
+  "/(auth)/sign-in/page": "app/(auth)/sign-in/page.js",
+  "/(auth)/sign-up/page": "app/(auth)/sign-up/page.js"
 }

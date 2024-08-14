@@ -105,11 +105,8 @@ const MyProjects = () => {
     <div className="flex flex-col mt-4 space-y-10 px-7">
       <div className="ml-2">
         <h1 className="text-primary font-bold text-2xl">
-          Hey {user.displayName}!
+          Hello {user.displayName}!
         </h1>
-        <h2 className="text-primary text-xl mt-2">
-          This is sample landing page for hundredmarks.ai
-        </h2>
       </div>
       <div className="w-full -ml-4 h-full flex flex-wrap gap-10">
         <Card

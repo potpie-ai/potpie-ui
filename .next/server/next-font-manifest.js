@@ -1,1 +1,1 @@
-self.__NEXT_FONT_MANIFEST='{"pages":{},"app":{"/Users/shubhamsingh/Desktop/code/momentum/hunderdmarks-ui/app/layout":["static/media/90f7cb2d0334f7f1-s.p.ttf"]},"appUsingSizeAdjust":true,"pagesUsingSizeAdjust":false}';
+self.__NEXT_FONT_MANIFEST="{\"pages\":{},\"app\":{\"/Users/shubhamsingh/Desktop/code/momentum/hunderdmarks-ui/app/layout\":[\"static/media/90f7cb2d0334f7f1-s.p.ttf\"]},\"appUsingSizeAdjust\":true,\"pagesUsingSizeAdjust\":false}"

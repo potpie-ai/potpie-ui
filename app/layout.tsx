@@ -16,8 +16,8 @@ const mullishRegular = MullishRegularFont({
 });
 
 export const metadata: Metadata = {
-  title: "HundredMarks.ai",
-  description: "Hundremarks.ai",
+  title: "hundredpoints.ai",
+  description: "hundredpoints.ai",
 };
 
 export default function RootLayout({

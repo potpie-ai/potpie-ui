@@ -4,26 +4,23 @@
 
 @layer base {
   :root {
-    --background: #F5F4F3;
+    --background: #f5f4f3;
     --foreground: #444444;
-    --card: #EBEDF0    ;
-    --card-border: #0F49A0    ;
-    --card-foreground: #F7F4EC;
-    --secondary: #EBEDF0    ;
-    --muted: #EBEDF0
-    ;
-    --accent: #0F49A0;
-    --accent-foreground: #0F49A0;
-    --border: #D4D4D4;
-    --input: #0F49A0
-    ;
-    --ring: #0F49A0
-    ;
-    --text-color-primary: #2C4E80;
-    --text-color-secondary: #444444;
-    --text-color-tertiary: #0F49A0    ;
-    --text-color-accent: #FFFFFF;
-    --text-color-icons: #005C78;
+    --card: #ebedf0;
+    --card-border: #0f49a0;
+    --card-foreground: #f7f4ec;
+    --secondary: #ebedf0;
+    --muted: #ebedf0;
+    --accent: #0f49a0;
+    --accent-foreground: #0f49a0;
+    --border: #848484;
+    --input: #0f49a0;
+    --ring: #FF7A00;
+    --text-color-primary: #2c4e80;
+    --text-color-secondary: #5b5b5b;
+    --text-color-tertiary: #BBBBBB;
+    --text-color-accent: #ffffff;
+    --text-color-icons: #005c78;
     --radius: 0.5rem;
   }
 
@@ -62,9 +59,19 @@
 }
 
 .react-flow__minimap {
-  background-color: #F7F4EC!important;
+  background-color: #f7f4ec !important;
 }
 
 .react-flow__attribution {
   display: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }

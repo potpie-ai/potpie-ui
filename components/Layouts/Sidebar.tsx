@@ -10,8 +10,16 @@ import {
   CardTitle,
 } from "../ui/card";
 import Image from "next/image";
+import * as Progress from "@radix-ui/react-progress";
 
 const Sidebar = () => {
+  const [progress, setProgress] = React.useState(90);
+  
+  React.useEffect(() => {
+    const timer = setTimeout(() => setProgress(5), 500);
+    return () => clearTimeout(timer);
+  }, []);
+  
   return (
     <div className="hidden bg-foreground text-white md:block relative">
       <div className="flex h-full max-h-screen flex-col gap-2 overflow-auto no-scrollbar">
@@ -27,6 +35,7 @@ const Sidebar = () => {
         </Button>
         <div className="flex-1">
           <nav className="grid items-start mx-5 text-sm font-medium gap-7">
+            {/* On clicking all chats all the chats will appear as chat gpt does  */}
             {SidebarItems.map((item, index) => (
               <div className="" key={index}>
                 <p>{item.title}</p>
@@ -37,7 +46,12 @@ const Sidebar = () => {
                     className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all    "
                   >
                     <Image src={link.icons} alt="logo" width={15} height={15} />
-                    <p>{link.title} </p> {link.soon && <p className="bg-gradient-to-r from-[#FFAD62] to-[#5356FF] rounded-full px-1 text-[0.6rem]">Comming soon </p>}
+                    <p>{link.title} </p>{" "}
+                    {link.soon && (
+                      <p className="bg-gradient-to-r from-[#FFAD62] to-[#5356FF] rounded-full px-1 text-[0.6rem]">
+                        Comming soon{" "}
+                      </p>
+                    )}
                   </Link>
                 ))}
               </div>
@@ -55,7 +69,20 @@ const Sidebar = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex ">
-              pending!!
+              <Progress.Root
+                className="relative overflow-hidden bg-[#7F7F7F] rounded-full w-full h-[5px]"
+                style={{
+                  // Fix overflow clipping in Safari
+                  // https://gist.github.com/domske/b66047671c780a238b51c51ffde8d3a0
+                  transform: "translateZ(0)",
+                }}
+                value={progress}
+              >
+                <Progress.Indicator
+                  className="bg-ring w-full h-full transition-transform duration-[660ms] ease-[cubic-bezier(0.65, 0, 0.35, 1)]"
+                  style={{ transform: `translateX(-${100 - progress}%)` }}
+                />
+              </Progress.Root>
               <Button
                 size="sm"
                 className="w-full bg-white !text-foreground !border-none"

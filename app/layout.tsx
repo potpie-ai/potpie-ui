@@ -2,12 +2,8 @@ import type { Metadata } from "next";
 import MullishRegularFont from "next/font/local";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import ReactQueryClientProvider from "@/providers/ReactQueryClientProvider";
 import { Toaster } from "@/components/ui/sonner";
-import { ThemeProvider } from "@/providers/theme-provider";
-import { AuthContextProvider } from "@/contexts/AuthContext";
 import LayoutProviders from "@/providers/LayoutProviders";
-import PHProvider from "@/providers/PostHogProvider";
 
 const mullishRegular = MullishRegularFont({
   src: "fonts/Mulish-VariableFont_wght.ttf",
@@ -16,8 +12,8 @@ const mullishRegular = MullishRegularFont({
 });
 
 export const metadata: Metadata = {
-  title: "hundredpoints.ai",
-  description: "hundredpoints.ai",
+  title: "potpie",
+  description: "PotPie.ai",
 };
 
 export default function RootLayout({
@@ -33,20 +29,7 @@ export default function RootLayout({
           mullishRegular.variable
         )}
       >
-        <PHProvider>
-        <ReactQueryClientProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem={false}
-            disableTransitionOnChange
-          >
-            <AuthContextProvider>
-              <LayoutProviders>{children}</LayoutProviders>
-            </AuthContextProvider>
-          </ThemeProvider>
-        </ReactQueryClientProvider>
-        </PHProvider>
+        <LayoutProviders>{children}</LayoutProviders>
         <Toaster richColors theme="light" closeButton />
       </body>
     </html>

@@ -46,18 +46,14 @@ const Navbar = () => {
             <DialogTrigger>
               <p>{chatName}</p>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[487px]" showX={false}>
               <DialogHeader>
-                <DialogTitle>Edit name</DialogTitle>
-                <DialogDescription>
-                  Make changes to your chat here. Click save when you're done.
-                </DialogDescription>
+                <DialogTitle className="text-center">
+                  Edit chat name
+                </DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Name
-                  </Label>
+                <div className="  ">
                   <Input
                     id="name"
                     value={inputValue}
@@ -68,8 +64,11 @@ const Navbar = () => {
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button type="button" onClick={handleSave}>
-                    Save changes
+                  <Button type="button">cancel</Button>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Button type="button" variant="blue" onClick={handleSave}>
+                    save
                   </Button>
                 </DialogClose>
               </DialogFooter>

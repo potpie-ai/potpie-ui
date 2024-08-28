@@ -20,7 +20,7 @@ import {
 
 const Chat = () => {
   return (
-    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 border border-border/15 gap-5">
+    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 gap-5">
       <NewChat />
       <div className="flex-1" />
       <form className="relative pb-3 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ">

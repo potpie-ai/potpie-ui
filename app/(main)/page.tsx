@@ -1,5 +1,4 @@
 "use client";
-import { useHeader } from "@/contexts/HeaderContext";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,7 +27,6 @@ import { setbranch } from "@/lib/state/branch/branch";
 
 const MyProjects = () => {
   const { user } = useAuthContext();
-  const { setHeaderTitle } = useHeader();
   const [endpointLists, setendpointLists] = useState<any>();
   const dispatch = useDispatch();
   const { push } = useRouter();
@@ -38,7 +36,6 @@ const MyProjects = () => {
     "/installations/select_target?setup_action=install";
   useEffect(() => {
     dispatch(setbranch(""));
-    setHeaderTitle("My Projects");
   });
   interface Endpoint {
     identifier: string;

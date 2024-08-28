@@ -1,9 +1,7 @@
 "use client";
-import Navbar from "@/components/Layouts/navbar/Navbar";
-import { useSidebarContext } from "@/contexts/SidebarContext";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import React from "react";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -11,7 +9,6 @@ export default function RootLayout({
 }>) {
   const { user } = useAuthContext();
   const router = useRouter();
-  const { isSidebarOpen } = useSidebarContext();
 
   if (user == null) {
     router.push("/sign-in");
@@ -23,8 +20,8 @@ export default function RootLayout({
       <div
         className={`grid h-screen w-full
           }`}
-      >        <div className="flex flex-col">
-          <Navbar />
+      >
+        <div className="flex flex-col">
           <main className="overflow-auto py-5 px-7 pb-12">{children}</main>
         </div>
       </div>

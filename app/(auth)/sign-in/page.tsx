@@ -1,9 +1,7 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Github } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -14,12 +12,7 @@ import {
   signInWithPopup,
 } from "firebase/auth";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form
 } from "@/components/ui/form";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";

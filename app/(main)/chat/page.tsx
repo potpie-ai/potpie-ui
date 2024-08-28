@@ -1,10 +1,8 @@
 "use client";
-import React, { FormEvent, useEffect, useState, KeyboardEvent, useRef } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { marked } from 'marked';
-import { Send, SendHorizonal } from "lucide-react"
-import MarkdownEditor from '@/components/ui/markdown-editor';
+import { SendHorizonal } from "lucide-react"
 
 interface ChatItem {
     message: string;
@@ -143,7 +141,7 @@ function helloWorld() {
                     <h1 className="text-xl font-semibold">Conversations</h1>
                     <ul className="mt-4 space-y-2">
                         <li className="p-2 hover:bg-gray-700 rounded cursor-pointer">o Debug my code</li>
-                        <li className="p-2 hover:bg-gray-700 rounded cursor-pointer">o What's wrong with the current implementation</li>
+                        <li className="p-2 hover:bg-gray-700 rounded cursor-pointer">o What&apos;s wrong with the current implementation</li>
                         <li className="p-2 hover:bg-gray-700 rounded cursor-pointer">o Test my code</li>
                     </ul>
                 </div>

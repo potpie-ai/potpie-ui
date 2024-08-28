@@ -2,7 +2,6 @@ import axios, { InternalAxiosRequestConfig } from 'axios';
 import { auth } from "@/configs/Firebase-config";
 import { useRouter } from 'next/navigation';
 import { toast } from "sonner";
-import { GlobalConfig } from '@/lib/Config';
 
 /*
  This implementation extends the axios definition to intercept any api call and set certain header,
@@ -35,7 +34,7 @@ const HandleResponseError = (error: { response: { status: number; }; }) => {
 
 axios.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   SetAuthorizationHeader();
-  config.baseURL=GlobalConfig.DBURL
+  config.baseURL=process.env.NEXT_PUBLIC_BASE_URL
   return config;
 }, (error) => {
   return Promise.reject(error);

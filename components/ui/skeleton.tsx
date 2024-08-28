@@ -12,19 +12,4 @@ function Skeleton({
   )
 }
 
-function SkeletonRow() {
-  return (
-    <tr className="pb-2 mb-2">
-      {}
-      {Array(3) 
-        .fill(null)
-        .map(() => (
-          <td key={Math.random()}>
-            <Skeleton className="w-full h-6 bg-neutral-400 m-2"/>
-          </td>
-        ))}
-    </tr>
-  );
-}
-
-export { Skeleton, SkeletonRow }
+export { Skeleton }

@@ -23,8 +23,8 @@ const Sidebar = () => {
 
   return (
     <div className="hidden bg-foreground text-white md:block relative">
-      <div className="flex h-full max-h-screen flex-col gap-2 overflow-auto no-scrollbar">
-        <div className="relative flex h-14 items-center px-4 lg:h-[90px] lg:px-6 mb-11 mt-7">
+      <div className="flex h-full max-h-screen sticky top-0 left-0 bottom-0 flex-col gap-2 overflow-auto no-scrollbar">
+        <div className="relative flex h-14 items-center px-4 lg:px-6 mb-11 mt-7">
           <Link href="/" className="flex items-center gap-3 font-semibold">
             <Image src={"/images/logo.svg"} alt="logo" width={35} height={35} />
             <span className="font-bold text-2xl">potpie</span>

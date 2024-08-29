@@ -76,14 +76,24 @@ const Step2 = () => {
       <h1 className="text-xl">Choose your expert</h1>
       <div className="w-full h-full grid grid-cols-2 ml-5 space-y10 gap-10">
         {onboardContent.map((content, index) => (
-          <Card key={index} className="border-border w-[485px] shadow-sm rounded-2xl">
+          <Card
+            key={index}
+            className="border-border w-[485px] shadow-sm rounded-2xl"
+          >
             <CardHeader className="p-2 px-6">
               <CardTitle className="text-lg flex gap-3 text-muted">
-                <Image src={"/images/person.svg"} alt="logo" width={20} height={20}/>
+                <Image
+                  src={"/images/person.svg"}
+                  alt="logo"
+                  width={20}
+                  height={20}
+                />
                 <p>{content.title}</p>
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm ml-8 text-muted/70 font-semibold">{content.desc}</CardContent>
+            <CardContent className="text-sm ml-8 text-muted/70 font-semibold">
+              {content.desc}
+            </CardContent>
           </Card>
         ))}
       </div>
@@ -111,26 +121,23 @@ const NewChat = () => {
   ];
 
   return (
-    <div className="w-[97%] h-full flex flex-col items-center -mb-12  ">
-      <h1 className="text-2xl font-bold mb-4">New Chat</h1>
-      <div className="flex flex-col items-center w-full h-full relative">
-        {steps.map((step, index) => (
-          <div key={index} className="flex items-start mb-8 w-full relative">
-            {/* Vertical Line */}
-            <div
-              className={`absolute left-[18px] top-10 h-full border-l-2 border-gray-300 z-0 ${
-                index === steps.length - 1 ? "hidden" : "top-10"
-              }`}
-            ></div>
-            {/* Step Circle */}
-            <div className="flex items-center justify-center w-10 h-10 bg-border text-border text-white rounded-full z-10">
-              {step.label.split(" ")[1]}
-            </div>
-            {/* Step Text */}
-            <div className="flex flex-col ml-4 w-full">{step.content}</div>
+    <div className="relative w-[97%] h-full flex flex-col items-center -mb-12 mt-5  ">
+      {steps.map((step, index) => (
+        <div key={index} className="flex items-start mb-8 w-full relative">
+          {/* Vertical Line */}
+          <div
+            className={`absolute left-[18px] top-10 h-full border-l-2 border-gray-300 z-0 ${
+              index === steps.length - 1 ? "hidden" : "top-10"
+            }`}
+          ></div>
+          {/* Step Circle */}
+          <div className="flex items-center justify-center w-10 h-10 bg-border text-border text-white rounded-full z-10">
+            {step.label.split(" ")[1]}
           </div>
-        ))}
-      </div>
+          {/* Step Text */}
+          <div className="flex flex-col ml-4 w-full">{step.content}</div>
+        </div>
+      ))}
     </div>
   );
 };

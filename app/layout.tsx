@@ -25,7 +25,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          "min-h-screen bg-background font-mulish antialiased ",
+          "min-h-screen font-mulish antialiased ",
           mullishRegular.variable
         )}
       >

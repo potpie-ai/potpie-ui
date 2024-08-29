@@ -12,15 +12,15 @@ import {
   Select,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/select";  
 import NewChat from "./NewChat";
 
 const Chat = () => {
   return (
-    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 gap-5">
+    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
       <NewChat />
       <div className="flex-1" />
-      <form className="relative pb-3 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ">
+      <form className="relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl">
         <div className="w-full h-9 bg-[#EFF4FC] flex items-center px-4">
           <Select>
             <SelectTrigger className="w-[180px] mx-4 my-3 h-5 text-sm rounded-full border-border">
@@ -50,7 +50,7 @@ const Chat = () => {
           <Tooltip>
             <TooltipTrigger asChild className="mx-2 ">
               <Button variant="ghost" size="icon">
-                <Plus className="border-ring rounded-full border-2" />
+                <Plus className="border-primary rounded-full border-2" />
                 <span className="sr-only">Share File</span>
               </Button>
             </TooltipTrigger>

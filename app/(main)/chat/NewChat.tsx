@@ -20,7 +20,7 @@ const Step1 = () => {
             <SelectValue
               className=""
               placeholder={
-                <div className="flex gap-3 items-center ">
+                <div className="flex gap-3 items-center font-semibold ">
                   <Github
                     className="h-4 w-4 text-[#7A7A7A] "
                     strokeWidth={1.5}
@@ -36,7 +36,7 @@ const Step1 = () => {
             <SelectValue
               className=""
               placeholder={
-                <div className="flex gap-3 items-center ">
+                <div className="flex gap-3 items-center font-semibold ">
                   <GitBranch
                     className="h-4 w-4 text-[#7A7A7A] "
                     strokeWidth={1.5}

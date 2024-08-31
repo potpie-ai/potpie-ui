@@ -7,7 +7,10 @@ import { toast } from "sonner";
  This implementation extends the axios definition to intercept any api call and set certain header,
  extend this later to modify any outgoing or incoming request body, headers, response 
 */
+
+// Please remove all the comments after you are done
 const SetAuthorizationHeader = async () => {
+  // https://github.com/axios/axios#global-axios-defaults
   const user = auth.currentUser;
   const idToken = await user?.getIdToken();
   axios.defaults.headers.common['Authorization'] = `Bearer ${idToken}`;
@@ -32,8 +35,12 @@ const HandleResponseError = (error: { response: { status: number; }; }) => {
   return Promise.reject(error);
 };
 
-axios.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+axios.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   SetAuthorizationHeader();
+  // https://stackoverflow.com/questions/43051291/attach-authorization-header-for-all-axios-requests
+  // const user = auth.currentUser;
+  // const idToken = await user?.getIdToken();
+  // config.headers.Authorization =  `Bearer ${idToken}`;
   config.baseURL=process.env.NEXT_PUBLIC_BASE_URL
   return config;
 }, (error) => {

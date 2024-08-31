@@ -11,10 +11,12 @@ import {
 } from "../ui/card";
 import Image from "next/image";
 import * as Progress from "@radix-ui/react-progress";
+import { useRouter } from "next/navigation";
 
 const Sidebar = () => {
   const [progress, setProgress] = React.useState(90);
-  const [showChatHistory, setShowChatHistory] = React.useState(false);
+
+  const router = useRouter();
 
   React.useEffect(() => {
     const timer = setTimeout(() => setProgress(5), 500);
@@ -31,7 +33,7 @@ const Sidebar = () => {
           </Link>
           <hr className="absolute right-0 -bottom-5 h-px w-full border-0 bg-border" />
         </div>
-        <Button className="flex gap-3 mx-5 mb-9 ">
+        <Button className="flex gap-3 mx-5 mb-9" onClick={() => router.push("/chat")}>
           <Plus /> <p>New Chat</p>
         </Button>
         <div className="flex-1">
@@ -42,14 +44,8 @@ const Sidebar = () => {
                 {item.links.map((link, index) => (
                   <div key={index} className="flex flex-col gap-3">
                     <Link
-                      href="#"
+                      href={link.href}
                       className="flex items-center gap-3 rounded-lg px-3 py-2 transition-all"
-                      onClick={() => {
-                        // Toggle the chat history only if "All chats" is clicked
-                        if (link.title === "All chats") {
-                          setShowChatHistory((prev) => !prev);
-                        }
-                      }}
                     >
                       <Image
                         src={link.icons}
@@ -64,20 +60,12 @@ const Sidebar = () => {
                         </p>
                       )}
                     </Link>
-                    {showChatHistory && link.title === "All chats" && (
-                      <div className="flex flex-col gap-1 mb-3 mx-7">
-                        {chatHistory.map((chat, i) => (
-                          <p key={i} className="rounded-xl hover:border hover:border-border p-3">{chat}</p>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
             ))}
           </nav>
         </div>
-        {/* Rest of your component remains unchanged */}
         <div className="relative mt-auto px-2 ">
           <hr className="absolute right-0 top-0 h-px w-full border-0 bg-border" />
           <Card className="bg-transparent border-none text-white">
@@ -138,10 +126,12 @@ const SidebarItems = [
       {
         icons: "/images/msg.svg",
         title: "All chats",
+        href:"/chat/all"
       },
       {
         icons: "/images/robot.svg",
         title: "AI Agents",
+        href:"#"
       },
     ],
   },
@@ -151,11 +141,13 @@ const SidebarItems = [
       {
         icons: "/images/git.svg",
         title: "Repositories",
+        href:"#"
       },
       {
         icons: "/images/document.svg",
         title: "Text resources",
         soon: true,
+        href:"#"
       },
     ],
   },
@@ -165,33 +157,20 @@ const SidebarItems = [
       {
         icons: "/images/document.svg",
         title: "Documentation",
+        href:"#"
       },
       {
         icons: "/images/git.svg",
         title: "Open source repo",
+        href:"#"
       },
       {
         icons: "/images/discord.svg",
         title: "Discord",
+        href:"#"
       },
     ],
   },
 ];
-const chatHistory = [
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-  "Chat history here ",
-];
+
 export default Sidebar;

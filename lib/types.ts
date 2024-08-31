@@ -48,3 +48,9 @@ type UserRepo = {
 type AllBranches = {
   branches: string[];
 };
+
+type AgentType = {
+  id: string;
+  name: string;
+  description: string;
+};

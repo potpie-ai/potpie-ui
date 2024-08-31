@@ -1,13 +1,35 @@
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,  
+} from "@/components/ui/select";
 import { Select } from "@radix-ui/react-select";
+import { useQuery } from "@tanstack/react-query";
 import { GitBranch, Github } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import React from "react";
+import axios from "@/configs/httpInterceptor";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import { setChat } from "@/lib/state/Reducers/chat";
 
 const Step1 = () => {
+  const {
+    data: UserRepositorys,
+    isLoading: UserRepositorysLoading,
+    refetch: RefetchUserRepositorys,
+  } = useQuery<UserRepo[]>({
+    queryKey: ["user-repository"],
+    queryFn: () =>
+      axios.get(`/github/user-repos`).then((res) => res.data),
+  });
+  const dispatch = useDispatch();
+  const { repoName, branchName } = useSelector(
+    (state: RootState) => state.chat
+  );
   return (
     <div className="text-muted">
       <h1 className="text-xl">Select a repository and branch</h1>
@@ -15,7 +37,10 @@ const Step1 = () => {
         need help?
       </Link>
       <div className=" flex gap-10 mt-7 ml-5">
-        <Select>
+        <Select
+          defaultValue={repoName}
+          onValueChange={(value) => dispatch(setChat({ repoName: value }))}
+        >
           <SelectTrigger className="w-[220px] py-2  border-border ">
             <SelectValue
               className=""
@@ -25,13 +50,28 @@ const Step1 = () => {
                     className="h-4 w-4 text-[#7A7A7A] "
                     strokeWidth={1.5}
                   />
-                  netflix-dispatch
+                  Select Repository
                 </div>
               }
             />
           </SelectTrigger>
+          <SelectContent>
+            {UserRepositorys?.map((value: any, i: number) => (
+              <SelectItem key={i} value={value.repo_name}>
+                {value.repo_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-        <Select>
+        <Select
+          defaultValue={branchName}
+          onValueChange={(value) => {
+            dispatch(setChat({ branchName: value }));
+            if (repoName !== null || branchName !== null) {
+              dispatch(setChat({ chatStep: 2 }));
+            }
+          }}
+        >
           <SelectTrigger className="w-[220px] py-2  border-border">
             <SelectValue
               className=""
@@ -41,11 +81,15 @@ const Step1 = () => {
                     className="h-4 w-4 text-[#7A7A7A] "
                     strokeWidth={1.5}
                   />
-                  master
+                  Select Branch
                 </div>
               }
             />
           </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="main">main</SelectItem>
+            <SelectItem value="develop">develop</SelectItem>
+          </SelectContent>
         </Select>
       </div>
     </div>
@@ -53,6 +97,12 @@ const Step1 = () => {
 };
 
 const Step2 = () => {
+  const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
+    AgentType[]
+  >({
+    queryKey: ["agent-types"],
+    queryFn: () => axios.get(`/list-available-agents`).then((res) => res.data),
+  });
   const onboardContent = [
     {
       title: "Onboarding expert",
@@ -71,6 +121,7 @@ const Step2 = () => {
       desc: "Specializes in developing and refining integration tests for your codebase. Helps ensure different components work together correctly.",
     },
   ];
+  const dispatch = useDispatch();
   return (
     <div className="flex flex-col w-full gap-7">
       <h1 className="text-xl">Choose your expert</h1>
@@ -78,7 +129,9 @@ const Step2 = () => {
         {onboardContent.map((content, index) => (
           <Card
             key={index}
-            className="border-border w-[485px] shadow-sm rounded-2xl"
+            className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300" onClick={() => {
+              dispatch(setChat({ agentId: content.title }));
+            }}
           >
             <CardHeader className="p-2 px-6">
               <CardTitle className="text-lg flex gap-3 text-muted">
@@ -101,17 +154,21 @@ const Step2 = () => {
   );
 };
 const NewChat = () => {
+
+  const { chatStep } = useSelector(
+    (state: RootState) => state.chat
+  );
   const steps = [
     {
-      label: "Step 1",
+      label: 1,
       content: <Step1 />,
     },
     {
-      label: "Step 2",
+      label:2,
       content: <Step2 />,
     },
     {
-      label: "Step 3",
+      label: 3,
       content: (
         <div className="flex flex-col ml-4 w-full">
           <p className="font-semibold">All Set! Start chatting.</p>
@@ -131,8 +188,8 @@ const NewChat = () => {
             }`}
           ></div>
           {/* Step Circle */}
-          <div className="flex items-center justify-center w-10 h-10 bg-border text-border text-white rounded-full z-10">
-            {step.label.split(" ")[1]}
+          <div className={`flex items-center justify-center w-10 h-10 bg-border text-white rounded-full z-10 ${chatStep !== undefined &&   step.label < chatStep ? "bg-[#00C313]" : chatStep === step.label ? "border-accent border-2 bg-white !text-border  " : ""}`}>
+            {step.label}
           </div>
           {/* Step Text */}
           <div className="flex flex-col ml-4 w-full">{step.content}</div>

@@ -22,7 +22,7 @@ import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Github, Loader2 } from "lucide-react";
-import axios from "@/app/api/interceptors/httpInterceptor";
+import axios from "@/configs/httpInterceptor";
 
 export default function SignUp() {
   const formSchema = z.object({

@@ -1,12 +1,12 @@
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,  
+  SelectValue,
 } from "@/components/ui/select";
-import { Select } from "@radix-ui/react-select";
 import { useQuery } from "@tanstack/react-query";
 import { GitBranch, Github } from "lucide-react";
 import Image from "next/image";
@@ -15,21 +15,46 @@ import axios from "@/configs/httpInterceptor";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Step1 = () => {
-  const {
-    data: UserRepositorys,
-    isLoading: UserRepositorysLoading,
-    refetch: RefetchUserRepositorys,
-  } = useQuery<UserRepo[]>({
-    queryKey: ["user-repository"],
-    queryFn: () =>
-      axios.get(`/github/user-repos`).then((res) => res.data.repositories),
-  });
   const dispatch = useDispatch();
   const { repoName, branchName } = useSelector(
     (state: RootState) => state.chat
   );
+  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
+    UserRepo[]
+  >({
+    queryKey: ["user-repository"],
+    queryFn: () =>
+      axios.get(`/github/user-repos`).then((res) => res.data.repositories),
+  });
+  const {
+    data: UserBranch,
+    isLoading: UserBranchLoading,
+    error: UserBranchError,
+  } = useQuery<UserRepo[]>({
+    queryKey: ["user-branch"],
+    queryFn: () =>
+      axios
+        .get(`/github/get-branch-list`, {
+          params: {
+            repo_name: repoName,
+          },
+        })
+        .then((res) => res.data),
+    enabled: !!repoName && repoName !== "",
+  });
+  const parseRepo = (repo_name: string, branch_name: string) => {
+    const parseResponse = axios
+      .post(`/parse`, { repo_name, branch_name })
+      .then((res) => {
+        if (repoName !== null || branchName !== null) {
+          dispatch(setChat({ chatStep: 2 }));
+        }
+        return res.data;
+      });
+  };
   return (
     <div className="text-muted">
       <h1 className="text-xl">Select a repository and branch</h1>
@@ -37,60 +62,70 @@ const Step1 = () => {
         need help?
       </Link>
       <div className=" flex gap-10 mt-7 ml-5">
-        <Select
-          defaultValue={repoName}
-          onValueChange={(value) => dispatch(setChat({ repoName: value }))}
-        >
-          <SelectTrigger className="w-[220px] py-2  border-border ">
-            <SelectValue
-              className=""
-              placeholder={
-                <div className="flex gap-3 items-center font-semibold ">
-                  <Github
-                    className="h-4 w-4 text-[#7A7A7A] "
-                    strokeWidth={1.5}
-                  />
-                  Select Repository
-                </div>
-              }
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {UserRepositorys?.map((value: any) => (
-              <SelectItem key={value.id} value={value.full_name}>
-                {value.repo_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          defaultValue={branchName}
-          onValueChange={(value) => {
-            dispatch(setChat({ branchName: value }));
-            if (repoName !== null || branchName !== null) {
-              dispatch(setChat({ chatStep: 2 }));
-            }
-          }}
-        >
-          <SelectTrigger className="w-[220px] py-2  border-border">
-            <SelectValue
-              className=""
-              placeholder={
-                <div className="flex gap-3 items-center font-semibold ">
-                  <GitBranch
-                    className="h-4 w-4 text-[#7A7A7A] "
-                    strokeWidth={1.5}
-                  />
-                  Select Branch
-                </div>
-              }
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="main">main</SelectItem>
-            <SelectItem value="develop">develop</SelectItem>
-          </SelectContent>
-        </Select>
+        {UserRepositorysLoading ? (
+          <Skeleton className="w-[220px] h-10" />
+        ) : (
+          <Select
+            defaultValue={repoName}
+            onValueChange={(value) => dispatch(setChat({ repoName: value }))}
+          >
+            <SelectTrigger className="w-[220px] py-2  border-border ">
+              <SelectValue
+                className=""
+                placeholder={
+                  <div className="flex gap-3 items-center font-semibold ">
+                    <Github
+                      className="h-4 w-4 text-[#7A7A7A] "
+                      strokeWidth={1.5}
+                    />
+                    Select Repository
+                  </div>
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {UserRepositorys?.map((value: any) => (
+                <SelectItem key={value.id} value={value.full_name}>
+                  {value.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {UserRepositorysLoading ? (
+          <Skeleton className="w-[220px] h-10" />
+        ) : (
+          <Select
+            defaultValue={branchName}
+            onValueChange={(value) => {
+              dispatch(setChat({ branchName: value }));
+              parseRepo(repoName, value);
+            }}
+          >
+            <SelectTrigger className="w-[220px] py-2  border-border">
+              <SelectValue
+                className=""
+                placeholder={
+                  <div className="flex gap-3 items-center font-semibold ">
+                    <GitBranch
+                      className="h-4 w-4 text-[#7A7A7A] "
+                      strokeWidth={1.5}
+                    />
+                    Select Branch
+                  </div>
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {!UserBranchLoading &&
+                UserBranch?.map((value: any) => (
+                  <SelectItem key={value.id} value={value.name}>
+                    {value.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
     </div>
   );
@@ -129,7 +164,8 @@ const Step2 = () => {
         {onboardContent?.map((content, index) => (
           <Card
             key={index}
-            className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300" onClick={() => {
+            className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300"
+            onClick={() => {
               dispatch(setChat({ agentId: content.title }));
             }}
           >
@@ -154,17 +190,14 @@ const Step2 = () => {
   );
 };
 const NewChat = () => {
-
-  const { chatStep } = useSelector(
-    (state: RootState) => state.chat
-  );
+  const { chatStep } = useSelector((state: RootState) => state.chat);
   const steps = [
     {
       label: 1,
       content: <Step1 />,
     },
     {
-      label:2,
+      label: 2,
       content: <Step2 />,
     },
     {
@@ -180,7 +213,10 @@ const NewChat = () => {
   return (
     <div className="relative w-[97%] h-full flex flex-col items-center -mb-12 mt-5  ">
       {steps.map((step, index) => (
-        <div key={index} className="flex items-start mb-8 w-full relative">
+        <div
+          key={index}
+          className={`flex items-start mb-8 w-full relative ${chatStep !== undefined && step.label === chatStep ? "pointer-events-none" : ""}`}
+        >
           {/* Vertical Line */}
           <div
             className={`absolute left-[18px] top-10 h-full border-l-2 border-gray-300 z-0 ${
@@ -188,7 +224,9 @@ const NewChat = () => {
             }`}
           ></div>
           {/* Step Circle */}
-          <div className={`flex items-center justify-center w-10 h-10 bg-border text-white rounded-full z-10 ${chatStep !== undefined &&   step.label < chatStep ? "bg-[#00C313]" : chatStep === step.label ? "border-accent border-2 bg-white !text-border  " : ""}`}>
+          <div
+            className={`flex items-center justify-center w-10 h-10 bg-border text-white rounded-full z-10 ${chatStep !== undefined && step.label < chatStep ? "bg-[#00C313]" : chatStep === step.label ? "border-accent border-2 bg-white !text-border  " : ""}`}
+          >
             {step.label}
           </div>
           {/* Step Text */}

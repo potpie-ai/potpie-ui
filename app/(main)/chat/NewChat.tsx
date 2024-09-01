@@ -24,7 +24,7 @@ const Step1 = () => {
   } = useQuery<UserRepo[]>({
     queryKey: ["user-repository"],
     queryFn: () =>
-      axios.get(`/github/user-repos`).then((res) => res.data),
+      axios.get(`/github/user-repos`).then((res) => res.data.repositories),
   });
   const dispatch = useDispatch();
   const { repoName, branchName } = useSelector(
@@ -56,8 +56,8 @@ const Step1 = () => {
             />
           </SelectTrigger>
           <SelectContent>
-            {UserRepositorys?.map((value: any, i: number) => (
-              <SelectItem key={i} value={value.repo_name}>
+            {UserRepositorys?.map((value: any) => (
+              <SelectItem key={value.id} value={value.full_name}>
                 {value.repo_name}
               </SelectItem>
             ))}
@@ -126,7 +126,7 @@ const Step2 = () => {
     <div className="flex flex-col w-full gap-7">
       <h1 className="text-xl">Choose your expert</h1>
       <div className="w-full h-full grid grid-cols-2 ml-5 space-y10 gap-10">
-        {onboardContent.map((content, index) => (
+        {onboardContent?.map((content, index) => (
           <Card
             key={index}
             className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300" onClick={() => {

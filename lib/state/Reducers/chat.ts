@@ -1,7 +1,7 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 interface chatState {
-  repoName?: string;
+  repoName: string;
   branchName?: string;
   chatStep?: number;
   agentId?: string;

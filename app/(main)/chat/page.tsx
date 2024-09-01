@@ -1,3 +1,4 @@
+"use client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,14 +15,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";  
 import NewChat from "./NewChat";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
 
 const Chat = () => {
+  const { chatStep } = useSelector((state: RootState) => state.chat);
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
       <NewChat />
       <div className="flex-1" />
-      <form className="relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl">
-        <div className="w-full h-9 bg-[#EFF4FC] flex items-center px-4">
+      <form className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}>
+        {/* <div className="w-full h-9 bg-[#EFF4FC] flex items-center px-4">
           <Select>
             <SelectTrigger className="w-[180px] mx-4 my-3 h-5 text-sm rounded-full border-border">
               <SelectValue className=""
@@ -37,7 +41,7 @@ const Chat = () => {
               />
             </SelectTrigger>
           </Select>
-        </div>
+        </div> */}
         <Label htmlFor="message" className="sr-only">
           Message
         </Label>
@@ -48,7 +52,7 @@ const Chat = () => {
         />
         <div className="flex items-center p-3 pt-0 ">
           <Tooltip>
-            <TooltipTrigger asChild className="mx-2 ">
+            <TooltipTrigger asChild className="mx-2 !bg-transparent">
               <Button variant="ghost" size="icon">
                 <Plus className="border-primary rounded-full border-2" />
                 <span className="sr-only">Share File</span>

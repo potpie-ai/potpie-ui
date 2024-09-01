@@ -1,35 +1,16 @@
 "use client";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import React, { useEffect, useRef, useState } from "react";
+import { Card} from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import axios from "@/app/api/interceptors/httpInterceptor";
-import dayjs from "dayjs";
-import ProfilePicture from "@/components/Layouts/minors/ProfilePicture";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Plus, RotateCw, TriangleAlert } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { usePostHog } from "posthog-js/react";
-import { toast } from "sonner";
 import { useDispatch } from "react-redux";
-import { setbranch } from "@/lib/state/branch/branch";
+import { setbranch } from "@/lib/state/Reducers/branch";
 
 const MyProjects = () => {
   const { user } = useAuthContext();
-  const [endpointLists, setendpointLists] = useState<any>();
   const dispatch = useDispatch();
-  const { push } = useRouter();
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +

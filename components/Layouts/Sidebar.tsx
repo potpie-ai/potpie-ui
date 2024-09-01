@@ -126,7 +126,7 @@ const SidebarItems = [
       {
         icons: "/images/msg.svg",
         title: "All chats",
-        href:"/chat/all"
+        href:"#"
       },
       {
         icons: "/images/robot.svg",

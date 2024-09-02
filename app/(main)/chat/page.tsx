@@ -9,39 +9,26 @@ import {
 } from "@/components/ui/tooltip";
 import { Github, Plus } from "lucide-react";
 import Image from "next/image";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";  
 import NewChat from "./NewChat";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
+import ChatInterface from "./ChatInterface";
 
 const Chat = () => {
   const { chatStep } = useSelector((state: RootState) => state.chat);
+  const handleSubmit = (e:any) => {
+    e.preventDefault();
+    console.log("Message:", e.target.message.value);
+    // setMessage("");
+  };
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
-      <NewChat />
+      {chatStep != 3 ? <NewChat /> : <ChatInterface />}
       <div className="flex-1" />
-      <form className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}>
-        {/* <div className="w-full h-9 bg-[#EFF4FC] flex items-center px-4">
-          <Select>
-            <SelectTrigger className="w-[180px] mx-4 my-3 h-5 text-sm rounded-full border-border">
-              <SelectValue className=""
-                placeholder={
-                  <div className="flex gap-3 items-center ">
-                    <Github
-                      className="h-4 w-4 text-[#7A7A7A] "
-                      strokeWidth={1.5}
-                    />
-                    netflix-dispatch
-                  </div>
-                }
-              />
-            </SelectTrigger>
-          </Select>
-        </div> */}
+      <form
+        className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}
+        onSubmit={handleSubmit}
+      >
         <Label htmlFor="message" className="sr-only">
           Message
         </Label>

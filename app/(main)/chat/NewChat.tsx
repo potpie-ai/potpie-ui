@@ -64,7 +64,7 @@ const Step1 = () => {
         })
         .then((res) => {
           if (res.data.branches.length === 1) {
-            // parseRepo(repoName, res.data.branches[0]);
+            parseRepo(repoName, res.data.branches[0]);
           }
           return res.data.branches;
         }),
@@ -144,7 +144,7 @@ const Step1 = () => {
       </div>
       {parsingStatus === "loading" && (
         <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
-          <Loader /> <p>Parsing...</p>
+          <Loader className="animate-spin h-4 w-4" /> <p>Parsing...</p>
         </div>
       )}
       {parsingStatus === "success" && (
@@ -163,7 +163,7 @@ const Step2 = () => {
     AgentType[]
   >({
     queryKey: ["agent-types"],
-    queryFn: () => axios.get(`/list-available-agents`).then((res) => res.data),
+    queryFn: () => axios.get(`/list-available-agents/`).then((res) => res.data),
   });
   return (
     <div className="flex flex-col w-full gap-7">
@@ -223,7 +223,7 @@ const NewChat = () => {
   ];
 
   return (
-    <div className="relative w-[97%] h-full flex flex-col items-center -mb-12 mt-5  ">
+    <div className="relative w-[97%] h-full flex flex-col items-center -mb-12 mt-5">
       {steps.map((step, index) => (
         <div
           key={index}

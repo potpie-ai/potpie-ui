@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { GitBranch, Github } from "lucide-react";
+import { CheckCircle, GitBranch, Github, Loader } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import axios from "@/configs/httpInterceptor";
@@ -16,12 +16,32 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useState } from "react";
 
 const Step1 = () => {
   const dispatch = useDispatch();
   const { repoName, branchName } = useSelector(
     (state: RootState) => state.chat
   );
+  const [parsingStatus, setParsingStatus] = useState<string | boolean>(false);
+
+  const parseRepo = (repo_name: string, branch_name: string) => {
+    setParsingStatus("loading");
+    const parseResponse = axios
+      .post(`/parse`, { repo_name, branch_name })
+      .then((res) => {
+        if (repoName !== null || branchName !== null) {
+          dispatch(setChat({ chatStep: 2 }));
+        }
+        if (res.status === 200) setParsingStatus("success");
+        return res.data;
+      })
+      .catch((err) => {
+        setParsingStatus("error");
+        return err;
+      });
+    console.log(parseResponse);
+  };
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
     UserRepo[]
   >({
@@ -42,19 +62,14 @@ const Step1 = () => {
             repo_name: repoName,
           },
         })
-        .then((res) => res.data),
+        .then((res) => {
+          if (res.data.branches.length === 1) {
+            // parseRepo(repoName, res.data.branches[0]);
+          }
+          return res.data.branches;
+        }),
     enabled: !!repoName && repoName !== "",
   });
-  const parseRepo = (repo_name: string, branch_name: string) => {
-    const parseResponse = axios
-      .post(`/parse`, { repo_name, branch_name })
-      .then((res) => {
-        if (repoName !== null || branchName !== null) {
-          dispatch(setChat({ chatStep: 2 }));
-        }
-        return res.data;
-      });
-  };
   return (
     <div className="text-muted">
       <h1 className="text-xl">Select a repository and branch</h1>
@@ -119,14 +134,24 @@ const Step1 = () => {
             <SelectContent>
               {!UserBranchLoading &&
                 UserBranch?.map((value: any) => (
-                  <SelectItem key={value.id} value={value.name}>
-                    {value.name}
+                  <SelectItem key={value} value={value}>
+                    {value}
                   </SelectItem>
                 ))}
             </SelectContent>
           </Select>
         )}
       </div>
+      {parsingStatus === "loading" && (
+        <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
+          <Loader /> <p>Parsing...</p>
+        </div>
+      )}
+      {parsingStatus === "success" && (
+        <div className="flex justify-start items-center gap-3 mt-5 ml-5">
+          <CheckCircle className="text-emerald-800 h-4 w-4" /> <p>Parsing Done</p>
+        </div>
+      )}
     </div>
   );
 };

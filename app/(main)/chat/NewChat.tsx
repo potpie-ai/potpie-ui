@@ -149,7 +149,8 @@ const Step1 = () => {
       )}
       {parsingStatus === "success" && (
         <div className="flex justify-start items-center gap-3 mt-5 ml-5">
-          <CheckCircle className="text-emerald-800 h-4 w-4" /> <p>Parsing Done</p>
+          <CheckCircle className="text-emerald-800 h-4 w-4" />{" "}
+          <p>Parsing Done</p>
         </div>
       )}
     </div>
@@ -157,59 +158,45 @@ const Step1 = () => {
 };
 
 const Step2 = () => {
+  const dispatch = useDispatch();
   const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
     AgentType[]
   >({
     queryKey: ["agent-types"],
     queryFn: () => axios.get(`/list-available-agents`).then((res) => res.data),
   });
-  const onboardContent = [
-    {
-      title: "Onboarding expert",
-      desc: "Parses your codebase and understands the file structure and intent of every piece of code. Guides you through setup and familiarization with your codebase. Explains key features, conventions, and getting started steps.",
-    },
-    {
-      title: "Review agent",
-      desc: "Compares your changes with your default branch and assists in understanding their impact and plan for a safer release",
-    },
-    {
-      title: "Debugging agent",
-      desc: "Traces your error through a graph of your codebase and aids in identifying and resolving bugs in your code. Offers strategies for effective debugging and helps optimize troubleshooting processes. ",
-    },
-    {
-      title: "Integration testing agent",
-      desc: "Specializes in developing and refining integration tests for your codebase. Helps ensure different components work together correctly.",
-    },
-  ];
-  const dispatch = useDispatch();
   return (
     <div className="flex flex-col w-full gap-7">
       <h1 className="text-xl">Choose your expert</h1>
-      <div className="w-full h-full grid grid-cols-2 ml-5 space-y10 gap-10">
-        {onboardContent?.map((content, index) => (
-          <Card
-            key={index}
-            className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300"
-            onClick={() => {
-              dispatch(setChat({ agentId: content.title }));
-            }}
-          >
-            <CardHeader className="p-2 px-6">
-              <CardTitle className="text-lg flex gap-3 text-muted">
-                <Image
-                  src={"/images/person.svg"}
-                  alt="logo"
-                  width={20}
-                  height={20}
-                />
-                <p>{content.title}</p>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm ml-8 text-muted/70 font-semibold">
-              {content.desc}
-            </CardContent>
-          </Card>
-        ))}
+      <div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y10 gap-10">
+        {AgentTypesLoading
+          ? Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="border-border w-[450px] h-40" />
+            ))
+          : AgentTypes?.map((content, index) => (
+              <Card
+                key={index}
+                className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300"
+                onClick={() => {
+                  dispatch(setChat({ agentId: content.id, chatStep: 3 }));
+                }}
+              >
+                <CardHeader className="p-2 px-6">
+                  <CardTitle className="text-lg flex gap-3 text-muted">
+                    <Image
+                      src={"/images/person.svg"}
+                      alt="logo"
+                      width={20}
+                      height={20}
+                    />
+                    <p>{content.name}</p>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm ml-8 text-muted/70 font-semibold">
+                  {content.description}
+                </CardContent>
+              </Card>
+            ))}
       </div>
     </div>
   );
@@ -240,7 +227,7 @@ const NewChat = () => {
       {steps.map((step, index) => (
         <div
           key={index}
-          className={`flex items-start mb-8 w-full relative ${chatStep !== undefined && step.label === chatStep ? "pointer-events-none" : ""}`}
+          className={`flex items-start mb-8 w-full relative ${chatStep !== undefined && step.label === chatStep ? "" : "pointer-events-none"}`}
         >
           {/* Vertical Line */}
           <div

@@ -31,6 +31,7 @@ const Step1 = () => {
       .post(`/parse`, { repo_name, branch_name })
       .then((res) => {
         if (repoName !== null || branchName !== null) {
+      dispatch(setChat({ projectId: res.data.id }));
           dispatch(setChat({ chatStep: 2 }));
         }
         if (res.status === 200) setParsingStatus("success");
@@ -63,9 +64,6 @@ const Step1 = () => {
           },
         })
         .then((res) => {
-          if (res.data.branches.length === 1) {
-            parseRepo(repoName, res.data.branches[0]);
-          }
           return res.data.branches;
         }),
     enabled: !!repoName && repoName !== "",
@@ -163,7 +161,9 @@ const Step2 = () => {
     AgentType[]
   >({
     queryKey: ["agent-types"],
-    queryFn: () => axios.get(`/list-available-agents/`).then((res) => res.data),
+    queryFn: () => axios.get(`/list-available-agents/`).then((res) => {
+      return res.data
+    }),
   });
   return (
     <div className="flex flex-col w-full gap-7">

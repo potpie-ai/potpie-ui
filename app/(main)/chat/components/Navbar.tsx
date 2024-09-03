@@ -13,21 +13,22 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";      
+import { Input } from "@/components/ui/input";
 import React from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import { setChat } from "@/lib/state/Reducers/chat";
 
 const Navbar = () => {
-  const [chatName, setChatName] = React.useState(
-    dayjs().format("MMMM DD, YYYY") + " Untitled"
-  );
-  const [inputValue, setInputValue] = React.useState(chatName);
-
+  const { title } = useSelector((state: RootState) => state.chat);
+  const dispatch = useDispatch();
+  const [inputValue, setInputValue] = React.useState(title);
   const handleInputChange = (event: any) => {
     setInputValue(event.target.value);
   };
 
   const handleSave = () => {
-    setChatName(inputValue);
+    dispatch(setChat({ title: inputValue }));
   };
 
   return (
@@ -43,7 +44,7 @@ const Navbar = () => {
           <Image src={"/images/msg.svg"} alt="logo" width={20} height={20} />
           <Dialog>
             <DialogTrigger>
-              <p className="text-muted">{chatName}</p>
+              <p className="text-muted">{title}</p>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[487px]" showX={false}>
               <DialogHeader>

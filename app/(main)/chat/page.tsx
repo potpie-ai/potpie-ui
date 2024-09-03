@@ -1,3 +1,4 @@
+"use client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,49 +7,53 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Github, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import Image from "next/image";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";  
-import NewChat from "./NewChat";
+import NewChat from "./components/NewChat";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import ChatInterface from "./components/ChatInterface";
+import { addConversation } from "@/lib/state/Reducers/chat";
+import dayjs from "dayjs";
+import { useRef } from "react";
 
 const Chat = () => {
+  const { chatStep, conversations } = useSelector(
+    (state: RootState) => state.chat
+  );
+  const dispatch = useDispatch();
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+    dispatch(
+      addConversation({
+        id: "temp",
+        sender: "user",
+        text: e.target.message.value,
+        timestamp: dayjs().format("MMMM DD, YYYY"),
+      })
+    );
+    if (messageRef.current) messageRef.current.value = "";
+  };
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
-      <NewChat />
+      {conversations.length >= 1 && chatStep == 3 ? <NewChat /> : <ChatInterface />}
       <div className="flex-1" />
-      <form className="relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl">
-        <div className="w-full h-9 bg-[#EFF4FC] flex items-center px-4">
-          <Select>
-            <SelectTrigger className="w-[180px] mx-4 my-3 h-5 text-sm rounded-full border-border">
-              <SelectValue className=""
-                placeholder={
-                  <div className="flex gap-3 items-center ">
-                    <Github
-                      className="h-4 w-4 text-[#7A7A7A] "
-                      strokeWidth={1.5}
-                    />
-                    netflix-dispatch
-                  </div>
-                }
-              />
-            </SelectTrigger>
-          </Select>
-        </div>
+      <form
+        className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}
+        onSubmit={handleSubmit}
+      >
         <Label htmlFor="message" className="sr-only">
           Message
         </Label>
-        <Textarea
+        <Textarea  ref={messageRef}
           id="message"
           placeholder="Start chatting with the expert...."
           className="min-h-12 h-[50%] resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
         />
         <div className="flex items-center p-3 pt-0 ">
           <Tooltip>
-            <TooltipTrigger asChild className="mx-2 ">
+            <TooltipTrigger asChild className="mx-2 !bg-transparent">
               <Button variant="ghost" size="icon">
                 <Plus className="border-primary rounded-full border-2" />
                 <span className="sr-only">Share File</span>

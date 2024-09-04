@@ -1,9 +1,8 @@
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
-import storage from "redux-persist/lib/storage";
 import { persistReducer, persistStore } from "redux-persist";
-import createWebStorage from "redux-persist/lib/storage/createWebStorage";
 import chatReducer from "./Reducers/chat";
 import branchSliceReducer from "./Reducers/branch";
+import createWebStorage from "redux-persist/lib/storage/createWebStorage";
 
 const rootReducers = combineReducers({
   chat: chatReducer,
@@ -36,11 +35,6 @@ const persistConfig = {
 const persistedReducer = persistReducer(persistConfig, rootReducers);
 
 export const store = configureStore({
-  reducer: persistedReducer,
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({
-      serializableCheck: false,
-    }),
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -5,7 +5,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN pnpm install --legacy-peer-deps
 
 FROM base AS builder
 WORKDIR /app
@@ -39,7 +39,7 @@ ENV NEXT_PUBLIC_SKIP_PRO_CHECK=$NEXT_PUBLIC_SKIP_PRO_CHECK
 ENV NEXT_PUBLIC_GITHUB_APP_NAME=$NEXT_PUBLIC_GITHUB_APP_NAME
 ENV NEXT_TELEMETRY_DISABLED 1
 
-RUN npm run build
+RUN pnpm run build
 
 FROM base AS runner
 WORKDIR /app

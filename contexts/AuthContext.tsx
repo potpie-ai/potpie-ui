@@ -26,24 +26,26 @@ export const AuthContextProvider = ({
   const [loading, setLoading] = React.useState(true);
   const [userSubscription, setUserSubscription] = React.useState<any>(null);
 
-  const { data } = useQuery({
-    queryKey: ["user-subscription", user?.uid],
-    queryFn: () =>
-      axios
-        .get(`${process.env.NEXT_PUBLIC_PADDLE_SERVER}/user-subs`, {
-          params: { userId: user?.uid },
-        })
-        .then((res) => {
-          return res.data;
-        }),
-    enabled: !!user?.uid,
-  });
+  // COMMENTED PADDLE CODE UNTIL INTEGRATED
 
-  React.useEffect(() => {
-    if (data) {
-      setUserSubscription(data);
-    }
-  }, [data]);
+  // const { data } = useQuery({
+  //   queryKey: ["user-subscription", user?.uid],
+  //   queryFn: () =>
+  //     axios
+  //       .get(`${process.env.NEXT_PUBLIC_PADDLE_SERVER}/user-subs`, {
+  //         params: { userId: user?.uid },
+  //       })
+  //       .then((res) => {
+  //         return res.data;
+  //       }),
+  //   enabled: !!user?.uid,
+  // });
+
+  // React.useEffect(() => {
+  //   if (data) {
+  //     setUserSubscription(data);
+  //   }
+  // }, [data]);
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {

@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/form";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
-import axios from "@/app/api/interceptors/httpInterceptor";
+import axios from "@/configs/httpInterceptor";
+
 
 export default function Signin() {
   const formSchema = z.object({

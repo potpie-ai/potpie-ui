@@ -6,7 +6,7 @@ WORKDIR /app
 RUN npm i -g pnpm
 
 COPY package*.json ./
-RUN pnpm install --legacy-peer-deps
+RUN pnpm install
 
 FROM base AS builder
 WORKDIR /app

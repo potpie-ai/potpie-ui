@@ -20,7 +20,8 @@ const config = {
     },
     extend: {
       fontFamily: {
-        mulish: ["var(--font-mulish)", ...fontFamily.sans],
+        sans: ['var(--font-geist-sans)'],
+        mono: ['var(--font-geist-mono)'],
       },
       colors: {
         border: "hsl(var(--border))",

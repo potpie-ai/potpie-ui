@@ -176,7 +176,7 @@ const Step2 = () => {
           : AgentTypes?.map((content, index) => (
               <Card
                 key={index}
-                className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300"
+                className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E]                "
                 onClick={() => {
                   dispatch(setChat({ agentId: content.id, chatStep: 3 }));
                 }}

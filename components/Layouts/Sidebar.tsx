@@ -37,15 +37,15 @@ const Sidebar = () => {
           <Plus /> <p>New Chat</p>
         </Button>
         <div className="flex-1">
-          <nav className="grid items-start mx-5 text-sm font-medium gap-7">
+          <nav className="grid items-start mx-5 text-sm font-normal gap-7">
             {SidebarItems.map((item, index) => (
               <div className="" key={index}>
-                <p>{item.title}</p>
+                <p className="pb-2 text-sm">{item.title}</p>
                 {item.links.map((link, index) => (
                   <div key={index} className="flex flex-col gap-3">
                     <Link
                       href={link.href}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2 transition-all"
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 transition-all font-medium text-base"
                     >
                       <Image
                         src={link.icons}
@@ -55,7 +55,7 @@ const Sidebar = () => {
                       />
                       <p>{link.title} </p>{" "}
                       {link.soon && (
-                        <p className="bg-gradient-to-r from-[#FFAD62] to-[#5356FF] rounded-full px-1 text-[0.6rem]">
+                        <p className="bg-gradient-to-r from-[#FFAD62] to-[#5356FF] rounded-full px-2 text-[0.6rem]">
                           Coming soon
                         </p>
                       )}

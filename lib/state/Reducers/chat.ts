@@ -45,7 +45,7 @@ const chatSlice = createSlice({
       Object.assign(state, action.payload);
     },
     addConversation: (state, action: PayloadAction<Conversation>) => {
-      const newConversation = {
+      const newConversation: Conversation = {
         conversationId: action.payload.conversationId,
         messages: action.payload.messages,
       };

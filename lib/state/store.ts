@@ -1,13 +1,31 @@
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
-import flowSliceReducer from "./flow/flowSlice";
-import branchSliceReducer from "./branch/branch";
-import storage from "redux-persist/lib/storage";
 import { persistReducer, persistStore } from "redux-persist";
+import branchSliceReducer from "./branch/branch";
+import flowSliceReducer from "./flow/flowSlice";
+import createWebStorage from "redux-persist/lib/storage/createWebStorage";
 
 const rootReducers = combineReducers({
   flow: flowSliceReducer,
   branch: branchSliceReducer,
 });
+
+const createNoopStorage = () => {
+  return {
+    getItem(_key: string) {
+      return Promise.resolve(null);
+    },
+    setItem(_key: string, value: string) {
+      return Promise.resolve(value);
+    },
+    removeItem(_key: string) {
+      return Promise.resolve();
+    },
+  };
+};  
+const storage =
+  typeof window === "undefined"
+    ? createNoopStorage()
+    : createWebStorage("local");
 
 const persistConfig = {
   key: "root",
@@ -17,7 +35,11 @@ const persistConfig = {
 const persistedReducer = persistReducer(persistConfig, rootReducers);
 
 export const store = configureStore({
-  reducer: persistedReducer,          
+  reducer: persistedReducer,
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: false,
+    }),
 });
 
 export const persistor = persistStore(store);

@@ -4,12 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import LayoutProviders from "@/providers/LayoutProviders";
-
-const mullishRegular = MullishRegularFont({
-  src: "fonts/Mulish-VariableFont_wght.ttf",
-  variable: "--font-mulish",
-  weight: "100 900",
-});
+import { GeistSans } from "geist/font/sans";
 
 export const metadata: Metadata = {
   title: "potpie",
@@ -26,7 +21,7 @@ export default function RootLayout({
       <body
         className={cn(
           "min-h-screen font-mulish antialiased ",
-          mullishRegular.variable
+          GeistSans.className
         )}
       >
         <LayoutProviders>{children}</LayoutProviders>

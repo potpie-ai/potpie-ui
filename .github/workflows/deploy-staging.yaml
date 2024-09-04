@@ -3,7 +3,7 @@ name: Build and Deploy to Staging Artifact
 on:
   push:
     branches:
-      - master
+      - main
 
 env:
   PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}

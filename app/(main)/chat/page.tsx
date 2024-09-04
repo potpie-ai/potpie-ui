@@ -27,10 +27,15 @@ const Chat = () => {
     e.preventDefault();
     dispatch(
       addConversation({
-        id: "temp",
-        sender: "user",
-        text: e.target.message.value,
-        timestamp: dayjs().format("MMMM DD, YYYY"),
+        conversationId: "temp",
+        messages: [
+          {
+            id: "temp",
+            sender: "user",
+            text: e.target.message.value,
+            timestamp: dayjs().format("MMMM DD, YYYY"),
+          },
+        ],
       })
     );
     if (messageRef.current) messageRef.current.value = "";

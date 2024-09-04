@@ -3,9 +3,12 @@ FROM node:18-alpine AS base
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
-RUN npm i -g pnpm
 
-COPY package*.json ./
+# Install pnpm globally
+RUN npm install -g pnpm
+
+# Copy the package.json and pnpm-lock.yaml files
+COPY package.json pnpm-lock.yaml ./
 RUN pnpm install
 
 FROM base AS builder

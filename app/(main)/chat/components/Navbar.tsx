@@ -44,7 +44,7 @@ const Navbar = () => {
           <Image src={"/images/msg.svg"} alt="logo" width={20} height={20} />
           <Dialog>
             <DialogTrigger>
-              <p className="text-muted">{title}</p>
+              <span className="text-muted">{title}</span>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[487px]" showX={false}>
               <DialogHeader>

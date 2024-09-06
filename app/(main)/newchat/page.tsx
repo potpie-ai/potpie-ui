@@ -8,15 +8,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle, GitBranch, Github, Loader } from "lucide-react";
+import { CheckCircle, GitBranch, Github, Loader, Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import axios from "@/configs/httpInterceptor";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
-import { setChat } from "@/lib/state/Reducers/chat";
+import { addMessageToConversation, agentRespond, setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { auth } from "@/configs/Firebase-config";
+import { Label } from "@radix-ui/react-label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent } from "@radix-ui/react-tooltip";
+import { Button } from "@/components/ui/button";
+import { TooltipTrigger } from "@/components/ui/tooltip";
+import { useRouter } from "next/navigation";
 
 const Step1 = () => {
   const dispatch = useDispatch();
@@ -141,13 +148,13 @@ const Step1 = () => {
       </div>
       {parsingStatus === "loading" && (
         <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
-          <Loader className="animate-spin h-4 w-4" /> <p>Parsing...</p>
+          <Loader className="animate-spin h-4 w-4" /> <span>Parsing...</span>
         </div>
       )}
       {parsingStatus === "success" && (
         <div className="flex justify-start items-center gap-3 mt-5 ml-5">
           <CheckCircle className="text-emerald-800 h-4 w-4" />{" "}
-          <p>Parsing Done</p>
+          <span>Parsing Done</span>
         </div>
       )}
     </div>
@@ -156,6 +163,11 @@ const Step1 = () => {
 
 const Step2 = () => {
   const dispatch = useDispatch();
+  const userId = auth.currentUser?.uid || "";
+  const {
+    projectId,
+    title,
+  } = useSelector((state: RootState) => state.chat);
   const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
     AgentType[]
   >({
@@ -164,6 +176,29 @@ const Step2 = () => {
       return res.data
     }),
   });
+  const createConversation = async (event:any) => {
+      dispatch(setChat({ agentId: event, chatStep: 3 }));
+      const response = await axios
+        .post("/conversations/", {
+          user_id: userId,
+          title: title,
+          status: "active",
+          project_ids: [projectId],
+          agent_ids: [event],
+        })
+        .then((res) => {
+          dispatch(setChat({currentConversationId:res.data.conversation_id}))
+          return res.data;
+        })
+        .catch((err) => {
+          console.log(err);
+          return { error: "Unable to create conversation: " + err.message };
+        });
+
+      if (response.error) {
+        console.error(response.error);
+      }
+    } 
   return (
     <div className="flex flex-col w-full gap-7">
       <h1 className="text-xl">Choose your expert</h1>
@@ -176,9 +211,7 @@ const Step2 = () => {
               <Card
                 key={index}
                 className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E]                "
-                onClick={() => {
-                  dispatch(setChat({ agentId: content.id, chatStep: 3 }));
-                }}
+                onClick={() => createConversation(content.id)}
               >
                 <CardHeader className="p-2 px-6">
                   <CardTitle className="text-lg flex gap-3 text-muted">
@@ -188,7 +221,7 @@ const Step2 = () => {
                       width={20}
                       height={20}
                     />
-                    <p>{content.name}</p>
+                    <span>{content.name}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm ml-8 text-muted/70 font-semibold">
@@ -201,7 +234,13 @@ const Step2 = () => {
   );
 };
 const NewChat = () => {
+  const router = useRouter();
+  const dispatch = useDispatch();
   const { chatStep } = useSelector((state: RootState) => state.chat);
+  const {
+    currentConversationId,
+  } = useSelector((state: RootState) => state.chat);
+  const [message, setMessage] = useState("");
   const steps = [
     {
       label: 1,
@@ -215,13 +254,26 @@ const NewChat = () => {
       label: 3,
       content: (
         <div className="flex flex-col ml-4 w-full">
-          <p className="font-semibold">All Set! Start chatting.</p>
+          <span className="font-semibold">All Set! Start chatting.</span>
         </div>
       ),
     },
   ];
 
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+      dispatch(
+        addMessageToConversation({
+          conversationId: currentConversationId,
+          message: { sender: "user", text: message },
+        })
+      );
+      dispatch(agentRespond());
+      router.push("/chat")
+  };
+
   return (
+    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
     <div className="relative w-[97%] h-full flex flex-col items-center -mb-12 mt-5">
       {steps.map((step, index) => (
         <div
@@ -245,6 +297,43 @@ const NewChat = () => {
         </div>
       ))}
     </div>
+    <div className="flex-1" />
+    <form
+      className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}
+      onSubmit={handleSubmit}
+    >
+      <Label htmlFor="message" className="sr-only">
+        Message
+      </Label>
+      <Textarea
+        id="message"
+        placeholder="Start chatting with the expert...."
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        className="min-h-12 h-[50%] resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
+      />
+      <div className="flex items-center p-3 pt-0 ">
+        <Tooltip>
+          <TooltipTrigger asChild className="mx-2 !bg-transparent">
+            <Button variant="ghost" size="icon">
+              <Plus className="border-primary rounded-full border-2" />
+              <span className="sr-only">Share File</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Share File</TooltipContent>
+        </Tooltip>
+        <Button type="submit" size="sm" className="ml-auto !bg-transparent">
+          <Image
+            src={"/images/sendmsg.svg"}
+            alt="logo"
+            width={20}
+            height={20}
+          />
+        </Button>
+      </div>
+    </form>
+  </div>
+
   );
 };
 

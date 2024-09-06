@@ -57,7 +57,7 @@ const Sidebar = () => {
                         width={20}
                         height={20}
                       />
-                      <p>{link.title} </p>{" "}
+                      <div>{link.title} </div>{" "}
                       {link.soon && (
                         <p className="bg-gradient-to-r from-[#FFAD62] to-[#5356FF] rounded-full px-2 text-[0.6rem]">
                           Coming soon

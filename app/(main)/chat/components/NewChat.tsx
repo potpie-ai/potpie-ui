@@ -31,7 +31,7 @@ const Step1 = () => {
       .post(`/parse`, { repo_name, branch_name })
       .then((res) => {
         if (repoName !== null || branchName !== null) {
-      dispatch(setChat({ projectId: res.data.id }));
+      dispatch(setChat({ projectId: res.data.project_id }));
           dispatch(setChat({ chatStep: 2 }));
         }
         if (res.status === 200) setParsingStatus("success");
@@ -41,7 +41,6 @@ const Step1 = () => {
         setParsingStatus("error");
         return err;
       });
-    console.log(parseResponse);
   };
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
     UserRepo[]

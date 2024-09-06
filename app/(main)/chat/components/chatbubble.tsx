@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
-  message: string;
+  message: string | any;
   sender: "user" | "agent";
 }
 

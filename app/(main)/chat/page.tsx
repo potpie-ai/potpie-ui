@@ -13,12 +13,15 @@ import NewChat from "./components/NewChat";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import ChatInterface from "./components/ChatInterface";
-import { addConversation } from "@/lib/state/Reducers/chat";
+import {
+  addConversation,
+  addMessageToConversation,
+} from "@/lib/state/Reducers/chat";
 import dayjs from "dayjs";
 import { useRef } from "react";
 
 const Chat = () => {
-  const { chatStep, conversations } = useSelector(
+  const { chatStep, conversations, currentConversationId } = useSelector(
     (state: RootState) => state.chat
   );
   const dispatch = useDispatch();
@@ -27,22 +30,21 @@ const Chat = () => {
     e.preventDefault();
     dispatch(
       addConversation({
-        conversationId: "temp",
+        id: currentConversationId !== "" ? currentConversationId : "temp",
         messages: [
           {
-            id: "temp",
             sender: "user",
             text: e.target.message.value,
-            timestamp: dayjs().format("MMMM DD, YYYY"),
           },
         ],
       })
     );
+
     if (messageRef.current) messageRef.current.value = "";
   };
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
-      {conversations.length >= 1 && chatStep == 3 ? <NewChat /> : <ChatInterface />}
+      {conversations.length < 1 ? <NewChat /> : <ChatInterface />}
       <div className="flex-1" />
       <form
         className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}
@@ -51,7 +53,8 @@ const Chat = () => {
         <Label htmlFor="message" className="sr-only">
           Message
         </Label>
-        <Textarea  ref={messageRef}
+        <Textarea
+          ref={messageRef}
           id="message"
           placeholder="Start chatting with the expert...."
           className="min-h-12 h-[50%] resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"

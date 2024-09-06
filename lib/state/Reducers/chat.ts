@@ -1,15 +1,14 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import dayjs from "dayjs";
+import axios from "@/configs/httpInterceptor";
 
 interface Message {
-  id: string;
   text: string;
   sender: "user" | "agent";
-  timestamp: string;
 }
 
 interface Conversation {
-  conversationId: string; // Changed from 'id' to 'conversationId' for clarity
+  conversationId: string;
   messages: Message[];
 }
 
@@ -37,6 +36,29 @@ const initialState: chatState = {
   currentConversationId: "",
 };
 
+export const agentRespond = createAsyncThunk<any>(
+  "agentRespond",
+  async (_, { getState }) => {
+    const state = getState() as { chat: chatState };
+
+    const currentConversation = state.chat.conversations.find(
+      (c) => c.conversationId === state.chat.currentConversationId
+    );
+    const lastUserMessage = currentConversation?.messages
+      .filter((message) => message.sender === "user")
+      .slice(-1)[0];
+
+    const response = await axios.post(
+      `/conversations/${state.chat.currentConversationId}/message/`,
+      {
+        content: lastUserMessage?.text,
+      }
+    );
+
+    return response.data;
+  }
+);
+
 const chatSlice = createSlice({
   name: "chat",
   initialState,
@@ -44,14 +66,16 @@ const chatSlice = createSlice({
     setChat: (state, action: PayloadAction<Partial<chatState>>) => {
       Object.assign(state, action.payload);
     },
-    addConversation: (state, action: PayloadAction<Conversation>) => {
-      const newConversation = {
-        conversationId: action.payload.conversationId,
+    addConversation: (
+      state,
+      action: PayloadAction<{ id: string; messages: Message[] }>
+    ) => {
+      state.conversations.push({
+        conversationId: action.payload.id,
         messages: action.payload.messages,
-      };
-
-      state.conversations.push(newConversation);
+      });
     },
+
     addMessageToConversation: (
       state,
       action: PayloadAction<{ conversationId: string; message: Message }>
@@ -59,10 +83,14 @@ const chatSlice = createSlice({
       const conversation = state.conversations.find(
         (conv) => conv.conversationId === action.payload.conversationId
       );
-      if (conversation) {
-        conversation.messages.push(action.payload.message);
+
+      if (
+        action.payload.conversationId === "temp" &&
+        conversation?.messages.length === 1
+      ) {
       }
     },
+
     changeConversationId: (
       state,
       action: PayloadAction<{ oldId: string; newId: string }>
@@ -71,9 +99,39 @@ const chatSlice = createSlice({
         (conv) => conv.conversationId === action.payload.oldId
       );
       if (conversation) {
-        conversation.conversationId = action.payload.newId;
+        if (conversation.conversationId !== "temp") {
+          conversation.conversationId = "temp";
+        }
+
+        if (action.payload.newId) {
+          conversation.conversationId = action.payload.newId;
+          state.currentConversationId = action.payload.newId;
+        }
       }
     },
+  },
+  extraReducers(builder) {
+    builder.addCase(agentRespond.pending, (state) => {
+      state.status = "loading";
+    })
+    builder.addCase(agentRespond.fulfilled, (state, action) => {
+      state.status = "active";
+      const conversation = state.conversations.find(
+        (conv) => conv.conversationId === state.currentConversationId
+      );
+      console.log(action.payload);  
+
+      if (conversation) {
+        conversation.messages.push({
+          sender: "agent",
+          text: action.payload,
+        });
+      }
+    });
+    builder.addCase(agentRespond.rejected, (state, action) => {
+      console.log(action.payload);
+      state.status = "error";
+    })
   },
 });
 

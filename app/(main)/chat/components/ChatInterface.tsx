@@ -1,25 +1,28 @@
 import { auth } from "@/configs/Firebase-config";
 import { RootState } from "@/lib/state/store";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "@/configs/httpInterceptor";
-import {
-  addMessageToConversation,
-  agentRespond,
-  changeConversationId,
-  setChat,
-} from "@/lib/state/Reducers/chat";
+import { agentRespond, changeConversationId } from "@/lib/state/Reducers/chat";
 import ChatBubble from "./chatbubble";
 
 const ChatInterface = () => {
   const userId = auth.currentUser?.uid || "";
   const dispatch = useDispatch();
-  const { agentId, projectId, title, conversations, currentConversationId } =
-    useSelector((state: RootState) => state.chat);
-  const hasSentMessage = useRef(false);
+  const {
+    agentId,
+    projectId,
+    title,
+    conversations,
+    currentConversationId,
+    status,
+  } = useSelector((state: RootState) => state.chat);
 
   const SendMessage = async () => {
-    if (conversations && conversations.length === 1) {
+    const currentConversation = conversations.find(
+      (c) => c.conversationId === currentConversationId
+    );
+    if (conversations && currentConversation?.messages.length === 1) {
       const response = await axios
         .post("/conversations/", {
           user_id: userId,
@@ -52,11 +55,11 @@ const ChatInterface = () => {
       );
       const lastUserMessage = currentConversation?.messages.slice(-1)[0];
       if (lastUserMessage?.sender !== "agent") dispatch(agentRespond({}));
+      else return;
     }
   };
 
   useEffect(() => {
-    hasSentMessage.current = false;
     SendMessage();
   }, [conversations]);
 
@@ -69,10 +72,17 @@ const ChatInterface = () => {
           ?.messages.map((message, i) => (
             <ChatBubble
               key={i}
-              message={message?.sender ? message.text : message}
+              message={message.text}
               sender={message?.sender}
             />
           ))}
+      {status === "loading" && (
+        <div className="flex items-center space-x-1 mr-auto">
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+        </div>
+      )}
     </div>
   );
 };

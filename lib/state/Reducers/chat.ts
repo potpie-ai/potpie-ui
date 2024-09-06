@@ -47,7 +47,7 @@ export const agentRespond = createAsyncThunk<any>(
     const lastUserMessage = currentConversation?.messages
       .filter((message) => message.sender === "user")
       .slice(-1)[0];
-
+    if (lastUserMessage?.sender == "agent") return;
     const response = await axios.post(
       `/conversations/${state.chat.currentConversationId}/message/`,
       {
@@ -84,10 +84,8 @@ const chatSlice = createSlice({
         (conv) => conv.conversationId === action.payload.conversationId
       );
 
-      if (
-        action.payload.conversationId === "temp" &&
-        conversation?.messages.length === 1
-      ) {
+      if (conversation) {
+        conversation.messages.push(action.payload.message);
       }
     },
 
@@ -113,13 +111,13 @@ const chatSlice = createSlice({
   extraReducers(builder) {
     builder.addCase(agentRespond.pending, (state) => {
       state.status = "loading";
-    })
+    });
     builder.addCase(agentRespond.fulfilled, (state, action) => {
       state.status = "active";
       const conversation = state.conversations.find(
         (conv) => conv.conversationId === state.currentConversationId
       );
-      console.log(action.payload);  
+      console.log(action.payload);
 
       if (conversation) {
         conversation.messages.push({
@@ -131,7 +129,7 @@ const chatSlice = createSlice({
     builder.addCase(agentRespond.rejected, (state, action) => {
       console.log(action.payload);
       state.status = "error";
-    })
+    });
   },
 });
 

@@ -16,12 +16,20 @@ import ProfilePicture from "./minors/ProfilePicture";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { signOut } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
+import { useDispatch } from "react-redux";
+import { clearChat } from "@/lib/state/Reducers/chat";
 
 const Sidebar = () => {
   const [progress, setProgress] = React.useState(90);
   const { user } = useAuthContext();
   const router = useRouter();
+  const dispatch = useDispatch();
 
+  const redirectToNewChat = (e:any) => {
+    router.push("/newchat")
+    dispatch(clearChat())
+  }
+  
   React.useEffect(() => {
     const timer = setTimeout(() => setProgress(5), 500);
     return () => clearTimeout(timer);
@@ -37,14 +45,14 @@ const Sidebar = () => {
           </Link>
           <hr className="absolute right-0 -bottom-5 h-px w-full border-0 bg-border" />
         </div>
-        <Button className="flex gap-3 mx-5 mb-9" onClick={() => router.push("/chat")}>
-          <Plus /> <p>New Chat</p>
+        <Button className="flex gap-3 mx-5 mb-9" onClick={() => redirectToNewChat(event)}>
+          <Plus /> <span>New Chat</span>
         </Button>
         <div className="flex-1">
           <nav className="grid items-start ml-5 text-sm font-normal gap-7">
             {SidebarItems.map((item, index) => (
               <div className="" key={index}>
-                <p className="pb-2 text-sm">{item.title}</p>
+                <span className="pb-2 text-sm">{item.title}</span>
                 {item.links.map((link, index) => (
                   <div key={index} className="flex flex-col gap-3">
                     <Link
@@ -59,9 +67,9 @@ const Sidebar = () => {
                       />
                       <div>{link.title} </div>{" "}
                       {link.soon && (
-                        <p className="bg-gradient-to-r from-[#FFAD62] to-[#5356FF] rounded-full px-2 text-[0.6rem]">
+                        <span className="bg-gradient-to-r from-[#FFAD62] to-[#5356FF] rounded-full px-2 text-[0.6rem]">
                           Coming soon
-                        </p>
+                        </span>
                       )}
                     </Link>
                   </div>
@@ -76,8 +84,8 @@ const Sidebar = () => {
             <CardHeader className="p-2 pt-0 md:p-4">
               <CardTitle className="text-lg">Free Plan</CardTitle>
               <CardDescription className="flex flex-row justify-between text-tertiary">
-                <p>Credits used</p>
-                <p>15/5.0k</p>
+                <span>Credits used</span>
+                <span>15/5.0k</span>
               </CardDescription>
             </CardHeader>
             <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex ">
@@ -109,7 +117,7 @@ const Sidebar = () => {
             <ProfilePicture
                       className={`text-icons size-8 "mr-auto" : "mx-auto"`}
                     />
-              <p className="text-m">{user?.displayName}</p>
+              <span className="text-m">{user?.displayName}</span>
             </div>
             <Image
               src={"/images/rightarrow.svg"}

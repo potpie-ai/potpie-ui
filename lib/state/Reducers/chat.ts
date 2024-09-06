@@ -38,7 +38,7 @@ const initialState: chatState = {
 
 export const agentRespond = createAsyncThunk<any>(
   "agentRespond",
-  async (_, { getState }) => {
+  async (arg, { getState }) => {
     const state = getState() as { chat: chatState };
 
     const currentConversation = state.chat.conversations.find(
@@ -89,23 +89,8 @@ const chatSlice = createSlice({
       }
     },
 
-    changeConversationId: (
-      state,
-      action: PayloadAction<{ oldId: string; newId: string }>
-    ) => {
-      const conversation = state.conversations.find(
-        (conv) => conv.conversationId === action.payload.oldId
-      );
-      if (conversation) {
-        if (conversation.conversationId !== "temp") {
-          conversation.conversationId = "temp";
-        }
-
-        if (action.payload.newId) {
-          conversation.conversationId = action.payload.newId;
-          state.currentConversationId = action.payload.newId;
-        }
-      }
+    clearChat: (state) => {
+      return initialState; // Resets the state to the initial values
     },
   },
   extraReducers(builder) {
@@ -117,7 +102,6 @@ const chatSlice = createSlice({
       const conversation = state.conversations.find(
         (conv) => conv.conversationId === state.currentConversationId
       );
-      console.log(action.payload);
 
       if (conversation) {
         conversation.messages.push({
@@ -127,7 +111,6 @@ const chatSlice = createSlice({
       }
     });
     builder.addCase(agentRespond.rejected, (state, action) => {
-      console.log(action.payload);
       state.status = "error";
     });
   },
@@ -139,5 +122,5 @@ export const {
   setChat,
   addConversation,
   addMessageToConversation,
-  changeConversationId,
+  clearChat, 
 } = chatSlice.actions;

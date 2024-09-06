@@ -1,4 +1,3 @@
-import { auth } from "@/configs/Firebase-config";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -6,12 +5,8 @@ import { agentRespond } from "@/lib/state/Reducers/chat";
 import ChatBubble from "./chatbubble";
 
 const ChatInterface = () => {
-  const userId = auth.currentUser?.uid || "";
   const dispatch: AppDispatch = useDispatch();
   const {
-    agentId,
-    projectId,
-    title,
     conversations,
     currentConversationId,
     status,

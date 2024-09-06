@@ -78,19 +78,21 @@ const chatSlice = createSlice({
 
     addMessageToConversation: (
       state,
-      action: PayloadAction<{ conversationId: string; message: Message }>
+      action: PayloadAction<{ message: Message }>
     ) => {
       const conversation = state.conversations.find(
-        (conv) => conv.conversationId === action.payload.conversationId
+        (conv) => conv.conversationId === state.currentConversationId
       );
-
-      if (conversation) {
-        conversation.messages.push(action.payload.message);
-      }
+      if (conversation) conversation.messages.push(action.payload.message);
+      else
+        state.conversations.push({
+          conversationId: state.currentConversationId,
+          messages: [action.payload.message],
+        });
     },
 
     clearChat: (state) => {
-      return initialState; // Resets the state to the initial values
+      return initialState;
     },
   },
   extraReducers(builder) {
@@ -118,9 +120,5 @@ const chatSlice = createSlice({
 
 export default chatSlice.reducer;
 
-export const {
-  setChat,
-  addConversation,
-  addMessageToConversation,
-  clearChat, 
-} = chatSlice.actions;
+export const { setChat, addConversation, addMessageToConversation, clearChat } =
+  chatSlice.actions;

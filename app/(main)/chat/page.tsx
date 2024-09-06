@@ -30,7 +30,6 @@ const Chat = () => {
     if (currentConversationId)
       dispatch(
         addMessageToConversation({
-          conversationId: currentConversationId,
           message: { sender: "user", text: e.target.message.value },
         })
       );

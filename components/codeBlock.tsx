@@ -2,7 +2,12 @@
 import { CodeBlock } from "react-code-block";
 import { themes } from "prism-react-renderer";
 
-function MyCodeBlock({ code, language }) {
+interface MyCodeBlockProps {
+  code: string;
+  language: string;
+}
+
+function MyCodeBlock({ code, language } : MyCodeBlockProps) {
   return (
     <div className="relative">
       <div className="absolute top-2 right-2 bg-gray-200 text-gray-800 text-xs font-semibold px-2 py-1 rounded">

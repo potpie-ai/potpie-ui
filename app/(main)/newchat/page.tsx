@@ -13,7 +13,7 @@ import Image from "next/image";
 import Link from "next/link";
 import axios from "@/configs/httpInterceptor";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "@/lib/state/store";
+import { AppDispatch, RootState } from "@/lib/state/store";
 import { addMessageToConversation, agentRespond, setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
@@ -235,7 +235,7 @@ const Step2 = () => {
 };
 const NewChat = () => {
   const router = useRouter();
-  const dispatch = useDispatch();
+  const dispatch : AppDispatch = useDispatch();
   const { chatStep } = useSelector((state: RootState) => state.chat);
   const {
     currentConversationId,
@@ -264,7 +264,6 @@ const NewChat = () => {
     e.preventDefault();
       dispatch(
         addMessageToConversation({
-          conversationId: currentConversationId,
           message: { sender: "user", text: message },
         })
       );

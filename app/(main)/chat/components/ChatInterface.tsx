@@ -1,14 +1,13 @@
 import { auth } from "@/configs/Firebase-config";
-import { RootState } from "@/lib/state/store";
+import { AppDispatch, RootState } from "@/lib/state/store";
 import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import axios from "@/configs/httpInterceptor";
-import { agentRespond, changeConversationId } from "@/lib/state/Reducers/chat";
+import { agentRespond } from "@/lib/state/Reducers/chat";
 import ChatBubble from "./chatbubble";
 
 const ChatInterface = () => {
   const userId = auth.currentUser?.uid || "";
-  const dispatch = useDispatch();
+  const dispatch: AppDispatch = useDispatch();
   const {
     agentId,
     projectId,
@@ -22,41 +21,10 @@ const ChatInterface = () => {
     const currentConversation = conversations.find(
       (c) => c.conversationId === currentConversationId
     );
-    if (conversations && currentConversation?.messages.length === 1) {
-      const response = await axios
-        .post("/conversations/", {
-          user_id: userId,
-          title: title,
-          status: "active",
-          project_ids: [projectId],
-          agent_ids: [agentId],
-        })
-        .then((res) => {
-          dispatch(
-            changeConversationId({
-              oldId: "temp",
-              newId: res.data.conversation_id,
-            })
-          );
-          dispatch(agentRespond({}));
-          return res.data;
-        })
-        .catch((err) => {
-          console.log(err);
-          return { error: "Unable to create conversation: " + err.message };
-        });
-
-      if (response.error) {
-        console.error(response.error);
-      }
-    } else {
-      const currentConversation = conversations.find(
-        (c) => c.conversationId === currentConversationId
-      );
       const lastUserMessage = currentConversation?.messages.slice(-1)[0];
-      if (lastUserMessage?.sender !== "agent") dispatch(agentRespond({}));
+      if (lastUserMessage?.sender !== "agent") dispatch(agentRespond());
       else return;
-    }
+    
   };
 
   useEffect(() => {

@@ -34,7 +34,6 @@ export default function Signin() {
 
   const provider = new GithubAuthProvider();
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    // console.log(data);
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then((userCredential) => {
         // Signed in
@@ -104,7 +103,7 @@ export default function Signin() {
             <h1 className="text-3xl font-extrabold">Login</h1>
             {/* <p className="text-balance text-secondary">
               Enter your email below to login to your account
-            </p> */}
+            </span> */}
           </div>
           <div className="grid gap-4">
             {/* <FormField

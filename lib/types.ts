@@ -54,3 +54,8 @@ type AgentType = {
   name: string;
   description: string;
 };
+
+interface AxiosResponse {
+  data: any;
+  error?: string;
+}

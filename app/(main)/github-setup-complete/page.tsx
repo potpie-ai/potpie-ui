@@ -21,7 +21,7 @@ export default function SetupComplete() {
   return (
     <div>
       <h1 className="text-primary font-bold text-2xl px-10 pt-10">Setup Complete</h1>
-      <p className="px-10 pt-4" >Your setup is complete, this window will close automatically.</p>
+      <span className="px-10 pt-4" >Your setup is complete, this window will close automatically.</span>
       <div className="px-10 mt-6">
       <Button variant="outline" onClick={()=>closeWindow()}>
         Close Now

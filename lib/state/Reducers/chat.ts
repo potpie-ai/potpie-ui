@@ -1,15 +1,14 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import dayjs from "dayjs";
+import axios from "@/configs/httpInterceptor";
 
 interface Message {
-  id: string;
   text: string;
   sender: "user" | "agent";
-  timestamp: string;
 }
 
 interface Conversation {
-  conversationId: string; // Changed from 'id' to 'conversationId' for clarity
+  conversationId: string;
   messages: Message[];
 }
 
@@ -37,6 +36,29 @@ const initialState: chatState = {
   currentConversationId: "",
 };
 
+export const agentRespond = createAsyncThunk<any>(
+  "agentRespond",
+  async (arg, { getState }) => {
+    const state = getState() as { chat: chatState };
+
+    const currentConversation = state.chat.conversations.find(
+      (c) => c.conversationId === state.chat.currentConversationId
+    );
+    const lastUserMessage = currentConversation?.messages
+      .filter((message) => message.sender === "user")
+      .slice(-1)[0];
+    if (lastUserMessage?.sender == "agent") return;
+    const response = await axios.post(
+      `/conversations/${state.chat.currentConversationId}/message/`,
+      {
+        content: lastUserMessage?.text,
+      }
+    );
+
+    return response.data;
+  }
+);
+
 const chatSlice = createSlice({
   name: "chat",
   initialState,
@@ -44,44 +66,59 @@ const chatSlice = createSlice({
     setChat: (state, action: PayloadAction<Partial<chatState>>) => {
       Object.assign(state, action.payload);
     },
-    addConversation: (state, action: PayloadAction<Conversation>) => {
-      const newConversation = {
-        conversationId: action.payload.conversationId,
+    addConversation: (
+      state,
+      action: PayloadAction<{ id: string; messages: Message[] }>
+    ) => {
+      state.conversations.push({
+        conversationId: action.payload.id,
         messages: action.payload.messages,
-      };
-
-      state.conversations.push(newConversation);
+      });
     },
+
     addMessageToConversation: (
       state,
-      action: PayloadAction<{ conversationId: string; message: Message }>
+      action: PayloadAction<{ message: Message }>
     ) => {
       const conversation = state.conversations.find(
-        (conv) => conv.conversationId === action.payload.conversationId
+        (conv) => conv.conversationId === state.currentConversationId
       );
-      if (conversation) {
-        conversation.messages.push(action.payload.message);
-      }
+      if (conversation) conversation.messages.push(action.payload.message);
+      else
+        state.conversations.push({
+          conversationId: state.currentConversationId,
+          messages: [action.payload.message],
+        });
     },
-    changeConversationId: (
-      state,
-      action: PayloadAction<{ oldId: string; newId: string }>
-    ) => {
+
+    clearChat: (state) => {
+      return initialState;
+    },
+  },
+  extraReducers(builder) {
+    builder.addCase(agentRespond.pending, (state) => {
+      state.status = "loading";
+    });
+    builder.addCase(agentRespond.fulfilled, (state, action) => {
+      state.status = "active";
       const conversation = state.conversations.find(
-        (conv) => conv.conversationId === action.payload.oldId
+        (conv) => conv.conversationId === state.currentConversationId
       );
+
       if (conversation) {
-        conversation.conversationId = action.payload.newId;
+        conversation.messages.push({
+          sender: "agent",
+          text: action.payload,
+        });
       }
-    },
+    });
+    builder.addCase(agentRespond.rejected, (state, action) => {
+      state.status = "error";
+    });
   },
 });
 
 export default chatSlice.reducer;
 
-export const {
-  setChat,
-  addConversation,
-  addMessageToConversation,
-  changeConversationId,
-} = chatSlice.actions;
+export const { setChat, addConversation, addMessageToConversation, clearChat } =
+  chatSlice.actions;

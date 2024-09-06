@@ -152,7 +152,7 @@ const PlanModal = ({
 
                       <div className="absolute left-0 top-8 text-xs text-black">
                         {userSubscription?.cancelOn && (
-                          <p className="font-normal">
+                          <span className="font-normal">
                             Valid until{" "}
                             <span className="font-bold">
                               {" "}
@@ -160,10 +160,10 @@ const PlanModal = ({
                                 userSubscription?.cancelOn
                               ).toLocaleDateString()}
                             </span>
-                          </p>
+                          </span>
                         )}
                         {userSubscription?.nextBillDate && (
-                          <p className="font-bold">
+                          <span className="font-bold">
                             {" "}
                             Renew on{" "}
                             <span className="font-bold">
@@ -171,7 +171,7 @@ const PlanModal = ({
                                 userSubscription?.nextBillDate
                               ).toLocaleDateString()}
                             </span>
-                          </p>
+                          </span>
                         )}
                       </div>
 

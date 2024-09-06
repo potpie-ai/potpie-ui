@@ -12,10 +12,14 @@ import {
 import Image from "next/image";
 import * as Progress from "@radix-ui/react-progress";
 import { useRouter } from "next/navigation";
+import ProfilePicture from "./minors/ProfilePicture";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { signOut } from "firebase/auth";
+import { auth } from "@/configs/Firebase-config";
 
 const Sidebar = () => {
   const [progress, setProgress] = React.useState(90);
-
+  const { user } = useAuthContext();
   const router = useRouter();
 
   React.useEffect(() => {
@@ -37,7 +41,7 @@ const Sidebar = () => {
           <Plus /> <p>New Chat</p>
         </Button>
         <div className="flex-1">
-          <nav className="grid items-start mx-5 text-sm font-normal gap-7">
+          <nav className="grid items-start ml-5 text-sm font-normal gap-7">
             {SidebarItems.map((item, index) => (
               <div className="" key={index}>
                 <p className="pb-2 text-sm">{item.title}</p>
@@ -50,8 +54,8 @@ const Sidebar = () => {
                       <Image
                         src={link.icons}
                         alt="logo"
-                        width={15}
-                        height={15}
+                        width={20}
+                        height={20}
                       />
                       <p>{link.title} </p>{" "}
                       {link.soon && (
@@ -101,16 +105,22 @@ const Sidebar = () => {
         <div className="relative mt-auto px-2 ">
           <hr className="absolute right-0 top-0 h-px w-full border-0 bg-border" />
           <div className="flex justify-between items-center py-3">
-            <div className="flex gap-5 items-center ">
-              <div className="bg-border rounded-full w-7 h-7" />  
-              <p className="text-sm">Your name</p>
+            <div className="flex gap-3 items-center ml-5">
+            <ProfilePicture
+                      className={`text-icons size-8 "mr-auto" : "mx-auto"`}
+                    />
+              <p className="text-m">{user?.displayName}</p>
             </div>
             <Image
               src={"/images/rightarrow.svg"}
               alt="logo"
               width={15}
-              className="mr-3"
+              className="mr-3 cursor-pointer"
               height={15}
+              onClick={() => {
+                signOut(auth);
+                router.push("/sign-in");
+              }}
             />
           </div>
         </div>

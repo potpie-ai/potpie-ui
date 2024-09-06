@@ -42,7 +42,7 @@ const Chat = () => {
   };
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
-      {conversations.length >= 1 && chatStep == 3 ? <NewChat /> : <ChatInterface />}
+      {chatStep == 3 ? <NewChat /> : <ChatInterface />}
       <div className="flex-1" />
       <form
         className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}

@@ -12,10 +12,13 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   className,
   ...props
 }) => {
-
   const extractCode = (message: string) => {
-    const codeMatch = message.match(/```(.*?)```/s);
-    return codeMatch ? codeMatch[1].trim() : "";
+    const codeMatch = message.match(/```(\w+?)\n(.*?)```/s);
+    if (codeMatch) {
+      const [, language, code] = codeMatch;
+      return { language, code: code.trim() };
+    }
+    return { language: "", code: "" };
   };
 
   const removeCode = (message: string) => {
@@ -25,7 +28,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       : message;
   };
 
-  const code = extractCode(message);
+  const { language, code } = extractCode(message);
   const textWithoutCode = removeCode(message);
 
   return (
@@ -42,7 +45,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {textWithoutCode && <p>{textWithoutCode}</p>}
 
       {sender === "agent" && code && (
-        <MyCodeBlock code={code} language="json" />
+        <MyCodeBlock code={code} language={language} />
       )}
     </div>
   );

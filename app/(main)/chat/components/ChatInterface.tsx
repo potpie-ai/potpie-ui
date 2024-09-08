@@ -4,11 +4,10 @@ import { useDispatch, useSelector } from "react-redux";
 import { agentRespond } from "@/lib/state/Reducers/chat";
 import ChatBubble from "./chatbubble";
 
-const ChatInterface = () => {
+const ChatInterface = ({currentConversationId}:{currentConversationId:string}) => {
   const dispatch: AppDispatch = useDispatch();
   const {
     conversations,
-    currentConversationId,
     status,
   } = useSelector((state: RootState) => state.chat);
 

@@ -236,10 +236,8 @@ const Step2 = () => {
 const NewChat = () => {
   const router = useRouter();
   const dispatch : AppDispatch = useDispatch();
-  const { chatStep } = useSelector((state: RootState) => state.chat);
-  const {
-    currentConversationId,
-  } = useSelector((state: RootState) => state.chat);
+  const { chatStep, currentConversationId } = useSelector((state: RootState) => state.chat);
+
   const [message, setMessage] = useState("");
   const steps = [
     {
@@ -263,12 +261,12 @@ const NewChat = () => {
   const handleSubmit = (e: any) => {
     e.preventDefault();
       dispatch(
-        addMessageToConversation({
+        addMessageToConversation({chatId: currentConversationId,
           message: { sender: "user", text: message },
         })
       );
       dispatch(agentRespond());
-      router.push("/chat")
+      router.push(`/chat/${currentConversationId}`);
   };
 
   return (

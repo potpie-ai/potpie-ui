@@ -64,11 +64,11 @@ const Navbar = () => {
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button type="button">cancel</Button>
+                  <Button type="button">Cancel</Button>
                 </DialogClose>
                 <DialogClose asChild>
                   <Button type="button" onClick={handleSave}>
-                    save
+                    Save
                   </Button>
                 </DialogClose>
               </DialogFooter>

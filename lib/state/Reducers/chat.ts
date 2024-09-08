@@ -38,7 +38,7 @@ const initialState: chatState = {
 
 export const agentRespond = createAsyncThunk<any>(
   "agentRespond",
-  async (arg, { getState }) => {
+  async (args, { getState }) => {
     const state = getState() as { chat: chatState };
 
     const currentConversation = state.chat.conversations.find(
@@ -78,15 +78,15 @@ const chatSlice = createSlice({
 
     addMessageToConversation: (
       state,
-      action: PayloadAction<{ message: Message }>
+      action: PayloadAction<{chatId: string; message: Message }>
     ) => {
       const conversation = state.conversations.find(
-        (conv) => conv.conversationId === state.currentConversationId
+        (conv) => conv.conversationId === action.payload.chatId
       );
       if (conversation) conversation.messages.push(action.payload.message);
       else
         state.conversations.push({
-          conversationId: state.currentConversationId,
+          conversationId: action.payload.chatId,
           messages: [action.payload.message],
         });
     },

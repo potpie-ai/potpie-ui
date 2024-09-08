@@ -3,22 +3,38 @@ import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { agentRespond } from "@/lib/state/Reducers/chat";
 import ChatBubble from "./chatbubble";
+import { useQuery } from "@tanstack/react-query";
+import axios from "@/configs/httpInterceptor";
 
-const ChatInterface = ({currentConversationId}:{currentConversationId:string}) => {
+const ChatInterface = ({
+  currentConversationId,
+}: {
+  currentConversationId: string;
+}) => {
   const dispatch: AppDispatch = useDispatch();
-  const {
-    conversations,
-    status,
-  } = useSelector((state: RootState) => state.chat);
+  const { conversations, status } = useSelector(
+    (state: RootState) => state.chat
+  );
+
+  const {data: messages, isLoading: messagesLoading} = useQuery({
+    queryKey: ["chatHistory"],
+    queryFn: () =>
+      axios
+        .get(`/conversations/${currentConversationId}/messages/`, {
+          params: {
+            start: 0,
+          },
+        })
+        .then((res) => res.data).catch((err) => console.log(err)),
+  });
 
   const SendMessage = async () => {
     const currentConversation = conversations.find(
       (c) => c.conversationId === currentConversationId
     );
-      const lastUserMessage = currentConversation?.messages.slice(-1)[0];
-      if (lastUserMessage?.sender !== "agent") dispatch(agentRespond());
-      else return;
-    
+    const lastUserMessage = currentConversation?.messages.slice(-1)[0];
+    if (lastUserMessage?.sender !== "agent") dispatch(agentRespond());
+    else return;
   };
 
   useEffect(() => {

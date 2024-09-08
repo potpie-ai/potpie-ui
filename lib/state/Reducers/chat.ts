@@ -38,7 +38,7 @@ const initialState: chatState = {
 
 export const agentRespond = createAsyncThunk<any>(
   "agentRespond",
-  async (arg, { getState }) => {
+  async (args, { getState }) => {
     const state = getState() as { chat: chatState };
 
     const currentConversation = state.chat.conversations.find(

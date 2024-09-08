@@ -210,10 +210,10 @@ const Step2 = () => {
           : AgentTypes?.map((content, index) => (
               <Card
                 key={index}
-                className="border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E]                "
+                className="pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E]                "
                 onClick={() => createConversation(content.id)}
               >
-                <CardHeader className="p-2 px-6">
+                <CardHeader className="p-2 px-6 font-normal">
                   <CardTitle className="text-lg flex gap-3 text-muted">
                     <Image
                       src={"/images/person.svg"}
@@ -224,7 +224,7 @@ const Step2 = () => {
                     <span>{content.name}</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="text-sm ml-8 text-muted/70 font-semibold">
+                <CardContent className="text-base ml-8 text-muted-foreground leading-tight">
                   {content.description}
                 </CardContent>
               </Card>
@@ -252,7 +252,7 @@ const NewChat = () => {
       label: 3,
       content: (
         <div className="flex flex-col ml-4 w-full">
-          <span className="font-semibold">All Set! Start chatting.</span>
+          <span className="font-semibold text-xl">All Set! Start chatting.</span>
         </div>
       ),
     },
@@ -290,13 +290,13 @@ const NewChat = () => {
             {step.label}
           </div>
           {/* Step Text */}
-          <div className="flex flex-col ml-4 w-full">{step.content}</div>
+          <div className="flex flex-col ml-8 w-full">{step.content}</div>
         </div>
       ))}
     </div>
     <div className="flex-1" />
     <form
-      className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}
+      className={`relative mb-4 mx-16 overflow-hidden rounded-lg bg-card focus-within:ring-1 shadow-md border border-border focus-within:ring-ring ${chatStep !== 3 ? "pointer-events-none" : ""}`}
       onSubmit={handleSubmit}
     >
       <Label htmlFor="message" className="sr-only">
@@ -307,7 +307,7 @@ const NewChat = () => {
         placeholder="Start chatting with the expert...."
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        className="min-h-12 h-[50%] resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
+        className="min-h-12 h-[50%] text-base resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
       />
       <div className="flex items-center p-3 pt-0 ">
         <Tooltip>

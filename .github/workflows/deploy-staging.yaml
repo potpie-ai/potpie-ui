@@ -1,4 +1,4 @@
-name: Build and Deploy to Staging Artifact
+name: Build and Deploy to Staging Artifact and Cloud Run
 
 on:
   push:
@@ -10,6 +10,7 @@ env:
   IMAGE: potpie-app-stage # updated image name
   GAR_ZONE: us-central1 # artifact registry zone
   GAR_REPO: potpie-frontend # updated artifact registry repository
+  CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
 
 jobs:
   setup-build-publish-deploy:
@@ -86,3 +87,13 @@ jobs:
       - name: Publish
         run: |-
           docker push "$IMAGE_TAG"
+
+      # Deploy to Cloud Run
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
+            --image ${{ env.IMAGE_TAG }} \
+            --project ${{ env.PROJECT_ID }} \
+            --region ${{ env.GAR_ZONE }} \
+            --platform managed \
+            --allow-unauthenticated

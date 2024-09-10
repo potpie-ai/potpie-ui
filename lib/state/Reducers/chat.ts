@@ -42,7 +42,7 @@ export const chatHistory = createAsyncThunk<any, any>(
   async (args, { getState }) => {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    const response = await axios.get(`${baseUrl}conversations/${args.chatId}/messages/`,{headers:headers});
+    const response = await axios.get(`${baseUrl}/conversations/${args.chatId}/messages/`,{headers:headers});
     return response.data;
   }
 );
@@ -62,7 +62,7 @@ export const agentRespond = createAsyncThunk<any,any>(
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const response = await axios.post(
-        `${baseUrl}conversations/${state.chat.currentConversationId}/message`,
+        `${baseUrl}/conversations/${state.chat.currentConversationId}/message`,
         {
           content: lastUserMessage?.text,
         },

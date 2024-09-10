@@ -62,7 +62,7 @@ export default function SignUp() {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const userSignup = axios
-        .post(`${baseUrl}signup`, result,{headers:headers})
+        .post(`${baseUrl}/signup`, result,{headers:headers})
         .then((res) => res.data)
         .catch((e) => {
           toast.error("Signup call unsuccessful");

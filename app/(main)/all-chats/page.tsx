@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import React, { useState, useEffect } from "react";
-import axios from "@/configs/httpInterceptor";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
@@ -12,14 +11,23 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import debounce from "debounce";
+import getHeaders from "@/app/utils/headers.util";
+import axios from "axios";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["all-chats"],
-    queryFn: () => axios.get("/user/conversations").then((res) => res.data),
+    queryFn: async () => {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const response = await axios.get(`${baseUrl}/user/conversations`, {
+        headers: headers,
+      });
+        return response.data;
+    }
   });
 
   useEffect(() => {

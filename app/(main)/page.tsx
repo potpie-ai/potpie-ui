@@ -46,7 +46,7 @@ const MyProjects = () => {
         // TODO: Additional user properties can be set here
       });
     }
-  }, [user]);
+  }, [posthog, user]);
 
   useEffect(() => {
     if (pathname && posthog) {
@@ -59,7 +59,7 @@ const MyProjects = () => {
         $current_user: user,
       });
     }
-  }, [pathname, searchParams, posthog]);
+  }, [user, pathname, searchParams, posthog]);
 
   useEffect(() => {
     /*

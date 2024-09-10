@@ -36,8 +36,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       className={cn(
         "rounded-lg px-4 py-2 max-w-[75%] break-words",
         sender === "user"
-          ? "bg-blue-500 text-white ml-auto"
-          : "bg-gray-200 text-gray-800 mr-auto",
+          ? "bg-primary text-white ml-auto"
+          : "bg-gray-200 text-muted mr-auto",
         className
       )}
       {...props}

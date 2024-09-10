@@ -41,10 +41,10 @@ const Navbar = () => {
           </Link>
         </div>
         <div className="flex items-center w-full px-6 pb-2 gap-5 ">
-          <Image src={"/images/msg.svg"} alt="logo" width={20} height={20} />
+          <Image src={"/images/msg-grey.svg"} alt="logo" width={20} height={20} />
           <Dialog>
             <DialogTrigger>
-              <span className="text-muted">{title}</span>
+              <span className="text-muted text-xl">{title}</span>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[487px]" showX={false}>
               <DialogHeader>
@@ -64,11 +64,11 @@ const Navbar = () => {
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button type="button">cancel</Button>
+                  <Button type="button">Cancel</Button>
                 </DialogClose>
                 <DialogClose asChild>
                   <Button type="button" onClick={handleSave}>
-                    save
+                    Save
                   </Button>
                 </DialogClose>
               </DialogFooter>

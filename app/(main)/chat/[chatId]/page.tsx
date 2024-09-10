@@ -56,7 +56,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       <ChatInterface currentConversationId={currentConversationId} />
       <div className="flex-1" />
       <form
-        className={`relative pb-3 ml-20 overflow-hidden rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring shadow-2xl ${chatStep !== 3 ? "pointer-events-none" : ""}`}
+        className={`relative mb-4 mx-16 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md ${chatStep !== 3 ? "pointer-events-none" : ""}`}
         onSubmit={handleSubmit}
       >
         <Label htmlFor="message" className="sr-only">
@@ -66,7 +66,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           ref={messageRef}
           id="message"
           placeholder="Start chatting with the expert...."
-          className="min-h-12 h-[50%] resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
+          className="min-h-12 h-[50%] text-base resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
         />
         <div className="flex items-center p-3 pt-0 ">
           <Tooltip>

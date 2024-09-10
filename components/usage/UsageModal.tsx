@@ -45,7 +45,7 @@ const UsageModal = ({
                     }
                 }}
             >
-                <DialogContent className="min-w-[640px] min-h-[300px] px-8 py-6 bg-background">
+                <DialogContent className="min-w-[640px] min-h-[300px] px-8 py-6 bg-card">
                     <DialogHeader>
                         <DialogTitle className="flex justify-between mb-2">
                             <div className="text-xl font-semibold">Usage</div>

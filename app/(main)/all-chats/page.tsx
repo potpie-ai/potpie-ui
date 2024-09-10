@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "@/configs/httpInterceptor";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -11,12 +11,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import debounce from "debounce";
+
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+
   const { data, isLoading } = useQuery({
     queryKey: ["all-chats"],
     queryFn: () => axios.get("/user/conversations").then((res) => res.data),
   });
+
+  useEffect(() => {
+    const handler = debounce((value) => {
+      setDebouncedSearchTerm(value);
+    }, 500);
+
+    handler(searchTerm);
+
+    return () => {
+      handler.clear();
+    };
+  }, [searchTerm]);
+
   return (
     <section className="max-w-2xl w-full space-y-4 h-full mx-auto">
       <div className="flex w-full mx-auto items-center space-x-2">
@@ -26,7 +43,6 @@ const AllChats = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        {/* <Button type="submit">search</Button> */}
       </div>
       {isLoading ? (
         <>
@@ -38,7 +54,7 @@ const AllChats = () => {
         <>
           {data
             .filter((chat: any) =>
-              chat.title.toLowerCase().includes(searchTerm.toLowerCase())
+              chat.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
             )
             .map((chat: any) => (
               <Card key={chat.id} className="border-none shadow-lg">

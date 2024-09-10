@@ -83,6 +83,9 @@ importers:
       dayjs:
         specifier: ^1.11.11
         version: 1.11.11
+      debounce:
+        specifier: ^2.1.1
+        version: 2.1.1
       elkjs:
         specifier: ^0.9.3
         version: 0.9.3
@@ -1663,6 +1666,10 @@ packages:
 
   dayjs@1.11.11:
     resolution: {integrity: sha512-okzr3f11N6WuqYtZSvm+F776mB41wRZMhKP+hc34YdW+KmtYYK9iqvHSwo2k9FEH3fhGXvOPV6yz2IcSrfRUDg==}
+
+  debounce@2.1.1:
+    resolution: {integrity: sha512-+xRWxgel9LgTC4PwKlm7TJUK6B6qsEK77NaiNvXmeQ7Y3e6OVVsBC4a9BSptS/mAYceyAz37Oa8JTTuPRft7uQ==}
+    engines: {node: '>=18'}
 
   debug@3.2.7:
     resolution: {integrity: sha512-CFjzYYAi4ThfiQvizrFQevTTXHtnCqWfe7x1AhgEscTz6ZbLbfoLRLPugTQyBth6f8ZERVUSyWHFD/7Wu4t1XQ==}
@@ -4885,6 +4892,8 @@ snapshots:
       is-data-view: 1.0.1
 
   dayjs@1.11.11: {}
+
+  debounce@2.1.1: {}
 
   debug@3.2.7:
     dependencies:

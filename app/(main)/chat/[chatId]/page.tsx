@@ -15,6 +15,7 @@ import ChatInterface from "../components/ChatInterface";
 import {
   addConversation,
   addMessageToConversation,
+  agentRespond,
   setChat,
 } from "@/lib/state/Reducers/chat";
 import { useRef } from "react";
@@ -47,7 +48,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           ],
         })
       );
-
+      dispatch(agentRespond());
     if (messageRef.current) messageRef.current.value = "";
   };
   return (

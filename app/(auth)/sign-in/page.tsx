@@ -16,7 +16,9 @@ import {
 } from "@/components/ui/form";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
-import axios from "@/configs/httpInterceptor";
+import axios from "axios";
+import { headers } from "next/headers";
+import getHeaders from "@/app/utils/headers.util";
 
 
 export default function Signin() {
@@ -35,11 +37,12 @@ export default function Signin() {
   const provider = new GithubAuthProvider();
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     signInWithEmailAndPassword(auth, data.email, data.password)
-      .then((userCredential) => {
+      .then(async (userCredential) => {
         // Signed in
         const user = userCredential.user;
+        const headers = await getHeaders();
         const userSignup = axios
-          .post(`/signup`, user)
+          .post(`/signup`, user,{headers:headers})
           .then((res) => res.data)
           .catch((e) => {
             toast.error("Signup call unsuccessful");

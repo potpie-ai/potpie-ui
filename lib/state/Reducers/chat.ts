@@ -1,6 +1,7 @@
+import getHeaders from "@/app/utils/headers.util";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import axios from "axios";
 import dayjs from "dayjs";
-import axios from "@/configs/httpInterceptor";
 
 interface Message {
   text: string;
@@ -36,9 +37,18 @@ const initialState: chatState = {
   currentConversationId: "",
 };
 
-export const agentRespond = createAsyncThunk<any>(
-  "agentRespond",
+export const chatHistory = createAsyncThunk<any, any>(
+  "chatHistory",
   async (args, { getState }) => {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    const response = await axios.get(`${baseUrl}conversations/${args.chatId}/messages/`,{headers:headers});
+    return response.data;
+  }
+);
+export const agentRespond = createAsyncThunk<any,any>(
+  "agentRespond",
+  async (_, { getState }) => {
     const state = getState() as { chat: chatState };
 
     const currentConversation = state.chat.conversations.find(
@@ -48,14 +58,24 @@ export const agentRespond = createAsyncThunk<any>(
       .filter((message) => message.sender === "user")
       .slice(-1)[0];
     if (lastUserMessage?.sender == "agent") return;
-    const response = await axios.post(
-      `/conversations/${state.chat.currentConversationId}/message/`,
-      {
-        content: lastUserMessage?.text,
-      }
-    );
+    try {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const response = await axios.post(
+        `${baseUrl}conversations/${state.chat.currentConversationId}/message`,
+        {
+          content: lastUserMessage?.text,
+        },
+        {
+          headers: headers,
+        }
+      );
 
-    return response.data;
+      return response.data;
+    } catch (error) {
+      console.error("Error in agentRespond:", error);
+      throw error;
+    }
   }
 );
 
@@ -78,7 +98,7 @@ const chatSlice = createSlice({
 
     addMessageToConversation: (
       state,
-      action: PayloadAction<{chatId: string; message: Message }>
+      action: PayloadAction<{ chatId: string; message: Message }>
     ) => {
       const conversation = state.conversations.find(
         (conv) => conv.conversationId === action.payload.chatId
@@ -113,6 +133,28 @@ const chatSlice = createSlice({
       }
     });
     builder.addCase(agentRespond.rejected, (state, action) => {
+      state.status = "error";
+    });
+
+    builder.addCase(chatHistory.pending, (state) => {
+      state.status = "loading";
+    });
+    builder.addCase(chatHistory.fulfilled, (state, action) => {
+      state.status = "active";
+      const currentConversation = state.conversations.find(
+        (conv) => conv.conversationId === action.payload[0].id
+      );
+
+      if (currentConversation) {
+        currentConversation.messages = action.payload.map((message:any) => (
+          {
+            text: message.content,
+            sender: message.sender === "HUMAN" ? "user" : message.sender === "AI_GENERATED" ? "agent" : "",
+          }
+        ));
+      }
+    });
+    builder.addCase(chatHistory.rejected, (state, action) => {
       state.status = "error";
     });
   },

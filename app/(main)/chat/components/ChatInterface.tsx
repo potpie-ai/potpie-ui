@@ -1,10 +1,8 @@
 import { AppDispatch, RootState } from "@/lib/state/store";
 import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { agentRespond } from "@/lib/state/Reducers/chat";
+import { agentRespond, chatHistory } from "@/lib/state/Reducers/chat";
 import ChatBubble from "./chatbubble";
-import { useQuery } from "@tanstack/react-query";
-import axios from "@/configs/httpInterceptor";
 
 const ChatInterface = ({
   currentConversationId,
@@ -16,30 +14,10 @@ const ChatInterface = ({
     (state: RootState) => state.chat
   );
 
-  const {data: messages, isLoading: messagesLoading} = useQuery({
-    queryKey: ["chatHistory"],
-    queryFn: () =>
-      axios
-        .get(`/conversations/${currentConversationId}/messages/`, {
-          params: {
-            start: 0,
-          },
-        })
-        .then((res) => res.data).catch((err) => console.log(err)),
-  });
-
-  const SendMessage = async () => {
-    const currentConversation = conversations.find(
-      (c) => c.conversationId === currentConversationId
-    );
-    const lastUserMessage = currentConversation?.messages.slice(-1)[0];
-    if (lastUserMessage?.sender !== "agent") dispatch(agentRespond());
-    else return;
-  };
 
   useEffect(() => {
-    SendMessage();
-  }, [conversations]);
+    if (currentConversationId) dispatch(chatHistory({ chatId: currentConversationId }));
+  }, []);
 
   return (
     <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">

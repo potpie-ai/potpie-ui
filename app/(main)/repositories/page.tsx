@@ -18,7 +18,7 @@ const AllRepos = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["all-chats"],
+    queryKey: ["all-repos"],
     queryFn: () => axios.get("/github/user-repos").then((res) => res.data.repositories),
   });
 

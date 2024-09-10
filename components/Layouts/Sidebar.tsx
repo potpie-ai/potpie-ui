@@ -159,7 +159,7 @@ const SidebarItems = [
       {
         icons: "/images/git.svg",
         title: "Repositories",
-        href:"#"
+        href:"repositories"
       },
       {
         icons: "/images/document.svg",

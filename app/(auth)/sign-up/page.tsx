@@ -22,7 +22,9 @@ import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Github, Loader2 } from "lucide-react";
-import axios from "@/configs/httpInterceptor";
+import axios from "axios";
+import { headers } from "next/headers";
+import getHeaders from "@/app/utils/headers.util";
 
 export default function SignUp() {
   const formSchema = z.object({
@@ -57,8 +59,10 @@ export default function SignUp() {
       toast.success(
         "Account created successfully as  " + result.user.displayName
       );
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const userSignup = axios
-        .post(`/signup`, result)
+        .post(`${baseUrl}signup`, result,{headers:headers})
         .then((res) => res.data)
         .catch((e) => {
           toast.error("Signup call unsuccessful");

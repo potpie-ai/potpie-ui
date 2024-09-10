@@ -1,12 +1,16 @@
 "use client";
-import axios from "@/configs/httpInterceptor";
 
-export const CreateConversation = (
+import getHeaders from "@/app/utils/headers.util";
+import axios from "axios";
+
+export const CreateConversation = async (
   userId: string,
   projectId: string,
   agentId: string,
   title: string
 ) => {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  const headers = await getHeaders()
   const response = axios
     .post("/conversations/", {
       user_id: userId,
@@ -14,7 +18,7 @@ export const CreateConversation = (
       status: "active",
       project_ids: [projectId],
       agent_ids: [agentId],
-    })
+    }, {headers:headers})
     .then((res) => {
       return res.data;
     })

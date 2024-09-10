@@ -11,7 +11,6 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle, GitBranch, Github, Loader, Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import axios from "@/configs/httpInterceptor";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { addMessageToConversation, agentRespond, setChat } from "@/lib/state/Reducers/chat";
@@ -24,6 +23,8 @@ import { Tooltip, TooltipContent } from "@radix-ui/react-tooltip";
 import { Button } from "@/components/ui/button";
 import { TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
+import axios from "axios";
+import getHeaders from "@/app/utils/headers.util";
 
 const Step1 = () => {
   const dispatch = useDispatch();
@@ -32,10 +33,12 @@ const Step1 = () => {
   );
   const [parsingStatus, setParsingStatus] = useState<string | boolean>(false);
 
-  const parseRepo = (repo_name: string, branch_name: string) => {
+  const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     const parseResponse = axios
-      .post(`/parse`, { repo_name, branch_name })
+      .post(`${baseUrl}parse`, { repo_name, branch_name }, { headers: headers })
       .then((res) => {
         if (repoName !== null || branchName !== null) {
           dispatch(setChat({ projectId: res.data.project_id }));
@@ -49,31 +52,38 @@ const Step1 = () => {
         return err;
       });
   };
-  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
-    UserRepo[]
-  >({
+
+  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<UserRepo[]>({
     queryKey: ["user-repository"],
-    queryFn: () =>
-      axios.get(`/github/user-repos`).then((res) => res.data.repositories),
+    queryFn: async () => {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const response = await axios.get(`${baseUrl}github/user-repos`, { headers });
+      return response.data.repositories;
+    },
   });
+
   const {
     data: UserBranch,
     isLoading: UserBranchLoading,
     error: UserBranchError,
   } = useQuery<UserRepo[]>({
-    queryKey: ["user-branch"],
-    queryFn: () =>
-      axios
-        .get(`/github/get-branch-list`, {
-          params: {
-            repo_name: repoName,
-          },
-        })
-        .then((res) => {
-          return res.data.branches;
-        }),
-    enabled: !!repoName && repoName !== "",
+    queryKey: ["user-branch", repoName],  
+    queryFn: async () => {
+      const headers = await getHeaders();  // Wait for the headers
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;  // Read base URL from the environment variable
+
+      const response = await axios.get(`${baseUrl}github/get-branch-list`, {
+        params: {
+          repo_name: repoName,  // Add the repo name as a parameter
+        },
+        headers: headers,  
+      });
+      return response.data.branches; 
+    },
+    enabled: !!repoName && repoName !== "",  
   });
+
   return (
     <div className="text-muted">
       <h1 className="text-xl">Select a repository and branch</h1>
@@ -168,25 +178,31 @@ const Step2 = () => {
     projectId,
     title,
   } = useSelector((state: RootState) => state.chat);
-  const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
-    AgentType[]
-  >({
+  const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<AgentType[]>({
     queryKey: ["agent-types"],
-    queryFn: () => axios.get(`/list-available-agents/`).then((res) => {
-      return res.data
-    }),
+    queryFn: async () => {
+      const headers = await getHeaders();  // Fetch the headers asynchronously
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;  // Read base URL from the environment variable
+        const response = await axios.get(`${baseUrl}list-available-agents/`, {
+        headers: headers,
+      });
+  
+      return response.data;  
+    },
   });
   const [selectedCard, setSelectedCard] = useState("999");
   const createConversation = async (event: any) => {
     dispatch(setChat({ agentId: event, chatStep: 3 }));
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     const response = await axios
-      .post("/conversations/", {
+      .post(`${baseUrl}conversations/`, {
         user_id: userId,
         title: title,
         status: "active",
         project_ids: [projectId],
         agent_ids: [event],
-      })
+      },{headers:headers})
       .then((res) => {
         dispatch(setChat({ currentConversationId: res.data.conversation_id }))
         return res.data;
@@ -212,8 +228,8 @@ const Step2 = () => {
             <Card
               key={index}
               className={`pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 ${selectedCard === content.id
-                  ? "border-[#FFB36E] border-2"
-                  : "hover:border-[#FFB36E] hover:border-2"
+                ? "border-[#FFB36E] border-2"
+                : "hover:border-[#FFB36E] hover:border-2"
                 }`}
               onClick={() => {
                 createConversation(content.id);
@@ -273,6 +289,7 @@ const NewChat = () => {
         message: { sender: "user", text: message },
       })
     );
+    //@ts-ignore
     dispatch(agentRespond());
     router.push(`/chat/${currentConversationId}`);
   };
@@ -293,10 +310,10 @@ const NewChat = () => {
             {/* Step Circle */}
             <div
               className={`flex items-center justify-center w-8 h-8 rounded-full z-10 ${step.label === 3 && chatStep === 3
-                  ? "bg-[#00C313] text-white" 
-                  : step.label <= (chatStep ?? 0)
-                    ? "bg-white text-border border-2 border-accent" 
-                    : "bg-border text-white"
+                ? "bg-[#00C313] text-white"
+                : step.label <= (chatStep ?? 0)
+                  ? "bg-white text-border border-2 border-accent"
+                  : "bg-border text-white"
                 }`}
             >
               {step.label}

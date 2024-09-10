@@ -48,6 +48,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           ],
         })
       );
+      //@ts-ignore
       dispatch(agentRespond());
     if (messageRef.current) messageRef.current.value = "";
   };

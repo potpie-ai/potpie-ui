@@ -1,6 +1,7 @@
+import getHeaders from "@/app/utils/headers.util";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import axios from "axios";
 import dayjs from "dayjs";
-import axios from "@/configs/httpInterceptor";
 
 interface Message {
   text: string;
@@ -39,8 +40,9 @@ const initialState: chatState = {
 export const chatHistory = createAsyncThunk<any, any>(
   "chatHistory",
   async (args, { getState }) => {
-    const response = await axios.get(`/conversations/${args.chatId}/messages/`);
-
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    const response = await axios.get(`${baseUrl}conversations/${args.chatId}/messages/`,{headers:headers});
     return response.data;
   }
 );
@@ -56,14 +58,24 @@ export const agentRespond = createAsyncThunk<any,any>(
       .filter((message) => message.sender === "user")
       .slice(-1)[0];
     if (lastUserMessage?.sender == "agent") return;
-    const response = await axios.post(
-      `/conversations/${state.chat.currentConversationId}/message/`,
-      {
-        content: lastUserMessage?.text,
-      }
-    );
+    try {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const response = await axios.post(
+        `${baseUrl}conversations/${state.chat.currentConversationId}/message`,
+        {
+          content: lastUserMessage?.text,
+        },
+        {
+          headers: headers,
+        }
+      );
 
-    return response.data;
+      return response.data;
+    } catch (error) {
+      console.error("Error in agentRespond:", error);
+      throw error;
+    }
   }
 );
 

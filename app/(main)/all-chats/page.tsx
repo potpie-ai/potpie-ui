@@ -14,7 +14,7 @@ import {
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const { data, isLoading } = useQuery({
-    queryKey: ["all-chats", searchTerm],
+    queryKey: ["all-chats"],
     queryFn: () => axios.get("/user/conversations").then((res) => res.data),
   });
   return (

@@ -32,7 +32,7 @@ const Onboarding = () => {
   };
   return (
     <section className="flex items-center justify-between w-full h-screen relative">
-      <div className="w-full bg-[#515983] h-full flex flex-col items-center justify-center gap-20">
+      <div className="w-full bg-[#515983] h-full flex flex-col items-center justify-center gap-28">
         <div className="h-3/6 w-3/5 bg-white rounded-3xl relative">
           <div className="flex justify-between flex-col w-full h-full">
             <div className="mt-auto py-6 px-4 flex flex-col gap-5 h-full">

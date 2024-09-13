@@ -13,6 +13,7 @@ import {
 import debounce from "debounce";
 import getHeaders from "@/app/utils/headers.util";
 import axios from "axios";
+import Link from "next/link";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -65,12 +66,14 @@ const AllChats = () => {
               chat.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
             )
             .map((chat: any) => (
-              <Card key={chat.id} className="border-none shadow-lg">
+              <Link key={chat.id} href={`/chat/${chat.id}`}>
+              <Card className="border-none shadow-lg hover:scale-105">
                 <CardHeader className="py-3">
                   <CardTitle className="text-xl">{chat.title}</CardTitle>
                   <CardDescription>Description</CardDescription>
                 </CardHeader>
               </Card>
+              </Link>
             ))}
         </>
       )}

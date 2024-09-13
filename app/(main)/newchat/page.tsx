@@ -13,7 +13,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
-import { addMessageToConversation, agentRespond, setChat } from "@/lib/state/Reducers/chat";
+import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
 import { auth } from "@/configs/Firebase-config";
@@ -289,8 +289,6 @@ const NewChat = () => {
         message: { sender: "user", text: message },
       })
     );
-    //@ts-ignore
-    dispatch(agentRespond());
     router.push(`/chat/${currentConversationId}`);
   };
 

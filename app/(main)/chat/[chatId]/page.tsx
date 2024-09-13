@@ -1,5 +1,8 @@
 "use client";
-import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
+import React, { useRef } from "react";
+import ChatInterface from "../components/ChatInterface";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -7,59 +10,164 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { LucideRepeat2, Plus } from "lucide-react";
 import Image from "next/image";
+import getHeaders from "@/app/utils/headers.util";
 import { useDispatch, useSelector } from "react-redux";
+import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { RootState } from "@/lib/state/store";
-import ChatInterface from "../components/ChatInterface";
-import {
-  addConversation,
-  addMessageToConversation,
-  agentRespond,
-  setChat,
-} from "@/lib/state/Reducers/chat";
-import { useRef } from "react";
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
-  const { chatStep } = useSelector((state: RootState) => state.chat);
-  const currentConversationId = params.chatId;
   const dispatch = useDispatch();
-  if (currentConversationId !== "" && currentConversationId !== "temp")
-    dispatch(setChat({ currentConversationId: currentConversationId }));
+  const { conversations } = useSelector((state: RootState) => state.chat);
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
   const messageRef = useRef<HTMLTextAreaElement>(null);
-  const handleSubmit = (e: any) => {
-    e.preventDefault();
-    if (currentConversationId)
+
+  const {
+    data: conversationMessages,
+    isLoading: conversationMessagesLoading,
+    error: conversationMessagesError,
+  } = useQuery({
+    queryKey: ["chat-messages", params.chatId],
+    queryFn: async () => {
+      const headers = await getHeaders();
+      dispatch(setChat({ currentConversationId: params.chatId }));
+      const response = await axios.get(
+        `${baseUrl}/conversations/${params.chatId}/messages/`,
+        {
+          headers: headers,
+          params: {
+            start: 0,
+            limit: 10,
+          },
+        }
+      );
+      if (conversations.find((c) => c.conversationId === params.chatId))
+        return response.data;
+      response.data.map((m: any) =>
+        dispatch(
+          addMessageToConversation({
+            chatId: params.chatId,
+            message: {
+              sender: m.type === "SYSTEM_GENERATED" ? "agent" : "user",
+              text: m.content,
+            },
+          })
+        )
+      );
+      return response.data;
+    },
+  });
+
+  const {
+    data: chatResponse,
+    isLoading: chatResponseLoading,
+    error: chatResponseError,
+    refetch: refetchChat,
+  } = useQuery({
+    queryKey: ["new-message", params.chatId],
+    queryFn: async () => {
+      const headers = await getHeaders();
+      if (messageRef.current && messageRef.current.value === "") return;
+      const response = await axios.post(
+        `https://momentumv2-backend-cj6r7x3fpa-uc.a.run.app/api/v1/conversations/${params.chatId}/message`,
+        {
+          content: messageRef.current?.value,
+        },
+        {
+          headers: headers,
+        }
+      );
       dispatch(
         addMessageToConversation({
-          chatId: currentConversationId,
-          message: { sender: "user", text: e.target.message.value },
+          chatId: params.chatId,
+          message: { sender: "agent", text: response.data.content },
         })
       );
-    else
-      dispatch(
-        addConversation({
-          id: "temp",
-          messages: [
-            {
-              sender: "user",
-              text: e.target.message.value,
-            },
-          ],
-        })
+      dispatch(setChat({ status: "active" }));
+      return response.data;
+    },
+    retry: false,
+    enabled: messageRef.current?.value !== "",
+  });
+
+  const agentRespond = async ({
+    chatId,
+    userMessage,
+  }: {
+    chatId: string;
+    userMessage: string;
+  }) => {
+    try {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const response = await axios.post(
+        `${baseUrl}/conversations/${chatId}/message`,
+        {
+          content: userMessage,
+        },
+        {
+          headers: headers,
+        }
       );
-      //@ts-ignore
-      dispatch(agentRespond());
-    if (messageRef.current) messageRef.current.value = "";
+      if (response.data) {
+        dispatch(
+          addMessageToConversation({
+            chatId: chatId,
+            message: { sender: "agent", text: response.data.content },
+          })
+        );
+        dispatch(setChat({ status: "active" }));
+      }
+      return response.data;
+    } catch (error) {
+      console.error("Error in agentRespond:", error);
+      throw error;
+    }
   };
+
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+    // refetchChat();
+    agentRespond({
+      chatId: params.chatId,
+      userMessage: messageRef.current?.value || "",
+    });
+    dispatch(
+      addMessageToConversation({
+        chatId: params.chatId,
+        message: { sender: "user", text: messageRef.current?.value || "" },
+      })
+    );
+    dispatch(setChat({ status: "loading" }));
+
+    // if (messageRef.current) messageRef.current.value = "";
+  };
+
+  const { refetch: Regenerate } = useQuery({
+    queryKey: ["regenerate", params.chatId],
+    queryFn: async () => {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const headers = await getHeaders();
+      axios.patch(`${baseUrl}/conversations/${params.chatId}/rename/`, {
+        headers: headers,
+      });
+    },
+    enabled: false,
+  });
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
-      <ChatInterface currentConversationId={currentConversationId} />
+      <ChatInterface currentConversationId={params.chatId} />
       <div className="flex-1" />
       <form
-        className={`relative mb-4 mx-16 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md ${chatStep !== 3 ? "pointer-events-none" : ""}`}
+        className={`relative mb-4 mx-16 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md flex flex-col `}
         onSubmit={handleSubmit}
       >
+        <Button className="ml-auto my-2 gap-2" variant="secondary" onClick={()=> Regenerate()}>
+          <LucideRepeat2 /> Regenerate
+        </Button>
         <Label htmlFor="message" className="sr-only">
           Message
         </Label>

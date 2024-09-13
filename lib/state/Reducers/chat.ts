@@ -68,7 +68,16 @@ const chatSlice = createSlice({
           messages: [action.payload.message],
         });
     },
-
+    removeLastMessage:  (
+      state,
+      action: PayloadAction<{ chatId: string; }>
+    ) => {
+      const conversation = state.conversations.find(
+        (conv) => conv.conversationId === action.payload.chatId
+      );
+      if (conversation) conversation.messages.pop();
+      state.status = "loading";
+    },
     clearChat: (state) => {
       return initialState;
     },
@@ -77,5 +86,5 @@ const chatSlice = createSlice({
 
 export default chatSlice.reducer;
 
-export const { setChat, addConversation, addMessageToConversation, clearChat } =
+export const { setChat, addConversation, addMessageToConversation, clearChat,removeLastMessage } =
   chatSlice.actions;

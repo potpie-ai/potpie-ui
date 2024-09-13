@@ -72,7 +72,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const headers = await getHeaders();
       if (messageRef.current && messageRef.current.value === "") return;
       const response = await axios.post(
-        `https://momentumv2-backend-cj6r7x3fpa-uc.a.run.app/api/v1/conversations/${params.chatId}/message`,
+        `${baseUrl}/conversations/${params.chatId}/message/`,
         {
           content: messageRef.current?.value,
         },
@@ -83,58 +83,19 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       dispatch(
         addMessageToConversation({
           chatId: params.chatId,
-          message: { sender: "agent", text: response.data.content },
+          message: { sender: "agent", text: response.data },
         })
       );
       dispatch(setChat({ status: "active" }));
       return response.data;
     },
     retry: false,
-    enabled: messageRef.current?.value !== "",
+    enabled: false,
   });
-
-  const agentRespond = async ({
-    chatId,
-    userMessage,
-  }: {
-    chatId: string;
-    userMessage: string;
-  }) => {
-    try {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.post(
-        `${baseUrl}/conversations/${chatId}/message`,
-        {
-          content: userMessage,
-        },
-        {
-          headers: headers,
-        }
-      );
-      if (response.data) {
-        dispatch(
-          addMessageToConversation({
-            chatId: chatId,
-            message: { sender: "agent", text: response.data.content },
-          })
-        );
-        dispatch(setChat({ status: "active" }));
-      }
-      return response.data;
-    } catch (error) {
-      console.error("Error in agentRespond:", error);
-      throw error;
-    }
-  };
 
   const handleSubmit = (e: any) => {
     e.preventDefault();
-    // refetchChat();
-    agentRespond({
-      chatId: params.chatId,
-      userMessage: messageRef.current?.value || "",
-    });
+    refetchChat();
     dispatch(
       addMessageToConversation({
         chatId: params.chatId,
@@ -143,20 +104,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     );
     dispatch(setChat({ status: "loading" }));
 
-    // if (messageRef.current) messageRef.current.value = "";
+    if (messageRef.current) messageRef.current.value = "";
   };
 
-  const { refetch: Regenerate } = useQuery({
-    queryKey: ["regenerate", params.chatId],
-    queryFn: async () => {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const headers = await getHeaders();
-      axios.patch(`${baseUrl}/conversations/${params.chatId}/rename/`, {
-        headers: headers,
-      });
-    },
-    enabled: false,
-  });
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
       <ChatInterface currentConversationId={params.chatId} />
@@ -165,9 +115,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         className={`relative mb-4 mx-16 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md flex flex-col `}
         onSubmit={handleSubmit}
       >
-        <Button className="ml-auto my-2 gap-2" variant="secondary" onClick={()=> Regenerate()}>
-          <LucideRepeat2 /> Regenerate
-        </Button>
         <Label htmlFor="message" className="sr-only">
           Message
         </Label>

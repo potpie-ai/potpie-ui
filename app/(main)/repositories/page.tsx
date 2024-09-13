@@ -59,7 +59,7 @@ const AllRepos = () => {
           ))}
         </>
       ) : (
-        <>
+        <div className="flex flex-col gap-4">
           {data
             .filter((repo: any) =>
               repo.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
@@ -72,7 +72,7 @@ const AllRepos = () => {
                 </CardHeader>
               </Card>
             ))}
-        </>
+        </div>
       )}
     </section>
   );

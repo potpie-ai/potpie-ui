@@ -33,51 +33,9 @@ const initialState: chatState = {
   projectId: "",
   conversations: [],
   title: dayjs().format("MMMM DD, YYYY") + " Untitled",
-  status: "active",
+  status: "loading",
   currentConversationId: "",
 };
-
-export const chatHistory = createAsyncThunk<any, any>(
-  "chatHistory",
-  async (args, { getState }) => {
-    const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    const response = await axios.get(`${baseUrl}/conversations/${args.chatId}/messages/`,{headers:headers});
-    return response.data;
-  }
-);
-export const agentRespond = createAsyncThunk<any,any>(
-  "agentRespond",
-  async (_, { getState }) => {
-    const state = getState() as { chat: chatState };
-
-    const currentConversation = state.chat.conversations.find(
-      (c) => c.conversationId === state.chat.currentConversationId
-    );
-    const lastUserMessage = currentConversation?.messages
-      .filter((message) => message.sender === "user")
-      .slice(-1)[0];
-    if (lastUserMessage?.sender == "agent") return;
-    try {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.post(
-        `${baseUrl}/conversations/${state.chat.currentConversationId}/message`,
-        {
-          content: lastUserMessage?.text,
-        },
-        {
-          headers: headers,
-        }
-      );
-
-      return response.data;
-    } catch (error) {
-      console.error("Error in agentRespond:", error);
-      throw error;
-    }
-  }
-);
 
 const chatSlice = createSlice({
   name: "chat",
@@ -110,57 +68,23 @@ const chatSlice = createSlice({
           messages: [action.payload.message],
         });
     },
-
+    removeLastMessage:  (
+      state,
+      action: PayloadAction<{ chatId: string; }>
+    ) => {
+      const conversation = state.conversations.find(
+        (conv) => conv.conversationId === action.payload.chatId
+      );
+      if (conversation) conversation.messages.pop();
+      state.status = "loading";
+    },
     clearChat: (state) => {
       return initialState;
     },
-  },
-  extraReducers(builder) {
-    builder.addCase(agentRespond.pending, (state) => {
-      state.status = "loading";
-    });
-    builder.addCase(agentRespond.fulfilled, (state, action) => {
-      state.status = "active";
-      const conversation = state.conversations.find(
-        (conv) => conv.conversationId === state.currentConversationId
-      );
-
-      if (conversation) {
-        conversation.messages.push({
-          sender: "agent",
-          text: action.payload,
-        });
-      }
-    });
-    builder.addCase(agentRespond.rejected, (state, action) => {
-      state.status = "error";
-    });
-
-    builder.addCase(chatHistory.pending, (state) => {
-      state.status = "loading";
-    });
-    builder.addCase(chatHistory.fulfilled, (state, action) => {
-      state.status = "active";
-      const currentConversation = state.conversations.find(
-        (conv) => conv.conversationId === action.payload[0].id
-      );
-
-      if (currentConversation) {
-        currentConversation.messages = action.payload.map((message:any) => (
-          {
-            text: message.content,
-            sender: message.sender === "HUMAN" ? "user" : message.sender === "AI_GENERATED" ? "agent" : "",
-          }
-        ));
-      }
-    });
-    builder.addCase(chatHistory.rejected, (state, action) => {
-      state.status = "error";
-    });
   },
 });
 
 export default chatSlice.reducer;
 
-export const { setChat, addConversation, addMessageToConversation, clearChat } =
+export const { setChat, addConversation, addMessageToConversation, clearChat,removeLastMessage } =
   chatSlice.actions;

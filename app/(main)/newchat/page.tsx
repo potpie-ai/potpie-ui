@@ -13,7 +13,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
-import { addMessageToConversation, agentRespond, setChat } from "@/lib/state/Reducers/chat";
+import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
 import { auth } from "@/configs/Firebase-config";
@@ -181,8 +181,8 @@ const Step2 = () => {
   const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<AgentType[]>({
     queryKey: ["agent-types"],
     queryFn: async () => {
-      const headers = await getHeaders();  // Fetch the headers asynchronously
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;  // Read base URL from the environment variable
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         const response = await axios.get(`${baseUrl}/list-available-agents/`, {
         headers: headers,
       });
@@ -280,17 +280,51 @@ const NewChat = () => {
       ),
     },
   ];
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+  const {
+    data: chatResponse,
+    isLoading: chatResponseLoading,
+    error: chatResponseError,
+    refetch: refetchChat,
+  } = useQuery({
+    queryKey: ["new-message",],
+    queryFn: async () => {
+      const headers = await getHeaders();
+      if (message === "") return;
+      const response = await axios.post(
+        `${baseUrl}/conversations/${currentConversationId}/message/`,
+        {
+          content: message,
+        },
+        {
+          headers: headers,
+        }
+      );
+      dispatch(
+        addMessageToConversation({
+          chatId: currentConversationId,
+          message: { sender: "agent", text: response.data },
+        })
+      );
+      dispatch(setChat({ status: "active" }));
+      return response.data;
+    },
+    retry: false,
+    enabled: false,
+  });
 
   const handleSubmit = (e: any) => {
     e.preventDefault();
+    refetchChat();
+    dispatch(setChat({ status: "loading" }));
+    if (message) setMessage("");
     dispatch(
       addMessageToConversation({
         chatId: currentConversationId,
         message: { sender: "user", text: message },
       })
     );
-    //@ts-ignore
-    dispatch(agentRespond());
     router.push(`/chat/${currentConversationId}`);
   };
 

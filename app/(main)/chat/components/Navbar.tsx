@@ -18,16 +18,42 @@ import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
+import getHeaders from "@/app/utils/headers.util";
+import { toast } from "sonner";
 
 const Navbar = () => {
-  const { title } = useSelector((state: RootState) => state.chat);
+  const { title, currentConversationId } = useSelector(
+    (state: RootState) => state.chat
+  );
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = React.useState(title);
   const handleInputChange = (event: any) => {
     setInputValue(event.target.value);
   };
 
+  const {
+    refetch: refetchChatTitle,
+  } = useQuery({
+    queryKey: ["chat-title"],
+    queryFn: async () => {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const headers = await getHeaders();
+      axios.patch(`${baseUrl}/conversations/${currentConversationId}/rename/`, {
+        title: inputValue,
+      }, {headers:headers}).then((res) => {
+        if(res.data.status === "success") toast.success("Title updated successfully");
+        return res.data;
+      }).catch((err) => {
+        console.log(err);
+        return err.response.data;
+      });
+    },
+    enabled: false,
+  });
   const handleSave = () => {
+    refetchChatTitle();
     dispatch(setChat({ title: inputValue }));
   };
 
@@ -41,7 +67,12 @@ const Navbar = () => {
           </Link>
         </div>
         <div className="flex items-center w-full px-6 pb-2 gap-5 ">
-          <Image src={"/images/msg-grey.svg"} alt="logo" width={20} height={20} />
+          <Image
+            src={"/images/msg-grey.svg"}
+            alt="logo"
+            width={20}
+            height={20}
+          />
           <Dialog>
             <DialogTrigger>
               <span className="text-muted text-xl">{title}</span>

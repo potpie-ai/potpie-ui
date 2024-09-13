@@ -32,6 +32,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const [copied, setCopied] = useState(false);
 
   const extractCode = (message: string) => {
+    // @ts-ignore
     const codeMatch = message.match(/```(\w+?)\n(.*?)```/s);
     if (codeMatch) {
       const [, language, code] = codeMatch;
@@ -103,7 +104,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         <MyCodeBlock code={code} language={language} />
       )}
       <div className="flex justify-between items-center mt-2">
-        {isLast && sender === "agent" &&  (
+        {isLast && sender === "agent" && (
           <Button
             className="gap-2"
             variant="secondary"

@@ -11,12 +11,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { LucideRepeat2, Plus } from "lucide-react";
 import Image from "next/image";
 import getHeaders from "@/app/utils/headers.util";
 import { useDispatch, useSelector } from "react-redux";
 import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { RootState } from "@/lib/state/store";
+import { Plus } from "lucide-react";
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();

@@ -60,14 +60,14 @@ const AllChats = () => {
           ))}
         </>
       ) : (
-        <>
+        <div className="flex flex-col gap-4">
           {data
             .filter((chat: any) =>
               chat.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
             )
             .map((chat: any) => (
               <Link key={chat.id} href={`/chat/${chat.id}`}>
-              <Card className="border-none shadow-lg hover:scale-105">
+              <Card className="border-none shadow-lg hover:scale-105 transition-all duration-300">
                 <CardHeader className="py-3">
                   <CardTitle className="text-xl">{chat.title}</CardTitle>
                   <CardDescription>Description</CardDescription>
@@ -75,7 +75,7 @@ const AllChats = () => {
               </Card>
               </Link>
             ))}
-        </>
+        </div>
       )}
     </section>
   );

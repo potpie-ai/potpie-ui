@@ -105,6 +105,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         message: { sender: "user", text: messageRef.current?.value || "" },
       })
     );
+    if (messageRef.current) messageRef.current.value = "";
   };
 
   return (

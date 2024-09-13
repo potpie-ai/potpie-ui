@@ -144,7 +144,7 @@ const SidebarItems = [
       {
         icons: "/images/msg.svg",
         title: "All chats",
-        href:"all-chats"
+        href:"/all-chats"
       },
       {
         icons: "/images/robot.svg",
@@ -159,7 +159,7 @@ const SidebarItems = [
       {
         icons: "/images/git.svg",
         title: "Repositories",
-        href:"repositories"
+        href:"/repositories"
       },
       {
         icons: "/images/document.svg",

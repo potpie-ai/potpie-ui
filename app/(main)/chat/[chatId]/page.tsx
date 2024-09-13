@@ -51,12 +51,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           addMessageToConversation({
             chatId: params.chatId,
             message: {
-              sender: m.type === "SYSTEM_GENERATED" ? "agent" : "user",
+              sender: m.type !== "HUMAN" ? "agent" : "user",
               text: m.content,
             },
           })
         )
       );
+      dispatch(setChat({ status: "active" }));
       return response.data;
     },
   });
@@ -70,7 +71,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     queryKey: ["new-message", params.chatId],
     queryFn: async () => {
       const headers = await getHeaders();
-      if (messageRef.current && messageRef.current.value === "") return;
+      if (messageRef.current && messageRef.current.value === "") return {};
       const response = await axios.post(
         `${baseUrl}/conversations/${params.chatId}/message/`,
         {
@@ -87,6 +88,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         })
       );
       dispatch(setChat({ status: "active" }));
+      if (messageRef.current) messageRef.current.value = "";
       return response.data;
     },
     retry: false,
@@ -95,6 +97,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const handleSubmit = (e: any) => {
     e.preventDefault();
+    dispatch(setChat({ status: "loading" }));
     refetchChat();
     dispatch(
       addMessageToConversation({
@@ -102,9 +105,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         message: { sender: "user", text: messageRef.current?.value || "" },
       })
     );
-    dispatch(setChat({ status: "loading" }));
-
-    if (messageRef.current) messageRef.current.value = "";
   };
 
   return (

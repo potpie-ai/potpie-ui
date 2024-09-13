@@ -54,14 +54,21 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const { refetch: Regenerate } = useQuery({
     queryKey: ["regenerate", currentConversationId],
     queryFn: async () => {
-      dispatch(removeLastMessage({ chatId: currentConversationId }));
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
       axios
-        .post(`${baseUrl}/conversations/${currentConversationId}/regenerate/`, {
-          headers: headers,
-        })
+        .post(
+          `${baseUrl}/conversations/${currentConversationId}/regenerate/`,
+          {},
+          {
+            headers: headers,
+          }
+        )
         .then((res) => {
+          if (res.data === "" || res.data === null) {
+            throw new Error("No response from server");
+          }
+          dispatch(removeLastMessage({ chatId: currentConversationId }));
           dispatch(
             addMessageToConversation({
               chatId: currentConversationId,
@@ -84,7 +91,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const handleCopy = () => {
     navigator.clipboard.writeText(code || "");
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000); // Reset the copied state after 2 seconds
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -103,38 +110,43 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {sender === "agent" && code && (
         <MyCodeBlock code={code} language={language} />
       )}
-      <div className="flex justify-between items-center mt-2">
-        {isLast && sender === "agent" && (
-          <Button
-            className="gap-2"
-            variant="secondary"
-            size="sm"
-            onClick={() => Regenerate()}
-          >
-            <LucideRepeat2 className="size-4" />
-          </Button>
-        )}
-        {code && sender === "agent" && (
-          <Button
-            className="gap-2"
-            variant="secondary"
-            size="sm"
-            onClick={handleCopy}
-          >
-            {copied ? (
-              <>
-                <LucideCopy className="size-4" />
-                copy
-              </>
-            ) : (
-              <>
-                <LucideCopyCheck className="size-4" />
-                Copied
-              </>
-            )}
-          </Button>
-        )}
-      </div>
+
+      {sender === "agent" && (
+        <div className="flex justify-between items-center mt-2">
+          {isLast ? (
+            <Button
+              className="gap-2"
+              variant="secondary"
+              size="sm"
+              onClick={() => Regenerate()}
+            >
+              <LucideRepeat2 className="size-4" />
+            </Button>
+          ) : (
+            <div></div>
+          )}
+          {code && (
+            <Button
+              className="gap-2"
+              variant="secondary"
+              size="sm"
+              onClick={handleCopy}
+            >
+              {copied ? (
+                <>
+                  <LucideCopy className="size-4" />
+                  copy
+                </>
+              ) : (
+                <>
+                  <LucideCopyCheck className="size-4" />
+                  Copied
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 };

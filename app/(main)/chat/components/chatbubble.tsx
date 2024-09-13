@@ -11,6 +11,7 @@ import axios from "axios";
 import { LucideCopy, LucideCopyCheck, LucideRepeat2 } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { useState } from "react";
+import { toast } from "sonner";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string | any;
@@ -65,24 +66,26 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           }
         )
         .then((res) => {
-          if (res.data === "" || res.data === null) {
+          if (res.data === "" || res.data === "{}" || res.data === null) {
             throw new Error("No response from server");
+          } else {
+            dispatch(removeLastMessage({ chatId: currentConversationId }));
+            dispatch(
+              addMessageToConversation({
+                chatId: currentConversationId,
+                message: {
+                  sender: "agent",
+                  text: res.data.content,
+                },
+              })
+            );
           }
-          dispatch(removeLastMessage({ chatId: currentConversationId }));
-          dispatch(
-            addMessageToConversation({
-              chatId: currentConversationId,
-              message: {
-                sender: "agent",
-                text: res.data.content,
-              },
-            })
-          );
           return res.data;
         })
         .catch((err) => {
           console.log(err);
-          return err.response.data;
+          toast.error("Unable to regenerate response");
+          return err.response;
         });
     },
     enabled: false,

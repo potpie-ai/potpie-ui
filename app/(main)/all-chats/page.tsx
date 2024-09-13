@@ -14,10 +14,13 @@ import debounce from "debounce";
 import getHeaders from "@/app/utils/headers.util";
 import axios from "axios";
 import Link from "next/link";
+import { useDispatch } from "react-redux";
+import { setChat } from "@/lib/state/Reducers/chat";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  const dispatch = useDispatch();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["all-chats"],
@@ -27,8 +30,8 @@ const AllChats = () => {
       const response = await axios.get(`${baseUrl}/user/conversations`, {
         headers: headers,
       });
-        return response.data;
-    }
+      return response.data;
+    },
   });
 
   useEffect(() => {
@@ -63,16 +66,28 @@ const AllChats = () => {
         <div className="flex flex-col gap-4">
           {data
             .filter((chat: any) =>
-              chat.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+              chat.title
+                .toLowerCase()
+                .includes(debouncedSearchTerm.toLowerCase())
             )
             .map((chat: any) => (
               <Link key={chat.id} href={`/chat/${chat.id}`}>
-              <Card className="border-none shadow-lg hover:scale-105 transition-all duration-300">
-                <CardHeader className="py-3">
-                  <CardTitle className="text-xl">{chat.title}</CardTitle>
-                  <CardDescription>Description</CardDescription>
-                </CardHeader>
-              </Card>
+                <Card
+                  className="border-none shadow-lg hover:scale-105 transition-all duration-300"
+                  onClick={() =>
+                    dispatch(
+                      setChat({
+                        currentConversationId: chat.id,
+                        title: chat.title,
+                      })
+                    )
+                  }
+                >
+                  <CardHeader className="py-3">
+                    <CardTitle className="text-xl">{chat.title}</CardTitle>
+                    <CardDescription>Description</CardDescription>
+                  </CardHeader>
+                </Card>
               </Link>
             ))}
         </div>

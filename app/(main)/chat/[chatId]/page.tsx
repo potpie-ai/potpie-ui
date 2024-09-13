@@ -71,7 +71,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     queryKey: ["new-message", params.chatId],
     queryFn: async () => {
       const headers = await getHeaders();
-      if (messageRef.current && messageRef.current.value === "") return {};
       const response = await axios.post(
         `${baseUrl}/conversations/${params.chatId}/message/`,
         {
@@ -91,12 +90,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       if (messageRef.current) messageRef.current.value = "";
       return response.data;
     },
-    retry: false,
+    staleTime: 0,
     enabled: false,
   });
 
   const handleSubmit = (e: any) => {
     e.preventDefault();
+    if(!messageRef.current?.value || messageRef.current?.value === "") return
     dispatch(setChat({ status: "loading" }));
     refetchChat();
     dispatch(

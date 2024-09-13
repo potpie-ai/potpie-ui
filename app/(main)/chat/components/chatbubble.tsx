@@ -137,13 +137,13 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             >
               {copied ? (
                 <>
-                  <LucideCopy className="size-4" />
-                  copy
+                  <LucideCopyCheck className="size-4" />
+                  copied
                 </>
               ) : (
                 <>
-                  <LucideCopyCheck className="size-4" />
-                  Copied
+                  <LucideCopy className="size-4" />
+                  Copy
                 </>
               )}
             </Button>

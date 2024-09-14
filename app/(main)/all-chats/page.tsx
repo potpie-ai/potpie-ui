@@ -100,7 +100,7 @@ const AllChats = () => {
         .delete(`${baseUrl}/projects`, {
           params: {
             project_id: currentProjectId,
-          },
+          },headers
         })
         .then((res) => {
           if (res.data.status === "success") {

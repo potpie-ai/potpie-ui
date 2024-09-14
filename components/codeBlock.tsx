@@ -7,18 +7,24 @@ interface MyCodeBlockProps {
   language: string;
 }
 
-function MyCodeBlock({ code, language } : MyCodeBlockProps) {
+function MyCodeBlock({ code, language }: MyCodeBlockProps) {
   return (
     <div className="relative">
       <div className="absolute top-2 right-2 bg-gray-200 text-gray-800 text-xs font-semibold px-2 py-1 rounded">
         {language}
       </div>
-      <CodeBlock code={code} language={language} theme={themes.vsLight}>
-        <CodeBlock.Code className="bg-gray-100 p-6 rounded-xl shadow-lg mt-4">
+      <CodeBlock
+        code={code}
+        language={language}
+        theme={themes.vsLight}
+      >
+        <CodeBlock.Code className="bg-gray-100 p-6 rounded-xl shadow-lg mt-4 overflow-x-auto">
           <div className="table-row">
             <CodeBlock.LineNumber className="table-cell pr-4 text-sm text-gray-500 text-right select-none" />
             <CodeBlock.LineContent className="table-cell">
-              <CodeBlock.Token />
+              <div className="whitespace-pre-wrap break-words">
+                <CodeBlock.Token />
+              </div>
             </CodeBlock.LineContent>
           </div>
         </CodeBlock.Code>

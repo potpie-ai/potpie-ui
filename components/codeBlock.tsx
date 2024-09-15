@@ -3,6 +3,7 @@ import { CodeBlock } from "react-code-block";
 import { themes } from "prism-react-renderer";
 import { useState } from "react";
 import { Button } from "@/components/ui/button"; // Assuming you have a button component
+import { LucideCopy, LucideCopyCheck } from "lucide-react";
 
 interface MyCodeBlockProps {
   code: string;
@@ -28,7 +29,7 @@ function MyCodeBlock({ code, language }: MyCodeBlockProps) {
           onClick={handleCopy}
           className="text-xs font-semibold px-2 py-1 rounded text-gray-800"
         >
-          {copied ? "Copied!" : "Copy"}
+          {copied ? <div className="flex gap-2 items-center"> <LucideCopyCheck className="size-5"/> Copied! </div> : <div className="flex gap-2 items-center"> <LucideCopy className="size-5"/> Copy</div>}
         </Button>
       </div>
       <CodeBlock code={code} language={language} theme={themes.vsLight}>

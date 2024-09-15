@@ -93,7 +93,6 @@ const MyProjects = () => {
         >
           <span className="pl-8">CLICK HERE TO TEST SAMPLE APP INSTALLATION</span>
         </Card>
-
       </div>
     </div>
   );

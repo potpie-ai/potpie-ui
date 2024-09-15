@@ -38,7 +38,7 @@ const Step1 = () => {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     const parseResponse = axios
-      .post(`${baseUrl}/parse`, { repo_name, branch_name }, { headers: headers })
+      .post(`${baseUrl}/api/v1/parse`, { repo_name, branch_name }, { headers: headers })
       .then((res) => {
         if (repoName !== null || branchName !== null) {
           dispatch(setChat({ projectId: res.data.project_id }));
@@ -58,7 +58,7 @@ const Step1 = () => {
     queryFn: async () => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(`${baseUrl}/github/user-repos`, { headers });
+      const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, { headers });
       return response.data.repositories;
     },
   });
@@ -73,7 +73,7 @@ const Step1 = () => {
       const headers = await getHeaders();  // Wait for the headers
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;  // Read base URL from the environment variable
 
-      const response = await axios.get(`${baseUrl}/github/get-branch-list`, {
+      const response = await axios.get(`${baseUrl}/api/v1/github/get-branch-list`, {
         params: {
           repo_name: repoName,  // Add the repo name as a parameter
         },
@@ -183,7 +183,7 @@ const Step2 = () => {
     queryFn: async () => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-        const response = await axios.get(`${baseUrl}/list-available-agents/`, {
+        const response = await axios.get(`${baseUrl}/api/v1/list-available-agents/`, {
         headers: headers,
       });
   
@@ -196,7 +196,7 @@ const Step2 = () => {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     const response = await axios
-      .post(`${baseUrl}/conversations/`, {
+      .post(`${baseUrl}/api/v1/conversations/`, {
         user_id: userId,
         title: title,
         status: "active",
@@ -293,7 +293,7 @@ const NewChat = () => {
       const headers = await getHeaders();
       if (message === "") return;
       const response = await axios.post(
-        `${baseUrl}/conversations/${currentConversationId}/message/`,
+        `${baseUrl}/api/v1/conversations/${currentConversationId}/message/`,
         {
           content: message,
         },

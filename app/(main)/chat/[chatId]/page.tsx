@@ -35,7 +35,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const headers = await getHeaders();
       dispatch(setChat({ currentConversationId: params.chatId }));
       const response = await axios.get(
-        `${baseUrl}/conversations/${params.chatId}/messages/`,
+        `${baseUrl}/api/v1/conversations/${params.chatId}/messages/`,
         {
           headers: headers,
           params: {
@@ -72,7 +72,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     queryFn: async () => {
       const headers = await getHeaders();
       const response = await axios.post(
-        `${baseUrl}/conversations/${params.chatId}/message/`,
+        `${baseUrl}/api/v1/conversations/${params.chatId}/message/`,
         {
           content: messageRef.current?.value,
         },

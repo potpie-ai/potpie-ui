@@ -62,7 +62,7 @@ export default function SignUp() {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const userSignup = axios
-        .post(`${baseUrl}/signup`, result,{headers:headers})
+        .post(`${baseUrl}/api/v1/signup`, result,{headers:headers})
         .then((res) => res.data)
         .catch((e) => {
           toast.error("Signup call unsuccessful");
@@ -77,8 +77,9 @@ export default function SignUp() {
     try {
       const result = await signInWithPopup(auth, provider);
 
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const userSignup = axios
-        .post(`/signup`, {
+        .post(`${baseUrl}/api/v1/signup`, {
           uid: result.user.uid,
           email: result.user.email,
           displayName: result.user.displayName || result.user.email?.split("@")[0],

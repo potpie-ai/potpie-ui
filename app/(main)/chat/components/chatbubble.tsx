@@ -65,7 +65,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       const headers = await getHeaders();
       axios
         .post(
-          `${baseUrl}/conversations/${currentConversationId}/regenerate/`,
+          `${baseUrl}/api/v1/conversations/${currentConversationId}/regenerate/`,
           {},
           {
             headers: headers,

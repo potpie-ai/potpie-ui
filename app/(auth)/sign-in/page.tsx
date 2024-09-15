@@ -58,7 +58,7 @@ export default function Signin() {
 
   const onGithub = async () => {
     signInWithPopup(auth, provider)
-      .then((result) => {
+      .then((result:any) => { console.log(result);
         // alert(JSON.stringify(result));
         // alert(result.user);
         // alert(JSON.stringify({ ...result.user, providerUsername: result._tokenResponse.screenName }));
@@ -67,18 +67,22 @@ export default function Signin() {
         if (credential) {
           const userSignup = axios
             .post(`${baseUrl}/api/v1/signup`, {
-              uid: result.user.uid,
+              uid: result.user.uid,   
               email: result.user.email,
-              displayName: result.user.displayName || result.user.email?.split("@")[0],
               emailVerified: result.user.emailVerified,
+              displayName: result.user.displayName || result.user.email?.split("@")[0],
+              isAnonymous: result.user.isAnonymous,
+              photoURL: result.user.photoURL,
+              providerData: result.user.providerData,
+              stsTokenManager: result.user.stsTokenManager,
               createdAt: result.user.metadata?.creationTime
                 ? new Date(result.user.metadata.creationTime).toISOString()
                 : "",
               lastLoginAt: result.user.metadata?.lastSignInTime
                 ? new Date(result.user.metadata.lastSignInTime).toISOString()
                 : "",
-
-              providerData: result.user.providerData,
+                apiKey: result.user.apiKey,
+                appName : result.user.auth.appName,
               providerUsername: (result as any)._tokenResponse.screenName,
             })
             .then((res: { data: any }) => res.data)

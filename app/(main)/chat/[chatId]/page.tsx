@@ -109,11 +109,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   return (
-    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
+    <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 ">
       <ChatInterface currentConversationId={params.chatId} />
-      <div className="flex-1" />
       <form
-        className={`relative mb-4 mx-16 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md flex flex-col `}
+        className={`sticky bottom-6 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md flex flex-col `}
         onSubmit={handleSubmit}
       >
         <Label htmlFor="message" className="sr-only">

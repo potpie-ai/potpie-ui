@@ -59,7 +59,7 @@ const Navbar = () => {
 
   return (
     <>
-      <header className="flex h-[70px] items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6 ">
+      <header className="sticky top-0 z-50 bg-white flex h-[70px] items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6 ">
         <div className="bg-[#4479FF] w-full text-center bg-opacity-[0.37] text-muted">
           🌎 join our next webinar on getting started with open source.{" "}
           <Link href={"#"} className="text-[#0267FF] underline">

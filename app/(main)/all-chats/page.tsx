@@ -42,10 +42,14 @@ const AllChats = () => {
     queryFn: async () => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(`${baseUrl}/user/conversations`, {
+      const response = await axios.get(`${baseUrl}/api/v1/user/conversations`, {
+        params:{
+          start:0,
+          limit: 1000,
+        },
         headers: headers,
       });
-      return response.data;
+      return response.data.reverse();
     },
   });
 
@@ -71,7 +75,7 @@ const AllChats = () => {
       const headers = await getHeaders();
       axios
         .patch(
-          `${baseUrl}/conversations/${currentConversationId}/rename/`,
+          `${baseUrl}/api/v1/conversations/${currentConversationId}/rename/`,
           {
             title: inputValue,
           },
@@ -97,7 +101,7 @@ const AllChats = () => {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
       axios
-        .delete(`${baseUrl}/projects`, {
+        .delete(`${baseUrl}/api/v1/projects`, {
           params: {
             project_id: currentProjectId,
           },headers

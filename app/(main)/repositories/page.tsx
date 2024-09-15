@@ -22,7 +22,7 @@ const AllRepos = () => {
     queryFn: async () => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(`${baseUrl}/github/user-repos`, {
+      const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
         headers: headers,
       });
   

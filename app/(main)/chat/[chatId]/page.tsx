@@ -35,7 +35,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const headers = await getHeaders();
       dispatch(setChat({ currentConversationId: params.chatId }));
       const response = await axios.get(
-        `${baseUrl}/conversations/${params.chatId}/messages/`,
+        `${baseUrl}/api/v1/conversations/${params.chatId}/messages/`,
         {
           headers: headers,
           params: {
@@ -72,7 +72,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     queryFn: async () => {
       const headers = await getHeaders();
       const response = await axios.post(
-        `${baseUrl}/conversations/${params.chatId}/message/`,
+        `${baseUrl}/api/v1/conversations/${params.chatId}/message/`,
         {
           content: messageRef.current?.value,
         },
@@ -109,7 +109,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   return (
-    <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 ">
+    <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
       <ChatInterface currentConversationId={params.chatId} />
       <form
         className={`sticky bottom-6 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md flex flex-col `}
@@ -144,6 +144,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           </Button>
         </div>
       </form>
+      <div className="h-6 w-full bg-background sticky bottom-0"></div>
     </div>
   );
 };

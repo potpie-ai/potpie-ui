@@ -38,11 +38,11 @@ export default function Signin() {
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
-        // Signed in
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         const user = userCredential.user;
         const headers = await getHeaders();
         const userSignup = axios
-          .post(`/signup`, user,{headers:headers})
+          .post(`${baseUrl}/api/v1/signup`, user,{headers:headers})
           .then((res) => res.data)
           .catch((e) => {
             toast.error("Signup call unsuccessful");
@@ -63,9 +63,10 @@ export default function Signin() {
         // alert(result.user);
         // alert(JSON.stringify({ ...result.user, providerUsername: result._tokenResponse.screenName }));
         const credential = GithubAuthProvider.credentialFromResult(result);
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         if (credential) {
           const userSignup = axios
-            .post(`/signup`, {
+            .post(`${baseUrl}/api/v1/signup`, {
               uid: result.user.uid,
               email: result.user.email,
               displayName: result.user.displayName || result.user.email?.split("@")[0],

@@ -1,3 +1,4 @@
+import ReactMarkdown from "react-markdown";
 import getHeaders from "@/app/utils/headers.util";
 import MyCodeBlock from "@/components/codeBlock";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
-import { LucideCopy, LucideCopyCheck, LucideRepeat2 } from "lucide-react";
+import { LucideRepeat2 } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -32,25 +33,30 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const dispatch = useDispatch();
   const [copied, setCopied] = useState(false);
 
-  const extractCode = (message: string) => {
-    // @ts-ignore
-    const codeMatch = message.match(/```(\w+?)\n(.*?)```/s);
-    if (codeMatch) {
-      const [, language, code] = codeMatch;
-      return { language, code: code.trim() };
+  const parseMessage = (message: string) => {
+    const sections: Array<{ type: 'text' | 'code', content: string, language?: string }> = [];
+    const regex = /```(\w+)?\n([\s\S]*?)```|([^`]+)/g;
+    let match;
+
+    while ((match = regex.exec(message)) !== null) {
+      if (match[1] && match[2]) {
+        sections.push({
+          type: 'code',
+          content: match[2].trim(),
+          language: match[1] || 'plaintext',
+        });
+      } else if (match[3]) {
+        sections.push({
+          type: 'text',
+          content: match[3].trim(),
+        });
+      }
     }
-    return { language: "", code: "" };
+
+    return sections;
   };
 
-  const removeCode = (message: string) => {
-    const codeStartIndex = message.indexOf("```");
-    return codeStartIndex !== -1
-      ? message.slice(0, codeStartIndex).trim()
-      : message;
-  };
-
-  const { language, code } = extractCode(message);
-  const textWithoutCode = removeCode(message);
+  const parsedSections = parseMessage(message.message); // Fixed to match the response structure
 
   const { refetch: Regenerate } = useQuery({
     queryKey: ["regenerate", currentConversationId],
@@ -59,7 +65,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       const headers = await getHeaders();
       axios
         .post(
-          `${baseUrl}/conversations/${currentConversationId}/regenerate/`,
+          `${baseUrl}/api/v1/conversations/${currentConversationId}/regenerate/`,
           {},
           {
             headers: headers,
@@ -91,7 +97,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     enabled: false,
   });
 
-  const handleCopy = () => {
+  const handleCopy = (code: string) => {
     navigator.clipboard.writeText(code || "");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -108,46 +114,43 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       )}
       {...props}
     >
-      {textWithoutCode && <p>{textWithoutCode}</p>}
-
-      {sender === "agent" && code && (
-        <MyCodeBlock code={code} language={language} />
-      )}
-
-      {sender === "agent" && (
-        <div className="flex justify-between items-center mt-2">
-          {isLast ? (
-            <Button
-              className="gap-2"
-              variant="secondary"
-              size="sm"
-              onClick={() => Regenerate()}
+      {parsedSections.map((section, index) => {
+        if (section.type === 'text') {
+          return (
+            <ReactMarkdown
+              key={index}
+              className="markdown"
+              components={{
+                // Customize inline code rendering
+                code: ({ children }) => (
+                  <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5">
+                    {children}
+                  </code>
+                ),
+              }}
             >
-              <LucideRepeat2 className="size-4" />
-            </Button>
-          ) : (
-            <div></div>
-          )}
-          {code && (
-            <Button
-              className="gap-2"
-              variant="secondary"
-              size="sm"
-              onClick={handleCopy}
-            >
-              {copied ? (
-                <>
-                  <LucideCopyCheck className="size-4" />
-                  copied
-                </>
-              ) : (
-                <>
-                  <LucideCopy className="size-4" />
-                  Copy
-                </>
-              )}
-            </Button>
-          )}
+              {section.content}
+            </ReactMarkdown>
+          );
+        } else if (section.type === 'code') {
+          return (
+            <div key={index} className="my-4">
+              <MyCodeBlock code={section.content} language={section.language || "json"} />
+            </div>
+          );
+        }
+      })}
+
+      {sender === "agent" && isLast && (
+        <div className="flex justify-end items-center mt-2">
+          <Button
+            className="gap-2"
+            variant="secondary"
+            size="sm"
+            onClick={() => Regenerate()}
+          >
+            <LucideRepeat2 className="size-4" />
+          </Button>
         </div>
       )}
     </div>

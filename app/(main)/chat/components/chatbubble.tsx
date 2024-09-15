@@ -40,14 +40,12 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
     while ((match = regex.exec(message)) !== null) {
       if (match[1] && match[2]) {
-        // Code block
         sections.push({
           type: 'code',
           content: match[2].trim(),
-          language: match[1] || 'plaintext', // Default to 'plaintext' if no language is specified
+          language: match[1] || 'plaintext',
         });
       } else if (match[3]) {
-        // Regular text
         sections.push({
           type: 'text',
           content: match[3].trim(),

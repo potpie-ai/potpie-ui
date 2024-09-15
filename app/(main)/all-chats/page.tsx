@@ -43,9 +43,13 @@ const AllChats = () => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const response = await axios.get(`${baseUrl}/user/conversations`, {
+        params:{
+          start:0,
+          limit: 1000,
+        },
         headers: headers,
       });
-      return response.data;
+      return response.data.reverse();
     },
   });
 

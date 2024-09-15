@@ -4,7 +4,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 
 interface Message {
-  text: string;
+  text: string | any;
   sender: "user" | "agent";
 }
 

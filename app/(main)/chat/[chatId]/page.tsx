@@ -1,30 +1,83 @@
-"use client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+"use client"
+import { useMutation, useQuery } from "@tanstack/react-query";
 import axios from "axios";
-import React, { useRef, FormEvent, KeyboardEvent } from "react";
+import React, { useRef, FormEvent, useState, useEffect, KeyboardEvent } from "react";
 import ChatInterface from "../components/ChatInterface";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import getHeaders from "@/app/utils/headers.util";
 import { useDispatch, useSelector } from "react-redux";
-import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { RootState } from "@/lib/state/store";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { conversations } = useSelector((state: RootState) => state.chat);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-
   const messageRef = useRef<HTMLTextAreaElement>(null);
-  const queryClient = useQueryClient();
+  const nodeInputRef = useRef<HTMLDivElement>(null);
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  const { conversations,projectId } = useSelector((state: RootState) => state.chat);
+
+  const [isNodeInputVisible, setIsNodeInputVisible] = useState(false);
+  const [nodeInput, setNodeInput] = useState("");
+  const [nodeOptions, setNodeOptions] = useState<any[]>([]);
+  const [selectedNodes, setSelectedNodes] = useState<any[]>([]);
+
+  const fetchNodes = async (query: string) => {
+    const headers = await getHeaders();
+    const response = await axios.post(
+      `${baseUrl}/api/v1/search`,
+      {
+        project_id: projectId,
+        query: query,
+      },
+      { headers }
+    );
+    setNodeOptions(response.data.results); 
+  };
+
+  const handleNodeSelect = (node: any) => {
+    console.log("Node selected:", node); 
+    if (!selectedNodes.some((n) => n.node_id === node.node_id)) {
+      setSelectedNodes([...selectedNodes, node]); 
+    }
+    setNodeInput(""); 
+    setIsNodeInputVisible(false); 
+  };
+
+  const handleNodeRemove = (node: any) => {
+    setSelectedNodes(selectedNodes.filter((n) => n.node_id !== node.node_id));
+  };
+
+  const handleNodeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setNodeInput(value);
+    if (value.trim()) {
+      fetchNodes(value); 
+    } else {
+      setNodeOptions([]);
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (nodeInputRef.current && !nodeInputRef.current.contains(event.target as Node)) {
+        setTimeout(() => setIsNodeInputVisible(false), 100); 
+      }
+    };
+    if (isNodeInputVisible) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+  
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isNodeInputVisible]);
 
   const sendMessage = async (content: string) => {
     const headers = await getHeaders();
@@ -34,7 +87,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         ...headers,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, nodeIds:nodeOptions }),
     });
 
     if (!response.ok) {
@@ -146,9 +199,47 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
       <ChatInterface currentConversationId={params.chatId} />
       <form
-        className={`sticky bottom-6 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md flex flex-col `}
+        className="sticky bottom-6 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md flex flex-col"
         onSubmit={handleSubmit}
       >
+        <div className="flex items-center p-2 pl-4" ref={nodeInputRef}>
+          {selectedNodes.map((node) => (
+            <div
+              key={node.node_id}
+              className="flex items-center space-x-2 bg-gray-200 p-1 rounded-lg mr-2"
+            >
+              <span>{node.name}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4 hover:bg-white"
+                onClick={() => handleNodeRemove(node)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {isNodeInputVisible ? (
+            <input
+              type="text"
+              value={nodeInput}
+              onChange={handleNodeInputChange}
+              className="border border-border p-1 rounded"
+              placeholder="Search for nodes..."
+            />
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hover:bg-transparent"
+              onClick={() => setIsNodeInputVisible(true)}
+            >
+              <Plus className="border-primary rounded-full border-2" />
+              <span className="sr-only">Add Node</span>
+            </Button>
+          )}
+        </div>
+
         <Label htmlFor="message" className="sr-only">
           Message
         </Label>
@@ -160,16 +251,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           onKeyPress={handleKeyPress}
         />
         <div className="flex items-center p-3 pt-0 ">
-          <Tooltip>
-            <TooltipTrigger asChild className="mx-2 !bg-transparent">
-              <Button variant="ghost" size="icon">
-                <Plus className="border-primary rounded-full border-2" />
-                <span className="sr-only">Share File</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Share File</TooltipContent>
-          </Tooltip>
-          <Button type="submit" size="sm" className="ml-auto !bg-transparent">
+          <Button type="submit" size="sm" className="ml-auto !bg-transparent mb-1">
             <Image
               src={"/images/sendmsg.svg"}
               alt="logo"
@@ -179,6 +261,27 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           </Button>
         </div>
       </form>
+
+      {isNodeInputVisible && nodeInput && nodeOptions.length > 0 && (
+        <div className="absolute bottom-40 w-[50%] left-80 right-4 bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50">
+          <ul>
+            {nodeOptions.map((node) => (
+              <li
+                key={node.node_id}
+                className="cursor-pointer p-1 hover:bg-gray-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNodeSelect(node);
+                }}
+              >
+                <div className="font-semibold">{node.name}</div>
+                <div className="text-sm text-gray-500">{node.file_path}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
     </div>
   );

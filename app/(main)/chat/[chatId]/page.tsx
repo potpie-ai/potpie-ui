@@ -1,7 +1,7 @@
 "use client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import React, { useRef, FormEvent } from "react";
+import React, { useRef, FormEvent, useState } from "react";
 import ChatInterface from "../components/ChatInterface";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,23 +24,52 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
+  const [streamedMessage, setStreamedMessage] = useState("");
 
   const queryClient = useQueryClient();
 
+  const sendMessage = async (content: string) => {
+    const headers = await getHeaders();
+    const response = await fetch(`${baseUrl}/api/v1/conversations/${params.chatId}/message/`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedMessage = "";
+
+    while (true) {
+      const { done, value } = await reader?.read() || { done: true, value: undefined };
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
+      
+      for (const parsedChunk of parsedChunks) {
+        accumulatedMessage += parsedChunk.message;
+        setStreamedMessage(accumulatedMessage);
+      }
+    }
+
+    return accumulatedMessage;
+  };
+
   const messageMutation = useMutation({
-    mutationFn: async (content: string) => {
-      const headers = await getHeaders();
-      return axios.post(
-        `${baseUrl}/api/v1/conversations/${params.chatId}/message/`,
-        { content },
-        { headers }
-      );
-    },
-    onSuccess: (response) => {
+    mutationFn: sendMessage,
+    onSuccess: (data) => {
       dispatch(
         addMessageToConversation({
           chatId: params.chatId,
-          message: { sender: "agent", text: response.data },
+          message: { sender: "agent", text: data },
         })
       );
       dispatch(setChat({ status: "active" }));

@@ -21,6 +21,7 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   className?: string;
   isLast?: boolean;
   currentConversationId: string;
+  isStreaming?: boolean;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
@@ -29,36 +30,16 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   className,
   isLast,
   currentConversationId,
+  isStreaming,
   ...props
 }) => {
   const dispatch = useDispatch();
   const [copied, setCopied] = useState(false);
   const parseMessage = (message: string) => {
-    // const sections: Array<{ type: 'text' | 'code', content: string, language?: string }> = [];
-    // const regex = /```(\w+)?\n([\s\S]*?)```|([^`]+)/g;
-    // let match;
-
-    // while ((match = regex.exec(message)) !== null) {
-    //   if (match[1] && match[2]) {
-    //     sections.push({
-    //       type: 'code',
-    //       content: match[2].trim(),
-    //       language: match[1] || 'plaintext',
-    //     });
-    //   } else if (match[3]) {
-    //     sections.push({
-    //       type: 'text',
-    //       content: match[3].trim(),
-    //     });
-    //   }
-    // }
-
-    // return sections;
-
     return [{ type: 'text', content: message, language: 'json' }];
   };
 
-  const parsedSections = parseMessage(message); // Fixed to pass the correct message structure
+  const parsedSections = parseMessage(message);
 
   const { refetch: Regenerate } = useQuery({
     queryKey: ["regenerate", currentConversationId],
@@ -123,7 +104,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
               key={index}
               className="markdown"
               components={{
-                // Customize inline code rendering
                 code: ({ children }) => (
                   <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5">
                     {children}
@@ -143,7 +123,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         }
       })}
 
-      {sender === "agent" && isLast && (
+      {isStreaming && (
+        <div className="flex items-center space-x-1 mt-2">
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+        </div>
+      )}
+
+      {sender === "agent" && isLast && !isStreaming && (
         <div className="flex justify-end items-center mt-2">
           <Button
             className="gap-2"

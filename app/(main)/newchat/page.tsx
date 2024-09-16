@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, GitBranch, Github, Loader, Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -25,7 +25,6 @@ import { TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const Step1 = () => {
   const dispatch = useDispatch();
@@ -265,19 +264,46 @@ const NewChat = () => {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const [message, setMessage] = useState("");
+  const [streamedMessage, setStreamedMessage] = useState("");
 
-  const { mutate: sendMessage, isPending: isSending } = useMutation({
-    mutationFn: async (content: string) => {
-      const headers = await getHeaders();
-      const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/${currentConversationId}/message/`,
-        { content: content.trim() },
-        { headers }
-      );
-      return response.data;
-    },
+  const sendMessage = async (content: string) => {
+    const headers = await getHeaders();
+    const response = await fetch(`${baseUrl}/api/v1/conversations/${currentConversationId}/message/`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedMessage = "";
+
+    while (true) {
+      const { done, value } = await reader?.read() || { done: true, value: undefined };
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
+      
+      for (const parsedChunk of parsedChunks) {
+        accumulatedMessage += parsedChunk.message;
+        setStreamedMessage(accumulatedMessage);
+      }
+    }
+
+    return accumulatedMessage;
+  };
+
+  const { mutate: sendMessageMutation, isPending: isSending } = useMutation({
+    mutationFn: sendMessage,
     onMutate: (content) => {
-      // Optimistically update UI
       dispatch(
         addMessageToConversation({
           chatId: currentConversationId,
@@ -297,6 +323,7 @@ const NewChat = () => {
     },
     onError: (error) => {
       console.error("Failed to send message:", error);
+      dispatch(setChat({ status: "error" }));
     },
   });
 
@@ -304,7 +331,7 @@ const NewChat = () => {
     e.preventDefault();
     if (!message.trim() || isSending) return;
 
-    sendMessage(message);
+    sendMessageMutation(message);
     setMessage("");
     router.push(`/chat/${currentConversationId}`);
   };

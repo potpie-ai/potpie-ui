@@ -399,14 +399,14 @@ const NewChat = () => {
     },
   });
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!message.trim() || isSending) return;
+        const handleSubmit = (e: FormEvent) => {
+          e.preventDefault();
+          if (!message.trim() || isSending) return;
 
-    sendMessageMutation(message);
-    setMessage("");
-    router.push(`/chat/${currentConversationId}`);
-  };
+          sendMessageMutation(message);
+          setMessage("");
+          router.push(`/chat/${currentConversationId}`);
+        };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -469,7 +469,7 @@ const NewChat = () => {
     enabled: false,
   });
 
-  
+
 
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">

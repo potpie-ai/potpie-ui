@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import {
   addMessageToConversation,
   removeLastMessage,
+  setChat,
 } from "@/lib/state/Reducers/chat";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { LucideRepeat2 } from "lucide-react";
 import { useDispatch } from "react-redux";
@@ -15,11 +15,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
-  message: string | any;
+  message: string;
   sender: "user" | "agent";
   className?: string;
   isLast?: boolean;
   currentConversationId: string;
+  isStreaming?: boolean;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
@@ -28,74 +29,80 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   className,
   isLast,
   currentConversationId,
+  isStreaming,
   ...props
 }) => {
   const dispatch = useDispatch();
   const [copied, setCopied] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isEmptyResponse, setIsEmptyResponse] = useState(false);
 
   const parseMessage = (message: string) => {
-    const sections: Array<{ type: 'text' | 'code', content: string, language?: string }> = [];
-    const regex = /```(\w+)?\n([\s\S]*?)```|([^`]+)/g;
-    let match;
-
-    while ((match = regex.exec(message)) !== null) {
-      if (match[1] && match[2]) {
-        sections.push({
-          type: 'code',
-          content: match[2].trim(),
-          language: match[1] || 'plaintext',
-        });
-      } else if (match[3]) {
-        sections.push({
-          type: 'text',
-          content: match[3].trim(),
-        });
-      }
-    }
-
-    return sections;
+    return [{ type: 'text', content: message, language: 'json' }];
   };
 
-  const parsedSections = parseMessage(message.message); // Fixed to match the response structure
+  const parsedSections = parseMessage(message);
 
-  const { refetch: Regenerate } = useQuery({
-    queryKey: ["regenerate", currentConversationId],
-    queryFn: async () => {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const headers = await getHeaders();
-      axios
-        .post(
-          `${baseUrl}/api/v1/conversations/${currentConversationId}/regenerate/`,
-          {},
-          {
-            headers: headers,
-          }
-        )
-        .then((res) => {
-          if (res.data === "" || res.data === "{}" || res.data === null) {
-            throw new Error("No response from server");
-          } else {
-            dispatch(removeLastMessage({ chatId: currentConversationId }));
-            dispatch(
-              addMessageToConversation({
-                chatId: currentConversationId,
-                message: {
-                  sender: "agent",
-                  text: res.data.content,
-                },
-              })
-            );
-          }
-          return res.data;
+  const regenerateMessage = async () => {
+    setIsRegenerating(true);
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    const headers = await getHeaders();
+    let accumulatedMessage = "";
+
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/conversations/${currentConversationId}/regenerate/`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      dispatch(removeLastMessage({ chatId: currentConversationId }));
+      dispatch(
+        addMessageToConversation({
+          chatId: currentConversationId,
+          message: { sender: "agent", text: "" },
         })
-        .catch((err) => {
-          console.log(err);
-          toast.error("Unable to regenerate response");
-          return err.response;
-        });
-    },
-    enabled: false,
-  });
+      );
+
+      while (true) {
+        const { done, value } = await reader?.read() || { done: true, value: undefined };
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
+
+        for (const parsedChunk of parsedChunks) {
+          accumulatedMessage += parsedChunk.message;
+          dispatch(
+            addMessageToConversation({
+              chatId: currentConversationId,
+              message: { sender: "agent", text: accumulatedMessage },
+            })
+          );
+        }
+      }
+
+      dispatch(setChat({ status: "active" }));
+      setIsEmptyResponse(false);
+      setIsRegenerating(false);
+      return accumulatedMessage;
+    } catch (err) {
+      console.log(err);
+      toast.error("Unable to regenerate response");
+      setIsRegenerating(false);
+      setIsEmptyResponse(true);
+      return err;
+    }
+  };
 
   const handleCopy = (code: string) => {
     navigator.clipboard.writeText(code || "");
@@ -110,6 +117,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         sender === "user"
           ? "bg-primary text-white ml-auto"
           : "bg-gray-200 text-muted mr-auto",
+        isStreaming && "animate-pulse",
         className
       )}
       {...props}
@@ -121,7 +129,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
               key={index}
               className="markdown"
               components={{
-                // Customize inline code rendering
                 code: ({ children }) => (
                   <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5">
                     {children}
@@ -141,15 +148,26 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         }
       })}
 
-      {sender === "agent" && isLast && (
+      {isEmptyResponse && (
+        <div className="text-red-500 mt-2">
+          The response was empty. Please try regenerating the response.
+        </div>
+      )}
+
+      {sender === "agent" && isLast && !isStreaming && (
         <div className="flex justify-end items-center mt-2">
           <Button
             className="gap-2"
             variant="secondary"
             size="sm"
-            onClick={() => Regenerate()}
+            onClick={regenerateMessage}
+            disabled={isRegenerating}
           >
-            <LucideRepeat2 className="size-4" />
+            {isRegenerating ? (
+              <span className="animate-spin">...</span>
+            ) : (
+              <LucideRepeat2 className="size-4" />
+            )}
           </Button>
         </div>
       )}

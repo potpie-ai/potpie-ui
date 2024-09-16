@@ -1,6 +1,6 @@
-import { RootState } from "@/lib/state/store";
 import React from "react";
 import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
 import ChatBubble from "./chatbubble";
 
 const ChatInterface = ({
@@ -14,14 +14,15 @@ const ChatInterface = ({
   const currentConversation = conversations.find(
     (c) => c.conversationId === currentConversationId
   );
+
   return (
     <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
       {currentConversation &&
         currentConversation.messages.map((message, i) => (
           <ChatBubble
-            key={i}
+            key={`${currentConversationId}-${i}`}
             message={message.text}
-            sender={message?.sender}
+            sender={message.sender}
             isLast={i === currentConversation.messages.length - 1}
             currentConversationId={currentConversationId}
           />
@@ -36,4 +37,5 @@ const ChatInterface = ({
     </div>
   );
 };
+
 export default ChatInterface;

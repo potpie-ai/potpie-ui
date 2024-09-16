@@ -1,7 +1,7 @@
 "use client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import React, { useRef } from "react";
+import React, { useRef, FormEvent, KeyboardEvent } from "react";
 import ChatInterface from "../components/ChatInterface";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +24,70 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
+  const queryClient = useQueryClient();
+
+  const sendMessage = async (content: string) => {
+    const headers = await getHeaders();
+    const response = await fetch(`${baseUrl}/api/v1/conversations/${params.chatId}/message/`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedMessage = "";
+
+    while (true) {
+      const { done, value } = await reader?.read() || { done: true, value: undefined };
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
+      
+      for (const parsedChunk of parsedChunks) {
+        accumulatedMessage += parsedChunk.message;
+      }
+    }
+
+    // Update the message once the entire response is received
+    dispatch(
+      addMessageToConversation({
+        chatId: params.chatId,
+        message: { sender: "agent", text: accumulatedMessage },
+      })
+    );
+
+    dispatch(setChat({ status: "active" }));
+    return accumulatedMessage;
+  };
+
+  const messageMutation = useMutation({
+    mutationFn: sendMessage,
+    onMutate: (content) => {
+      dispatch(setChat({ status: "loading" }));
+      dispatch(
+        addMessageToConversation({
+          chatId: params.chatId,
+          message: { sender: "user", text: content },
+        })
+      );
+    },
+    onSuccess: () => {
+      dispatch(setChat({ status: "active" }));
+    },
+    onError: (error) => {
+      console.error("Error sending message:", error);
+      dispatch(setChat({ status: "error" }));
+    },
+  });
 
   const {
     data: conversationMessages,
@@ -62,50 +126,20 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     },
   });
 
-  const {
-    data: chatResponse,
-    isLoading: chatResponseLoading,
-    error: chatResponseError,
-    refetch: refetchChat,
-  } = useQuery({
-    queryKey: ["new-message", params.chatId],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/${params.chatId}/message/`,
-        {
-          content: messageRef.current?.value,
-        },
-        {
-          headers: headers,
-        }
-      );
-      dispatch(
-        addMessageToConversation({
-          chatId: params.chatId,
-          message: { sender: "agent", text: response.data },
-        })
-      );
-      dispatch(setChat({ status: "active" }));
-      if (messageRef.current) messageRef.current.value = "";
-      return response.data;
-    },
-    staleTime: 0,
-    enabled: false,
-  });
-
-  const handleSubmit = (e: any) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if(!messageRef.current?.value || messageRef.current?.value === "") return
-    dispatch(setChat({ status: "loading" }));
-    refetchChat();
-    dispatch(
-      addMessageToConversation({
-        chatId: params.chatId,
-        message: { sender: "user", text: messageRef.current?.value || "" },
-      })
-    );
+    const content = messageRef.current?.value;
+    if (!content || content === "") return;
+
+    messageMutation.mutate(content);
     if (messageRef.current) messageRef.current.value = "";
+  };
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as FormEvent);
+    }
   };
 
   return (
@@ -123,6 +157,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           id="message"
           placeholder="Start chatting with the expert...."
           className="min-h-12 h-[50%] text-base resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
+          onKeyPress={handleKeyPress}
         />
         <div className="flex items-center p-3 pt-0 ">
           <Tooltip>

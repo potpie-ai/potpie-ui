@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, GitBranch, Github, Loader, Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,11 +15,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEffect, useState } from "react";
+import { useState, FormEvent, KeyboardEvent } from "react";
 import { auth } from "@/configs/Firebase-config";
 import { Label } from "@radix-ui/react-label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent } from "@radix-ui/react-tooltip";
+import { Tooltip, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
@@ -218,8 +218,7 @@ const Step2 = () => {
   }
   return (
     <div className="flex flex-col w-full gap-7">
-      <h1 className="text-xl">Choose your expert</h1>
-      <div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y10 gap-10">
+      <h1 className="text-xl">Choose your expert</h1><div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y10 gap-10">
         {AgentTypesLoading
           ? Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="border-border w-[450px] h-40" />
@@ -259,9 +258,92 @@ const Step2 = () => {
 const NewChat = () => {
   const router = useRouter();
   const dispatch: AppDispatch = useDispatch();
+  const queryClient = useQueryClient();
   const { chatStep, currentConversationId } = useSelector((state: RootState) => state.chat);
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const [message, setMessage] = useState("");
+
+  const sendMessage = async (content: string) => {
+    const headers = await getHeaders();
+    const response = await fetch(`${baseUrl}/api/v1/conversations/${currentConversationId}/message/`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedMessage = "";
+
+    while (true) {
+      const { done, value } = await reader?.read() || { done: true, value: undefined };
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
+      
+      for (const parsedChunk of parsedChunks) {
+        accumulatedMessage += parsedChunk.message;
+      }
+    }
+
+    // Update the message once the entire response is received
+    dispatch(
+      addMessageToConversation({
+        chatId: currentConversationId,
+        message: { sender: "agent", text: accumulatedMessage },
+      })
+    );
+
+    dispatch(setChat({ status: "active" }));
+    return accumulatedMessage;
+  };
+
+  const { mutate: sendMessageMutation, isPending: isSending } = useMutation({
+    mutationFn: sendMessage,
+    onMutate: (content) => {
+      dispatch(setChat({ status: "loading" }));
+      dispatch(
+        addMessageToConversation({
+          chatId: currentConversationId,
+          message: { sender: "user", text: content },
+        })
+      );
+    },
+    onSuccess: () => {
+      dispatch(setChat({ status: "active" }));
+      queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
+    },
+    onError: (error) => {
+      console.error("Failed to send message:", error);
+      dispatch(setChat({ status: "error" }));
+    },
+  });
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!message.trim() || isSending) return;
+
+    sendMessageMutation(message);
+    setMessage("");
+    router.push(`/chat/${currentConversationId}`);
+  };
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as FormEvent);
+    }
+  };
+
   const steps = [
     {
       label: 1,
@@ -280,53 +362,6 @@ const NewChat = () => {
       ),
     },
   ];
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-
-  const {
-    data: chatResponse,
-    isLoading: chatResponseLoading,
-    error: chatResponseError,
-    refetch: refetchChat,
-  } = useQuery({
-    queryKey: ["new-message",],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      if (message === "") return;
-      const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/${currentConversationId}/message/`,
-        {
-          content: message,
-        },
-        {
-          headers: headers,
-        }
-      );
-      dispatch(
-        addMessageToConversation({
-          chatId: currentConversationId,
-          message: { sender: "agent", text: response.data },
-        })
-      );
-      dispatch(setChat({ status: "active" }));
-      return response.data;
-    },
-    retry: false,
-    enabled: false,
-  });
-
-  const handleSubmit = (e: any) => {
-    e.preventDefault();
-    refetchChat();
-    dispatch(setChat({ status: "loading" }));
-    if (message) setMessage("");
-    dispatch(
-      addMessageToConversation({
-        chatId: currentConversationId,
-        message: { sender: "user", text: message },
-      })
-    );
-    router.push(`/chat/${currentConversationId}`);
-  };
 
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
@@ -370,19 +405,26 @@ const NewChat = () => {
           placeholder="Start chatting with the expert...."
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+          disabled={isSending}
           className="min-h-12 h-[50%] text-base resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
         />
         <div className="flex items-center p-3 pt-0 ">
           <Tooltip>
             <TooltipTrigger asChild className="mx-2 !bg-transparent">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" disabled={isSending}>
                 <Plus className="border-primary rounded-full border-2" />
                 <span className="sr-only">Share File</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">Share File</TooltipContent>
           </Tooltip>
-          <Button type="submit" size="sm" className="ml-auto !bg-transparent">
+          <Button 
+            type="submit" 
+            size="sm" 
+            className="ml-auto !bg-transparent"
+            disabled={chatStep !== 3 || !message.trim() || isSending}
+          >
             <Image
               src={"/images/sendmsg.svg"}
               alt="logo"
@@ -393,7 +435,6 @@ const NewChat = () => {
         </div>
       </form>
     </div>
-
   );
 };
 

@@ -36,15 +36,14 @@ const AllChats = () => {
   const [title, setTitle] = useState("");
   const [inputValue, setInputValue] = useState(title);
   const [currentConversationId, setCurrentConversationId] = useState("");
-  const [currentProjectId, setCurrentProjectId] = useState("");
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["all-chats"],
     queryFn: async () => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const response = await axios.get(`${baseUrl}/api/v1/user/conversations`, {
-        params:{
-          start:0,
+        params: {
+          start: 0,
           limit: 1000,
         },
         headers: headers,
@@ -68,7 +67,7 @@ const AllChats = () => {
     setInputValue(event.target.value);
   };
 
-  const {data:chats, refetch: refetchChatTitle } = useQuery({
+  const { data: chats, refetch: refetchChatTitle } = useQuery({
     queryKey: ["chat-title"],
     queryFn: async () => {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -101,20 +100,19 @@ const AllChats = () => {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
       axios
-        .delete(`${baseUrl}/api/v1/projects`, {
-          params: {
-            project_id: currentProjectId,
-          },headers
+        .delete(`${baseUrl}/api/v1/conversations/${currentConversationId}/`, {
+          headers,
         })
         .then((res) => {
-          if (res.data.status === "success") {
+          if (res.status === 200) {
             refetch();
-            toast.success("Title updated successfully");
+            toast.success("Chat deleted Successfully");
           }
           return res.data;
         })
         .catch((err) => {
           console.log(err);
+          toast.error("Unable to delete chat"); 
           return err.response.data;
         });
     },
@@ -216,7 +214,7 @@ const AllChats = () => {
                         variant="destructive"
                         size="icon"
                         onClick={(e: any) => {
-                          setCurrentProjectId(chat.project_ids[0]);
+                          setCurrentConversationId(chat.id);
                           refetchChatDelete();
                         }}
                       >

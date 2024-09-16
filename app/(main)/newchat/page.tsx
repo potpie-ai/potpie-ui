@@ -8,7 +8,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle, GitBranch, Github, Loader, Plus } from "lucide-react";
+import {
+  CheckCircle,
+  GitBranch,
+  Github,
+  Loader,
+  Plus,
+  XCircle,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
@@ -31,7 +38,7 @@ const Step1 = () => {
   const { repoName, branchName } = useSelector(
     (state: RootState) => state.chat
   );
-  const [parsingStatus, setParsingStatus] = useState<string | boolean>(false);
+  const [parsingStatus, setParsingStatus] = useState<string>("");
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
     const headers = await getHeaders();
@@ -61,22 +68,24 @@ const Step1 = () => {
         setParsingStatus(parsingStatus);
 
         if (parsingStatus === "ready") {
+          dispatch(setChat({ chatStep: 2 }));
+          setParsingStatus("Ready");
           break;
+        } else if (parsingStatus === "submitted") {
+          setParsingStatus("Parsing");
+        } else if (parsingStatus === "parsed") {
+          setParsingStatus("Understanding your code");
         } else if (parsingStatus === "error") {
           setParsingStatus("error");
-          return;
+          break;
         }
-
-        console.log(`Current parsing status: ${parsingStatus}`);
 
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
-
-      dispatch(setChat({ chatStep: 2 }));
       return parseResponse.data;
     } catch (err) {
       console.error("Error during parsing:", err);
-      setParsingStatus("error");
+      setParsingStatus("Error");
       return err;
     }
   };
@@ -191,15 +200,34 @@ const Step1 = () => {
           </Select>
         )}
       </div>
-      {parsingStatus != "" && (
-        <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
-          <Loader className="animate-spin h-4 w-4" /> <span>{parsingStatus    }</span>
-        </div>
-      )}
-      {parsingStatus === "success" && (
+      {parsingStatus !== "error" && parsingStatus === "Ready" ? (
         <div className="flex justify-start items-center gap-3 mt-5 ml-5">
           <CheckCircle className="text-[#00C313] h-4 w-4" />{" "}
-          <span className="text-[#00C313]">Parsing Done</span>
+          <span className="text-[#00C313]">{parsingStatus}</span>
+        </div>
+      ) : (
+        parsingStatus !== "error" && (
+          <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
+            <Loader
+              className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
+            />{" "}
+            <span>{parsingStatus}</span>
+          </div>
+        )
+      )}
+      {parsingStatus === "error" && (
+        <div className="flex gap-10 items-center my-3">
+          <div className="flex justify-start items-center gap-3 ">
+            <XCircle className="text-[#E53E3E] h-4 w-4" />{" "}
+            <span>{parsingStatus}</span>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => branchName && parseRepo(repoName, branchName)}
+          >
+            Retry
+          </Button>
         </div>
       )}
     </div>

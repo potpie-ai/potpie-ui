@@ -99,6 +99,7 @@ const AllChats = () => {
     queryFn: async () => {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
+      if(currentConversationId === "" || !currentConversationId) return;
       axios
         .delete(`${baseUrl}/api/v1/conversations/${currentConversationId}/`, {
           headers,

@@ -13,6 +13,7 @@ import { LucideRepeat2 } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { useState } from "react";
 import { toast } from "sonner";
+import { languages } from "prismjs";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string | any;
@@ -32,31 +33,32 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 }) => {
   const dispatch = useDispatch();
   const [copied, setCopied] = useState(false);
-
   const parseMessage = (message: string) => {
-    const sections: Array<{ type: 'text' | 'code', content: string, language?: string }> = [];
-    const regex = /```(\w+)?\n([\s\S]*?)```|([^`]+)/g;
-    let match;
+    // const sections: Array<{ type: 'text' | 'code', content: string, language?: string }> = [];
+    // const regex = /```(\w+)?\n([\s\S]*?)```|([^`]+)/g;
+    // let match;
 
-    while ((match = regex.exec(message)) !== null) {
-      if (match[1] && match[2]) {
-        sections.push({
-          type: 'code',
-          content: match[2].trim(),
-          language: match[1] || 'plaintext',
-        });
-      } else if (match[3]) {
-        sections.push({
-          type: 'text',
-          content: match[3].trim(),
-        });
-      }
-    }
+    // while ((match = regex.exec(message)) !== null) {
+    //   if (match[1] && match[2]) {
+    //     sections.push({
+    //       type: 'code',
+    //       content: match[2].trim(),
+    //       language: match[1] || 'plaintext',
+    //     });
+    //   } else if (match[3]) {
+    //     sections.push({
+    //       type: 'text',
+    //       content: match[3].trim(),
+    //     });
+    //   }
+    // }
 
-    return sections;
+    // return sections;
+
+    return [{ type: 'text', content: message, language: 'json' }];
   };
 
-  const parsedSections = parseMessage(message.message); // Fixed to match the response structure
+  const parsedSections = parseMessage(message); // Fixed to pass the correct message structure
 
   const { refetch: Regenerate } = useQuery({
     queryKey: ["regenerate", currentConversationId],

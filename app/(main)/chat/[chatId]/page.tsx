@@ -1,7 +1,7 @@
 "use client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import React, { useRef } from "react";
+import React, { useRef, FormEvent } from "react";
 import ChatInterface from "../components/ChatInterface";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +24,33 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
+
+  const queryClient = useQueryClient();
+
+  const messageMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const headers = await getHeaders();
+      return axios.post(
+        `${baseUrl}/api/v1/conversations/${params.chatId}/message/`,
+        { content },
+        { headers }
+      );
+    },
+    onSuccess: (response) => {
+      dispatch(
+        addMessageToConversation({
+          chatId: params.chatId,
+          message: { sender: "agent", text: response.data },
+        })
+      );
+      dispatch(setChat({ status: "active" }));
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", params.chatId] });
+    },
+    onError: (error) => {
+      console.error("Error sending message:", error);
+      dispatch(setChat({ status: "error" }));
+    },
+  });
 
   const {
     data: conversationMessages,
@@ -62,47 +89,17 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     },
   });
 
-  const {
-    data: chatResponse,
-    isLoading: chatResponseLoading,
-    error: chatResponseError,
-    refetch: refetchChat,
-  } = useQuery({
-    queryKey: ["new-message", params.chatId],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/${params.chatId}/message/`,
-        {
-          content: messageRef.current?.value,
-        },
-        {
-          headers: headers,
-        }
-      );
-      dispatch(
-        addMessageToConversation({
-          chatId: params.chatId,
-          message: { sender: "agent", text: response.data },
-        })
-      );
-      dispatch(setChat({ status: "active" }));
-      if (messageRef.current) messageRef.current.value = "";
-      return response.data;
-    },
-    staleTime: 0,
-    enabled: false,
-  });
-
-  const handleSubmit = (e: any) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if(!messageRef.current?.value || messageRef.current?.value === "") return
+    const content = messageRef.current?.value;
+    if (!content || content === "") return;
+
     dispatch(setChat({ status: "loading" }));
-    refetchChat();
+    messageMutation.mutate(content);
     dispatch(
       addMessageToConversation({
         chatId: params.chatId,
-        message: { sender: "user", text: messageRef.current?.value || "" },
+        message: { sender: "user", text: content },
       })
     );
     if (messageRef.current) messageRef.current.value = "";

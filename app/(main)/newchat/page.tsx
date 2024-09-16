@@ -15,7 +15,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
+import { useState, FormEvent, KeyboardEvent } from "react";
 import { auth } from "@/configs/Firebase-config";
 import { Label } from "@radix-ui/react-label";
 import { Textarea } from "@/components/ui/textarea";
@@ -218,8 +218,7 @@ const Step2 = () => {
   }
   return (
     <div className="flex flex-col w-full gap-7">
-      <h1 className="text-xl">Choose your expert</h1>
-      <div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y10 gap-10">
+      <h1 className="text-xl">Choose your expert</h1><div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y10 gap-10">
         {AgentTypesLoading
           ? Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="border-border w-[450px] h-40" />
@@ -264,7 +263,6 @@ const NewChat = () => {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const [message, setMessage] = useState("");
-  const [streamedMessage, setStreamedMessage] = useState("");
 
   const sendMessage = async (content: string) => {
     const headers = await getHeaders();
@@ -294,16 +292,25 @@ const NewChat = () => {
       
       for (const parsedChunk of parsedChunks) {
         accumulatedMessage += parsedChunk.message;
-        setStreamedMessage(accumulatedMessage);
       }
     }
 
+    // Update the message once the entire response is received
+    dispatch(
+      addMessageToConversation({
+        chatId: currentConversationId,
+        message: { sender: "agent", text: accumulatedMessage },
+      })
+    );
+
+    dispatch(setChat({ status: "active" }));
     return accumulatedMessage;
   };
 
   const { mutate: sendMessageMutation, isPending: isSending } = useMutation({
     mutationFn: sendMessage,
     onMutate: (content) => {
+      dispatch(setChat({ status: "loading" }));
       dispatch(
         addMessageToConversation({
           chatId: currentConversationId,
@@ -311,13 +318,7 @@ const NewChat = () => {
         })
       );
     },
-    onSuccess: (data) => {
-      dispatch(
-        addMessageToConversation({
-          chatId: currentConversationId,
-          message: { sender: "agent", text: data },
-        })
-      );
+    onSuccess: () => {
       dispatch(setChat({ status: "active" }));
       queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
     },
@@ -327,13 +328,20 @@ const NewChat = () => {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isSending) return;
 
     sendMessageMutation(message);
     setMessage("");
     router.push(`/chat/${currentConversationId}`);
+  };
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as FormEvent);
+    }
   };
 
   const steps = [
@@ -397,6 +405,7 @@ const NewChat = () => {
           placeholder="Start chatting with the expert...."
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
           disabled={isSending}
           className="min-h-12 h-[50%] text-base resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
         />

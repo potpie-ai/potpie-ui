@@ -20,14 +20,20 @@ const ChatInterface = ({
       {currentConversation &&
         currentConversation.messages.map((message, i) => (
           <ChatBubble
-            key={i}
+            key={`${currentConversationId}-${i}`}
             message={message.text}
-            sender={message?.sender}
+            sender={message.sender}
             isLast={i === currentConversation.messages.length - 1}
             currentConversationId={currentConversationId}
-            isStreaming={status === "loading" && i === currentConversation.messages.length - 1}
           />
         ))}
+      {status === "loading" && (
+        <div className="flex items-center space-x-1 mr-auto">
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 "use client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import React, { useRef, FormEvent, useState } from "react";
+import React, { useRef, FormEvent, KeyboardEvent } from "react";
 import ChatInterface from "../components/ChatInterface";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,8 +24,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
-  const [streamedMessage, setStreamedMessage] = useState("");
-
   const queryClient = useQueryClient();
 
   const sendMessage = async (content: string) => {
@@ -56,24 +54,34 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       
       for (const parsedChunk of parsedChunks) {
         accumulatedMessage += parsedChunk.message;
-        setStreamedMessage(accumulatedMessage);
       }
     }
 
+    // Update the message once the entire response is received
+    dispatch(
+      addMessageToConversation({
+        chatId: params.chatId,
+        message: { sender: "agent", text: accumulatedMessage },
+      })
+    );
+
+    dispatch(setChat({ status: "active" }));
     return accumulatedMessage;
   };
 
   const messageMutation = useMutation({
     mutationFn: sendMessage,
-    onSuccess: (data) => {
+    onMutate: (content) => {
+      dispatch(setChat({ status: "loading" }));
       dispatch(
         addMessageToConversation({
           chatId: params.chatId,
-          message: { sender: "agent", text: data },
+          message: { sender: "user", text: content },
         })
       );
+    },
+    onSuccess: () => {
       dispatch(setChat({ status: "active" }));
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", params.chatId] });
     },
     onError: (error) => {
       console.error("Error sending message:", error);
@@ -123,15 +131,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     const content = messageRef.current?.value;
     if (!content || content === "") return;
 
-    dispatch(setChat({ status: "loading" }));
     messageMutation.mutate(content);
-    dispatch(
-      addMessageToConversation({
-        chatId: params.chatId,
-        message: { sender: "user", text: content },
-      })
-    );
     if (messageRef.current) messageRef.current.value = "";
+  };
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as FormEvent);
+    }
   };
 
   return (
@@ -149,6 +157,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           id="message"
           placeholder="Start chatting with the expert...."
           className="min-h-12 h-[50%] text-base resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
+          onKeyPress={handleKeyPress}
         />
         <div className="flex items-center p-3 pt-0 ">
           <Tooltip>

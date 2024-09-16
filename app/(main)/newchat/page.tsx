@@ -437,40 +437,6 @@ const NewChat = () => {
   ];
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
-  const {
-    data: chatResponse,
-    isLoading: chatResponseLoading,
-    error: chatResponseError,
-    refetch: refetchChat,
-  } = useQuery({
-    queryKey: ["new-message"],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      if (message === "") return;
-      const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/${currentConversationId}/message/`,
-        {
-          content: message,
-        },
-        {
-          headers: headers,
-        }
-      );
-      dispatch(
-        addMessageToConversation({
-          chatId: currentConversationId,
-          message: { sender: "agent", text: response.data },
-        })
-      );
-      dispatch(setChat({ status: "active" }));
-      return response.data;
-    },
-    retry: false,
-    enabled: false,
-  });
-
-
-
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">
       <div className="relative w-[97%] h-full flex flex-col items-center -mb-12 mt-5">

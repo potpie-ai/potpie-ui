@@ -9,7 +9,7 @@ import {
 } from "@/lib/state/Reducers/chat";
 import { cn } from "@/lib/utils";
 import axios from "axios";
-import { LucideRepeat2 } from "lucide-react";
+import { LucideRepeat2, RotateCw } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -66,12 +66,13 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       const decoder = new TextDecoder();
 
       dispatch(removeLastMessage({ chatId: currentConversationId }));
-      dispatch(
-        addMessageToConversation({
-          chatId: currentConversationId,
-          message: { sender: "agent", text: "" },
-        })
-      );
+      // removed coz it added an empty response in the UI while regen 
+      // dispatch(
+      //   addMessageToConversation({
+      //     chatId: currentConversationId,
+      //     message: { sender: "agent", text: "" },
+      //   }) 
+      // );
 
       while (true) {
         const { done, value } = await reader?.read() || { done: true, value: undefined };
@@ -97,6 +98,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       return accumulatedMessage;
     } catch (err) {
       console.log(err);
+      dispatch(setChat({ status: "active" }));
       toast.error("Unable to regenerate response");
       setIsRegenerating(false);
       setIsEmptyResponse(true);
@@ -154,7 +156,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         </div>
       )}
 
-      {sender === "agent" && isLast && !isStreaming && (
+      {sender === "agent" && isLast && !isStreaming && !isRegenerating && (
         <div className="flex justify-end items-center mt-2">
           <Button
             className="gap-2"
@@ -164,7 +166,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             disabled={isRegenerating}
           >
             {isRegenerating ? (
-              <span className="animate-spin">...</span>
+              <RotateCw className="animate-spin size-4 " />
             ) : (
               <LucideRepeat2 className="size-4" />
             )}

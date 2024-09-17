@@ -18,6 +18,7 @@ import getHeaders from "@/app/utils/headers.util";
 import Step1 from "./components/step1";
 import Step2 from "./components/step2";
 
+
 const NewChat = () => {
   const router = useRouter();
   const dispatch: AppDispatch = useDispatch();

@@ -4,12 +4,6 @@ import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import React, { useState, useEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import debounce from "debounce";
 import getHeaders from "@/app/utils/headers.util";
 import axios from "axios";
@@ -28,6 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -51,21 +46,6 @@ const AllChats = () => {
       return response.data.reverse();
     },
   });
-
-  useEffect(() => {
-    const handler = debounce((value) => {
-      setDebouncedSearchTerm(value);
-    }, 500);
-
-    handler(searchTerm);
-
-    return () => {
-      handler.clear();
-    };
-  }, [searchTerm]);
-  const handleInputChange = (event: any) => {
-    setInputValue(event.target.value);
-  };
 
   const { data: chats, refetch: refetchChatTitle } = useQuery({
     queryKey: ["chat-title"],
@@ -99,7 +79,7 @@ const AllChats = () => {
     queryFn: async () => {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
-      if(currentConversationId === "" || !currentConversationId) return;
+      if (currentConversationId === "" || !currentConversationId) return;
       axios
         .delete(`${baseUrl}/api/v1/conversations/${currentConversationId}/`, {
           headers,
@@ -113,19 +93,36 @@ const AllChats = () => {
         })
         .catch((err) => {
           console.log(err);
-          toast.error("Unable to delete chat"); 
+          toast.error("Unable to delete chat");
           return err.response.data;
         });
     },
     enabled: false,
   });
+
   const handleSave = () => {
     refetchChatTitle();
     dispatch(setChat({ title: inputValue }));
   };
 
+  useEffect(() => {
+    const handler = debounce((value) => {
+      setDebouncedSearchTerm(value);
+    }, 500);
+
+    handler(searchTerm);
+
+    return () => {
+      handler.clear();
+    };
+  }, [searchTerm]);
+
+  const handleInputChange = (event: any) => {
+    setInputValue(event.target.value);
+  };
+
   return (
-    <section className="max-w-2xl w-full space-y-4 h-full mx-auto">
+    <div className="m-10">
       <div className="flex w-full mx-auto items-center space-x-2">
         <Input
           type="text"
@@ -134,50 +131,38 @@ const AllChats = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
-      {isLoading ? (
-        <>
-          {Array.from({ length: 10 }).map((_, index) => (
-            <Skeleton key={index} className="w-full h-16" />
-          ))}
-        </>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {data
-            .filter((chat: any) =>
-              chat.title
-                .toLowerCase()
-                .includes(debouncedSearchTerm.toLowerCase())
-            )
-            .map((chat: any) => (
-              <Card
-                key={chat.id}
-                className="border-none shadow-lg hover:scale-105 transition-all duration-300"
-                onClick={() =>
-                  dispatch(
-                    setChat({
-                      currentConversationId: chat.id,
-                      title: chat.title,
-                    })
-                  )
-                }
-              >
-                <CardHeader className="py-3">
-                  <CardTitle className="text-xl flex w-full justify-between items-center">
-                    <Link href={`/chat/${chat.id}`}>
-                      <p> {chat.title}</p>
-                    </Link>
+      {!isLoading && data && data.length > 0 ? (
+        <Table className="mt-10">
+          <TableHeader className="font-semibold text-red">
+            <TableRow className="border-b-8 border-border font-semibold text-red">
+              <TableHead className="w-[200px] text-primary">Title</TableHead>
+              <TableHead className="w-[200px] text-primary">Created At</TableHead>
+              <TableHead className="w-[200px] text-primary">Status</TableHead>
+              <TableHead className="w-[200px] text-primary">Repository</TableHead>
+              <TableHead className="w-[200px] text-primary">Branch</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((chat: any) => (
+              <TableRow key={chat.id} className="hover:bg-red">
+                <TableCell>{chat.title}</TableCell>
+                <TableCell>{new Date(chat.created_at).toLocaleString()}</TableCell>
+                <TableCell>{chat.status}</TableCell>
+                <TableCell>{chat?.repository}</TableCell>
+                <TableCell>{chat?.branch}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-5">
                     <div className="flex gap-3">
                       <Dialog>
                         <DialogTrigger>
                           <Button
-                            size="icon"
                             onClick={(e: any) => {
                               setTitle(chat.title);
                               setInputValue(chat.title);
                               setCurrentConversationId(chat.id);
                             }}
                           >
-                            <Edit />
+                            Rename
                           </Button>
                         </DialogTrigger>
                         <DialogContent
@@ -211,28 +196,35 @@ const AllChats = () => {
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        onClick={(e: any) => {
-                          setCurrentConversationId(chat.id);
-                          refetchChatDelete();
-                        }}
-                      >
-                        <Trash />
-                      </Button>
                     </div>
-                  </CardTitle>
-                  <CardDescription>
-                    {dayjs(chat.updated_at).format("MMM DD, YYYY")}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+                    <Button
+                      variant="outline"
+                      className="configure-button hover:bg-gray-200"
+                      onClick={(e: any) => {
+                        setCurrentConversationId(chat.id);
+                        refetchChatDelete();
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
             ))}
+          </TableBody>
+        </Table>
+      ) : isLoading ? (
+        <Skeleton className="h-6 mt-4 w-full" />
+      ) : (
+        <div className="flex flex-col items-start h-full w-full">
+          <p className="text-primary text-center py-5">
+            No chats found.
+          </p>
         </div>
       )}
-    </section>
+    </div>
   );
 };
 
 export default AllChats;
+

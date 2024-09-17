@@ -35,7 +35,7 @@ function MyCodeBlock({ code, language }: MyCodeBlockProps) {
       <CodeBlock code={code} language={language} theme={themes.vsLight}>
         <CodeBlock.Code className="bg-gray-100 p-6 rounded-b-lg overflow-x-auto">
           <div className="table-row">
-            <CodeBlock.LineNumber className="table-cell pr-4 text-sm text-gray-500 text-right select-none" />
+            {/* <CodeBlock.LineNumber className="table-cell pr-4 text-sm text-border text-right select-none" /> */}
             <CodeBlock.LineContent className="table-cell">
               <div className="whitespace-pre-wrap break-words">
                 <CodeBlock.Token />

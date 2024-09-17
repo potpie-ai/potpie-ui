@@ -1,22 +1,31 @@
 "use client";
 import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import debounce from "debounce";
 import getHeaders from "@/app/utils/headers.util";
 import axios from "axios";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { LucideGithub } from "lucide-react";
 
 const AllRepos = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
 
+  const githubAppUrl =
+    "https://github.com/apps/" +
+    process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
+    "/installations/select_target?setup_action=install";
+  const popupRef = useRef<Window | null>(null);
+  const openPopup = () => {
+    popupRef.current = window.open(
+      githubAppUrl,
+      "_blank",
+      "width=1000,height=700"
+    );
+  };
   const { data, isLoading, error } = useQuery({
     queryKey: ["all-repos"],
     queryFn: async () => {
@@ -25,7 +34,7 @@ const AllRepos = () => {
       const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
         headers: headers,
       });
-  
+
       return response.data.repositories;
     }
   });
@@ -43,38 +52,52 @@ const AllRepos = () => {
   }, [searchTerm]);
 
   return (
-    <section className="max-w-2xl w-full space-y-4 h-full mx-auto">
+    <div className="m-10">
       <div className="flex w-full mx-auto items-center space-x-2">
         <Input
           type="text"
-          placeholder="Search your Repos..."
+          placeholder="Search your Repositories..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
+        <Button onClick={() => openPopup()} className="gap-2">
+          <LucideGithub className=" rounded-full border border-white p-1" />
+          Add new repo from Github
+        </Button>
       </div>
-      {isLoading ? (
+      {!isLoading && data && data.length > 0 ? (
+        <Table className="mt-10">
+          <TableHeader>
+            <TableRow className="border-b-8 border-border">
+              <TableHead className="w-[200px] text-primary">Name</TableHead>
+              <TableHead className="w-[200px] text-primary">Description</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data
+              .filter((repo: any) =>
+                repo.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+              )
+              .map((repo: any) => (
+                <TableRow key={repo.id} className="hover:bg-gray-100">
+                  <TableCell>{repo.name}</TableCell>
+                  <TableCell>{repo.description || "No description available"}</TableCell>
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+      ) : isLoading ? (
         <>
           {Array.from({ length: 10 }).map((_, index) => (
-            <Skeleton key={index} className="w-full h-16" />
+            <Skeleton key={index} className="w-full h-6 mt-4" />
           ))}
         </>
       ) : (
-        <div className="flex flex-col gap-4">
-          {data
-            .filter((repo: any) =>
-              repo.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-            )
-            .map((repo: any) => (
-              <Card key={repo.id} className="border-none shadow-lg">
-                <CardHeader className="py-3">
-                  <CardTitle className="text-xl">{repo.name}</CardTitle>
-                  <CardDescription>Description</CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
+        <div className="flex flex-col items-start h-full w-full">
+          <p className="text-primary text-center py-5">No repositories found.</p>
         </div>
       )}
-    </section>
+    </div>
   );
 };
 

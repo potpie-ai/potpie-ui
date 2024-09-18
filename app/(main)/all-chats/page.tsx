@@ -145,11 +145,11 @@ const AllChats = () => {
           <TableBody>
             {data.map((chat: any) => (
               <TableRow key={chat.id} className="hover:bg-red">
-                <TableCell>{chat.title}</TableCell>
-                <TableCell>{new Date(chat.created_at).toLocaleString()}</TableCell>
-                <TableCell>{chat.status}</TableCell>
-                <TableCell>{chat?.repository}</TableCell>
-                <TableCell>{chat?.branch}</TableCell>
+                <TableCell><Link href={`/chat/${chat.id}`}>{chat.title}</Link></TableCell>
+                <TableCell><Link href={`/chat/${chat.id}`}>{new Date(chat.created_at).toLocaleString()}</Link></TableCell>
+                <TableCell><Link href={`/chat/${chat.id}`}>{chat.status}</Link></TableCell>
+                <TableCell><Link href={`/chat/${chat.id}`}>{chat?.repository}</Link></TableCell>
+                <TableCell><Link href={`/chat/${chat.id}`}>{chat?.branch}</Link></TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-5">
                     <div className="flex gap-3">

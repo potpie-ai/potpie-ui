@@ -275,7 +275,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                 }}
               >
                 <div className="font-semibold">{node.name}</div>
-                <div className="text-sm text-gray-500">{node.file_path}</div>
+                <div className="text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">{node.file_path}</div>
               </li>
             ))}
           </ul>

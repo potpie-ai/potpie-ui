@@ -33,15 +33,31 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   ...props
 }) => {
   const dispatch = useDispatch();
-  const [copied, setCopied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEmptyResponse, setIsEmptyResponse] = useState(false);
 
   const parseMessage = (message: string) => {
-    return [{ type: 'text', content: message, language: 'json' }];
+    const sections = [];
+    const codeRegex = /```(\w+?)\n([\s\S]*?)```/g; 
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeRegex.exec(message)) !== null) {
+      if (match.index > lastIndex) {
+        sections.push({ type: 'text', content: message.slice(lastIndex, match.index) });
+      }
+      sections.push({ type: 'code', content: match[2], language: match[1] });
+      lastIndex = match.index + match[0].length; 
+    }
+
+    if (lastIndex < message.length) {
+      sections.push({ type: 'text', content: message.slice(lastIndex) });
+    }
+
+    return sections;
   };
 
-  const parsedSections = parseMessage(message);
+  const parsedSections = parseMessage(message); 
 
   const regenerateMessage = async () => {
     setIsRegenerating(true);
@@ -66,30 +82,20 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       const decoder = new TextDecoder();
 
       dispatch(removeLastMessage({ chatId: currentConversationId }));
-      // removed coz it added an empty response in the UI while regen 
-      // dispatch(
-      //   addMessageToConversation({
-      //     chatId: currentConversationId,
-      //     message: { sender: "agent", text: "" },
-      //   }) 
-      // );
 
       while (true) {
         const { done, value } = await reader?.read() || { done: true, value: undefined };
         if (done) break;
 
         const chunk = decoder.decode(value);
-        const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
+        accumulatedMessage += chunk;
 
-        for (const parsedChunk of parsedChunks) {
-          accumulatedMessage += parsedChunk.message;
-          dispatch(
-            addMessageToConversation({
-              chatId: currentConversationId,
-              message: { sender: "agent", text: accumulatedMessage },
-            })
-          );
-        }
+        dispatch(
+          addMessageToConversation({
+            chatId: currentConversationId,
+            message: { sender: "agent", text: accumulatedMessage },
+          })
+        );
       }
 
       dispatch(setChat({ status: "active" }));
@@ -106,12 +112,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     }
   };
 
-  const handleCopy = (code: string) => {
-    navigator.clipboard.writeText(code || "");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div
       className={cn(
@@ -124,11 +124,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       )}
       {...props}
     >
-      {parsedSections.map((section, index) => {
-        if (section.type === 'text') {
-          return (
+      {parsedSections.map((section, index) => (
+        <div key={index}>
+          {section.type === 'text' && (
             <ReactMarkdown
-              key={index}
               className="markdown"
               components={{
                 code: ({ children }) => (
@@ -140,15 +139,12 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             >
               {section.content}
             </ReactMarkdown>
-          );
-        } else if (section.type === 'code') {
-          return (
-            <div key={index} className="my-4">
-              <MyCodeBlock code={section.content} language={section.language || "json"} />
-            </div>
-          );
-        }
-      })}
+          )}
+          {section.type === 'code' && (
+            <MyCodeBlock code={section.content} language={section.language || "json"} />
+          )}
+        </div>
+      ))}
 
       {isEmptyResponse && (
         <div className="text-red-500 mt-2">

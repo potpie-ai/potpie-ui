@@ -1,331 +1,24 @@
 "use client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  CheckCircle,
-  GitBranch,
-  Github,
-  Loader,
   Plus,
   X,
-  XCircle,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useState, FormEvent, KeyboardEvent, useEffect, useRef } from "react";
-import { auth } from "@/configs/Firebase-config";
 import { Label } from "@radix-ui/react-label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import Step1 from "./components/step1";
+import Step2 from "./components/step2";
 
-const Step1 = () => {
-  const dispatch = useDispatch();
-  const { repoName, branchName } = useSelector(
-    (state: RootState) => state.chat
-  );
-  const [parsingStatus, setParsingStatus] = useState<string>("");
-  const parseRepo = async (repo_name: string, branch_name: string) => {
-    setParsingStatus("loading");
-    const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
-    try {
-      const parseResponse = await axios.post(
-        `${baseUrl}/api/v1/parse`,
-        { repo_name, branch_name },
-        { headers: headers }
-      );
-
-      if (repo_name !== null || branch_name !== null) {
-        dispatch(setChat({ projectId: parseResponse.data.project_id }));
-      }
-
-      const projectId = parseResponse.data.project_id;
-
-      let parsingStatus = "";
-      while (true) {
-        const statusResponse = await axios.get(
-          `${baseUrl}/api/v1/parsing-status/${projectId}`,
-          { headers: headers }
-        );
-
-        parsingStatus = statusResponse.data.status;
-        setParsingStatus(parsingStatus);
-
-        if (parsingStatus === "ready") {
-          dispatch(setChat({ chatStep: 2 }));
-          setParsingStatus("Ready");
-          break;
-        } else if (parsingStatus === "submitted") {
-          setParsingStatus("Parsing");
-        } else if (parsingStatus === "parsed") {
-          setParsingStatus("Understanding your code");
-        } else if (parsingStatus === "error") {
-          setParsingStatus("error");
-          break;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      }
-      return parseResponse.data;
-    } catch (err) {
-      console.error("Error during parsing:", err);
-      setParsingStatus("Error");
-      return err;
-    }
-  };
-
-  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
-    UserRepo[]
-  >({
-    queryKey: ["user-repository"],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
-        headers,
-      });
-      return response.data.repositories;
-    },
-  });
-
-  const {
-    data: UserBranch,
-    isLoading: UserBranchLoading,
-    error: UserBranchError,
-  } = useQuery<UserRepo[]>({
-    queryKey: ["user-branch", repoName],
-    queryFn: async () => {
-      const headers = await getHeaders(); // Wait for the headers
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL; // Read base URL from the environment variable
-
-      const response = await axios.get(
-        `${baseUrl}/api/v1/github/get-branch-list`,
-        {
-          params: {
-            repo_name: repoName, // Add the repo name as a parameter
-          },
-          headers: headers,
-        }
-      );
-      return response.data.branches;
-    },
-    enabled: !!repoName && repoName !== "",
-  });
-
-  return (
-    <div className="text-muted">
-      <h1 className="text-xl">Select a repository and branch</h1>
-      <Link href={"#"} className="text-accent underline">
-        need help?
-      </Link>
-      <div className=" flex gap-10 mt-7 ml-5">
-        {UserRepositorysLoading ? (
-          <Skeleton className="w-[220px] h-10" />
-        ) : (
-          <Select
-            defaultValue={repoName}
-            onValueChange={(value) => dispatch(setChat({ repoName: value }))}
-          >
-            <SelectTrigger className="w-[220px] py-2  border-border ">
-              <SelectValue
-                className=""
-                placeholder={
-                  <div className="flex gap-3 items-center font-semibold ">
-                    <Github
-                      className="h-4 w-4 text-[#7A7A7A] "
-                      strokeWidth={1.5}
-                    />
-                    Select Repository
-                  </div>
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {UserRepositorys?.map((value: any) => (
-                <SelectItem key={value.id} value={value.full_name}>
-                  {value.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {UserRepositorysLoading ? (
-          <Skeleton className="w-[220px] h-10" />
-        ) : (
-          <Select
-            defaultValue={branchName}
-            onValueChange={(value) => {
-              dispatch(setChat({ branchName: value }));
-              parseRepo(repoName, value);
-            }}
-          >
-            <SelectTrigger className="w-[220px] py-2  border-border">
-              <SelectValue
-                className=""
-                placeholder={
-                  <div className="flex gap-3 items-center font-semibold ">
-                    <GitBranch
-                      className="h-4 w-4 text-[#7A7A7A] "
-                      strokeWidth={1.5}
-                    />
-                    Select Branch
-                  </div>
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {!UserBranchLoading &&
-                UserBranch?.map((value: any) => (
-                  <SelectItem key={value} value={value}>
-                    {value}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-      {parsingStatus !== "error" && parsingStatus === "Ready" ? (
-        <div className="flex justify-start items-center gap-3 mt-5 ml-5">
-          <CheckCircle className="text-[#00C313] h-4 w-4" />{" "}
-          <span className="text-[#00C313]">{parsingStatus}</span>
-        </div>
-      ) : (
-        parsingStatus !== "error" && (
-          <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
-            <Loader
-              className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
-            />{" "}
-            <span>{parsingStatus}</span>
-          </div>
-        )
-      )}
-      {parsingStatus === "error" && (
-        <div className="flex gap-10 items-center my-3">
-          <div className="flex justify-start items-center gap-3 ">
-            <XCircle className="text-[#E53E3E] h-4 w-4" />{" "}
-            <span>{parsingStatus}</span>
-          </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => branchName && parseRepo(repoName, branchName)}
-          >
-            Retry
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const Step2 = () => {
-  const dispatch = useDispatch();
-  const userId = auth.currentUser?.uid || "";
-  const { projectId, title } = useSelector((state: RootState) => state.chat);
-  const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
-    AgentType[]
-  >({
-    queryKey: ["agent-types"],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(
-        `${baseUrl}/api/v1/list-available-agents/`,
-        {
-          headers: headers,
-        }
-      );
-
-      return response.data;
-    },
-  });
-  const [selectedCard, setSelectedCard] = useState("999");
-  const createConversation = async (event: any) => {
-    dispatch(setChat({ agentId: event, chatStep: 3 }));
-    const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    const response = await axios
-      .post(
-        `${baseUrl}/api/v1/conversations/`,
-        {
-          user_id: userId,
-          title: title,
-          status: "active",
-          project_ids: [projectId],
-          agent_ids: [event],
-        },
-        { headers: headers }
-      )
-      .then((res) => {
-        dispatch(setChat({ currentConversationId: res.data.conversation_id }));
-        return res.data;
-      })
-      .catch((err) => {
-        console.log(err);
-        return { error: "Unable to create conversation: " + err.message };
-      });
-
-    if (response.error) {
-      console.error(response.error);
-    }
-  };
-  return (
-    <div className="flex flex-col w-full gap-7">
-      <h1 className="text-xl">Choose your expert</h1><div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y10 gap-10">
-        {AgentTypesLoading
-          ? Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="border-border w-[450px] h-40" />
-            ))
-          : AgentTypes?.map((content, index) => (
-              <Card
-                key={index}
-                className={`pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 ${
-                  selectedCard === content.id
-                    ? "border-[#FFB36E] border-2"
-                    : "hover:border-[#FFB36E] hover:border-2"
-                }`}
-                onClick={() => {
-                  createConversation(content.id);
-                  setSelectedCard(content.id);
-                }}
-              >
-                <CardHeader className="p-2 px-6 font-normal">
-                  <CardTitle className="text-lg flex gap-3 text-muted">
-                    <Image
-                      src={"/images/person.svg"}
-                      alt="logo"
-                      width={20}
-                      height={20}
-                    />
-                    <span>{content.name}</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-base ml-8 text-muted-foreground leading-tight">
-                  {content.description}
-                </CardContent>
-              </Card>
-            ))}
-      </div>
-    </div>
-  );
-};
 const NewChat = () => {
   const router = useRouter();
   const dispatch: AppDispatch = useDispatch();
@@ -333,6 +26,7 @@ const NewChat = () => {
   const { chatStep, currentConversationId, projectId } = useSelector(
     (state: RootState) => state.chat
   );
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const [message, setMessage] = useState("");
 
@@ -498,7 +192,6 @@ const NewChat = () => {
       ),
     },
   ];
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2 ">

@@ -56,27 +56,40 @@ const chatSlice = createSlice({
 
     addMessageToConversation: (
       state,
-      action: PayloadAction<{ chatId: string; message: Message }>
+      action: PayloadAction<{
+        chatId: string;
+        message: { sender: "user" | "agent"; text: string };
+      }>
     ) => {
+      const { chatId, message } = action.payload;
       const conversation = state.conversations.find(
-        (conv) => conv.conversationId === action.payload.chatId
+        (c) => c.conversationId === chatId
       );
-      if (conversation) conversation.messages.push(action.payload.message);
-      else
+      if (conversation) {
+        const lastMessage =
+          conversation.messages[conversation.messages.length - 1];
+        if (
+          message.sender === "agent" &&
+          lastMessage &&
+          lastMessage.sender === "agent"
+        ) {
+          lastMessage.text = message.text;
+        } else {
+          conversation.messages.push(message);
+        }
+      } else {
         state.conversations.push({
-          conversationId: action.payload.chatId,
-          messages: [action.payload.message],
+          conversationId: chatId,
+          messages: [message],
         });
+      }
     },
-    removeLastMessage:  (
-      state,
-      action: PayloadAction<{ chatId: string; }>
-    ) => {
-      const conversation = state.conversations.find(
-        (conv) => conv.conversationId === action.payload.chatId
-      );
-      if (conversation) conversation.messages.pop();
-      state.status = "loading";
+    removeLastMessage: (state, action: PayloadAction<{ chatId: string }>) => {
+      const { chatId } = action.payload;
+      const conversation = state.conversations.find(c => c.conversationId === chatId);
+      if (conversation && conversation.messages.length > 0) {
+        conversation.messages.pop();
+      }
     },
     clearChat: (state) => {
       return initialState;
@@ -86,5 +99,10 @@ const chatSlice = createSlice({
 
 export default chatSlice.reducer;
 
-export const { setChat, addConversation, addMessageToConversation, clearChat,removeLastMessage } =
-  chatSlice.actions;
+export const {
+  setChat,
+  addConversation,
+  addMessageToConversation,
+  clearChat,
+  removeLastMessage,
+} = chatSlice.actions;

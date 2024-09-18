@@ -52,10 +52,10 @@ const NewChat = () => {
     while (true) {
       const { done, value } = await reader?.read() || { done: true, value: undefined };
       if (done) break;
-      
+
       const chunk = decoder.decode(value);
       const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
-      
+
       for (const parsedChunk of parsedChunks) {
         accumulatedMessage += parsedChunk.message;
       }
@@ -94,14 +94,14 @@ const NewChat = () => {
     },
   });
 
-        const handleSubmit = (e: FormEvent) => {
-          e.preventDefault();
-          if (!message.trim() || isSending) return;
-
-          sendMessageMutation(message);
-          setMessage("");
-          router.push(`/chat/${currentConversationId}`);
-        };
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const content = messageRef.current?.value;
+    if (!content || content === "") return;
+    sendMessageMutation(content);
+    setMessage("");
+    router.push(`/chat/${currentConversationId}`);
+  };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -128,16 +128,16 @@ const NewChat = () => {
       },
       { headers }
     );
-    setNodeOptions(response.data.results); 
+    setNodeOptions(response.data.results);
   };
 
   const handleNodeSelect = (node: any) => {
-    console.log("Node selected:", node); 
+    console.log("Node selected:", node);
     if (!selectedNodes.some((n) => n.node_id === node.node_id)) {
-      setSelectedNodes([...selectedNodes, node]); 
+      setSelectedNodes([...selectedNodes, node]);
     }
-    setNodeInput(""); 
-    setIsNodeInputVisible(false); 
+    setNodeInput("");
+    setIsNodeInputVisible(false);
   };
 
   const handleNodeRemove = (node: any) => {
@@ -148,7 +148,7 @@ const NewChat = () => {
     const value = e.target.value;
     setNodeInput(value);
     if (value.trim()) {
-      fetchNodes(value); 
+      fetchNodes(value);
     } else {
       setNodeOptions([]);
     }
@@ -157,7 +157,7 @@ const NewChat = () => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (nodeInputRef.current && !nodeInputRef.current.contains(event.target as Node)) {
-        setTimeout(() => setIsNodeInputVisible(false), 100); 
+        setTimeout(() => setIsNodeInputVisible(false), 100);
       }
     };
     if (isNodeInputVisible) {
@@ -165,7 +165,7 @@ const NewChat = () => {
     } else {
       document.removeEventListener("mousedown", handleClickOutside);
     }
-  
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -203,19 +203,17 @@ const NewChat = () => {
           >
             {/* Vertical Line */}
             <div
-              className={`absolute left-[18px] top-10 h-full border-l-2 border-gray-300 z-0 ${
-                index === steps.length - 1 ? "hidden" : "top-10"
-              }`}
+              className={`absolute left-[18px] top-10 h-full border-l-2 border-gray-300 z-0 ${index === steps.length - 1 ? "hidden" : "top-10"
+                }`}
             ></div>
             {/* Step Circle */}
             <div
-              className={`flex items-center justify-center w-8 h-8 rounded-full z-5 ${
-                step.label === 3 && chatStep === 3
+              className={`flex items-center justify-center w-8 h-8 rounded-full z-5 ${step.label === 3 && chatStep === 3
                   ? "bg-[#00C313] text-white"
                   : step.label <= (chatStep ?? 0)
                     ? "bg-white text-border border-2 border-accent"
                     : "bg-border text-white"
-              }`}
+                }`}
             >
               {step.label}
             </div>

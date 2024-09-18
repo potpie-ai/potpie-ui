@@ -79,24 +79,26 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       }
 
       const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+    const decoder = new TextDecoder();
+    let accumulatedMessage = "";
 
-      dispatch(removeLastMessage({ chatId: currentConversationId }));
-
-      while (true) {
-        const { done, value } = await reader?.read() || { done: true, value: undefined };
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        accumulatedMessage += chunk;
-
-        dispatch(
-          addMessageToConversation({
-            chatId: currentConversationId,
-            message: { sender: "agent", text: accumulatedMessage },
-          })
-        );
+    while (true) {
+      const { done, value } = await reader?.read() || { done: true, value: undefined };
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
+      
+      for (const parsedChunk of parsedChunks) {
+        accumulatedMessage += parsedChunk.message;
       }
+    }
+      dispatch(
+        addMessageToConversation({
+          chatId: currentConversationId,
+          message: { sender: "agent", text: accumulatedMessage },
+        })
+      );
 
       dispatch(setChat({ status: "active" }));
       setIsEmptyResponse(false);

@@ -61,7 +61,7 @@ jobs:
           echo "NEXT_PUBLIC_BASE_URL=${{ secrets.PROD_PUBLIC_BASE_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SKIP_PRO_CHECK=${{ secrets.PROD_PUBLIC_SKIP_PRO_CHECK }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GITHUB_APP_NAME=${{ secrets.PROD_PUBLIC_GITHUB_APP_NAME }}" >> $GITHUB_ENV
-
+          echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=${{ secrets.PROD_PUBLIC_CONVERSATION_BASE_URL }}" >> $GITHUB_ENV
       # Build the Docker image
       - name: Build
         run: |-
@@ -81,6 +81,7 @@ jobs:
             --build-arg NEXT_PUBLIC_BASE_URL="${{ env.NEXT_PUBLIC_BASE_URL }}" \
             --build-arg NEXT_PUBLIC_SKIP_PRO_CHECK="${{ env.NEXT_PUBLIC_SKIP_PRO_CHECK }}" \
             --build-arg NEXT_PUBLIC_GITHUB_APP_NAME="${{ env.NEXT_PUBLIC_GITHUB_APP_NAME }}" \
+            --build-arg NEXT_PUBLIC_CONVERSATION_BASE_URL="${{ env.NEXT_PUBLIC_CONVERSATION_BASE_URL }}" \
             -f Dockerfile .
 
       # Push the Docker image to Google Artifact Registry
@@ -89,11 +90,11 @@ jobs:
           docker push "$IMAGE_TAG"
 
       # Deploy to Cloud Run
-      - name: Deploy to Cloud Run
-        run: |-
-          gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
-            --image ${{ env.IMAGE_TAG }} \
-            --project ${{ env.PROJECT_ID }} \
-            --region ${{ env.GAR_ZONE }} \
-            --platform managed \
-            --allow-unauthenticated
+      # - name: Deploy to Cloud Run
+      #   run: |-
+      #     gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
+      #       --image ${{ env.IMAGE_TAG }} \
+      #       --project ${{ env.PROJECT_ID }} \
+      #       --region ${{ env.GAR_ZONE }} \
+      #       --platform managed \
+      #       --allow-unauthenticated

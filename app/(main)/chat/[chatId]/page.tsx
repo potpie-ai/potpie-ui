@@ -81,7 +81,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const sendMessage = async (content: string) => {
     const headers = await getHeaders();
-    const response = await fetch(`${baseUrl}/api/v1/conversations/${params.chatId}/message/`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/message/`, {
       method: 'POST',
       headers: {
         ...headers,
@@ -152,7 +152,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const headers = await getHeaders();
       dispatch(setChat({ currentConversationId: params.chatId }));
       const response = await axios.get(
-        `${baseUrl}/api/v1/conversations/${params.chatId}/messages/`,
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/messages/`,
         {
           headers: headers,
           params: {

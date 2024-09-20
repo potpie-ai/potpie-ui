@@ -32,7 +32,7 @@ const NewChat = () => {
 
   const sendMessage = async (content: string) => {
     const headers = await getHeaders();
-    const response = await fetch(`${baseUrl}/api/v1/conversations/${currentConversationId}/message/`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/message/`, {
       method: 'POST',
       headers: {
         ...headers,

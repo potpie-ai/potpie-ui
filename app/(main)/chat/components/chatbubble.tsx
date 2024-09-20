@@ -66,7 +66,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     let accumulatedMessage = "";
 
     try {
-      const response = await fetch(`${baseUrl}/api/v1/conversations/${currentConversationId}/regenerate/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/regenerate/`, {
         method: 'POST',
         headers: {
           ...headers,

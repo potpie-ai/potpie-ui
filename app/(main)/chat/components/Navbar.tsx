@@ -40,7 +40,7 @@ const Navbar = () => {
     queryFn: async () => {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
-      axios.patch(`${baseUrl}/api/v1/conversations/${currentConversationId}/rename/`, {
+      axios.patch(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename/`, {
         title: inputValue,
       }, {headers:headers}).then((res) => {
         if(res.data.status === "success") toast.success("Title updated successfully");

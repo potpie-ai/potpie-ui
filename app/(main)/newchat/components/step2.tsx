@@ -38,7 +38,7 @@ const Step2 = () => {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     const response = await axios
       .post(
-        `${baseUrl}/api/v1/conversations/`,
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/`,
         {
           user_id: userId,
           title: title,

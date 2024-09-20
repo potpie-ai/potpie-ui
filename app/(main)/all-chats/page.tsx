@@ -36,7 +36,7 @@ const AllChats = () => {
     queryFn: async () => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(`${baseUrl}/api/v1/user/conversations`, {
+      const response = await axios.get(`${ process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/user/conversations`, {
         params: {
           start: 0,
           limit: 1000,
@@ -54,7 +54,7 @@ const AllChats = () => {
       const headers = await getHeaders();
       axios
         .patch(
-          `${baseUrl}/api/v1/conversations/${currentConversationId}/rename/`,
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename/`,
           {
             title: inputValue,
           },
@@ -81,7 +81,7 @@ const AllChats = () => {
       const headers = await getHeaders();
       if (currentConversationId === "" || !currentConversationId) return;
       axios
-        .delete(`${baseUrl}/api/v1/conversations/${currentConversationId}/`, {
+        .delete(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/`, {
           headers,
         })
         .then((res) => {

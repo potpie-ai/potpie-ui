@@ -1,4 +1,3 @@
-
 import {
   Select,
   SelectContent,
@@ -6,20 +5,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useQuery} from "@tanstack/react-query";
-import {
-  CheckCircle,
-  GitBranch,
-  Github,
-  Loader,
-  XCircle,
-} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CheckCircle, GitBranch, Github, Loader, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
-import {setChat } from "@/lib/state/Reducers/chat";
+import { setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState} from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
@@ -30,6 +23,7 @@ const Step1 = () => {
     (state: RootState) => state.chat
   );
   const [parsingStatus, setParsingStatus] = useState<string>("");
+
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
     const headers = await getHeaders();
@@ -47,6 +41,7 @@ const Step1 = () => {
       }
 
       const projectId = parseResponse.data.project_id;
+      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       let parsingStatus = "";
       while (true) {

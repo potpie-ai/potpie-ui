@@ -7,7 +7,7 @@ import {
 import Image from "next/image";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
-import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
+import { addMessageToConversation, setChat, setPendingMessage } from "@/lib/state/Reducers/chat";
 import { useState, FormEvent, KeyboardEvent, useEffect, useRef } from "react";
 import { Label } from "@radix-ui/react-label";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,79 +27,11 @@ const NewChat = () => {
     (state: RootState) => state.chat
   );
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-
-  const [message, setMessage] = useState("");
-
-  const sendMessage = async (content: string) => {
-    const headers = await getHeaders();
-    const response = await fetch(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/message/`, {
-      method: 'POST',
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ content }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Network response was not ok');
-    }
-
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let accumulatedMessage = "";
-
-    while (true) {
-      const { done, value } = await reader?.read() || { done: true, value: undefined };
-      if (done) break;
-
-      const chunk = decoder.decode(value);
-      const parsedChunks = chunk.split('}').filter(Boolean).map(c => JSON.parse(c + '}'));
-
-      for (const parsedChunk of parsedChunks) {
-        accumulatedMessage += parsedChunk.message;
-      }
-    }
-
-    // Update the message once the entire response is received
-    dispatch(
-      addMessageToConversation({
-        chatId: currentConversationId,
-        message: { sender: "agent", text: accumulatedMessage },
-      })
-    );
-
-    dispatch(setChat({ status: "active" }));
-    return accumulatedMessage;
-  };
-
-  const { mutate: sendMessageMutation, isPending: isSending } = useMutation({
-    mutationFn: sendMessage,
-    onMutate: (content) => {
-      dispatch(setChat({ status: "loading" }));
-      dispatch(
-        addMessageToConversation({
-          chatId: currentConversationId,
-          message: { sender: "user", text: content },
-        })
-      );
-    },
-    onSuccess: () => {
-      dispatch(setChat({ status: "active" }));
-      queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
-    },
-    onError: (error) => {
-      console.error("Failed to send message:", error);
-      dispatch(setChat({ status: "error" }));
-    },
-  });
-
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const content = messageRef.current?.value;
     if (!content || content === "") return;
-    sendMessageMutation(content);
-    setMessage("");
+    dispatch(setPendingMessage(content));
     router.push(`/chat/${currentConversationId}`);
   };
 

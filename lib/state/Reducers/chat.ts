@@ -23,6 +23,7 @@ interface chatState {
   title: string;
   status: string;
   currentConversationId: string;
+  pendingMessage: string | null ;
 }
 
 const initialState: chatState = {
@@ -35,6 +36,7 @@ const initialState: chatState = {
   title: dayjs().format("MMMM DD, YYYY") + " Untitled",
   status: "loading",
   currentConversationId: "",
+  pendingMessage: "",
 };
 
 const chatSlice = createSlice({
@@ -91,6 +93,12 @@ const chatSlice = createSlice({
         conversation.messages.pop();
       }
     },
+    setPendingMessage: (state, action: PayloadAction<string>) => {
+      state.pendingMessage = action.payload;
+    },
+    clearPendingMessage: (state) => {
+      state.pendingMessage = null;
+    },
     clearChat: (state) => {
       return initialState;
     },
@@ -105,4 +113,5 @@ export const {
   addMessageToConversation,
   clearChat,
   removeLastMessage,
+  setPendingMessage, clearPendingMessage
 } = chatSlice.actions;

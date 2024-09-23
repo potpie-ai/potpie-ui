@@ -5,7 +5,7 @@ import React, { useRef, FormEvent, useState, useEffect, KeyboardEvent } from "re
 import ChatInterface from "../components/ChatInterface";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { addMessageToConversation, clearChat, setChat } from "@/lib/state/Reducers/chat";
+import { addMessageToConversation, clearChat, clearPendingMessage, setChat } from "@/lib/state/Reducers/chat";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import getHeaders from "@/app/utils/headers.util";
@@ -19,7 +19,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const nodeInputRef = useRef<HTMLDivElement>(null);
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  const { conversations,projectId } = useSelector((state: RootState) => state.chat);
+  const { pendingMessage,conversations,projectId } = useSelector((state: RootState) => state.chat);
 
   const [isNodeInputVisible, setIsNodeInputVisible] = useState(false);
   const [nodeInput, setNodeInput] = useState("");
@@ -64,6 +64,14 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   useEffect(() => {
     dispatch(clearChat());
+    if (pendingMessage) {
+        try {
+          messageMutation.mutate(pendingMessage);
+          dispatch(clearPendingMessage());
+        } catch (error) {
+          console.error("Error sending message:", error);
+        }
+      };
     const handleClickOutside = (event: MouseEvent) => {
       if (nodeInputRef.current && !nodeInputRef.current.contains(event.target as Node)) {
         setTimeout(() => setIsNodeInputVisible(false), 100); 

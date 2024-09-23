@@ -5,7 +5,7 @@ import React, { useRef, FormEvent, useState, useEffect, KeyboardEvent } from "re
 import ChatInterface from "../components/ChatInterface";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
+import { addMessageToConversation, clearChat, setChat } from "@/lib/state/Reducers/chat";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import getHeaders from "@/app/utils/headers.util";
@@ -63,6 +63,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   useEffect(() => {
+    dispatch(clearChat());
     const handleClickOutside = (event: MouseEvent) => {
       if (nodeInputRef.current && !nodeInputRef.current.contains(event.target as Node)) {
         setTimeout(() => setIsNodeInputVisible(false), 100); 
@@ -157,7 +158,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           headers: headers,
           params: {
             start: 0,
-            limit: 10,
+            limit: 100,
           },
         }
       );

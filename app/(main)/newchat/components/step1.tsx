@@ -12,7 +12,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
@@ -23,6 +23,21 @@ const Step1 = () => {
     (state: RootState) => state.chat
   );
   const [parsingStatus, setParsingStatus] = useState<string>("");
+
+  const githubAppUrl =
+    "https://github.com/apps/" +
+    process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
+    "/installations/select_target?setup_action=install";
+  const popupRef = useRef<Window | null>(null);
+
+  // Open popup for linking a new repo
+  const openPopup = () => {
+    popupRef.current = window.open(
+      githubAppUrl,
+      "_blank",
+      "width=1000,height=700"
+    );
+  };
 
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
@@ -104,7 +119,7 @@ const Step1 = () => {
         `${baseUrl}/api/v1/github/get-branch-list`,
         {
           params: {
-            repo_name: repoName, // Add the repo name as a parameter
+            repo_name: repoName,
           },
           headers: headers,
         }
@@ -116,17 +131,23 @@ const Step1 = () => {
 
   return (
     <div className="text-muted">
-      <h1 className="text-xl">Select a repository and branch</h1>
+      <h1 className="text-lg">Select a repository and branch</h1>
       <Link href={"#"} className="text-accent underline">
         need help?
       </Link>
-      <div className=" flex gap-10 mt-7 ml-5">
+      <div className=" flex gap-10 mt-4 ml-5">
         {UserRepositorysLoading ? (
           <Skeleton className="w-[220px] h-10" />
         ) : (
           <Select
             defaultValue={repoName}
-            onValueChange={(value) => dispatch(setChat({ repoName: value }))}
+            onValueChange={(value) => {
+              if (value !== "new") {
+                dispatch(setChat({ repoName: value }));
+              } else {
+                openPopup();
+              }
+            }}
           >
             <SelectTrigger className="w-[220px] py-2  border-border ">
               <SelectValue
@@ -148,6 +169,13 @@ const Step1 = () => {
                   {value.full_name}
                 </SelectItem>
               ))}
+              {/* Link new repository option */}
+              <SelectItem key="new" value="new">
+                <span onClick={(e) => {
+                  e.preventDefault();
+                  openPopup();
+                }}>+ Link new repository</span>
+              </SelectItem>
             </SelectContent>
           </Select>
         )}

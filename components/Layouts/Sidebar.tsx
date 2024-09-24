@@ -38,21 +38,21 @@ const Sidebar = () => {
   return (
     <div className="hidden bg-foreground text-white md:block relative">
       <div className="flex h-full max-h-screen sticky top-0 left-0 bottom-0 flex-col gap-2 overflow-auto no-scrollbar">
-        <div className="relative flex h-14 items-center px-4 lg:px-6 mb-11 mt-7">
-          <Link href="/" className="flex items-center gap-3 font-semibold">
+        <div className="relative flex h-14 items-center px-2 lg:px-6 mb-11 mt-7">
+          <Link href="/" className="flex items-center gap-3 font-semibold ml-2">
             <Image src={"/images/logo.svg"} alt="logo" width={35} height={35} />
             <span className="font-bold text-2xl">potpie</span>
           </Link>
           <hr className="absolute right-0 -bottom-5 h-px w-full border-0 bg-border" />
         </div>
-        <Button className="flex gap-3 mx-5 mb-9" onClick={() => redirectToNewChat(event)}>
+        <Button className="flex gap-3 mx-5 mb-7" onClick={() => redirectToNewChat(event)}>
           <Plus /> <span>New Chat</span>
         </Button>
         <div className="flex-1">
-          <nav className="grid items-start ml-5 text-sm font-normal gap-7">
+          <nav className="grid items-start ml-5 text-sm font-normal gap-5">
             {SidebarItems.map((item, index) => (
               <div className="" key={index}>
-                <span className="pb-2 text-sm">{item.title}</span>
+                <span className="pb-3 text-sm">{item.title}</span>
                 {item.links.map((link, index) => (
                   <div key={index} className="flex flex-col gap-3">
                     <Link

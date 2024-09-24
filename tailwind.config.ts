@@ -16,12 +16,16 @@ const config = {
       padding: "2rem",
       screens: {
         "2xl": "1400px",
+        "xl": "1200px",
       },
     },
     extend: {
       fontFamily: {
         sans: ['var(--font-geist-sans)'],
         mono: ['var(--font-geist-mono)'],
+      },
+      fontSize: {
+        base: "14px",
       },
       colors: {
         border: "hsl(var(--border))",

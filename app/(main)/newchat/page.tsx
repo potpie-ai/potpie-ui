@@ -42,20 +42,20 @@ const NewChat = () => {
       label: 3,
       content: (
         <div className="flex flex-col ml-4 w-full">
-          <span className="font-semibold text-xl">All Set! Start chatting.</span>
+          <span className="text-lg">All Set! Start chatting.</span>
         </div>
       ),
     },
   ];
 
   return (
-    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2">
+    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-2 lg:col-span-2">
       {/* Step Logic */}
-      <div className="relative w-[97%] h-full flex flex-col items-center -mb-12 mt-5">
+      <div className="relative w-[97%] h-full flex flex-col items-center -mb-6 mt-3">
         {steps.map((step, index) => (
           <div
             key={index}
-            className={`flex items-start mb-8 w-full relative ${chatStep !== undefined && step.label === chatStep ? "" : "pointer-events-none"
+            className={`flex items-start mb-4 w-full relative ${chatStep !== undefined && step.label === chatStep ? "" : "pointer-events-none"
               }`}
           >
             {/* Vertical Line */}
@@ -82,8 +82,7 @@ const NewChat = () => {
         ))}
       </div>
 
-      {/* Node Selector Form */}
-      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} />
+      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} disabled={chatStep !== 3} />
     </div>
   );
 };

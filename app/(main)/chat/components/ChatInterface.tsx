@@ -21,6 +21,7 @@ const ChatInterface = ({
         currentConversation.messages.map((message, i) => (
           <ChatBubble
             key={`${currentConversationId}-${i}`}
+            citations={message.citations}
             message={message.text}
             sender={message.sender}
             isLast={i === currentConversation.messages.length - 1}

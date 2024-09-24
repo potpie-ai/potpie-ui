@@ -4,15 +4,17 @@ import MyCodeBlock from "@/components/codeBlock";
 import { Button } from "@/components/ui/button";
 import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { cn } from "@/lib/utils";
-import { LucideRepeat2, RotateCw } from "lucide-react";
-import { useDispatch } from "react-redux";
+import { LucideRepeat2, RotateCw, Github } from "lucide-react"; // Import GitHub icon
+import { useDispatch, useSelector } from "react-redux";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { RootState } from "@/lib/state/store";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string;
   sender: "user" | "agent";
+  citations: string[] | undefined; 
   className?: string;
   isLast?: boolean;
   currentConversationId: string;
@@ -24,6 +26,7 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
 const ChatBubble: React.FC<ChatBubbleProps> = ({
   message,
   sender,
+  citations,
   className,
   isLast,
   currentConversationId,
@@ -34,6 +37,9 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const dispatch = useDispatch();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEmptyResponse, setIsEmptyResponse] = useState(false);
+  const { branchName, repoName } = useSelector(
+    (state: RootState) => state.chat
+  );
 
   const userImage = user.photoUrl;
   const agentImage = "/images/logo.svg";
@@ -140,6 +146,38 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         )}
         {...props}
       >
+        {/* Citations Section */}
+        {sender === "agent" && citations && citations.length > 0 && (
+       <div className="mb-2">
+       {citations.map((citation, index) => (
+         <div key={index} className="bg-gray-200 mb-2 rounded-md flex items-center">
+           <a
+             href={"https://github.com/"+repoName}
+             target="_blank"
+             rel="noopener noreferrer"
+             className="flex items-center text-green-700 hover:underline flex-grow"
+           >
+             {/* GitHub Icon and File Name */}
+             <Github className="w-4 h-4" />
+             <span className="ml-2">{citation}</span>
+           </a>
+           
+           {/* Repo and Branch Name to the right */}
+           <div className="flex items-center space-x-2 ml-auto">
+             <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+               {branchName}
+             </code>
+             <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+               {repoName}
+             </code>
+           </div>
+         </div>
+       ))}
+     </div>
+     
+       
+        )}
+
         {parsedSections.map((section, index) => (
           <div key={index}>
             {section.type === "text" && (
@@ -147,7 +185,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
                 className="markdown-content"
                 components={{
                   code: ({ children }) => (
-                    <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5 text-sm">
+                    <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5 text-sm font-bold">
                       {children}
                     </code>
                   ),

@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 interface Message {
   text: string | any;
   sender: "user" | "agent";
+  citations?: string[];
 }
 
 interface Conversation {
@@ -60,7 +61,7 @@ const chatSlice = createSlice({
       state,
       action: PayloadAction<{
         chatId: string;
-        message: { sender: "user" | "agent"; text: string };
+        message: { sender: "user" | "agent"; text: string, citations?: string[]};
       }>
     ) => {
       const { chatId, message } = action.payload;
@@ -82,7 +83,7 @@ const chatSlice = createSlice({
       } else {
         state.conversations.push({
           conversationId: chatId,
-          messages: [message],
+          messages: [message]
         });
       }
     },
@@ -100,10 +101,12 @@ const chatSlice = createSlice({
       state.pendingMessage = null;
     },
     clearChat: (state) => {
-      const { projectId } = state;  
+      const { projectId, branchName, repoName } = state;  
       return {
         ...initialState,
-        projectId,  
+        projectId, 
+        branchName,
+        repoName 
       };
     },
   },

@@ -44,10 +44,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           ...headers,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          content: message,
-          nodeIds: selectedNodes.map((node) => node.node_id),
-        }),
+        body: JSON.stringify({ content: message, node_ids: selectedNodes }),
       }
     );
 
@@ -58,6 +55,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let accumulatedMessage = "";
+    let accumulatedCitation = "";
 
     while (true) {
       const { done, value } = (await reader?.read()) || {
@@ -75,6 +73,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
         for (const parsedChunk of parsedChunks) {
           accumulatedMessage += parsedChunk.message;
+          accumulatedCitation += parsedChunk.citations
         }
       } catch (error) {
         //TODO: Implement this later
@@ -84,7 +83,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     dispatch(
       addMessageToConversation({
         chatId: params.chatId,
-        message: { sender: "agent", text: accumulatedMessage },
+        message: { sender: "agent", text: accumulatedMessage, citations: [accumulatedCitation] },
       })
     );
 
@@ -239,7 +238,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         currentConversationId={params.chatId}
         refetchMessages={refetchMessages}
       />
-      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} />
+      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} disabled={false} />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
     </div>
   );

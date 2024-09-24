@@ -176,12 +176,16 @@ const Step1 = () => {
               />
             </SelectTrigger>
             <SelectContent>
-              {!UserBranchLoading &&
+              {UserBranchLoading ?
                 UserBranch?.map((value: any) => (
                   <SelectItem key={value} value={value}>
                     {value}
                   </SelectItem>
-                ))}
+                )):(
+                  <SelectItem value="loading" disabled className="pointer-events-none">
+                    <Skeleton className="w-[180px] h-7" />
+                  </SelectItem>
+                )}
             </SelectContent>
           </Select>
         )}

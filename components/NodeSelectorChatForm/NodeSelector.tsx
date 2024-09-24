@@ -204,7 +204,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
         value={message}
         onChange={handleMessageChange}
         id="message"
-        placeholder="Start chatting with the expert...."
+        placeholder="Type @  followed by file or function name to provide additional context"
         className="min-h-12 h-[50%] text-base resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
         onKeyPress={handleKeyPress}
       />

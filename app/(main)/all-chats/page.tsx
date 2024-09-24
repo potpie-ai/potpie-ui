@@ -10,8 +10,6 @@ import axios from "axios";
 import Link from "next/link";
 import { useDispatch } from "react-redux";
 import { setChat } from "@/lib/state/Reducers/chat";
-import dayjs from "dayjs";
-import { Edit, Edit2, Trash } from "lucide-react";
 import {
   Dialog,
   DialogClose,
@@ -23,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { LucideEdit, LucideTrash } from "lucide-react"; // Import the icons
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -134,83 +133,90 @@ const AllChats = () => {
       {!isLoading && data && data.length > 0 ? (
         <Table className="mt-10">
           <TableHeader className="font-semibold text-red">
-            <TableRow className="border-b-8 border-border font-semibold text-red">
+            <TableRow className="border-b border-border font-semibold text-red">
               <TableHead className="w-[200px] text-primary">Title</TableHead>
-              <TableHead className="w-[200px] text-primary">Created At</TableHead>
-              <TableHead className="w-[200px] text-primary">Status</TableHead>
+              <TableHead className="w-[200px] text-primary">Agent</TableHead> {/* Moved Agent up */}
               <TableHead className="w-[200px] text-primary">Repository</TableHead>
               <TableHead className="w-[200px] text-primary">Branch</TableHead>
+              <TableHead className="w-[200px] text-primary">Created At</TableHead> {/* Moved Created At down */}
+              <TableHead className="w-[200px] text-primary text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((chat: any) => (
-              <TableRow key={chat.id} className="hover:bg-red">
-                <TableCell><Link href={`/chat/${chat.id}`}>{chat.title}</Link></TableCell>
-                <TableCell><Link href={`/chat/${chat.id}`}>{new Date(chat.created_at).toLocaleString()}</Link></TableCell>
-                <TableCell><Link href={`/chat/${chat.id}`}>{chat.status}</Link></TableCell>
-                <TableCell><Link href={`/chat/${chat.id}`}>{chat?.repository}</Link></TableCell>
-                <TableCell><Link href={`/chat/${chat.id}`}>{chat?.branch}</Link></TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-5">
-                    <div className="flex gap-3">
-                      <Dialog>
-                        <DialogTrigger>
-                          <Button
-                            onClick={(e: any) => {
-                              setTitle(chat.title);
-                              setInputValue(chat.title);
-                              setCurrentConversationId(chat.id);
-                            }}
+            {data
+              .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Sort by created_at in descending order
+              .map((chat: any) => (
+                <TableRow key={chat.id} className="hover:bg-red border-b border-gray-200">
+                  <TableCell><Link href={`/chat/${chat.id}`}>{chat.title}</Link></TableCell>
+                  <TableCell>
+                    <Link href={`/chat/${chat.id}`}>
+                      {chat.agent_id.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                    </Link>
+                  </TableCell>
+                  <TableCell><Link href={`/chat/${chat.id}`}>{chat?.repository}</Link></TableCell>
+                  <TableCell><Link href={`/chat/${chat.id}`}>{chat?.branch}</Link></TableCell>
+                  <TableCell><Link href={`/chat/${chat.id}`}>{new Date(chat.created_at).toLocaleString()}</Link></TableCell> {/* Moved Created At down */}
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-5">
+                      <div className="flex gap-3">
+                        <Dialog>
+                          <DialogTrigger>
+                            <Button
+                              onClick={(e: any) => {
+                                setTitle(chat.title);
+                                setInputValue(chat.title);
+                                setCurrentConversationId(chat.id);
+                              }}
+                            >
+                              <LucideEdit className="h-4 w-4" /> 
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent
+                            className="sm:max-w-[487px]"
+                            showX={false}
                           >
-                            Rename
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent
-                          className="sm:max-w-[487px]"
-                          showX={false}
-                        >
-                          <DialogHeader>
-                            <DialogTitle className="text-center">
-                              Edit chat name
-                            </DialogTitle>
-                          </DialogHeader>
-                          <div className="grid gap-4 py-4">
-                            <div className="  ">
-                              <Input
-                                id="name"
-                                value={inputValue}
-                                onChange={handleInputChange}
-                                className="col-span-3"
-                              />
+                            <DialogHeader>
+                              <DialogTitle className="text-center">
+                                Edit chat name
+                              </DialogTitle>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                              <div className="  ">
+                                <Input
+                                  id="name"
+                                  value={inputValue}
+                                  onChange={handleInputChange}
+                                  className="col-span-3"
+                                />
+                              </div>
                             </div>
-                          </div>
-                          <DialogFooter>
-                            <DialogClose asChild>
-                              <Button type="button">Cancel</Button>
-                            </DialogClose>
-                            <DialogClose asChild>
-                              <Button type="button" onClick={handleSave}>
-                                Save
-                              </Button>
-                            </DialogClose>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                            <DialogFooter>
+                              <DialogClose asChild>
+                                <Button type="button">Cancel</Button>
+                              </DialogClose>
+                              <DialogClose asChild>
+                                <Button type="button" onClick={handleSave}>
+                                  Save
+                                </Button>
+                              </DialogClose>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="configure-button hover:bg-gray-200"
+                        onClick={(e: any) => {
+                          setCurrentConversationId(chat.id);
+                          refetchChatDelete();
+                        }}
+                      >
+                        <LucideTrash className="h-4 w-4" /> {/* Delete icon */}
+                      </Button>
                     </div>
-                    <Button
-                      variant="outline"
-                      className="configure-button hover:bg-gray-200"
-                      onClick={(e: any) => {
-                        setCurrentConversationId(chat.id);
-                        refetchChatDelete();
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       ) : isLoading ? (
@@ -227,4 +233,3 @@ const AllChats = () => {
 };
 
 export default AllChats;
-

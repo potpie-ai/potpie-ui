@@ -183,9 +183,9 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
         {selectedNodes.map((node) => (
           <div
             key={node.node_id}
-            className="flex items-center space-x-2 bg-gray-200 p-1 rounded-lg mr-2"
+            className="flex items-center space-x-2 bg-primary p-1 rounded-lg mr-2"
           >
-            <span>{node.name}</span>
+            <span className="pl-1">{node.name}</span>
             <Button
               variant="ghost"
               size="icon"

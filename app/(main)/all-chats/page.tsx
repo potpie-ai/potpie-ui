@@ -120,6 +120,10 @@ const AllChats = () => {
     setInputValue(event.target.value);
   };
 
+  const handleChatClick = (chat: any) => {
+    dispatch(setChat({ projectId: chat.project_ids[0] }));
+  };
+
   return (
     <div className="m-10">
       <div className="flex w-full mx-auto items-center space-x-2">
@@ -147,15 +151,15 @@ const AllChats = () => {
               .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Sort by created_at in descending order
               .map((chat: any) => (
                 <TableRow key={chat.id} className="hover:bg-red border-b border-gray-200">
-                  <TableCell><Link href={`/chat/${chat.id}`}>{chat.title}</Link></TableCell>
+                  <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)}>{chat.title}</Link></TableCell>
                   <TableCell>
-                    <Link href={`/chat/${chat.id}`}>
+                    <Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)} >
                       {chat.agent_id.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                     </Link>
                   </TableCell>
-                  <TableCell><Link href={`/chat/${chat.id}`}>{chat?.repository}</Link></TableCell>
-                  <TableCell><Link href={`/chat/${chat.id}`}>{chat?.branch}</Link></TableCell>
-                  <TableCell><Link href={`/chat/${chat.id}`}>{new Date(chat.created_at).toLocaleString()}</Link></TableCell> {/* Moved Created At down */}
+                  <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)} >{chat?.repository}</Link></TableCell>
+                  <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)} >{chat?.branch}</Link></TableCell>
+                  <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)} >{new Date(chat.created_at).toLocaleString()}</Link></TableCell> {/* Moved Created At down */}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-5">
                       <div className="flex gap-3">

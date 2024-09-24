@@ -62,9 +62,9 @@ const Step2 = () => {
     }
   };
   return (
-    <div className="flex flex-col w-full gap-7">
-      <h1 className="text-xl">Choose your expert</h1>
-      <div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y10 gap-10">
+    <div className="flex flex-col w-full gap-3">
+      <h1 className="text-lg">Choose your expert</h1>
+      <div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y6 gap-6">
         {AgentTypesLoading
           ? Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="border-border w-[450px] h-40" />
@@ -82,7 +82,7 @@ const Step2 = () => {
                   setSelectedCard(content.id);
                 }}
               >
-                <CardHeader className="p-2 px-6 font-normal">
+                <CardHeader className="p-1 px-6 font-normal">
                   <CardTitle className="text-lg flex gap-3 text-muted">
                     <Image
                       src={"/images/person.svg"}
@@ -93,7 +93,7 @@ const Step2 = () => {
                     <span>{content.name}</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="text-base ml-8 text-muted-foreground leading-tight">
+                <CardContent className="text-base ml-8 text-muted-foreground leading-tight px-6 pb-4">
                   {content.description}
                 </CardContent>
               </Card>

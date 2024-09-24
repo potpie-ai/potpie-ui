@@ -130,7 +130,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         <div key={index}>
           {section.type === 'text' && (
             <ReactMarkdown
-              className="markdown"
+              className="markdown whitespace-pre-wrap break-words"
               components={{
                 code: ({ children }) => (
                   <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5">

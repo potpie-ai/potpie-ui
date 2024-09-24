@@ -116,11 +116,11 @@ const Step1 = () => {
 
   return (
     <div className="text-muted">
-      <h1 className="text-xl">Select a repository and branch</h1>
+      <h1 className="text-lg">Select a repository and branch</h1>
       <Link href={"#"} className="text-accent underline">
         need help?
       </Link>
-      <div className=" flex gap-10 mt-7 ml-5">
+      <div className=" flex gap-10 mt-4 ml-5">
         {UserRepositorysLoading ? (
           <Skeleton className="w-[220px] h-10" />
         ) : (

@@ -176,7 +176,7 @@ const Step1 = () => {
               />
             </SelectTrigger>
             <SelectContent>
-              {UserBranchLoading ?
+              {!UserBranchLoading ?
                 UserBranch?.map((value: any) => (
                   <SelectItem key={value} value={value}>
                     {value}

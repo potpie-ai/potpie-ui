@@ -82,8 +82,7 @@ const NewChat = () => {
         ))}
       </div>
 
-      {/* Node Selector Form */}
-      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} />
+      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} disabled={chatStep !== 3} />
     </div>
   );
 };

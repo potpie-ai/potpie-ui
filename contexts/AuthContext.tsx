@@ -1,12 +1,9 @@
 "use client";
 import React from "react";
-import { onAuthStateChanged, getAuth } from "firebase/auth";
+import { onIdTokenChanged, getAuth } from "firebase/auth";
 import { firebase_app } from "@/configs/Firebase-config";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-import axios from "axios";
-import { useQuery } from "@tanstack/react-query";
 
 const auth = getAuth(firebase_app);
 
@@ -26,29 +23,17 @@ export const AuthContextProvider = ({
   const [loading, setLoading] = React.useState(true);
   const [userSubscription, setUserSubscription] = React.useState<any>(null);
 
-  // COMMENTED PADDLE CODE UNTIL INTEGRATED
+  React.useEffect(() => {
+    const refreshToken = () => {
+      auth.currentUser?.getIdToken(true);
+    };
+    const refreshInterval = setInterval(refreshToken, 50 * 60 * 1000);
 
-  // const { data } = useQuery({
-  //   queryKey: ["user-subscription", user?.uid],
-  //   queryFn: () =>
-  //     axios
-  //       .get(`${process.env.NEXT_PUBLIC_PADDLE_SERVER}/user-subs`, {
-  //         params: { userId: user?.uid },
-  //       })
-  //       .then((res) => {
-  //         return res.data;
-  //       }),
-  //   enabled: !!user?.uid,
-  // });
-
-  // React.useEffect(() => {
-  //   if (data) {
-  //     setUserSubscription(data);
-  //   }
-  // }, [data]);
+    return () => clearInterval(refreshInterval);
+  }, []);
 
   React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onIdTokenChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
     });

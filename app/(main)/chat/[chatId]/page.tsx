@@ -29,6 +29,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const pendingMessageSent = useRef(false);
   const [start, setStart] = React.useState(0);
+  const [msgRefetchCount, setMsgRefetchCount] = React.useState(0);
 
   /*
   This Function is to send message
@@ -118,17 +119,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     },
   });
 
-  /*
-  Query to fetch messages for the conversation.
-  - `queryKey`: The key that uniquely identifies the query (chat-messages).
-  - `queryFn`: Fetches chat messages from the conversation API and updates the chat state.
-  - Messages are loaded in batches (start=0, limit=100), and the current chat is cleared before new messages are loaded.
-  */
-  const { refetch: refetchMessages } = useQuery({
-    queryKey: ["chat-messages", params.chatId],
+  const {
+    data: totalMessages,
+    refetch: refetchTotalMessages,
+    isLoading: isLoadingTotalMessages,
+  } = useQuery({
+    queryKey: ["total-messages", params.chatId],
     queryFn: async () => {
       const headers = await getHeaders();
-    const totalMessages = await  axios
+      const response = await axios
         .get(
           `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
           {
@@ -142,24 +141,44 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               totalMessages: res.data.total_messages,
             })
           );
-          setStart(res.data.total_messages - 10 > 0 ? res.data.total_messages - 10 : 0)
+          setStart(
+            res.data.total_messages - 10 > 0 ? res.data.total_messages - 10 : 0
+          );
           return res.data.total_messages;
-        }).catch((error) => {
+        })
+        .catch((error) => {
           console.log(error);
           dispatch(setChat({ status: "error" }));
         });
-        
+      if (response.data.status === "error")
+        dispatch(setChat({ status: "error" }));
+      return response.data.total_messages;
+    },
+  });
+
+  /*
+  Query to fetch messages for the conversation.
+  - `queryKey`: The key that uniquely identifies the query (chat-messages).
+  - `queryFn`: Fetches chat messages from the conversation API and updates the chat state.
+  - Messages are loaded in batches (start=0, limit=100), and the current chat is cleared before new messages are loaded.
+  */
+  const { refetch: refetchMessages } = useQuery({
+    queryKey: ["chat-messages", params.chatId],
+    queryFn: async () => {
+      const headers = await getHeaders();
+
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/messages/`,
         {
           headers: headers,
           params: {
-            start: start,
+            start: msgRefetchCount > 0 ? start - msgRefetchCount * 10 > 0 ? start - msgRefetchCount * 10 : 0 : start,
             limit: 10,
           },
         }
       );
-      // Clear the current chat before loading new messages
+      setMsgRefetchCount(msgRefetchCount + 1);
+
       dispatch(clearChat());
       response.data.forEach((message: any) => {
         dispatch(
@@ -187,6 +206,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       dispatch(setChat({ status: "active" }));
       return response.data;
     },
+    enabled: !isLoadingTotalMessages && !!totalMessages,
   });
 
   /*
@@ -215,7 +235,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2">
-      <ChatInterface currentConversationId={params.chatId} />
+      <ChatInterface
+        currentConversationId={params.chatId}
+        refetchMessages={refetchMessages}
+      />
       <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
     </div>

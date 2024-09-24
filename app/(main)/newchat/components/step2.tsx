@@ -49,7 +49,7 @@ const Step2 = () => {
         { headers: headers }
       )
       .then((res) => {
-        dispatch(setChat({ currentConversationId: res.data.conversation_id }));
+        dispatch(setChat({ currentConversationId: res.data.conversation_id, projectId: projectId, agentId: event }));
         return res.data;
       })
       .catch((err) => {

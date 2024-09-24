@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from "react";
+import ReactDOM from "react-dom"; // Import ReactDOM for portal
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Plus, X } from "lucide-react";
@@ -18,37 +19,54 @@ interface NodeSelectorFormProps {
 }
 
 const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit }) => {
-  const [isNodeInputVisible, setIsNodeInputVisible] = useState(false);
-  const [nodeInput, setNodeInput] = useState("");
-  const [nodeOptions, setNodeOptions] = useState<Node[]>([]);
-  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
+  const [isNodeListVisible, setIsNodeListVisible] = useState(false); // To show or hide node options
+  const [nodeInput, setNodeInput] = useState(""); // Store node input after '@'
+  const [nodeOptions, setNodeOptions] = useState<Node[]>([]); // List of nodes to show in dropdown
+  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]); // Selected nodes
+  const [message, setMessage] = useState(""); // Message text with nodes
   const messageRef = useRef<HTMLTextAreaElement>(null);
-  const nodeInputRef = useRef<HTMLDivElement>(null);
+  const nodeListRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  // Fetch nodes based on the search query
+  // Fetch nodes based on the search query after '@'
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    const response = await axios.post(
-      `${baseUrl}/api/v1/search`,
-      {
-        project_id: projectId,
-        query: query,
-      },
-      { headers }
-    );
-    setNodeOptions(response.data.results);
+    try {
+      const response = await axios.post(
+        `${baseUrl}/api/v1/search`,
+        {
+          project_id: projectId,
+          query: query,
+        },
+        { headers }
+      );
+      
+      // Check if the response contains the expected results
+      if (response.data.results && response.data.results.length > 0) {
+        setNodeOptions(response.data.results);
+      } else if (response.data.length > 0) {
+        // If results are directly in response.data
+        setNodeOptions(response.data);
+      } else {
+        setNodeOptions([]);
+      }
+
+      setIsNodeListVisible(true);  // Make sure the list is shown after fetching
+    } catch (error) {
+      console.error("Error fetching nodes:", error);
+      setNodeOptions([]);
+    }
   };
 
   // Handle form submission
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const content = messageRef.current?.value;
-    if (!content || content === "") return;
+    if (!message || message.trim() === "") return;
 
     // Call the onSubmit callback with the message and selected nodes
-    onSubmit(content, selectedNodes);
-    if (messageRef.current) messageRef.current.value = "";
+    onSubmit(message, selectedNodes);
+    setMessage("");
     setSelectedNodes([]);
   };
 
@@ -60,13 +78,43 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
     }
   };
 
-  // Handle node selection
+  // Handle message input and detect '@' for node selection
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setMessage(value);
+
+    // Detect '@' and trigger node input
+    const cursorPosition = e.target.selectionStart;
+    const lastAtPosition = value.lastIndexOf("@", cursorPosition);
+
+    if (lastAtPosition !== -1 && cursorPosition > lastAtPosition) {
+      const query = value.substring(lastAtPosition + 1, cursorPosition);
+      if (query.trim().length > 0) {
+        fetchNodes(query); // Fetch nodes based on the text after '@'
+      } else {
+        setNodeOptions([]);
+        setIsNodeListVisible(false);
+      }
+    } else {
+      setIsNodeListVisible(false);
+    }
+  };
+
+  // Handle node selection by adding it to the chips and clearing the input
   const handleNodeSelect = (node: Node) => {
+    // Add selected node to the list and reset the input
     if (!selectedNodes.some((n) => n.node_id === node.node_id)) {
       setSelectedNodes([...selectedNodes, node]);
     }
-    setNodeInput("");
-    setIsNodeInputVisible(false);
+
+    // Remove the "@node" input from the message and close the dropdown
+    const cursorPosition = messageRef.current?.selectionStart || 0;
+    const textBeforeAt = message.slice(0, message.lastIndexOf("@", cursorPosition));
+    const textAfterAt = message.slice(cursorPosition);
+
+    // Update the message without the @node part
+    setMessage(`${textBeforeAt}${textAfterAt}`);
+    setIsNodeListVisible(false);
   };
 
   // Handle node removal
@@ -74,25 +122,15 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
     setSelectedNodes(selectedNodes.filter((n) => n.node_id !== node.node_id));
   };
 
-  // Handle input change for node search
-  const handleNodeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setNodeInput(value);
-    if (value.trim()) {
-      fetchNodes(value);
-    } else {
-      setNodeOptions([]);
-    }
-  };
-
-  // Handle clicking outside of the input to close the search box
+  // Handle clicking outside of the input to close the node list
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (nodeInputRef.current && !nodeInputRef.current.contains(event.target as any)) {
-        setTimeout(() => setIsNodeInputVisible(false), 100);
+      if (nodeListRef.current && !nodeListRef.current.contains(event.target as any)) {
+        setTimeout(() => setIsNodeListVisible(false), 100);
       }
     };
-    if (isNodeInputVisible) {
+
+    if (isNodeListVisible) {
       document.addEventListener("mousedown", handleClickOutside);
     } else {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -101,14 +139,56 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isNodeInputVisible]);
+  }, [isNodeListVisible]);
+
+  // Render node list in a portal to flow outside the form
+  const renderNodeList = () => {
+    if (!isNodeListVisible || nodeOptions.length === 0) return null;
+
+    const formRect = formRef.current?.getBoundingClientRect();
+
+    return ReactDOM.createPortal(
+      <div
+        ref={nodeListRef}
+        className="absolute bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50"
+        style={{
+          top: formRect ? formRect.bottom + 10 : '0px',
+          left: formRect ? formRect.left : '0px',
+          width: formRect ? formRect.width : 'auto',
+        }}
+      >
+        <ul>
+          {nodeOptions.map((node) => (
+            <li
+              key={node.node_id}
+              className="cursor-pointer p-1 hover:bg-gray-200"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNodeSelect(node);
+              }}
+            >
+              <div className="font-semibold">{node.name}</div>
+              <div className="text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
+                {node.file_path.length > 100
+                  ? '...' + node.file_path.slice(-100)
+                  : node.file_path}
+              </div>              
+            </li>
+          ))}
+        </ul>
+      </div>,
+      document.body // Render the dropdown outside of the form component
+    );
+  };
 
   return (
     <form
       className="sticky bottom-6 overflow-hidden rounded-lg bg-card focus-within:ring-1 focus-within:ring-ring border border-border shadow-md flex flex-col"
       onSubmit={handleSubmit}
+      ref={formRef}
     >
-      <div className="flex items-center p-2 pl-4" ref={nodeInputRef}>
+      {/* Selected Nodes Chips */}
+      <div className="flex items-center p-2 pl-4">
         {selectedNodes.map((node) => (
           <div
             key={node.node_id}
@@ -125,51 +205,22 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
             </Button>
           </div>
         ))}
-        {isNodeInputVisible ? (
-          <input
-            type="text"
-            value={nodeInput}
-            onChange={handleNodeInputChange}
-            className="border border-border p-1 rounded"
-            placeholder="Search for nodes..."
-          />
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hover:bg-transparent"
-            onClick={() => setIsNodeInputVisible(true)}
-          >
-            <Plus className="border-primary rounded-full border-2" />
-            <span className="sr-only">Add Node</span>
-          </Button>
-        )}
       </div>
 
-      {isNodeInputVisible && nodeInput && nodeOptions.length > 0 && (
-        <div className="absolute bottom-40 w-[50%] left-80 right-4 bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50">
-          <ul>
-            {nodeOptions.map((node) => (
-              <li
-                key={node.node_id}
-                className="cursor-pointer p-1 hover:bg-gray-200"
-                onClick={() => handleNodeSelect(node)}
-              >
-                <div className="font-semibold">{node.name}</div>
-                <div className="text-sm text-gray-500">{node.file_path}</div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
+      {/* Textarea for message input */}
       <Textarea
         ref={messageRef}
+        value={message}
+        onChange={handleMessageChange}
         id="message"
         placeholder="Start chatting with the expert...."
         className="min-h-12 h-[50%] text-base resize-none border-0 p-3 px-7 shadow-none focus-visible:ring-0"
         onKeyPress={handleKeyPress}
       />
+
+      {renderNodeList()}
+
+      {/* Submit button */}
       <div className="flex items-center p-3 pt-0 ">
         <Button type="submit" size="sm" className="ml-auto !bg-transparent mb-1">
           <Image

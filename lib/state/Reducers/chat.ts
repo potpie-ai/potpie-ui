@@ -100,7 +100,11 @@ const chatSlice = createSlice({
       state.pendingMessage = null;
     },
     clearChat: (state) => {
-      return initialState;
+      const { projectId } = state;  
+      return {
+        ...initialState,
+        projectId,  
+      };
     },
   },
 });

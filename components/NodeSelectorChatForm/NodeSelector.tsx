@@ -50,7 +50,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
         setNodeOptions([]);
       }
 
-      setIsNodeListVisible(true); 
+      setIsNodeListVisible(true);
     } catch (error) {
       console.error("Error fetching nodes:", error);
       setNodeOptions([]);
@@ -141,10 +141,10 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
     return ReactDOM.createPortal(
       <div
         ref={nodeListRef}
-        className="absolute w-[50%] bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50"
+        className="fixed w-[50%] bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50 -mb-2" // Using `fixed` and `-mb-2` to move above
         style={{
-          top: formRect ? formRect.bottom - 220 : '0px',
           left: formRect ? formRect.left : '0px',
+          bottom: formRect ? window.innerHeight - formRect.top + 10 : '0px',  // Position it above the input
         }}
       >
         <ul>
@@ -166,8 +166,9 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
             </li>
           ))}
         </ul>
-      </div>,
-      document.body 
+      </div>
+      ,
+      document.body
     );
   };
 

@@ -41,30 +41,26 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
         },
         { headers }
       );
-      
-      // Check if the response contains the expected results
+
       if (response.data.results && response.data.results.length > 0) {
         setNodeOptions(response.data.results);
       } else if (response.data.length > 0) {
-        // If results are directly in response.data
         setNodeOptions(response.data);
       } else {
         setNodeOptions([]);
       }
 
-      setIsNodeListVisible(true);  // Make sure the list is shown after fetching
+      setIsNodeListVisible(true); 
     } catch (error) {
       console.error("Error fetching nodes:", error);
       setNodeOptions([]);
     }
   };
 
-  // Handle form submission
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!message || message.trim() === "") return;
 
-    // Call the onSubmit callback with the message and selected nodes
     onSubmit(message, selectedNodes);
     setMessage("");
     setSelectedNodes([]);
@@ -78,7 +74,6 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
     }
   };
 
-  // Handle message input and detect '@' for node selection
   const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setMessage(value);
@@ -100,9 +95,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
     }
   };
 
-  // Handle node selection by adding it to the chips and clearing the input
   const handleNodeSelect = (node: Node) => {
-    // Add selected node to the list and reset the input
     if (!selectedNodes.some((n) => n.node_id === node.node_id)) {
       setSelectedNodes([...selectedNodes, node]);
     }
@@ -117,12 +110,10 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
     setIsNodeListVisible(false);
   };
 
-  // Handle node removal
   const handleNodeRemove = (node: Node) => {
     setSelectedNodes(selectedNodes.filter((n) => n.node_id !== node.node_id));
   };
 
-  // Handle clicking outside of the input to close the node list
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (nodeListRef.current && !nodeListRef.current.contains(event.target as any)) {
@@ -150,11 +141,10 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
     return ReactDOM.createPortal(
       <div
         ref={nodeListRef}
-        className="absolute bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50"
+        className="absolute w-[50%] bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50"
         style={{
-          top: formRect ? formRect.bottom + 10 : '0px',
+          top: formRect ? formRect.bottom - 220 : '0px',
           left: formRect ? formRect.left : '0px',
-          width: formRect ? formRect.width : 'auto',
         }}
       >
         <ul>
@@ -172,12 +162,12 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, onSubmit
                 {node.file_path.length > 100
                   ? '...' + node.file_path.slice(-100)
                   : node.file_path}
-              </div>              
+              </div>
             </li>
           ))}
         </ul>
       </div>,
-      document.body // Render the dropdown outside of the form component
+      document.body 
     );
   };
 

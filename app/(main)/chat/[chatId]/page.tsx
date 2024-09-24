@@ -72,7 +72,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     dispatch(
       addMessageToConversation({
         chatId: params.chatId,
-        message: { sender: "agent", text: accumulatedMessage, citations: ["app/(main)/chat/[chatId]/page.tsx","app/(main)/chat/[chatId]/page.tsx"] },
+        message: { sender: "agent", text: accumulatedMessage, citations: [accumulatedCitation] },
       })
     );
 

@@ -172,7 +172,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         {
           headers: headers,
           params: {
-            start: msgRefetchCount > 0 ? start - msgRefetchCount * 10 > 0 ? start - msgRefetchCount * 10 : 0 : start,
+            start: msgRefetchCount > 0 && start > 10 ? start - msgRefetchCount * 10 : start,
             limit: 10,
           },
         }

@@ -22,7 +22,6 @@ const ChatInterface = ({
     (c) => c.conversationId === currentConversationId
   );
 
-  // Scroll to bottom when new messages are added
   useEffect(() => {
     if (bottomOfPanel.current) {
       bottomOfPanel.current.scrollIntoView({ behavior: "smooth" });

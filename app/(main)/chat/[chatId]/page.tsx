@@ -4,7 +4,13 @@ import ChatInterface from "../components/ChatInterface";
 import { useDispatch } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { useSelector } from "react-redux";
-import { clearChat, clearPendingMessage, setChat, addMessageToConversation } from "@/lib/state/Reducers/chat";
+import {
+  clearChat,
+  clearPendingMessage,
+  setChat,
+  addMessageToConversation,
+  setTotalMessages,
+} from "@/lib/state/Reducers/chat";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import getHeaders from "@/app/utils/headers.util";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
@@ -17,11 +23,12 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { pendingMessage, projectId } = useSelector(
+  const { pendingMessage, projectId, conversations } = useSelector(
     (state: RootState) => state.chat
   );
 
   const pendingMessageSent = useRef(false);
+  const [start, setStart] = React.useState(0);
 
   /*
   This Function is to send message
@@ -31,17 +38,20 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/message/`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           ...headers,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content: message, nodeIds: selectedNodes.map(node => node.node_id) }),
+        body: JSON.stringify({
+          content: message,
+          nodeIds: selectedNodes.map((node) => node.node_id),
+        }),
       }
     );
 
     if (!response.ok) {
-      throw new Error('Network response was not ok');
+      throw new Error("Network response was not ok");
     }
 
     const reader = response.body?.getReader();
@@ -49,15 +59,18 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     let accumulatedMessage = "";
 
     while (true) {
-      const { done, value } = await reader?.read() || { done: true, value: undefined };
+      const { done, value } = (await reader?.read()) || {
+        done: true,
+        value: undefined,
+      };
       if (done) break;
 
       const chunk = decoder.decode(value);
       try {
         const parsedChunks = chunk
-          .split('}')
+          .split("}")
           .filter(Boolean)
-          .map((c) => JSON.parse(c + '}')); // Ensure that chunks are closed properly
+          .map((c) => JSON.parse(c + "}")); // Ensure that chunks are closed properly
 
         for (const parsedChunk of parsedChunks) {
           accumulatedMessage += parsedChunk.message;
@@ -115,13 +128,34 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     queryKey: ["chat-messages", params.chatId],
     queryFn: async () => {
       const headers = await getHeaders();
+    const totalMessages = await  axios
+        .get(
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
+          {
+            headers: headers,
+          }
+        )
+        .then((res) => {
+          dispatch(
+            setTotalMessages({
+              chatId: params.chatId,
+              totalMessages: res.data.total_messages,
+            })
+          );
+          setStart(res.data.total_messages - 10 > 0 ? res.data.total_messages - 10 : 0)
+          return res.data.total_messages;
+        }).catch((error) => {
+          console.log(error);
+          dispatch(setChat({ status: "error" }));
+        });
+        
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/messages/`,
         {
           headers: headers,
           params: {
-            start: 0,
-            limit: 100,
+            start: start,
+            limit: 10,
           },
         }
       );
@@ -145,7 +179,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             sender: "user",
             text: pendingMessage,
           },
-        })
+        });
         dispatch(setChat({ status: "loading" }));
         dispatch(clearPendingMessage());
         return response.data;
@@ -180,7 +214,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   return (
-    <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
+    <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2">
       <ChatInterface currentConversationId={params.chatId} />
       <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>

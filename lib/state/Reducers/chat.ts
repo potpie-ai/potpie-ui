@@ -11,6 +11,7 @@ interface Message {
 interface Conversation {
   conversationId: string;
   messages: Message[];
+  totalMessages: number;
 }
 
 interface chatState {
@@ -23,7 +24,7 @@ interface chatState {
   title: string;
   status: string;
   currentConversationId: string;
-  pendingMessage: string | null ;
+  pendingMessage: string | null;
 }
 
 const initialState: chatState = {
@@ -53,6 +54,7 @@ const chatSlice = createSlice({
       state.conversations.push({
         conversationId: action.payload.id,
         messages: action.payload.messages,
+        totalMessages: action.payload.messages.length,
       });
     },
 
@@ -79,16 +81,24 @@ const chatSlice = createSlice({
         } else {
           conversation.messages.push(message);
         }
+        if (conversation.totalMessages) {
+          conversation.totalMessages += conversation.messages.length + 1;
+        } else {
+          conversation.totalMessages = conversation.messages.length + 1;
+        }
       } else {
         state.conversations.push({
           conversationId: chatId,
           messages: [message],
+          totalMessages: 1,
         });
       }
     },
     removeLastMessage: (state, action: PayloadAction<{ chatId: string }>) => {
       const { chatId } = action.payload;
-      const conversation = state.conversations.find(c => c.conversationId === chatId);
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
       if (conversation && conversation.messages.length > 0) {
         conversation.messages.pop();
       }
@@ -100,11 +110,23 @@ const chatSlice = createSlice({
       state.pendingMessage = null;
     },
     clearChat: (state) => {
-      const { projectId } = state;  
+      const { projectId } = state;
       return {
         ...initialState,
-        projectId,  
+        projectId,
       };
+    },
+    setTotalMessages: (
+      state,
+      action: PayloadAction<{ chatId: string; totalMessages: number }>
+    ) => {
+      const { chatId, totalMessages } = action.payload;
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
+      if (conversation) {
+        conversation.totalMessages = totalMessages;
+      }
     },
   },
 });
@@ -117,5 +139,7 @@ export const {
   addMessageToConversation,
   clearChat,
   removeLastMessage,
-  setPendingMessage, clearPendingMessage
+  setPendingMessage,
+  clearPendingMessage,
+  setTotalMessages,
 } = chatSlice.actions;

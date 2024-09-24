@@ -88,3 +88,57 @@
   padding: 2px 4px;
   border-radius: 4px;
 }
+
+/* Styling for the content rendered from Markdown */
+
+.markdown-content {
+  color: #333;
+}
+
+/* Paragraph styles */
+.markdown-content p {
+  line-height: 1.6;
+}
+
+/* Heading styles */
+.markdown-content h3 {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  color: #2c3e50;
+}
+
+/* List styles */
+.markdown-content ul,
+.markdown-content ol {
+  list-style-type: disc;
+  margin-left: 20px;
+  margin-bottom: 16px;
+}
+
+/* List item styles */
+.markdown-content li {
+  margin-bottom: 8px;
+}
+
+/* Bold text (e.g., for <strong> tags) */
+.markdown-content strong {
+  font-weight: bold;
+}
+
+/* Code block styles */
+.markdown-content pre {
+  background-color: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.markdown-content code {
+  background-color: #f5f5f5;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+}

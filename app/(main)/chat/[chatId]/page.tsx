@@ -143,11 +143,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   Query to fetch paginated messages from the conversation.
   */
   const { refetch: refetchMessages } = useQuery({
-    queryKey: ["chat-messages", params.chatId, conversations.find(c => c.conversationId === params.chatId)?.start],
+    queryKey: ["chat-messages", params.chatId],
     queryFn: async () => {
       const headers = await getHeaders();
       const conversation = conversations.find(c => c.conversationId === params.chatId);
-      const start = conversation?.start;
+      const start = conversation?.start || 0;
 
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/messages/`,

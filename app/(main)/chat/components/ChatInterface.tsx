@@ -19,7 +19,6 @@ const ChatInterface = ({
 
   const bottomOfPanel = useRef<HTMLDivElement>(null);
   const upPanelRef = useRef<HTMLDivElement>(null);
-  const [noMessages, setNoMessages] = useState(false);
   const currentConversation = conversations.find(
     (c) => c.conversationId === currentConversationId
   );
@@ -28,7 +27,7 @@ const ChatInterface = ({
     if (bottomOfPanel.current) {
       bottomOfPanel.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [currentConversation]);
+  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -38,15 +37,10 @@ const ChatInterface = ({
             (c) => c.conversationId === currentConversationId
           );
           const start = conversation?.start || 0;
-          console.log(start-10);
-          if (start > 0) {
-            dispatch(
-              setStart({ chatId: currentConversationId, start: start - 10 })
-            );
-            refetchMessages();
-          }else{
-            setNoMessages(true);
-          }
+          dispatch(
+            setStart({ chatId: currentConversationId, start: start - 10 })
+          );
+          refetchMessages();
         }
       });
     });
@@ -64,7 +58,8 @@ const ChatInterface = ({
 
   return (
     <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
-      {!noMessages && (
+      {conversations.find((c) => c.conversationId === currentConversationId)
+        ?.start !== 0 && (
         <div ref={upPanelRef} className="w-full">
           <Skeleton className="w-full h-10" />
         </div>

@@ -24,6 +24,9 @@ const ChatInterface = ({
     (c) => c.conversationId === currentConversationId
   );
 
+  // State to track if it's the first render
+  const [isFirstRender, setIsFirstRender] = useState(true);
+
   const { refetch: refetchMessages } = useQuery({
     queryKey: ["chat-messages-refetch", currentConversationId],
     queryFn: async () => {
@@ -58,12 +61,13 @@ const ChatInterface = ({
     if (bottomOfPanel.current) {
       bottomOfPanel.current.scrollIntoView({ behavior: "smooth" });
     }
+    setIsFirstRender(false);
   }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
-        if (entry.isIntersecting) {
+        if (entry.isIntersecting && !isFirstRender) {
           const conversation = conversations.find(
             (c) => c.conversationId === currentConversationId
           );
@@ -85,7 +89,7 @@ const ChatInterface = ({
         observer.unobserve(upPanelRef.current);
       }
     };
-  }, []);
+  }, [isFirstRender]);
 
   return (
     <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">

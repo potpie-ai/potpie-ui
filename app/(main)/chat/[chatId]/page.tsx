@@ -159,7 +159,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           },
         }
       );
-      dispatch(clearChat());
+      // dispatch(clearChat());
       response.data.forEach((message: any) => {
         dispatch(
           addMessageToConversation({

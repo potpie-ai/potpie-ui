@@ -13,7 +13,7 @@ interface Conversation {
   conversationId: string;
   messages: Message[];
   totalMessages: number;
-  start?:number;
+  start?: number;
 }
 
 interface chatState {
@@ -106,7 +106,10 @@ const chatSlice = createSlice({
       );
       if (conversation && conversation.messages.length > 0) {
         conversation.messages.pop();
-        conversation.totalMessages = Math.max(0, conversation.totalMessages - 1);
+        conversation.totalMessages = Math.max(
+          0,
+          conversation.totalMessages - 1
+        );
       }
     },
 
@@ -133,30 +136,44 @@ const chatSlice = createSlice({
       action: PayloadAction<{ chatId: string; start: number }>
     ) => {
       const { chatId, start } = action.payload;
-      const conversation = state.conversations.find(
+      const validStart = start >= 0 ? start : 0;
+      let conversation = state.conversations.find(
         (c) => c.conversationId === chatId
       );
-      if (conversation && start >= 0) {
-        conversation.start = start;
+
+      if (conversation) {
+        conversation.start = validStart;
+      } else {
+        conversation = {
+          conversationId: chatId,
+          messages: [],
+          totalMessages: 0,
+          start: validStart,
+        };
+        state.conversations.push(conversation);
       }
     },
-    addOlderMessages: (state, action: PayloadAction<{ chatId: string; messages: any[] }>) => {
+    addOlderMessages: (
+      state,
+      action: PayloadAction<{ chatId: string; messages: any[] }>
+    ) => {
       const { chatId, messages } = action.payload;
       const conversation = state.conversations.find(
         (c) => c.conversationId === chatId
       );
-      
+
       if (conversation) {
         const formattedMessages = messages.map((message) => ({
           text: message.content,
-          sender: message.type === "HUMAN" ? "user" : "agent" as "user" | "agent",  // Explicitly typing the sender
+          sender:
+            message.type === "HUMAN" ? "user" : ("agent" as "user" | "agent"), // Explicitly typing the sender
           citations: message.citations || [],
         }));
-    
+
         conversation.messages.unshift(...formattedMessages);
         conversation.totalMessages += formattedMessages.length;
       }
-    }
+    },
   },
 });
 
@@ -170,5 +187,6 @@ export const {
   removeLastMessage,
   setPendingMessage,
   clearPendingMessage,
-  setStart,addOlderMessages   
+  setStart,
+  addOlderMessages,
 } = chatSlice.actions;

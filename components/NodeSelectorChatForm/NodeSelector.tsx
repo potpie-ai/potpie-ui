@@ -6,27 +6,27 @@ import { Plus, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
 import getHeaders from "@/app/utils/headers.util";
-
-interface Node {
-  node_id: string;
-  name: string;
-  file_path: string;
-}
+import { setChat } from "@/lib/state/Reducers/chat";
+import { AppDispatch, RootState } from "@/lib/state/store";
+import { useDispatch, useSelector } from "react-redux";
 
 interface NodeSelectorFormProps {
   projectId: string;
   disabled: boolean; // Disable prop
-  onSubmit: (message: string, selectedNodes: Node[]) => void;
+  onSubmit: (message: string) => void;
 }
 
 const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled, onSubmit }) => {
   const [isNodeListVisible, setIsNodeListVisible] = useState(false); 
-  const [nodeOptions, setNodeOptions] = useState<Node[]>([]); 
-  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]); 
+  const [nodeOptions, setNodeOptions] = useState<any[]>([]); 
   const [message, setMessage] = useState(""); 
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const nodeListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const dispatch: AppDispatch = useDispatch();
+  const { selectedNodes } = useSelector(
+    (state: RootState) => state.chat
+  );
   
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
@@ -55,9 +55,8 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     e.preventDefault();
     if (!message.trim()) return;
 
-    onSubmit(message, selectedNodes);
+    onSubmit(message);
     setMessage("");
-    setSelectedNodes([]);
   };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -87,9 +86,9 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     }
   };
 
-  const handleNodeSelect = (node: Node) => {
+  const handleNodeSelect = (node: any) => {
     if (!selectedNodes.some((n) => n.node_id === node.node_id)) {
-      setSelectedNodes([...selectedNodes, node]);
+      dispatch(setChat({selectedNodes: [...selectedNodes, node]}))
     }
 
     const cursorPosition = messageRef.current?.selectionStart || 0;
@@ -100,8 +99,8 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     setIsNodeListVisible(false);
   };
 
-  const handleNodeRemove = (node: Node) => {
-    setSelectedNodes(selectedNodes.filter((n) => n.node_id !== node.node_id));
+  const handleNodeRemove = (node: any) => {
+    dispatch(setChat({selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id)}))
   };
 
   useEffect(() => {

@@ -17,7 +17,7 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { pendingMessage, projectId } = useSelector(
+  const { pendingMessage, projectId, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
 
@@ -62,13 +62,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
         for (const parsedChunk of parsedChunks) {
           accumulatedMessage += parsedChunk.message;
-          accumulatedCitation += parsedChunk.citations
+          accumulatedCitation = parsedChunk.citations
         }
       } catch (error) {
         //TODO: Implement this later
       }
     }
-
     dispatch(
       addMessageToConversation({
         chatId: params.chatId,
@@ -177,8 +176,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   This function handles form submission in the chat interface.
   It triggers the `messageMutation` to send the message along with any selected nodes.
   */
-  const handleFormSubmit = (message: string, selectedNodes: any[]) => {
-    messageMutation.mutate({ message, selectedNodes });
+  const handleFormSubmit = (message: string) => {
+    messageMutation.mutate({ message, selectedNodes: selectedNodes });
   };
 
   return (

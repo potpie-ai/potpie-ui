@@ -128,17 +128,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
             }));
           }
-          refetchMessages();
-          
           return totalMessages;
         })
         .catch((error) => {
           console.log(error);
           dispatch(setChat({ status: "error" }));
         });
-  
-      if (response.data.status === "error")
-        dispatch(setChat({ status: "error" }));
   
       return response.data.total_messages;
     },
@@ -153,10 +148,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const headers = await getHeaders();
       const conversation = conversations.find(c => c.conversationId === params.chatId);
       const start = conversation?.start;
-
-      if (start === undefined) {
-        return;
-      }
 
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/messages/`,

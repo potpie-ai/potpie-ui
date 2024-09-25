@@ -169,7 +169,7 @@ export default function Signin() {
         </Button>
         <div className="mt-4 text-center text-sm">
             Don&apos;t have an account?{" "}
-            <Link href="/sign-up" className="underline">
+            <Link href="/onboarding" className="underline">
               Sign up
             </Link>
           </div>

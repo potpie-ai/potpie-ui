@@ -4,7 +4,13 @@ import ChatInterface from "../components/ChatInterface";
 import { useDispatch } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { useSelector } from "react-redux";
-import { clearChat, clearPendingMessage, setChat, addMessageToConversation, setStart } from "@/lib/state/Reducers/chat";
+import {
+  clearChat,
+  clearPendingMessage,
+  setChat,
+  addMessageToConversation,
+  setStart,
+} from "@/lib/state/Reducers/chat";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import getHeaders from "@/app/utils/headers.util";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
@@ -31,17 +37,17 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/message/`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           ...headers,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ content: message, node_ids: selectedNodes }),
       }
     );
 
     if (!response.ok) {
-      throw new Error('Network response was not ok');
+      throw new Error("Network response was not ok");
     }
 
     const reader = response.body?.getReader();
@@ -50,15 +56,18 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     let accumulatedCitation = "";
 
     while (true) {
-      const { done, value } = await reader?.read() || { done: true, value: undefined };
+      const { done, value } = (await reader?.read()) || {
+        done: true,
+        value: undefined,
+      };
       if (done) break;
 
       const chunk = decoder.decode(value);
       try {
         const parsedChunks = chunk
-          .split('}')
+          .split("}")
           .filter(Boolean)
-          .map((c) => JSON.parse(c + '}')); // Ensure that chunks are closed properly
+          .map((c) => JSON.parse(c + "}")); // Ensure that chunks are closed properly
 
         for (const parsedChunk of parsedChunks) {
           accumulatedMessage += parsedChunk.message;
@@ -72,7 +81,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     dispatch(
       addMessageToConversation({
         chatId: params.chatId,
-        message: { sender: "agent", text: accumulatedMessage, citations: [accumulatedCitation] },
+        message: {
+          sender: "agent",
+          text: accumulatedMessage,
+          citations: [accumulatedCitation],
+        },
       })
     );
 
@@ -106,9 +119,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   /*
   Query to fetch total messages for the conversation.
   */
-  const {
-    isLoading: isLoadingTotalMessages,
-  } = useQuery({
+  const { isLoading: isLoadingTotalMessages } = useQuery({
     queryKey: ["total-messages", params.chatId],
     queryFn: async () => {
       const headers = await getHeaders();
@@ -121,12 +132,14 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         )
         .then((res) => {
           const totalMessages = res.data.total_messages;
-          
+
           if (totalMessages > 0) {
-            dispatch(setStart({
-              chatId: params.chatId,
-              start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
-            }));
+            dispatch(
+              setStart({
+                chatId: params.chatId,
+                start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
+              })
+            );
           }
           return totalMessages;
         })
@@ -134,11 +147,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           console.log(error);
           dispatch(setChat({ status: "error" }));
         });
-  
+
       return response.data.total_messages;
     },
   });
-  
+
   /*
   Query to fetch paginated messages from the conversation.
   */
@@ -146,7 +159,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     queryKey: ["chat-messages", params.chatId],
     queryFn: async () => {
       const headers = await getHeaders();
-      const conversation = conversations.find(c => c.conversationId === params.chatId);
+      const conversation = conversations.find(
+        (c) => c.conversationId === params.chatId
+      );
       const start = conversation?.start || 0;
 
       const response = await axios.get(
@@ -173,13 +188,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       });
 
       if (pendingMessage) {
-        dispatch(addMessageToConversation({
-          chatId: params.chatId,
-          message: {
-            sender: "user",
-            text: pendingMessage,
-          },
-        }));
+        dispatch(
+          addMessageToConversation({
+            chatId: params.chatId,
+            message: {
+              sender: "user",
+              text: pendingMessage,
+            },
+          })
+        );
         dispatch(setChat({ status: "loading" }));
         dispatch(clearPendingMessage());
       }
@@ -187,6 +204,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       dispatch(setChat({ status: "active" }));
       return response.data;
     },
+    refetchOnWindowFocus: false,
     enabled: !isLoadingTotalMessages,
   });
 
@@ -214,7 +232,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
       <ChatInterface currentConversationId={params.chatId} />
-      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} disabled={false} />
+      <NodeSelectorForm
+        projectId={projectId}
+        onSubmit={handleFormSubmit}
+        disabled={false}
+      />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
     </div>
   );

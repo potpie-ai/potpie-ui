@@ -3,14 +3,15 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import ChatBubble from "./chatbubble";
 import { Skeleton } from "@/components/ui/skeleton";
-import { setStart } from "@/lib/state/Reducers/chat";
+import { addOlderMessages, setStart } from "@/lib/state/Reducers/chat";
+import axios from "axios";
+import getHeaders from "@/app/utils/headers.util";
+import { useQuery } from "@tanstack/react-query";
 
 const ChatInterface = ({
   currentConversationId,
-  refetchMessages,
 }: {
   currentConversationId: string;
-  refetchMessages: () => void;
 }) => {
   const { conversations, status } = useSelector(
     (state: RootState) => state.chat
@@ -22,6 +23,36 @@ const ChatInterface = ({
   const currentConversation = conversations.find(
     (c) => c.conversationId === currentConversationId
   );
+
+  const { refetch: refetchMessages } = useQuery({
+    queryKey: ["chat-messages-refetch", currentConversationId],
+    queryFn: async () => {
+      const headers = await getHeaders();
+      const conversation = conversations.find(
+        (c) => c.conversationId === currentConversationId
+      );
+      const start = conversation?.start || 0;
+
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/messages/`,
+        {
+          headers: headers,
+          params: {
+            start,
+            limit: 10,
+          },
+        }
+      );
+      dispatch(
+        addOlderMessages({
+          chatId: currentConversationId,
+          messages: response.data
+        })
+      );
+      return response.data;
+    },
+    enabled: false,
+  });
 
   useEffect(() => {
     if (bottomOfPanel.current) {

@@ -80,7 +80,6 @@ const chatSlice = createSlice({
         const lastMessage =
           conversation.messages[conversation.messages.length - 1];
 
-        // If the last message is from "agent" and the new message is also from "agent", update the last message
         if (
           message.sender === "agent" &&
           lastMessage &&
@@ -89,11 +88,9 @@ const chatSlice = createSlice({
           lastMessage.text = message.text;
         } else {
           conversation.messages.push(message);
-          // Increment totalMessages by 1 for each new message
           conversation.totalMessages += 1;
         }
       } else {
-        // If no conversation exists, create a new one and set totalMessages to 1
         state.conversations.push({
           conversationId: chatId,
           messages: [message],
@@ -143,6 +140,23 @@ const chatSlice = createSlice({
         conversation.start = start;
       }
     },
+    addOlderMessages: (state, action: PayloadAction<{ chatId: string; messages: any[] }>) => {
+      const { chatId, messages } = action.payload;
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
+      
+      if (conversation) {
+        const formattedMessages = messages.map((message) => ({
+          text: message.content,
+          sender: message.type === "HUMAN" ? "user" : "agent" as "user" | "agent",  // Explicitly typing the sender
+          citations: message.citations || [],
+        }));
+    
+        conversation.messages.unshift(...formattedMessages);
+        conversation.totalMessages += formattedMessages.length;
+      }
+    }
   },
 });
 
@@ -156,5 +170,5 @@ export const {
   removeLastMessage,
   setPendingMessage,
   clearPendingMessage,
-  setStart,
+  setStart,addOlderMessages   
 } = chatSlice.actions;

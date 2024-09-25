@@ -213,7 +213,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
-      <ChatInterface refetchMessages={refetchMessages} currentConversationId={params.chatId} />
+      <ChatInterface currentConversationId={params.chatId} />
       <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} disabled={false} />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
     </div>

@@ -12,6 +12,8 @@ interface Message {
 interface Conversation {
   conversationId: string;
   messages: Message[];
+  totalMessages: number;
+  start?:number;
 }
 
 interface chatState {
@@ -24,7 +26,7 @@ interface chatState {
   title: string;
   status: string;
   currentConversationId: string;
-  pendingMessage: string | null ;
+  pendingMessage: string | null;
 }
 
 const initialState: chatState = {
@@ -54,6 +56,7 @@ const chatSlice = createSlice({
       state.conversations.push({
         conversationId: action.payload.id,
         messages: action.payload.messages,
+        totalMessages: action.payload.messages.length,
       });
     },
 
@@ -61,16 +64,23 @@ const chatSlice = createSlice({
       state,
       action: PayloadAction<{
         chatId: string;
-        message: { sender: "user" | "agent"; text: string, citations?: string[]};
+        message: {
+          sender: "user" | "agent";
+          text: string;
+          citations?: string[];
+        };
       }>
     ) => {
       const { chatId, message } = action.payload;
       const conversation = state.conversations.find(
         (c) => c.conversationId === chatId
       );
+
       if (conversation) {
         const lastMessage =
           conversation.messages[conversation.messages.length - 1];
+
+        // If the last message is from "agent" and the new message is also from "agent", update the last message
         if (
           message.sender === "agent" &&
           lastMessage &&
@@ -79,35 +89,59 @@ const chatSlice = createSlice({
           lastMessage.text = message.text;
         } else {
           conversation.messages.push(message);
+          // Increment totalMessages by 1 for each new message
+          conversation.totalMessages += 1;
         }
       } else {
+        // If no conversation exists, create a new one and set totalMessages to 1
         state.conversations.push({
           conversationId: chatId,
-          messages: [message]
+          messages: [message],
+          totalMessages: 1,
         });
       }
     },
+
     removeLastMessage: (state, action: PayloadAction<{ chatId: string }>) => {
       const { chatId } = action.payload;
-      const conversation = state.conversations.find(c => c.conversationId === chatId);
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
       if (conversation && conversation.messages.length > 0) {
         conversation.messages.pop();
+        conversation.totalMessages = Math.max(0, conversation.totalMessages - 1);
       }
     },
+
     setPendingMessage: (state, action: PayloadAction<string>) => {
       state.pendingMessage = action.payload;
     },
+
     clearPendingMessage: (state) => {
       state.pendingMessage = null;
     },
+
     clearChat: (state) => {
-      const { projectId, branchName, repoName } = state;  
+      const { projectId, branchName, repoName } = state;
       return {
         ...initialState,
-        projectId, 
+        projectId,
         branchName,
-        repoName 
+        repoName,
       };
+    },
+
+    setStart: (
+      state,
+      action: PayloadAction<{ chatId: string; start: number }>
+    ) => {
+      const { chatId, start } = action.payload;
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
+      if (conversation && start >= 0) {
+        conversation.start = start;
+      }
     },
   },
 });
@@ -120,5 +154,7 @@ export const {
   addMessageToConversation,
   clearChat,
   removeLastMessage,
-  setPendingMessage, clearPendingMessage
+  setPendingMessage,
+  clearPendingMessage,
+  setStart,
 } = chatSlice.actions;

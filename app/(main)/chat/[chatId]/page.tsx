@@ -4,7 +4,7 @@ import ChatInterface from "../components/ChatInterface";
 import { useDispatch } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { useSelector } from "react-redux";
-import { clearChat, clearPendingMessage, setChat, addMessageToConversation } from "@/lib/state/Reducers/chat";
+import { clearChat, clearPendingMessage, setChat, addMessageToConversation, setStart } from "@/lib/state/Reducers/chat";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import getHeaders from "@/app/utils/headers.util";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
@@ -17,14 +17,14 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { pendingMessage, projectId } = useSelector(
+  const { pendingMessage, projectId, conversations } = useSelector(
     (state: RootState) => state.chat
   );
 
   const pendingMessageSent = useRef(false);
 
   /*
-  This Function is to send message
+  This function is to send a message.
   */
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     const headers = await getHeaders();
@@ -62,10 +62,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
         for (const parsedChunk of parsedChunks) {
           accumulatedMessage += parsedChunk.message;
-          accumulatedCitation += parsedChunk.citations
+          accumulatedCitation += parsedChunk.citations;
         }
       } catch (error) {
-        //TODO: Implement this later
+        // TODO: Implement this later
       }
     }
 
@@ -81,11 +81,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   /*
-  This mutation hook is used to handle the process of sending messages.
-  It triggers the `sendMessage` function and updates the chat state accordingly.
-  - `onMutate`: Dispatches the chat status to "loading" and adds the user's message to the conversation.
-  - `onSuccess`: Sets the chat status to "active" after successfully sending the message.
-  - `onError`: Handles any errors that occur while sending the message and sets the chat status to "error".
+  This mutation hook handles the process of sending messages.
   */
   const messageMutation = useMutation({
     mutationFn: sendMessage,
@@ -108,26 +104,70 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   });
 
   /*
-  Query to fetch messages for the conversation.
-  - `queryKey`: The key that uniquely identifies the query (chat-messages).
-  - `queryFn`: Fetches chat messages from the conversation API and updates the chat state.
-  - Messages are loaded in batches (start=0, limit=100), and the current chat is cleared before new messages are loaded.
+  Query to fetch total messages for the conversation.
   */
-  const { refetch: refetchMessages } = useQuery({
-    queryKey: ["chat-messages", params.chatId],
+  const {
+    isLoading: isLoadingTotalMessages,
+  } = useQuery({
+    queryKey: ["total-messages", params.chatId],
     queryFn: async () => {
       const headers = await getHeaders();
+      const response = await axios
+        .get(
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
+          {
+            headers: headers,
+          }
+        )
+        .then((res) => {
+          const totalMessages = res.data.total_messages;
+          
+          if (totalMessages > 0) {
+            dispatch(setStart({
+              chatId: params.chatId,
+              start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
+            }));
+          }
+          refetchMessages();
+          
+          return totalMessages;
+        })
+        .catch((error) => {
+          console.log(error);
+          dispatch(setChat({ status: "error" }));
+        });
+  
+      if (response.data.status === "error")
+        dispatch(setChat({ status: "error" }));
+  
+      return response.data.total_messages;
+    },
+  });
+  
+  /*
+  Query to fetch paginated messages from the conversation.
+  */
+  const { refetch: refetchMessages } = useQuery({
+    queryKey: ["chat-messages", params.chatId, conversations.find(c => c.conversationId === params.chatId)?.start],
+    queryFn: async () => {
+      const headers = await getHeaders();
+      const conversation = conversations.find(c => c.conversationId === params.chatId);
+      const start = conversation?.start;
+
+      if (start === undefined) {
+        return;
+      }
+
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/messages/`,
         {
           headers: headers,
           params: {
-            start: 0,
-            limit: 100,
+            start,
+            limit: 10,
           },
         }
       );
-      // Clear the current chat before loading new messages
       dispatch(clearChat());
       response.data.forEach((message: any) => {
         dispatch(
@@ -140,27 +180,27 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           })
         );
       });
+
       if (pendingMessage) {
-        addMessageToConversation({
+        dispatch(addMessageToConversation({
           chatId: params.chatId,
           message: {
             sender: "user",
             text: pendingMessage,
           },
-        })
+        }));
         dispatch(setChat({ status: "loading" }));
         dispatch(clearPendingMessage());
-        return response.data;
       }
+
       dispatch(setChat({ status: "active" }));
       return response.data;
     },
+    enabled: !isLoadingTotalMessages,
   });
 
   /*
-  This `useEffect` hook checks if there is any pending message when the chat ID changes.
-  If a pending message exists and hasn't been sent yet, it triggers the mutation to send the message.
-  The `pendingMessageSent` flag ensures that the pending message is only sent once.
+  Send pending message if present.
   */
   useEffect(() => {
     if (pendingMessage && !pendingMessageSent.current) {
@@ -174,8 +214,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   }, [params.chatId, pendingMessage]);
 
   /*
-  This function handles form submission in the chat interface.
-  It triggers the `messageMutation` to send the message along with any selected nodes.
+  Handles form submission from the chat interface.
   */
   const handleFormSubmit = (message: string, selectedNodes: any[]) => {
     messageMutation.mutate({ message, selectedNodes });
@@ -183,7 +222,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
-      <ChatInterface currentConversationId={params.chatId} />
+      <ChatInterface refetchMessages={refetchMessages} currentConversationId={params.chatId} />
       <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} disabled={false} />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
     </div>

@@ -198,7 +198,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
       {renderNodeList()}
 
       <div className="flex items-center p-3 pt-0 ">
-        <Button type="submit" size="sm" className="ml-auto !bg-transparent mb-1" disabled={disabled}>
+        <Button type="submit" size="sm" className="ml-auto !bg-transparent mb-1 fill-primary" disabled={disabled}>
           <Image src={"/images/sendmsg.svg"} alt="logo" width={20} height={20} />
         </Button>
       </div>

@@ -166,7 +166,7 @@ const chatSlice = createSlice({
         const formattedMessages = messages.map((message) => ({
           text: message.content,
           sender:
-            message.type === "HUMAN" ? "user" : ("agent" as "user" | "agent"), // Explicitly typing the sender
+            message.type === "HUMAN" ? "user" : ("agent" as "user" | "agent"),
           citations: message.citations || [],
         }));
 

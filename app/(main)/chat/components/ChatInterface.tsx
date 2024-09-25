@@ -89,12 +89,10 @@ const ChatInterface = ({
 
   return (
     <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
-      {conversations.find((c) => c.conversationId === currentConversationId)
-        ?.start !== 0 && (
+      
         <div ref={upPanelRef} className="w-full">
-          <Skeleton className="w-full h-10" />
+          {/* <Skeleton className="w-full h-10" /> */}
         </div>
-      )}
 
       {currentConversation &&
         currentConversation.messages.map((message, i) => (

@@ -10,6 +10,7 @@ import {
   setChat,
   addMessageToConversation,
   setStart,
+  setTotalMessages,
 } from "@/lib/state/Reducers/chat";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import getHeaders from "@/app/utils/headers.util";
@@ -140,6 +141,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                 start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
               })
             );
+            dispatch(setTotalMessages({ chatId: params.chatId, totalMessages })); 
           }
           return totalMessages;
         })

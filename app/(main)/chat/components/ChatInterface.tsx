@@ -24,7 +24,6 @@ const ChatInterface = ({
     (c) => c.conversationId === currentConversationId
   );
 
-  // State to track if it's the first render
   const [isFirstRender, setIsFirstRender] = useState(true);
 
   const { refetch: refetchMessages } = useQuery({

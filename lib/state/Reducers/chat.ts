@@ -56,7 +56,7 @@ const chatSlice = createSlice({
       state.conversations.push({
         conversationId: action.payload.id,
         messages: action.payload.messages,
-        totalMessages: action.payload.messages.length,
+        totalMessages: 1,
       });
     },
 
@@ -88,7 +88,7 @@ const chatSlice = createSlice({
           lastMessage.text = message.text;
         } else {
           conversation.messages.push(message);
-          conversation.totalMessages += 1;
+          // conversation.totalMessages += 1;
         }
       } else {
         state.conversations.push({
@@ -174,6 +174,18 @@ const chatSlice = createSlice({
         conversation.totalMessages += formattedMessages.length;
       }
     },
+    setTotalMessages: (
+      state,
+      action: PayloadAction<{ chatId: string; totalMessages: number }>
+    ) => {
+      const { chatId, totalMessages } = action.payload;
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
+      if (conversation) {
+        conversation.totalMessages = totalMessages;
+      }
+    },
   },
 });
 
@@ -189,4 +201,5 @@ export const {
   clearPendingMessage,
   setStart,
   addOlderMessages,
+  setTotalMessages
 } = chatSlice.actions;

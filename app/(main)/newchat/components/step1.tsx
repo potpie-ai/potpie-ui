@@ -12,7 +12,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
@@ -38,7 +38,6 @@ const Step1 = () => {
       "width=1000,height=700"
     );
   };
-
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
     const headers = await getHeaders();
@@ -86,10 +85,14 @@ const Step1 = () => {
       return parseResponse.data;
     } catch (err) {
       console.error("Error during parsing:", err);
-      setParsingStatus("Error");
+      setParsingStatus("error");
       return err;
     }
   };
+
+  useEffect(() => {
+    if (branchName && repoName) parseRepo(repoName, branchName);
+  }, []);
 
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
     UserRepo[]
@@ -171,10 +174,14 @@ const Step1 = () => {
               ))}
               {/* Link new repository option */}
               <SelectItem key="new" value="new">
-                <span onClick={(e) => {
-                  e.preventDefault();
-                  openPopup();
-                }}>+ Link new repository</span>
+                <span
+                  onClick={(e) => {
+                    e.preventDefault();
+                    openPopup();
+                  }}
+                >
+                  + Link new repository
+                </span>
               </SelectItem>
             </SelectContent>
           </Select>
@@ -204,12 +211,21 @@ const Step1 = () => {
               />
             </SelectTrigger>
             <SelectContent>
-              {!UserBranchLoading &&
+              {!UserBranchLoading ? (
                 UserBranch?.map((value: any) => (
                   <SelectItem key={value} value={value}>
                     {value}
                   </SelectItem>
-                ))}
+                ))
+              ) : (
+                <SelectItem
+                  value="loading"
+                  disabled
+                  className="pointer-events-none"
+                >
+                  <Skeleton className="w-[180px] h-7" />
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
         )}

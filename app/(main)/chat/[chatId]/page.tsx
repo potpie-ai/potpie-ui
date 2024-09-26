@@ -24,7 +24,7 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { pendingMessage, projectId, conversations } = useSelector(
+  const { pendingMessage, projectId, selectedNodes, conversations } = useSelector(
     (state: RootState) => state.chat
   );
 
@@ -72,13 +72,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
         for (const parsedChunk of parsedChunks) {
           accumulatedMessage += parsedChunk.message;
-          accumulatedCitation += parsedChunk.citations;
+          accumulatedCitation = parsedChunk.citations
         }
       } catch (error) {
         // TODO: Implement this later
       }
     }
-
     dispatch(
       addMessageToConversation({
         chatId: params.chatId,
@@ -227,8 +226,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   /*
   Handles form submission from the chat interface.
   */
-  const handleFormSubmit = (message: string, selectedNodes: any[]) => {
-    messageMutation.mutate({ message, selectedNodes });
+  const handleFormSubmit = (message: string) => {
+    messageMutation.mutate({ message, selectedNodes: selectedNodes });
   };
 
   return (

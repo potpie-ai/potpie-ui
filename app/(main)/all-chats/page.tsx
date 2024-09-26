@@ -121,7 +121,7 @@ const AllChats = () => {
   };
 
   const handleChatClick = (chat: any) => {
-    dispatch(setChat({ projectId: chat.project_ids[0], branchName: chat.branch, repoName:chat.repository }));
+    dispatch(setChat({ projectId: chat.project_ids[0], branchName: chat.branch, repoName:chat.repository, selectedNodes: [], title: chat.title }));
   };
 
   return (

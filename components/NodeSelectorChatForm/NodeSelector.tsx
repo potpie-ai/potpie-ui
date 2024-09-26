@@ -6,27 +6,28 @@ import { Plus, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
 import getHeaders from "@/app/utils/headers.util";
-
-interface Node {
-  node_id: string;
-  name: string;
-  file_path: string;
-}
+import { setChat } from "@/lib/state/Reducers/chat";
+import { AppDispatch, RootState } from "@/lib/state/store";
+import { useDispatch, useSelector } from "react-redux";
 
 interface NodeSelectorFormProps {
   projectId: string;
   disabled: boolean; // Disable prop
-  onSubmit: (message: string, selectedNodes: Node[]) => void;
+  onSubmit: (message: string) => void;
 }
 
 const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled, onSubmit }) => {
   const [isNodeListVisible, setIsNodeListVisible] = useState(false); 
-  const [nodeOptions, setNodeOptions] = useState<Node[]>([]); 
-  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]); 
+  const [nodeOptions, setNodeOptions] = useState<any[]>([]); 
   const [message, setMessage] = useState(""); 
+  const [isNodeSelected, setIsNodeSelected] = useState(false);
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const nodeListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const dispatch: AppDispatch = useDispatch();
+  const { selectedNodes } = useSelector(
+    (state: RootState) => state.chat
+  );
   
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
@@ -55,9 +56,8 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     e.preventDefault();
     if (!message.trim()) return;
 
-    onSubmit(message, selectedNodes);
+    onSubmit(message);
     setMessage("");
-    setSelectedNodes([]);
   };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -75,9 +75,12 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     const lastAtPosition = value.lastIndexOf("@", cursorPosition);
 
     if (lastAtPosition !== -1 && cursorPosition > lastAtPosition) {
+      if (isNodeSelected) {
+        setIsNodeSelected(false); 
+      }
       const query = value.substring(lastAtPosition + 1, cursorPosition);
       if (query.trim().length > 0) {
-        fetchNodes(query); 
+        fetchNodes(query);
       } else {
         setNodeOptions([]);
         setIsNodeListVisible(false);
@@ -87,21 +90,27 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     }
   };
 
-  const handleNodeSelect = (node: Node) => {
+  const handleNodeSelect = (node: any) => {
     if (!selectedNodes.some((n) => n.node_id === node.node_id)) {
-      setSelectedNodes([...selectedNodes, node]);
+      dispatch(setChat({ selectedNodes: [...selectedNodes, node] }));
     }
-
+  
     const cursorPosition = messageRef.current?.selectionStart || 0;
-    const textBeforeAt = message.slice(0, message.lastIndexOf("@", cursorPosition));
+    const atPosition = message.lastIndexOf("@", cursorPosition);
+    const textBeforeAt = message.slice(0, atPosition);
     const textAfterAt = message.slice(cursorPosition);
-
-    setMessage(`${textBeforeAt}${textAfterAt}`);
+  
+    const nodeText = `${node.name} `; 
+  
+    setMessage(`${textBeforeAt}@${nodeText} ${textAfterAt}`);
     setIsNodeListVisible(false);
+  
+    setIsNodeSelected(true);
   };
+  
 
-  const handleNodeRemove = (node: Node) => {
-    setSelectedNodes(selectedNodes.filter((n) => n.node_id !== node.node_id));
+  const handleNodeRemove = (node: any) => {
+    dispatch(setChat({selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id)}))
   };
 
   useEffect(() => {
@@ -199,7 +208,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
       {renderNodeList()}
 
       <div className="flex items-center p-3 pt-0 ">
-        <Button type="submit" size="sm" className="ml-auto !bg-transparent mb-1" disabled={disabled}>
+        <Button type="submit" size="sm" className="ml-auto !bg-transparent mb-1 fill-primary" disabled={disabled}>
           <Image src={"/images/sendmsg.svg"} alt="logo" width={20} height={20} />
         </Button>
       </div>

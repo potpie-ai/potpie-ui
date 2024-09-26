@@ -17,7 +17,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { signOut } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { useDispatch } from "react-redux";
-import { clearChat } from "@/lib/state/Reducers/chat";
+import { clearChat, clearFullChat } from "@/lib/state/Reducers/chat";
 
 const Sidebar = () => {
   const [progress, setProgress] = React.useState(90);
@@ -27,7 +27,7 @@ const Sidebar = () => {
 
   const redirectToNewChat = (e:any) => {
     router.push("/newchat")
-    dispatch(clearChat())
+    dispatch(clearFullChat())
   }
   
   React.useEffect(() => {

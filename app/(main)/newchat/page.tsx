@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
-import { setPendingMessage } from "@/lib/state/Reducers/chat";
+import { setChat, setPendingMessage } from "@/lib/state/Reducers/chat";
 import Step1 from "./components/step1";
 import Step2 from "./components/step2";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
@@ -19,7 +19,7 @@ const NewChat = () => {
   - It dispatches an action to set the pending message in the Redux store.
   - After setting the pending message, it navigates the user to the chat page based on the current conversation ID.
   */
-  const handleFormSubmit = (message: string, selectedNodes: any[]) => {
+  const handleFormSubmit = (message: string) => {
     dispatch(setPendingMessage(message));
     router.push(`/chat/${currentConversationId}`);
   };

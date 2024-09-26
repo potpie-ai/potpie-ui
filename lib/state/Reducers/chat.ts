@@ -23,6 +23,7 @@ interface chatState {
   agentId: string;
   projectId: string;
   conversations: Conversation[];
+  selectedNodes: any[]
   title: string;
   status: string;
   currentConversationId: string;
@@ -40,6 +41,7 @@ const initialState: chatState = {
   status: "loading",
   currentConversationId: "",
   pendingMessage: "",
+  selectedNodes: []
 };
 
 const chatSlice = createSlice({
@@ -122,7 +124,7 @@ const chatSlice = createSlice({
     },
 
     clearChat: (state) => {
-      const { projectId, branchName, repoName } = state;
+      const { projectId, branchName, repoName, selectedNodes, title } = state;  
       return {
         ...initialState,
         projectId,
@@ -186,6 +188,9 @@ const chatSlice = createSlice({
         conversation.totalMessages = totalMessages;
       }
     },
+    clearFullChat: (state) => {
+      return initialState
+    },
   },
 });
 
@@ -202,4 +207,7 @@ export const {
   setStart,
   addOlderMessages,
   setTotalMessages
+  setPendingMessage, 
+  clearPendingMessage,
+  clearFullChat
 } = chatSlice.actions;

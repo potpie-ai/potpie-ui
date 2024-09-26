@@ -85,7 +85,7 @@ const Step1 = () => {
       return parseResponse.data;
     } catch (err) {
       console.error("Error during parsing:", err);
-      setParsingStatus("Error");
+      setParsingStatus("error");
       return err;
     }
   };

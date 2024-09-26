@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { CircleDollarSignIcon, KeyRound, LogOut, MessageCircleQuestion, Plus } from "lucide-react";
 import Link from "next/link";
 import React from "react";
 import { Button } from "../ui/button";
@@ -18,6 +18,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { useDispatch } from "react-redux";
 import { clearChat, clearFullChat } from "@/lib/state/Reducers/chat";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu";
 
 const Sidebar = () => {
   const [progress, setProgress] = React.useState(90);
@@ -111,27 +112,63 @@ const Sidebar = () => {
           </Card>
         </div>
         <div className="relative mt-auto px-2 ">
-          <hr className="absolute right-0 top-0 h-px w-full border-0 bg-border" />
-          <div className="flex justify-between items-center py-3">
-            <div className="flex gap-3 items-center ml-5">
+  <hr className="absolute right-0 top-0 h-px w-full border-0 bg-border" />
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button
+        variant={"ghost"}
+        size={"default"}
+        className="hover:bg-transparent hover:text-white gap-2 w-full"
+      >
+        <div className="flex justify-between items-center py-8 mt-4">
+          <div className="flex gap-3 items-center">
             <ProfilePicture
-                      className={`text-icons size-8 "mr-auto" : "mx-auto"`}
-                    />
-              <span className="text-m">{user?.displayName}</span>
-            </div>
-            <Image
-              src={"/images/rightarrow.svg"}
-              alt="logo"
-              width={15}
-              className="mr-3 cursor-pointer"
-              height={15}
-              onClick={() => {
-                signOut(auth);
-                router.push("/sign-in");
-              }}
+              className="text-icons size-8 mr-auto"
             />
+            <span className="text-m">{user?.displayName}</span>
           </div>
+          <Image
+            src={"/images/rightarrow.svg"}
+            alt="logo"
+            width={15}
+            className="mr-3 cursor-pointer ml-8"
+            height={15}
+          />
         </div>
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent
+      align="end"
+      className="z-[999] bg-muted-foreground p-4 ml-4"
+    >
+      <DropdownMenuItem
+        className="pr-8 hover:bg-transparent text-white"
+        onClick={() => router.push("/key-management")}
+      >
+        <KeyRound className="pr-2" />
+        Key Management
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        className="hover:bg-transparent text-white"
+      >
+        <MessageCircleQuestion className="pr-2" />
+        Support
+      </DropdownMenuItem>
+      <DropdownMenuSeparator className="bg-white" />
+      <DropdownMenuItem
+        className="hover:bg-transparent text-white"
+        onClick={() => {
+          signOut(auth);
+          router.push("/sign-in");
+        }}
+      >
+        <LogOut className="pr-2" />
+        Logout
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+</div>
+
       </div>
     </div>
   );

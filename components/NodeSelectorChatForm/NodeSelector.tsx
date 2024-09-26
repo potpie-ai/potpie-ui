@@ -20,6 +20,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
   const [isNodeListVisible, setIsNodeListVisible] = useState(false); 
   const [nodeOptions, setNodeOptions] = useState<any[]>([]); 
   const [message, setMessage] = useState(""); 
+  const [isNodeSelected, setIsNodeSelected] = useState(false);
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const nodeListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -74,9 +75,12 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     const lastAtPosition = value.lastIndexOf("@", cursorPosition);
 
     if (lastAtPosition !== -1 && cursorPosition > lastAtPosition) {
+      if (isNodeSelected) {
+        setIsNodeSelected(false); 
+      }
       const query = value.substring(lastAtPosition + 1, cursorPosition);
       if (query.trim().length > 0) {
-        fetchNodes(query); 
+        fetchNodes(query);
       } else {
         setNodeOptions([]);
         setIsNodeListVisible(false);
@@ -88,16 +92,22 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
 
   const handleNodeSelect = (node: any) => {
     if (!selectedNodes.some((n) => n.node_id === node.node_id)) {
-      dispatch(setChat({selectedNodes: [...selectedNodes, node]}))
+      dispatch(setChat({ selectedNodes: [...selectedNodes, node] }));
     }
-
+  
     const cursorPosition = messageRef.current?.selectionStart || 0;
-    const textBeforeAt = message.slice(0, message.lastIndexOf("@", cursorPosition));
+    const atPosition = message.lastIndexOf("@", cursorPosition);
+    const textBeforeAt = message.slice(0, atPosition);
     const textAfterAt = message.slice(cursorPosition);
-
-    setMessage(`${textBeforeAt}${textAfterAt}`);
+  
+    const nodeText = `${node.name} `; 
+  
+    setMessage(`${textBeforeAt}@${nodeText} ${textAfterAt}`);
     setIsNodeListVisible(false);
+  
+    setIsNodeSelected(true);
   };
+  
 
   const handleNodeRemove = (node: any) => {
     dispatch(setChat({selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id)}))

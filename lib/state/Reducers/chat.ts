@@ -103,13 +103,14 @@ const chatSlice = createSlice({
       state.pendingMessage = null;
     },
     clearChat: (state) => {
-      const { projectId, branchName, repoName, selectedNodes } = state;  
+      const { projectId, branchName, repoName, selectedNodes, title } = state;  
       return {
         ...initialState,
         projectId, 
         branchName,
         repoName,
-        selectedNodes
+        selectedNodes,
+        title
       };
     },
     clearFullChat: (state) => {

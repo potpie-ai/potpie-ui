@@ -12,6 +12,8 @@ interface Message {
 interface Conversation {
   conversationId: string;
   messages: Message[];
+  totalMessages: number;
+  start?: number;
 }
 
 interface chatState {
@@ -25,7 +27,7 @@ interface chatState {
   title: string;
   status: string;
   currentConversationId: string;
-  pendingMessage: string | null ;
+  pendingMessage: string | null;
 }
 
 const initialState: chatState = {
@@ -56,6 +58,7 @@ const chatSlice = createSlice({
       state.conversations.push({
         conversationId: action.payload.id,
         messages: action.payload.messages,
+        totalMessages: 1,
       });
     },
 
@@ -63,16 +66,22 @@ const chatSlice = createSlice({
       state,
       action: PayloadAction<{
         chatId: string;
-        message: { sender: "user" | "agent"; text: string, citations?: string[]};
+        message: {
+          sender: "user" | "agent";
+          text: string;
+          citations?: string[];
+        };
       }>
     ) => {
       const { chatId, message } = action.payload;
       const conversation = state.conversations.find(
         (c) => c.conversationId === chatId
       );
+
       if (conversation) {
         const lastMessage =
           conversation.messages[conversation.messages.length - 1];
+
         if (
           message.sender === "agent" &&
           lastMessage &&
@@ -81,37 +90,103 @@ const chatSlice = createSlice({
           lastMessage.text = message.text;
         } else {
           conversation.messages.push(message);
+          // conversation.totalMessages += 1;
         }
       } else {
         state.conversations.push({
           conversationId: chatId,
-          messages: [message]
+          messages: [message],
+          totalMessages: 1,
         });
       }
     },
+
     removeLastMessage: (state, action: PayloadAction<{ chatId: string }>) => {
       const { chatId } = action.payload;
-      const conversation = state.conversations.find(c => c.conversationId === chatId);
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
       if (conversation && conversation.messages.length > 0) {
         conversation.messages.pop();
+        conversation.totalMessages = Math.max(
+          0,
+          conversation.totalMessages - 1
+        );
       }
     },
+
     setPendingMessage: (state, action: PayloadAction<string>) => {
       state.pendingMessage = action.payload;
     },
+
     clearPendingMessage: (state) => {
       state.pendingMessage = null;
     },
+
     clearChat: (state) => {
       const { projectId, branchName, repoName, selectedNodes, title } = state;  
       return {
         ...initialState,
-        projectId, 
+        projectId,
         branchName,
         repoName,
-        selectedNodes,
-        title
       };
+    },
+
+    setStart: (
+      state,
+      action: PayloadAction<{ chatId: string; start: number }>
+    ) => {
+      const { chatId, start } = action.payload;
+      const validStart = start >= 0 ? start : 0;
+      let conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
+
+      if (conversation) {
+        conversation.start = validStart;
+      } else {
+        conversation = {
+          conversationId: chatId,
+          messages: [],
+          totalMessages: 0,
+          start: validStart,
+        };
+        state.conversations.push(conversation);
+      }
+    },
+    addOlderMessages: (
+      state,
+      action: PayloadAction<{ chatId: string; messages: any[] }>
+    ) => {
+      const { chatId, messages } = action.payload;
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
+
+      if (conversation) {
+        const formattedMessages = messages.map((message) => ({
+          text: message.content,
+          sender:
+            message.type === "HUMAN" ? "user" : ("agent" as "user" | "agent"),
+          citations: message.citations || [],
+        }));
+
+        conversation.messages.unshift(...formattedMessages);
+        conversation.totalMessages += formattedMessages.length;
+      }
+    },
+    setTotalMessages: (
+      state,
+      action: PayloadAction<{ chatId: string; totalMessages: number }>
+    ) => {
+      const { chatId, totalMessages } = action.payload;
+      const conversation = state.conversations.find(
+        (c) => c.conversationId === chatId
+      );
+      if (conversation) {
+        conversation.totalMessages = totalMessages;
+      }
     },
     clearFullChat: (state) => {
       return initialState
@@ -127,6 +202,10 @@ export const {
   addMessageToConversation,
   clearChat,
   removeLastMessage,
-  setPendingMessage, clearPendingMessage,
+  setPendingMessage,
+  clearPendingMessage,
+  setStart,
+  addOlderMessages,
+  setTotalMessages,
   clearFullChat
 } = chatSlice.actions;

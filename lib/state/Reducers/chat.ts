@@ -206,8 +206,6 @@ export const {
   clearPendingMessage,
   setStart,
   addOlderMessages,
-  setTotalMessages
-  setPendingMessage, 
-  clearPendingMessage,
+  setTotalMessages,
   clearFullChat
 } = chatSlice.actions;

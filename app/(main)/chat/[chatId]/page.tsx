@@ -1,9 +1,8 @@
 "use client";
 import React, { useEffect, useRef } from "react";
 import ChatInterface from "../components/ChatInterface";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
-import { useSelector } from "react-redux";
 import {
   clearChat,
   clearPendingMessage,
@@ -24,7 +23,7 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { pendingMessage, projectId, selectedNodes, conversations } = useSelector(
+  const { pendingMessage, projectId, selectedNodes, conversations, chatFlow } = useSelector(
     (state: RootState) => state.chat
   );
 
@@ -72,7 +71,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
         for (const parsedChunk of parsedChunks) {
           accumulatedMessage += parsedChunk.message;
-          accumulatedCitation = parsedChunk.citations
+          accumulatedCitation = parsedChunk.citations;
         }
       } catch (error) {
         // TODO: Implement this later
@@ -119,38 +118,34 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   /*
   Query to fetch total messages for the conversation.
   */
-  const { isLoading: isLoadingTotalMessages } = useQuery({
+  const { isLoading: isLoadingTotalMessages, data: totalMessagesData } = useQuery({
     queryKey: ["total-messages", params.chatId],
     queryFn: async () => {
+      if (chatFlow !== "EXISTING_CHAT") return; // Skip fetching if it's a new chat
+
       const headers = await getHeaders();
-      const response = await axios
-        .get(
-          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
-          {
-            headers: headers,
-          }
-        )
-        .then((res) => {
-          const totalMessages = res.data.total_messages;
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
+        {
+          headers: headers,
+        }
+      );
 
-          if (totalMessages > 0) {
-            dispatch(
-              setStart({
-                chatId: params.chatId,
-                start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
-              })
-            );
-            dispatch(setTotalMessages({ chatId: params.chatId, totalMessages })); 
-          }
-          return totalMessages;
-        })
-        .catch((error) => {
-          console.log(error);
-          dispatch(setChat({ status: "error" }));
-        });
+      const totalMessages = response.data.total_messages;
 
-      return response.data.total_messages;
+      if (totalMessages > 0) {
+        dispatch(
+          setStart({
+            chatId: params.chatId,
+            start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
+          })
+        );
+        dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
+      }
+
+      return totalMessages;
     },
+    enabled: chatFlow === "EXISTING_CHAT", 
   });
 
   /*
@@ -175,12 +170,14 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           },
         }
       );
-      // dispatch(clearChat());
+
+      dispatch(clearChat());
       response.data.forEach((message: any) => {
         dispatch(
           addMessageToConversation({
             chatId: params.chatId,
             message: {
+              id: message.id,
               sender: message.type !== "HUMAN" ? "agent" : "user",
               text: message.content,
             },
@@ -206,7 +203,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       return response.data;
     },
     refetchOnWindowFocus: false,
-    enabled: !isLoadingTotalMessages,
+    enabled: chatFlow === "EXISTING_CHAT" || !!pendingMessage, // Allow refetch only if flow or pending message exists
   });
 
   /*

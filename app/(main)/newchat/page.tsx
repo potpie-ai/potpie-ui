@@ -21,6 +21,7 @@ const NewChat = () => {
   */
   const handleFormSubmit = (message: string) => {
     dispatch(setPendingMessage(message));
+    dispatch(setChat({chatFlow: "NEW_CHAT"}))
     router.push(`/chat/${currentConversationId}`);
   };
 

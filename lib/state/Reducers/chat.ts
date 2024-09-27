@@ -4,6 +4,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 
 interface Message {
+  id?: string
   text: string | any;
   sender: "user" | "agent";
   citations?: string[];
@@ -28,6 +29,7 @@ interface chatState {
   status: string;
   currentConversationId: string;
   pendingMessage: string | null;
+  chatFlow: string;
 }
 
 const initialState: chatState = {
@@ -41,7 +43,8 @@ const initialState: chatState = {
   status: "loading",
   currentConversationId: "",
   pendingMessage: "",
-  selectedNodes: []
+  selectedNodes: [],
+  chatFlow: "NEW_CHAT"
 };
 
 const chatSlice = createSlice({
@@ -67,6 +70,7 @@ const chatSlice = createSlice({
       action: PayloadAction<{
         chatId: string;
         message: {
+          id?: string; // Unique identifier for each message
           sender: "user" | "agent";
           text: string;
           citations?: string[];
@@ -74,32 +78,40 @@ const chatSlice = createSlice({
       }>
     ) => {
       const { chatId, message } = action.payload;
+    
       const conversation = state.conversations.find(
         (c) => c.conversationId === chatId
       );
-
+    
       if (conversation) {
-        const lastMessage =
-          conversation.messages[conversation.messages.length - 1];
-
-        if (
-          message.sender === "agent" &&
-          lastMessage &&
-          lastMessage.sender === "agent"
-        ) {
-          lastMessage.text = message.text;
-        } else {
-          conversation.messages.push(message);
-          // conversation.totalMessages += 1;
+        console.log(conversation.messages)
+        const existingMessage = conversation.messages.find(
+          (msg) => msg.id === message.id
+        );
+    
+        if (!existingMessage) {
+          const lastMessage =
+            conversation.messages[conversation.messages.length - 1];
+    
+          if (
+            message.sender === "agent" &&
+            lastMessage &&
+            lastMessage.sender === "agent"
+          ) {
+            lastMessage.text = message.text;
+          } else {
+            conversation.messages.push(message);
+          }
         }
       } else {
         state.conversations.push({
           conversationId: chatId,
           messages: [message],
-          totalMessages: 1,
+          totalMessages: 1, 
         });
       }
     },
+    
 
     removeLastMessage: (state, action: PayloadAction<{ chatId: string }>) => {
       const { chatId } = action.payload;
@@ -163,19 +175,24 @@ const chatSlice = createSlice({
       const conversation = state.conversations.find(
         (c) => c.conversationId === chatId
       );
-
+    
       if (conversation) {
-        const formattedMessages = messages.map((message) => ({
-          text: message.content,
-          sender:
-            message.type === "HUMAN" ? "user" : ("agent" as "user" | "agent"),
-          citations: message.citations || [],
-        }));
-
-        conversation.messages.unshift(...formattedMessages);
-        conversation.totalMessages += formattedMessages.length;
+        const existingMessageIds = new Set(conversation.messages.map((msg) => msg.id));
+        const formattedMessages = messages
+          .filter((message) => !existingMessageIds.has(message.id)) // Filter out duplicates by ID
+          .map((message) => ({
+            id: message.id, 
+            text: message.content,
+            sender: message.type === "HUMAN" ? "user" : ("agent" as "user" | "agent"),
+            citations: message.citations || [],
+          }));
+    
+        if (formattedMessages.length > 0) {
+          conversation.messages.unshift(...formattedMessages);
+          conversation.totalMessages += formattedMessages.length;
+        }
       }
-    },
+    },    
     setTotalMessages: (
       state,
       action: PayloadAction<{ chatId: string; totalMessages: number }>

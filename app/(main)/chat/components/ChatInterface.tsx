@@ -13,7 +13,7 @@ const ChatInterface = ({
 }: {
   currentConversationId: string;
 }) => {
-  const { conversations, status } = useSelector(
+  const { conversations, status, chatFlow } = useSelector(
     (state: RootState) => state.chat
   );
   const dispatch = useDispatch();
@@ -48,7 +48,7 @@ const ChatInterface = ({
       dispatch(
         addOlderMessages({
           chatId: currentConversationId,
-          messages: response.data
+          messages: response.data,
         })
       );
       return response.data;
@@ -64,38 +64,39 @@ const ChatInterface = ({
   }, []);
 
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting && !isFirstRender) {
-          const conversation = conversations.find(
-            (c) => c.conversationId === currentConversationId
-          );
-          const start = conversation?.start || 0;
-          dispatch(
-            setStart({ chatId: currentConversationId, start: start - 10 })
-          );
-          refetchMessages();
-        }
+    if (chatFlow === "EXISTING_CHAT") {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !isFirstRender) {
+            const conversation = conversations.find(
+              (c) => c.conversationId === currentConversationId
+            );
+            const start = conversation?.start || 0;
+            dispatch(
+              setStart({ chatId: currentConversationId, start: start - 10 })
+            );
+            refetchMessages();
+          }
+        });
       });
-    });
 
-    if (upPanelRef.current) {
-      observer.observe(upPanelRef.current);
-    }
-
-    return () => {
       if (upPanelRef.current) {
-        observer.unobserve(upPanelRef.current);
+        observer.observe(upPanelRef.current);
       }
-    };
-  }, [isFirstRender]);
+
+      return () => {
+        if (upPanelRef.current) {
+          observer.unobserve(upPanelRef.current);
+        }
+      };
+    }
+  }, [isFirstRender, chatFlow, currentConversationId, conversations, dispatch, refetchMessages]);
 
   return (
     <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
-      
-        <div ref={upPanelRef} className="w-full">
-          {/* <Skeleton className="w-full h-10" /> */}
-        </div>
+      <div ref={upPanelRef} className="w-full">
+        {/* <Skeleton className="w-full h-10" /> */}
+      </div>
 
       {currentConversation &&
         currentConversation.messages.map((message, i) => (

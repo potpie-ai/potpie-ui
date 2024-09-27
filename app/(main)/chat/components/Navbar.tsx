@@ -22,9 +22,10 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
+import { usePathname } from "next/navigation";
 
 const Navbar = () => {
-  const { title, currentConversationId } = useSelector(
+  const { title } = useSelector(
     (state: RootState) => state.chat
   );
   const dispatch = useDispatch();
@@ -32,7 +33,7 @@ const Navbar = () => {
   const handleInputChange = (event: any) => {
     setInputValue(event.target.value);
   };
-
+const currentConversationId = usePathname()?.split("/").pop();
   const {
     refetch: refetchChatTitle,
   } = useQuery({

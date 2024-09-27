@@ -6,7 +6,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle, GitBranch, Github, Loader, XCircle } from "lucide-react";
+import { CheckCircle, GitBranch, Github, Loader, Plus, XCircle, Info } from "lucide-react";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -16,6 +16,14 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+
 
 const Step1 = () => {
   const dispatch = useDispatch();
@@ -132,13 +140,29 @@ const Step1 = () => {
     enabled: !!repoName && repoName !== "",
   });
 
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  const handleParse = () => {
+    if (repoName && branchName) {
+      parseRepo(repoName, branchName);
+    }
+  };
+
+  const handleInfoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowTooltip(!showTooltip);
+  };
+
+  const isParseDisabled = !repoName || !branchName;
+
   return (
     <div className="text-muted">
       <h1 className="text-lg">Select a repository and branch</h1>
       <Link href={"#"} className="text-accent underline">
         need help?
       </Link>
-      <div className=" flex gap-10 mt-4 ml-5">
+      <div className="flex items-center gap-4 mt-4 ml-5">
         {UserRepositorysLoading ? (
           <Skeleton className="w-[220px] h-10" />
         ) : (
@@ -193,7 +217,6 @@ const Step1 = () => {
             defaultValue={branchName}
             onValueChange={(value) => {
               dispatch(setChat({ branchName: value }));
-              parseRepo(repoName, value);
             }}
           >
             <SelectTrigger className="w-[220px] py-2  border-border">
@@ -210,6 +233,7 @@ const Step1 = () => {
                 }
               />
             </SelectTrigger>
+
             <SelectContent>
               {!UserBranchLoading ? (
                 UserBranch?.map((value: any) => (
@@ -229,24 +253,56 @@ const Step1 = () => {
             </SelectContent>
           </Select>
         )}
+        <div className="flex items-center">
+          {parsingStatus !== "Ready" && (
+            <>
+              <Button 
+                className="w-24 flex items-center justify-center mr-2" 
+                onClick={handleParse}
+                disabled={isParseDisabled}
+              >
+                <span>Parse</span>
+              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div 
+                      className="cursor-pointer p-2 hover:bg-gray-100 rounded-full"
+                      onClick={handleInfoClick}
+                    >
+                      <Info className="h-4 w-4" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs p-4">
+                    <p className="text-sm font-semibold mb-2">Unlock the Power of Your Code</p>
+                    <p className="text-xs">
+                      Parse transforms your codebase into a comprehensive knowledge graph. 
+                      Our cutting-edge agents analyze and understand your code, 
+                      enabling seamless, context-aware conversations that bring 
+                      your development process to the next level.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </>
+          )}
+        </div>
       </div>
       {parsingStatus !== "error" && parsingStatus === "Ready" ? (
         <div className="flex justify-start items-center gap-3 mt-5 ml-5">
           <CheckCircle className="text-[#00C313] h-4 w-4" />{" "}
           <span className="text-[#00C313]">{parsingStatus}</span>
         </div>
-      ) : (
-        parsingStatus !== "error" && (
-          <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
-            <Loader
-              className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
-            />{" "}
-            <span>{parsingStatus}</span>
-          </div>
-        )
-      )}
+      ) : parsingStatus !== "error" && parsingStatus !== "" ? (
+        <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
+          <Loader
+            className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
+          />{" "}
+          <span>{parsingStatus}</span>
+        </div>
+      ) : null}
       {parsingStatus === "error" && (
-        <div className="flex gap-10 items-center my-3">
+        <div className="flex gap-4 items-center my-3">
           <div className="flex justify-start items-center gap-3 ">
             <XCircle className="text-[#E53E3E] h-4 w-4" />{" "}
             <span>{parsingStatus}</span>

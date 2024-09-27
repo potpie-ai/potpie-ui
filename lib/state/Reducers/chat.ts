@@ -44,7 +44,7 @@ const initialState: chatState = {
   currentConversationId: "",
   pendingMessage: "",
   selectedNodes: [],
-  chatFlow: "NEW_CHAT"
+  chatFlow: "EXISTING_CHAT"
 };
 
 const chatSlice = createSlice({
@@ -84,12 +84,6 @@ const chatSlice = createSlice({
       );
     
       if (conversation) {
-        console.log(conversation.messages)
-        const existingMessage = conversation.messages.find(
-          (msg) => msg.id === message.id
-        );
-    
-        if (!existingMessage) {
           const lastMessage =
             conversation.messages[conversation.messages.length - 1];
     
@@ -102,7 +96,7 @@ const chatSlice = createSlice({
           } else {
             conversation.messages.push(message);
           }
-        }
+        
       } else {
         state.conversations.push({
           conversationId: chatId,
@@ -136,12 +130,15 @@ const chatSlice = createSlice({
     },
 
     clearChat: (state) => {
-      const { projectId, branchName, repoName, selectedNodes, title } = state;  
+      const { projectId, branchName, repoName, selectedNodes, title, chatFlow } = state;  
       return {
         ...initialState,
         projectId,
         branchName,
         repoName,
+        selectedNodes,
+        title,
+        chatFlow
       };
     },
 

@@ -197,6 +197,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         );
         dispatch(setChat({ status: "loading" }));
         dispatch(clearPendingMessage());
+        return response.data
       }
 
       dispatch(setChat({ status: "active" }));

@@ -13,7 +13,7 @@ import getHeaders from "@/app/utils/headers.util";
 const Step2 = () => {
   const dispatch = useDispatch();
   const userId = auth.currentUser?.uid || "";
-  const { projectId, title } = useSelector((state: RootState) => state.chat);
+  const { projectId, title, selectedNodes } = useSelector((state: RootState) => state.chat);
   const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
     AgentType[]
   >({
@@ -45,6 +45,7 @@ const Step2 = () => {
           status: "active",
           project_ids: [projectId],
           agent_ids: [event],
+          node_ids: selectedNodes,
         },
         { headers: headers }
       )

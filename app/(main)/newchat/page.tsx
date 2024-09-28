@@ -10,7 +10,7 @@ import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
 const NewChat = () => {
   const router = useRouter();
   const dispatch: AppDispatch = useDispatch();
-  const { chatStep, currentConversationId, projectId } = useSelector(
+  const { chatStep, currentConversationId, projectId, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
 
@@ -21,7 +21,7 @@ const NewChat = () => {
   */
   const handleFormSubmit = (message: string) => {
     dispatch(setPendingMessage(message));
-    dispatch(setChat({chatFlow: "NEW_CHAT"}))
+    dispatch(setChat({ chatFlow: "NEW_CHAT" }));
     router.push(`/chat/${currentConversationId}`);
   };
 

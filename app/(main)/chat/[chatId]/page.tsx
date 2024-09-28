@@ -32,6 +32,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   /*
   This function is to send a message.
   */
+
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     const headers = await getHeaders();
     const response = await fetch(
@@ -91,7 +92,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     dispatch(setChat({ status: "active" }));
     return accumulatedMessage;
   };
-
   /*
   This mutation hook handles the process of sending messages.
   */
@@ -114,14 +114,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       dispatch(setChat({ status: "error" }));
     },
   });
-
   /*
   Query to fetch total messages for the conversation.
   */
   const { isLoading: isLoadingTotalMessages, data: totalMessagesData } = useQuery({
     queryKey: ["total-messages", params.chatId],
     queryFn: async () => {
-      if (chatFlow !== "EXISTING_CHAT") return; // Skip fetching if it's a new chat
+      if (chatFlow !== "EXISTING_CHAT") return;
 
       const headers = await getHeaders();
       const response = await axios.get(
@@ -147,7 +146,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     },
     enabled: chatFlow === "EXISTING_CHAT", 
   });
-
   /*
   Query to fetch paginated messages from the conversation.
   */
@@ -204,16 +202,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       return response.data;
     },
     refetchOnWindowFocus: false,
-    enabled: chatFlow === "EXISTING_CHAT" || !!pendingMessage, // Allow refetch only if flow or pending message exists
+    enabled: chatFlow === "EXISTING_CHAT" || !!pendingMessage,
   });
 
-  /*
-  Send pending message if present.
-  */
   useEffect(() => {
     if (pendingMessage && !pendingMessageSent.current) {
       try {
-        messageMutation.mutate({ message: pendingMessage, selectedNodes: [] });
+        messageMutation.mutate({ message: pendingMessage, selectedNodes: selectedNodes });
         pendingMessageSent.current = true;
       } catch (error) {
         console.error("Error sending pending message:", error);
@@ -221,11 +216,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   }, [params.chatId, pendingMessage]);
 
-  /*
-  Handles form submission from the chat interface.
-  */
   const handleFormSubmit = (message: string) => {
-    messageMutation.mutate({ message, selectedNodes: selectedNodes });
+    messageMutation.mutate({ 
+      message, 
+      selectedNodes: selectedNodes 
+    });
   };
 
   return (

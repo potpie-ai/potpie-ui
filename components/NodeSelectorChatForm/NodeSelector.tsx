@@ -12,7 +12,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 interface NodeSelectorFormProps {
   projectId: string;
-  disabled: boolean; // Disable prop
+  disabled: boolean;
   onSubmit: (message: string) => void;
 }
 

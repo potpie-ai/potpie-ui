@@ -64,8 +64,6 @@ const Step1 = () => {
 
       const projectId = parseResponse.data.project_id;
 
-      await new Promise((resolve) => setTimeout(resolve, 15000));
-
       let parsingStatus = "";
 
       while (true) {

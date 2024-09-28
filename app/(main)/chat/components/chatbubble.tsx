@@ -37,7 +37,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const dispatch = useDispatch();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEmptyResponse, setIsEmptyResponse] = useState(false);
-  const { branchName, repoName } = useSelector(
+  const { branchName, repoName, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
 
@@ -80,6 +80,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             ...headers,
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({ node_ids: selectedNodes }), // Only send node_ids
         }
       );
 

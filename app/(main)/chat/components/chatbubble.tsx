@@ -209,7 +209,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </div>
         )}
 
-        {sender === "agent" && isLast && !isStreaming && !isRegenerating && (
+        {sender === "agent" && isLast && !isStreaming && (
           <div className="flex justify-end items-center mt-2">
             <Button
               className="gap-2"
@@ -219,9 +219,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
               disabled={isRegenerating}
             >
               {isRegenerating ? (
-                <RotateCw className="animate-spin size-4 " />
+                <>
+                  <RotateCw className="animate-spin size-4" />
+                  Regenerating...
+                </>
               ) : (
-                <LucideRepeat2 className="size-4" />
+                <>
+                  <LucideRepeat2 className="size-4" />
+                  Regenerate
+                </>
               )}
             </Button>
           </div>

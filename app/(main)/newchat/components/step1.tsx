@@ -63,9 +63,11 @@ const Step1 = () => {
       }
 
       const projectId = parseResponse.data.project_id;
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+
+      await new Promise((resolve) => setTimeout(resolve, 15000));
 
       let parsingStatus = "";
+
       while (true) {
         const statusResponse = await axios.get(
           `${baseUrl}/api/v1/parsing-status/${projectId}`,
@@ -98,9 +100,6 @@ const Step1 = () => {
     }
   };
 
-  useEffect(() => {
-    if (branchName && repoName) parseRepo(repoName, branchName);
-  }, []);
 
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
     UserRepo[]

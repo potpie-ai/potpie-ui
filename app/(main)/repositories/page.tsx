@@ -71,7 +71,7 @@ const AllRepos = () => {
             <TableRow className="border-b-8 border-border">
               <TableHead className="w-[200px] text-primary">Name</TableHead>
               <TableHead className="w-[200px] text-primary">Owner</TableHead>
-              <TableHead className="w-[200px] text-primary">Private</TableHead>
+              <TableHead className="w-[200px] text-primary">Visibility</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -12,7 +12,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 interface NodeSelectorFormProps {
   projectId: string;
-  disabled: boolean;
+  disabled: boolean; // Disable prop
   onSubmit: (message: string) => void;
 }
 
@@ -56,7 +56,10 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     e.preventDefault();
     if (!message.trim()) return;
 
-    onSubmit(message);
+    // Remove @ symbols only before node names, ensuring a space before @
+    const processedMessage = message.replace(/(\s)@([^\s]+)(?=\s)/g, '$1$2');
+
+    onSubmit(processedMessage);
     setMessage("");
   };
 
@@ -94,17 +97,17 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     if (!selectedNodes.some((n) => n.node_id === node.node_id)) {
       dispatch(setChat({ selectedNodes: [...selectedNodes, node] }));
     }
-  
+
     const cursorPosition = messageRef.current?.selectionStart || 0;
     const atPosition = message.lastIndexOf("@", cursorPosition);
     const textBeforeAt = message.slice(0, atPosition);
     const textAfterAt = message.slice(cursorPosition);
-  
-    const nodeText = `${node.name} `; 
-  
-    setMessage(`${textBeforeAt}@${nodeText} ${textAfterAt}`);
+
+    const nodeText = `@${node.name} `; 
+
+    setMessage(`${textBeforeAt}${nodeText}${textAfterAt}`);
     setIsNodeListVisible(false);
-  
+
     setIsNodeSelected(true);
   };
   

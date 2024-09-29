@@ -23,8 +23,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-
-
 const Step1 = () => {
   const dispatch = useDispatch();
   const { repoName, branchName } = useSelector(
@@ -46,6 +44,7 @@ const Step1 = () => {
       "width=1000,height=700"
     );
   };
+
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
     const headers = await getHeaders();
@@ -63,9 +62,9 @@ const Step1 = () => {
       }
 
       const projectId = parseResponse.data.project_id;
-      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       let parsingStatus = "";
+
       while (true) {
         const statusResponse = await axios.get(
           `${baseUrl}/api/v1/parsing-status/${projectId}`,
@@ -97,10 +96,6 @@ const Step1 = () => {
       return err;
     }
   };
-
-  useEffect(() => {
-    if (branchName && repoName) parseRepo(repoName, branchName);
-  }, []);
 
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
     UserRepo[]
@@ -155,6 +150,11 @@ const Step1 = () => {
   };
 
   const isParseDisabled = !repoName || !branchName;
+
+  // Reset repoName, branchName, and chatStep when the component mounts
+  useEffect(() => {
+    dispatch(setChat({ repoName: "", branchName: "", chatStep: 1 }));
+  }, [dispatch]);
 
   return (
     <div className="text-muted">

@@ -37,7 +37,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const dispatch = useDispatch();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEmptyResponse, setIsEmptyResponse] = useState(false);
-  const { branchName, repoName } = useSelector(
+  const { branchName, repoName, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
 
@@ -80,6 +80,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             ...headers,
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({ node_ids: selectedNodes }), // Only send node_ids
         }
       );
 
@@ -208,7 +209,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </div>
         )}
 
-        {sender === "agent" && isLast && !isStreaming && !isRegenerating && (
+        {sender === "agent" && isLast && !isStreaming && (
           <div className="flex justify-end items-center mt-2">
             <Button
               className="gap-2"
@@ -218,9 +219,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
               disabled={isRegenerating}
             >
               {isRegenerating ? (
-                <RotateCw className="animate-spin size-4 " />
+                <>
+                  <RotateCw className="animate-spin size-4" />
+                  Regenerating...
+                </>
               ) : (
-                <LucideRepeat2 className="size-4" />
+                <>
+                  <LucideRepeat2 className="size-4" />
+                  Regenerate
+                </>
               )}
             </Button>
           </div>

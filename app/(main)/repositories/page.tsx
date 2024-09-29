@@ -70,7 +70,8 @@ const AllRepos = () => {
           <TableHeader>
             <TableRow className="border-b-8 border-border">
               <TableHead className="w-[200px] text-primary">Name</TableHead>
-              <TableHead className="w-[200px] text-primary">Description</TableHead>
+              <TableHead className="w-[200px] text-primary">Owner</TableHead>
+              <TableHead className="w-[200px] text-primary">Private</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -80,8 +81,13 @@ const AllRepos = () => {
               )
               .map((repo: any) => (
                 <TableRow key={repo.id} className="hover:bg-gray-100">
-                  <TableCell>{repo.name}</TableCell>
-                  <TableCell>{repo.description || "No description available"}</TableCell>
+                  <TableCell>
+                    <a href={repo.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+                      {repo.name}
+                    </a>
+                  </TableCell>
+                  <TableCell>{repo.owner}</TableCell>
+                  <TableCell>{repo.private ? "Private" : "Public"}</TableCell>
                 </TableRow>
               ))}
           </TableBody>

@@ -149,7 +149,7 @@ const Step1 = () => {
     setShowTooltip(!showTooltip);
   };
 
-  const isParseDisabled = !repoName || !branchName;
+  const isParseDisabled = !repoName || !branchName || parsingStatus !== "";
 
   // Reset repoName, branchName, and chatStep when the component mounts
   useEffect(() => {
@@ -261,7 +261,7 @@ const Step1 = () => {
                 onClick={handleParse}
                 disabled={isParseDisabled}
               >
-                <span>Parse</span>
+                <span>Parse</span> 
               </Button>
               <TooltipProvider>
                 <Tooltip>

@@ -213,16 +213,19 @@ const SidebarItems = [
       {
         icons: "/images/document.svg",
         title: "Documentation",
+        soon: true,
         href:"#"
       },
       {
         icons: "/images/git.svg",
-        title: "Open source repo",
+        title: "Open source",
+        soon: true,
         href:"#"
       },
       {
         icons: "/images/discord.svg",
         title: "Discord",
+        soon: true,
         href:"#"
       },
     ],

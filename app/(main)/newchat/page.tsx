@@ -21,6 +21,7 @@ const NewChat = () => {
   - After setting the pending message, it navigates the user to the chat page based on the current conversation ID.
   */
   const handleFormSubmit = (message: string) => {
+    if(!projectId || !currentConversationId) return;
     dispatch(setPendingMessage(message));
     dispatch(setChat({ chatFlow: "NEW_CHAT" }));
     router.push(`/chat/${currentConversationId}`);

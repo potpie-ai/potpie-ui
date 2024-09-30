@@ -13,7 +13,9 @@ import getHeaders from "@/app/utils/headers.util";
 const Step2 = () => {
   const dispatch = useDispatch();
   const userId = auth.currentUser?.uid || "";
-  const { projectId, title, selectedNodes } = useSelector((state: RootState) => state.chat);
+  const { projectId, title, selectedNodes } = useSelector(
+    (state: RootState) => state.chat
+  );
   const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
     AgentType[]
   >({
@@ -33,7 +35,6 @@ const Step2 = () => {
   });
   const [selectedCard, setSelectedCard] = useState("999");
   const createConversation = async (event: any) => {
-    dispatch(setChat({ agentId: event, chatStep: 3 }));
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     const response = await axios
@@ -50,10 +51,18 @@ const Step2 = () => {
         { headers: headers }
       )
       .then((res) => {
-        dispatch(setChat({ currentConversationId: res.data.conversation_id, projectId: projectId, agentId: event }));
+        dispatch(setChat({ agentId: event, chatStep: 3 }));
+        dispatch(
+          setChat({
+            currentConversationId: res.data.conversation_id,
+            projectId: projectId,
+            agentId: event,
+          })
+        );
         return res.data;
       })
       .catch((err) => {
+        dispatch(setChat({ agentId: "", chatStep: 2 }));
         console.log(err);
         return { error: "Unable to create conversation: " + err.message };
       });

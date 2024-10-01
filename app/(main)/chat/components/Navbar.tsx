@@ -25,31 +25,35 @@ import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 
 const Navbar = () => {
-  const { title } = useSelector(
-    (state: RootState) => state.chat
-  );
+  const { title, agentId } = useSelector((state: RootState) => state.chat);
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = React.useState(title);
   const handleInputChange = (event: any) => {
     setInputValue(event.target.value);
   };
-const currentConversationId = usePathname()?.split("/").pop();
-  const {
-    refetch: refetchChatTitle,
-  } = useQuery({
+  const currentConversationId = usePathname()?.split("/").pop();
+  const { refetch: refetchChatTitle } = useQuery({
     queryKey: ["chat-title"],
     queryFn: async () => {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
-      axios.patch(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename/`, {
-        title: inputValue,
-      }, {headers:headers}).then((res) => {
-        if(res.data.status === "success") toast.success("Title updated successfully");
-        return res.data;
-      }).catch((err) => {
-        console.log(err);
-        return err.response.data;
-      });
+      axios
+        .patch(
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename/`,
+          {
+            title: inputValue,
+          },
+          { headers: headers }
+        )
+        .then((res) => {
+          if (res.data.status === "success")
+            toast.success("Title updated successfully");
+          return res.data;
+        })
+        .catch((err) => {
+          console.log(err);
+          return err.response.data;
+        });
     },
     enabled: false,
   });
@@ -67,45 +71,52 @@ const currentConversationId = usePathname()?.split("/").pop();
             Click here
           </Link>
         </div>
-        <div className="flex items-center w-full px-6 pb-2 gap-5 ">
-          <Image
-            src={"/images/msg-grey.svg"}
-            alt="logo"
-            width={20}
-            height={20}
-          />
-          <Dialog>
-            <DialogTrigger>
-              <span className="text-muted text-xl">{title}</span>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[487px]" showX={false}>
-              <DialogHeader>
-                <DialogTitle className="text-center">
-                  Edit chat name
-                </DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="  ">
-                  <Input
-                    id="name"
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    className="col-span-3"
-                  />
+        <div className="flex items-center justify-between w-full px-6 pb-2 gap-5 ">
+          <div className="gap-5 flex items-center justify-start">
+            <Image
+              src={"/images/msg-grey.svg"}
+              alt="logo"
+              width={20}
+              height={20}
+            />
+            <Dialog>
+              <DialogTrigger>
+                <span className="text-muted text-xl">{title}</span>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[487px]" showX={false}>
+                <DialogHeader>
+                  <DialogTitle className="text-center">
+                    Edit chat name
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="  ">
+                    <Input
+                      id="name"
+                      value={inputValue}
+                      onChange={handleInputChange}
+                      className="col-span-3"
+                    />
+                  </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button">Cancel</Button>
-                </DialogClose>
-                <DialogClose asChild>
-                  <Button type="button" onClick={handleSave}>
-                    Save
-                  </Button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button type="button">Cancel</Button>
+                  </DialogClose>
+                  <DialogClose asChild>
+                    <Button type="button" onClick={handleSave}>
+                      Save
+                    </Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <div className="gap-5 text-muted flex items-center justify-start">
+            {agentId && (
+              agentId.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2")
+            )}
+          </div>
         </div>
       </header>
     </>

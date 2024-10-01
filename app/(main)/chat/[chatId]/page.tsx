@@ -140,6 +140,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           })
         );
         dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
+        dispatch(setChat({
+          agentId: response.data.agent_ids[0],
+        }))
       }
 
       return totalMessages;

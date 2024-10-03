@@ -17,18 +17,17 @@ interface NodeSelectorFormProps {
 }
 
 const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled, onSubmit }) => {
-  const [isNodeListVisible, setIsNodeListVisible] = useState(false); 
-  const [nodeOptions, setNodeOptions] = useState<any[]>([]); 
-  const [message, setMessage] = useState(""); 
+  const [isNodeListVisible, setIsNodeListVisible] = useState(false);
+  const [nodeOptions, setNodeOptions] = useState<any[]>([]);
+  const [message, setMessage] = useState("");
   const [isNodeSelected, setIsNodeSelected] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null); // Timeout reference for debounce
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const nodeListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const dispatch: AppDispatch = useDispatch();
-  const { selectedNodes,status } = useSelector(
-    (state: RootState) => state.chat
-  );
-  
+  const { selectedNodes } = useSelector((state: RootState) => state.chat);
+
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -82,8 +81,17 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
         setIsNodeSelected(false); 
       }
       const query = value.substring(lastAtPosition + 1, cursorPosition);
+
       if (query.trim().length > 0) {
-        fetchNodes(query);
+        // Clear previous timeout if the user types again
+        if (searchTimeout) clearTimeout(searchTimeout);
+
+        // Set new timeout for debounce
+        const timeoutId = setTimeout(() => {
+          fetchNodes(query);
+        }, 2000); // 2-second debounce
+
+        setSearchTimeout(timeoutId); // Store the timeout ID
       } else {
         setNodeOptions([]);
         setIsNodeListVisible(false);
@@ -103,17 +111,16 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     const textBeforeAt = message.slice(0, atPosition);
     const textAfterAt = message.slice(cursorPosition);
 
-    const nodeText = `@${node.name} `; 
+    const nodeText = `@${node.name} `;
 
     setMessage(`${textBeforeAt}${nodeText}${textAfterAt}`);
     setIsNodeListVisible(false);
 
     setIsNodeSelected(true);
   };
-  
 
   const handleNodeRemove = (node: any) => {
-    dispatch(setChat({selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id)}))
+    dispatch(setChat({ selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id) }));
   };
 
   useEffect(() => {
@@ -145,7 +152,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
         className="fixed w-[50%] bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50"
         style={{
           left: formRect ? formRect.left : '0px',
-          bottom: formRect ? window.innerHeight - formRect.top + 10 : '0px', 
+          bottom: formRect ? window.innerHeight - formRect.top + 10 : '0px',
         }}
       >
         <ul>
@@ -174,7 +181,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
 
   return (
     <form
-      className={`sticky bottom-6 overflow-hidden rounded-lg bg-card border shadow-md flex flex-col ${disabled ? "opacity-70" : ""}`}
+      className="sticky bottom-6 overflow-hidden rounded-lg bg-card border shadow-md flex flex-col"
       onSubmit={handleSubmit}
       ref={formRef}
     >

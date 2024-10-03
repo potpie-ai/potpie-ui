@@ -193,25 +193,27 @@ const Step1 = () => {
             <PopoverTrigger asChild className="w-[220px]">
               {UserRepositorys?.length === 0 || !repoName ? (
                 <Button
-                  className="flex gap-3 items-center font-semibold "
+                  className="flex gap-3 items-center font-semibold"
                   variant="outline"
                 >
                   <Github
-                    className="h-4 w-4 text-[#7A7A7A] "
+                    className="h-4 w-4 text-[#7A7A7A]"
                     strokeWidth={1.5}
                   />
                   Select Repository
                 </Button>
               ) : (
                 <Button
-                  className="flex gap-3 items-center font-semibold "
+                  className="flex gap-3 items-center font-semibold"
                   variant="outline"
                 >
                   <Github
-                    className="h-4 w-4 text-[#7A7A7A] "
+                    className="h-4 w-4 text-[#7A7A7A]"
                     strokeWidth={1.5}
                   />
-                  {repoName}
+                  <span className="truncate text-ellipsis whitespace-nowrap">
+                    {repoName}
+                  </span>
                 </Button>
               )}
             </PopoverTrigger>
@@ -259,7 +261,7 @@ const Step1 = () => {
         ) : (
           <Popover open={branchOpen} onOpenChange={setbranchOpen}>
             <PopoverTrigger asChild className="w-[220px]">
-              {UserRepositorys?.length === 0 || !branchName? (
+              {UserRepositorys?.length === 0 || !branchName ? (
                 <Button
                   className="flex gap-3 items-center font-semibold "
                   variant="outline"
@@ -272,14 +274,16 @@ const Step1 = () => {
                 </Button>
               ) : (
                 <Button
-                  className="flex gap-3 items-center font-semibold "
+                  className="flex gap-3 items-center font-semibold w-[220px]"
                   variant="outline"
                 >
                   <GitBranch
                     className="h-4 w-4 text-[#7A7A7A] "
                     strokeWidth={1.5}
                   />
-                  {branchName}
+                  <span className="truncate text-ellipsis whitespace-nowrap">
+                    {branchName}
+                  </span>
                 </Button>
               )}
             </PopoverTrigger>

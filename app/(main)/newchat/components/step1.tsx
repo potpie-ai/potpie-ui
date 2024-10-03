@@ -215,7 +215,7 @@ const Step1 = () => {
                 </Button>
               )}
             </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0">
+            <PopoverContent className="w-auto min-w-[220px] max-w-[300px] p-0">
               <Command>
                 <CommandInput placeholder="Search repo..." />
                 <CommandList>

@@ -24,23 +24,23 @@ import { usePathname } from "next/navigation";
 import { Share2Icon } from "lucide-react";
 import { z } from "zod";
 
-const chatTitleSchema = z.string().min(1, { message: "Title cannot be empty" });
 const emailSchema = z.string().email({ message: "Invalid email address" });
 
 const Navbar = () => {
   const { title } = useSelector((state: RootState) => state.chat);
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = useState(title);
-  const [emailValue, setEmailValue] = useState(title);
-  const [inputError, setInputError] = useState<string | null>(null);
+  const [emailValue, setEmailValue] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleInputChange = (event: any) => {
     setInputValue(event.target.value);
   };
-  
+
   const handleEmailChange = (event: any) => {
     setEmailValue(event.target.value);
+    setEmailError(null);
   };
 
   const currentConversationId = usePathname()?.split("/").pop();
@@ -69,28 +69,22 @@ const Navbar = () => {
   });
 
   const handleSave = () => {
-    try {
-      chatTitleSchema.parse(inputValue); 
-      setInputError(null);
-      refetchChatTitle();
-      dispatch(setChat({ title: inputValue }));
-    } catch (e) {
-      if (e instanceof z.ZodError) {
-        setInputError(e.errors[0].message); 
-      }
-    }
+    refetchChatTitle();
+    dispatch(setChat({ title: inputValue }));
   };
 
   const handleEmailSave = () => {
     try {
-      emailSchema.parse(emailValue); 
-      setEmailError(null);
+      emailSchema.parse(emailValue);
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       toast.success("Link copied to clipboard");
-      navigator.clipboard.writeText(baseUrl + "/chat/share" + currentConversationId);
-    } catch (e) {
-      if (e instanceof z.ZodError) {
-        setEmailError(e.errors[0].message); 
+      navigator.clipboard.writeText(
+        baseUrl + "/chat/share/" + currentConversationId
+      );
+      setIsDialogOpen(false);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        setEmailError(error.errors[0].message);
       }
     }
   };
@@ -112,7 +106,7 @@ const Navbar = () => {
               width={20}
               height={20}
             />
-            <Dialog>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger>
                 <span className="text-muted text-xl">{title}</span>
               </DialogTrigger>
@@ -123,32 +117,27 @@ const Navbar = () => {
                   </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="  ">
+                  <div className="">
                     <Input
                       id="name"
                       value={inputValue}
                       onChange={handleInputChange}
                       className="col-span-3"
                     />
-                    {inputError && (
-                      <p className="text-red-500 text-sm">{inputError}</p>
-                    )}
                   </div>
                 </div>
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button type="button">Cancel</Button>
                   </DialogClose>
-                  <DialogClose asChild>
-                    <Button type="button" onClick={handleSave}>
-                      Save
-                    </Button>
-                  </DialogClose>
+                  <Button type="button" onClick={handleSave}>
+                    Save
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
-          <Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger>
               <Button size="sm" className="gap-2 my-1">
                 <Share2Icon className="size-5" /> Share
@@ -161,10 +150,11 @@ const Navbar = () => {
                 </DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="  ">
+                <div className="">
                   <Input
                     id="email"
                     placeholder="Email"
+                    value={emailValue}
                     onChange={handleEmailChange}
                     className="col-span-3"
                   />
@@ -177,15 +167,13 @@ const Navbar = () => {
                 <DialogClose asChild>
                   <Button type="button">Cancel</Button>
                 </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    type="button"
-                    onClick={handleEmailSave}
-                    disabled={emailValue === ""}
-                  >
-                    share
-                  </Button>
-                </DialogClose>
+                <Button
+                  type="button"
+                  onClick={handleEmailSave}
+                  disabled={emailValue === ""}
+                >
+                  Share
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

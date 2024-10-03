@@ -79,11 +79,13 @@ const Step1 = () => {
           setParsingStatus("Ready");
           break;
         } else if (parsingStatus === "submitted") {
-          setParsingStatus("Parsing");
+          setParsingStatus("Cloning your repository");
+        } else if (parsingStatus === "cloned") {
+          setParsingStatus("Parsing your code");
         } else if (parsingStatus === "parsed") {
-          setParsingStatus("Understanding your code");
+          setParsingStatus("Understanding your codebase");
         } else if (parsingStatus === "error") {
-          setParsingStatus("error");
+          setParsingStatus("Error");
           break;
         }
 

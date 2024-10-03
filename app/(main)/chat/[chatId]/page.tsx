@@ -23,7 +23,7 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { pendingMessage, projectId, selectedNodes, conversations, chatFlow } = useSelector(
+  const { pendingMessage, projectId, selectedNodes, conversations, chatFlow,status } = useSelector(
     (state: RootState) => state.chat
   );
 
@@ -35,6 +35,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     const headers = await getHeaders();
+    dispatch(setChat({ status: "loading" }));
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/message/`,
       {
@@ -229,7 +230,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       <NodeSelectorForm
         projectId={projectId}
         onSubmit={handleFormSubmit}
-        disabled={false}
+        disabled={status === "loading"}
       />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
     </div>

@@ -25,7 +25,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
   const nodeListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const dispatch: AppDispatch = useDispatch();
-  const { selectedNodes } = useSelector(
+  const { selectedNodes,status } = useSelector(
     (state: RootState) => state.chat
   );
   
@@ -174,7 +174,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
 
   return (
     <form
-      className="sticky bottom-6 overflow-hidden rounded-lg bg-card border shadow-md flex flex-col"
+      className={`sticky bottom-6 overflow-hidden rounded-lg bg-card border shadow-md flex flex-col ${disabled ? "opacity-70" : ""}`}
       onSubmit={handleSubmit}
       ref={formRef}
     >

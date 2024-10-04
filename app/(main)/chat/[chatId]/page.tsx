@@ -229,7 +229,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       if (pendingMessage) {
         const conversation = conversations.find(conv => conv.conversationId === params.chatId);
         const lastMessage = conversation?.messages?.[conversation.messages.length - 1]?.text;
-        console.log("HERE with pendingmessage ",conversations)
+        // Adding extra check if the message is already present, dont add it again
         if (lastMessage !== pendingMessage) {
           dispatch(
             addMessageToConversation({

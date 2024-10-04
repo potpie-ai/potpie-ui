@@ -7,7 +7,7 @@ export default function RootLayout({
 }>) {
   return (
     <>
-      <Navbar />
+      <Navbar showShare={false} />
       {children}
     </>
   );

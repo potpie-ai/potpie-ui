@@ -26,7 +26,7 @@ import { z } from "zod";
 
 const emailSchema = z.string().email({ message: "Invalid email address" });
 
-const Navbar = () => {
+const Navbar = ({ showShare }: { showShare?: boolean }) => {
   const { title } = useSelector((state: RootState) => state.chat);
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = useState(title);
@@ -72,15 +72,39 @@ const Navbar = () => {
     refetchChatTitle();
     dispatch(setChat({ title: inputValue }));
   };
-
+  const { refetch: refetchChatShare } = useQuery({
+    queryKey: ["chat-share"],
+    queryFn: async () => {
+      const headers = await getHeaders();
+      axios
+        .post(
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share/`,
+          {
+            conversation_id: currentConversationId,
+            recipientEmails: [emailValue],
+          },
+          { headers: headers }
+        )
+        .then((res) => {
+          navigator.clipboard.writeText(
+            process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL + "/chat/" + currentConversationId
+          );
+          toast.success("Link copied to clipboard");
+          return res.data;
+        })
+        .catch((err) => {
+          console.log(err);
+          toast.error("Unable to share");
+          return err.response.data;
+        });
+    },
+    enabled: false,
+  });
   const handleEmailSave = () => {
     try {
       emailSchema.parse(emailValue);
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      toast.success("Link copied to clipboard");
-      navigator.clipboard.writeText(
-        baseUrl + "/chat/share/" + currentConversationId
-      );
+      refetchChatShare();
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -138,8 +162,8 @@ const Navbar = () => {
             </Dialog>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger>
-              <Button size="sm" className="gap-2 my-1">
+            <DialogTrigger hidden={!showShare}>
+              <Button size="sm" className="gap-2 my-1 mx-2">
                 <Share2Icon className="size-5" /> Share
               </Button>
             </DialogTrigger>

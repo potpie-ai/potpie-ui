@@ -227,18 +227,23 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       });
 
       if (pendingMessage) {
-        dispatch(
-          addMessageToConversation({
-            chatId: params.chatId,
-            message: {
-              sender: "user",
-              text: pendingMessage,
-            },
-          })
-        );
-        dispatch(setChat({ status: "loading" }));
-        dispatch(clearPendingMessage());
-        return response.data;
+        const conversation = conversations.find(conv => conv.conversationId === params.chatId);
+        const lastMessage = conversation?.messages?.[conversation.messages.length - 1]?.text;
+        console.log("HERE with pendingmessage ",conversations)
+        if (lastMessage !== pendingMessage) {
+          dispatch(
+            addMessageToConversation({
+              chatId: params.chatId,
+              message: {
+                sender: "user",
+                text: pendingMessage,
+              },
+            })
+          );
+          dispatch(setChat({ status: "loading" }));
+          dispatch(clearPendingMessage());
+          return response.data;
+        }
       }
 
       dispatch(setChat({ status: "active" }));
@@ -267,7 +272,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   const parseRepo = async (repo_name: string, branch_name: string) => {
-    setParsingStatus("loading");
+    setParsingStatus("parsing");
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 

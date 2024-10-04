@@ -23,6 +23,7 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
+import { Download, Share2 } from "lucide-react";
 
 const Navbar = () => {
   const { title, agentId, allAgents } = useSelector((state: RootState) => state.chat);
@@ -112,11 +113,22 @@ const Navbar = () => {
               </DialogContent>
             </Dialog>
           </div>
-          <div className="gap-5 text-muted flex items-center justify-start">
-            {agentId && allAgents && (
-              allAgents.find(agent => agent.id === agentId)?.name ||
-              agentId.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2")
-            )}
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
+            </div>
+            <div>
+              <Download className="text-gray-500 hover:text-gray-700 w-5 h-5" />
+            </div>
+            <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+              <span className="text-gray-700">
+                {agentId && allAgents && (
+                  allAgents.find(agent => agent.id === agentId)?.name ||
+                  agentId.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2")
+                )}
+              </span>
+            </div>
           </div>
         </div>
       </header>

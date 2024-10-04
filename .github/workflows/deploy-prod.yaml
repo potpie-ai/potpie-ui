@@ -1,9 +1,7 @@
 name: Build and Deploy to Prod Artifact and Cloud Run
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 env:
   PROJECT_ID: ${{ secrets.PROD_GCLOUD_PROJECT_ID }}

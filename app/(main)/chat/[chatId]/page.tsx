@@ -40,16 +40,19 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     chatFlow,
     repoName,
     branchName,
+    status
   } = useSelector((state: RootState) => state.chat);
-
+  
   const pendingMessageSent = useRef(false);
   const [parsingStatus, setParsingStatus] = useState<string>("");
 
   /*
   This function is to send a message.
   */
+
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     const headers = await getHeaders();
+    dispatch(setChat({ status: "loading" }));
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/message/`,
       {
@@ -107,7 +110,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     dispatch(setChat({ status: "active" }));
     return accumulatedMessage;
   };
-
   /*
   This mutation hook handles the process of sending messages.
   */
@@ -130,15 +132,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       dispatch(setChat({ status: "error" }));
     },
   });
-
   /*
   Query to fetch total messages for the conversation.
   */
-  const { isLoading: isLoadingTotalMessages, data: totalMessagesData } =
-    useQuery({
-      queryKey: ["total-messages", params.chatId],
-      queryFn: async () => {
-        if (chatFlow !== "EXISTING_CHAT") return; // Skip fetching if it's a new chat
+  const { isLoading: isLoadingTotalMessages, data: totalMessagesData } = useQuery({
+    queryKey: ["total-messages", params.chatId],
+    queryFn: async () => {
+      if (chatFlow !== "EXISTING_CHAT") return;
 
         const headers = await getHeaders();
         const response = await axios.get(
@@ -147,8 +147,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             headers: headers,
           }
         );
-        dispatch(setChat({ projectId: response.data.project_ids[0] }));
         const totalMessages = response.data.total_messages;
+        dispatch(setChat({ projectId: response.data.project_ids[0], agentId: response.data.agent_ids[0] }));
+        dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
 
         if (totalMessages > 0) {
           dispatch(
@@ -188,7 +189,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     },
     enabled: !isLoadingTotalMessages && !!projectId,
   });
-
   /*
   Query to fetch paginated messages from the conversation.
   */
@@ -245,16 +245,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       return response.data;
     },
     refetchOnWindowFocus: false,
-    enabled: chatFlow === "EXISTING_CHAT" || !!pendingMessage, // Allow refetch only if flow or pending message exists
+    enabled: chatFlow === "EXISTING_CHAT" || !!pendingMessage,
   });
 
-  /*
-  Send pending message if present.
-  */
   useEffect(() => {
     if (pendingMessage && !pendingMessageSent.current) {
       try {
-        messageMutation.mutate({ message: pendingMessage, selectedNodes: [] });
+        messageMutation.mutate({ message: pendingMessage, selectedNodes: selectedNodes });
         pendingMessageSent.current = true;
       } catch (error) {
         console.error("Error sending pending message:", error);
@@ -262,11 +259,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   }, [params.chatId, pendingMessage]);
 
-  /*
-  Handles form submission from the chat interface.
-  */
   const handleFormSubmit = (message: string) => {
-    messageMutation.mutate({ message, selectedNodes: selectedNodes });
+    messageMutation.mutate({ 
+      message, 
+      selectedNodes: selectedNodes 
+    });
   };
 
   const parseRepo = async (repo_name: string, branch_name: string) => {
@@ -327,7 +324,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       <NodeSelectorForm
         projectId={projectId}
         onSubmit={handleFormSubmit}
-        disabled={false}
+        disabled={status === "loading"}
       />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
       <Dialog open={!!IsLatest}>

@@ -130,7 +130,7 @@ const chatSlice = createSlice({
     },
 
     clearChat: (state) => {
-      const { projectId, branchName, repoName, selectedNodes, title, chatFlow } = state;  
+      const { projectId, branchName, repoName, selectedNodes, title, chatFlow,agentId } = state;  
       return {
         ...initialState,
         projectId,
@@ -138,7 +138,8 @@ const chatSlice = createSlice({
         repoName,
         selectedNodes,
         title,
-        chatFlow
+        chatFlow,
+        agentId
       };
     },
 

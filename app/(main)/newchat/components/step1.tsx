@@ -6,7 +6,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle, GitBranch, Github, Loader, Plus, XCircle, Info } from "lucide-react";
+import {
+  CheckCircle,
+  GitBranch,
+  Github,
+  Loader,
+  Plus,
+  XCircle,
+  Info,
+} from "lucide-react";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -22,8 +30,20 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { CommandSeparator } from "cmdk";
 
 const Step1 = () => {
   const dispatch = useDispatch();
@@ -46,6 +66,7 @@ const Step1 = () => {
       "width=1000,height=700"
     );
   };
+
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
     const headers = await getHeaders();
@@ -63,9 +84,9 @@ const Step1 = () => {
       }
 
       const projectId = parseResponse.data.project_id;
-      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       let parsingStatus = "";
+
       while (true) {
         const statusResponse = await axios.get(
           `${baseUrl}/api/v1/parsing-status/${projectId}`,
@@ -80,11 +101,13 @@ const Step1 = () => {
           setParsingStatus("Ready");
           break;
         } else if (parsingStatus === "submitted") {
-          setParsingStatus("Parsing");
+          setParsingStatus("Cloning your repository");
+        } else if (parsingStatus === "cloned") {
+          setParsingStatus("Parsing your code");
         } else if (parsingStatus === "parsed") {
-          setParsingStatus("Understanding your code");
+          setParsingStatus("Understanding your codebase");
         } else if (parsingStatus === "error") {
-          setParsingStatus("error");
+          setParsingStatus("Error");
           break;
         }
 
@@ -97,10 +120,6 @@ const Step1 = () => {
       return err;
     }
   };
-
-  useEffect(() => {
-    if (branchName && repoName) parseRepo(repoName, branchName);
-  }, []);
 
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
     UserRepo[]
@@ -154,8 +173,14 @@ const Step1 = () => {
     setShowTooltip(!showTooltip);
   };
 
-  const isParseDisabled = !repoName || !branchName;
+  const isParseDisabled = !repoName || !branchName || parsingStatus !== "";
 
+  // Reset repoName, branchName, and chatStep when the component mounts
+  useEffect(() => {
+    dispatch(setChat({ repoName: "", branchName: "", chatStep: 1 }));
+  }, [dispatch]);
+  const [repoOpen, setRepoOpen] = useState(false);
+  const [branchOpen, setbranchOpen] = useState(false);
   return (
     <div className="text-muted">
       <h1 className="text-lg">Select a repository and branch</h1>
@@ -166,98 +191,144 @@ const Step1 = () => {
         {UserRepositorysLoading ? (
           <Skeleton className="w-[220px] h-10" />
         ) : (
-          <Select
-            defaultValue={repoName}
-            onValueChange={(value) => {
-              if (value !== "new") {
-                dispatch(setChat({ repoName: value }));
-              } else {
-                openPopup();
-              }
-            }}
-          >
-            <SelectTrigger className="w-[220px] py-2  border-border ">
-              <SelectValue
-                className=""
-                placeholder={
-                  <div className="flex gap-3 items-center font-semibold ">
-                    <Github
-                      className="h-4 w-4 text-[#7A7A7A] "
-                      strokeWidth={1.5}
-                    />
-                    Select Repository
-                  </div>
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {UserRepositorys?.map((value: any) => (
-                <SelectItem key={value.id} value={value.full_name}>
-                  {value.full_name}
-                </SelectItem>
-              ))}
-              {/* Link new repository option */}
-              <SelectItem key="new" value="new">
-                <span
-                  onClick={(e) => {
-                    e.preventDefault();
-                    openPopup();
-                  }}
+          <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+            <PopoverTrigger asChild className="w-[220px]">
+              {UserRepositorys?.length === 0 || !repoName ? (
+                <Button
+                  className="flex gap-3 items-center font-semibold"
+                  variant="outline"
                 >
-                  + Link new repository
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+                  <Github
+                    className="h-4 w-4 text-[#7A7A7A]"
+                    strokeWidth={1.5}
+                  />
+                  Select Repository
+                </Button>
+              ) : (
+                <Button
+                  className="flex gap-3 items-center font-semibold"
+                  variant="outline"
+                >
+                  <Github
+                    className="h-4 w-4 text-[#7A7A7A]"
+                    strokeWidth={1.5}
+                  />
+                  <span className="truncate text-ellipsis whitespace-nowrap">
+                    {repoName}
+                  </span>
+                </Button>
+              )}
+            </PopoverTrigger>
+            <PopoverContent className="w-auto min-w-[220px] max-w-[300px] p-0">
+              <Command>
+                <CommandInput placeholder="Search repo..." />
+                <CommandList>
+                  <CommandEmpty>No Repository found.</CommandEmpty>
+                  <CommandGroup>
+                    {UserRepositorys?.map((value: any) => (
+                      <CommandItem
+                        key={value.id}
+                        value={value.full_name}
+                        onSelect={(value) => {
+                          if (value !== "new") {
+                            dispatch(setChat({ repoName: value }));
+                          } else {
+                            openPopup();
+                          }
+                          setRepoOpen(false);
+                        }}
+                      >
+                        {value.full_name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                  <CommandSeparator className="my-1" />
+                  <CommandItem>
+                    <span
+                      onClick={(e) => {
+                        e.preventDefault();
+                        openPopup();
+                      }}
+                    >
+                      + Link new repository
+                    </span>
+                  </CommandItem>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         )}
-        {UserRepositorysLoading ? (
+        {UserBranchLoading ? (
           <Skeleton className="w-[220px] h-10" />
         ) : (
-          <Select
-            defaultValue={branchName}
-            onValueChange={(value) => {
-              dispatch(setChat({ branchName: value }));
-            }}
-          >
-            <SelectTrigger className="w-[220px] py-2  border-border">
-              <SelectValue
-                className=""
-                placeholder={
-                  <div className="flex gap-3 items-center font-semibold ">
-                    <GitBranch
-                      className="h-4 w-4 text-[#7A7A7A] "
-                      strokeWidth={1.5}
-                    />
-                    Select Branch
-                  </div>
-                }
-              />
-            </SelectTrigger>
-
-            <SelectContent>
-              {!UserBranchLoading ? (
-                UserBranch?.map((value: any) => (
-                  <SelectItem key={value} value={value}>
-                    {value}
-                  </SelectItem>
-                ))
-              ) : (
-                <SelectItem
-                  value="loading"
-                  disabled
-                  className="pointer-events-none"
+          <Popover open={branchOpen} onOpenChange={setbranchOpen}>
+            <PopoverTrigger asChild className="w-[220px]">
+              {UserRepositorys?.length === 0 || !branchName ? (
+                <Button
+                  className="flex gap-3 items-center font-semibold "
+                  variant="outline"
                 >
-                  <Skeleton className="w-[180px] h-7" />
-                </SelectItem>
+                  <GitBranch
+                    className="h-4 w-4 text-[#7A7A7A] "
+                    strokeWidth={1.5}
+                  />
+                  Select Branch
+                </Button>
+              ) : (
+                <Button
+                  className="flex gap-3 items-center font-semibold w-[220px]"
+                  variant="outline"
+                >
+                  <GitBranch
+                    className="h-4 w-4 text-[#7A7A7A] "
+                    strokeWidth={1.5}
+                  />
+                  <span className="truncate text-ellipsis whitespace-nowrap">
+                    {branchName}
+                  </span>
+                </Button>
               )}
-            </SelectContent>
-          </Select>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-0">
+              <Command>
+                <CommandInput placeholder="Search branch..." />
+                <CommandList>
+                  <CommandEmpty>No branch found.</CommandEmpty>
+                  <CommandGroup>
+                    {!UserBranchLoading ? (
+                      UserBranch?.map((value: any) => (
+                        <CommandItem
+                          key={value}
+                          value={value}
+                          onSelect={(value) => {
+                            dispatch(setChat({ branchName: value }));
+                            setbranchOpen(false);
+                          }}
+                        >
+                          {value}
+                        </CommandItem>
+                      ))
+                    ) : (
+                      <SelectItem
+                        value="loading"
+                        disabled
+                        className="pointer-events-none"
+                      >
+                        <Skeleton className="w-[180px] h-7" />
+                      </SelectItem>
+                    )}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         )}
+
         <div className="flex items-center">
           {parsingStatus !== "Ready" && (
             <>
-              <Button 
-                className="w-24 flex items-center justify-center mr-2" 
+              <Button
+                className="w-24 flex items-center justify-center mr-2"
                 onClick={handleParse}
                 disabled={isParseDisabled}
               >
@@ -266,7 +337,7 @@ const Step1 = () => {
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div 
+                    <div
                       className="cursor-pointer p-2 hover:bg-gray-100 rounded-full"
                       onClick={handleInfoClick}
                     >
@@ -274,12 +345,15 @@ const Step1 = () => {
                     </div>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs p-4">
-                    <p className="text-sm font-semibold mb-2">Unlock the Power of Your Code</p>
+                    <p className="text-sm font-semibold mb-2">
+                      Unlock the Power of Your Code
+                    </p>
                     <p className="text-xs">
-                      Parse transforms your codebase into a comprehensive knowledge graph. 
-                      Our cutting-edge agents analyze and understand your code, 
-                      enabling seamless, context-aware conversations that bring 
-                      your development process to the next level.
+                      Parse transforms your codebase into a comprehensive
+                      knowledge graph. Our cutting-edge agents analyze and
+                      understand your code, enabling seamless, context-aware
+                      conversations that bring your development process to the
+                      next level.
                     </p>
                   </TooltipContent>
                 </Tooltip>

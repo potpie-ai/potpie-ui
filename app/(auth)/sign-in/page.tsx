@@ -41,6 +41,10 @@ export default function Signin() {
   });
 
   const provider = new GithubAuthProvider();
+  provider.addScope('repo');
+  provider.addScope('read:org');
+  provider.addScope('user');
+
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
@@ -70,6 +74,8 @@ export default function Signin() {
         // alert(JSON.stringify({ ...result.user, providerUsername: result._tokenResponse.screenName }));
         const credential = GithubAuthProvider.credentialFromResult(result);
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+        console.log(result.user);
+        console.log(credential);
         if (credential) {
           const userSignup = axios
             .post(`${baseUrl}/api/v1/signup`, {
@@ -85,6 +91,7 @@ export default function Signin() {
                 : "",
 
               providerData: result.user.providerData,
+              accessToken: credential.accessToken,
               providerUsername: (result as any)._tokenResponse.screenName,
             })
             .then((res: { data: any }) => res.data)

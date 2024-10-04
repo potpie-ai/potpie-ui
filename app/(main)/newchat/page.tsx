@@ -2,15 +2,16 @@
 import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
-import { setChat, setPendingMessage } from "@/lib/state/Reducers/chat";
+import { setChat, setPendingMessage, clearChat } from "@/lib/state/Reducers/chat";
 import Step1 from "./components/step1";
 import Step2 from "./components/step2";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
+import { useEffect } from "react";
 
 const NewChat = () => {
   const router = useRouter();
   const dispatch: AppDispatch = useDispatch();
-  const { chatStep, currentConversationId, projectId } = useSelector(
+  const { chatStep, currentConversationId, projectId, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
 
@@ -20,8 +21,9 @@ const NewChat = () => {
   - After setting the pending message, it navigates the user to the chat page based on the current conversation ID.
   */
   const handleFormSubmit = (message: string) => {
+    if(!projectId || !currentConversationId) return;
     dispatch(setPendingMessage(message));
-    dispatch(setChat({chatFlow: "NEW_CHAT"}))
+    dispatch(setChat({ chatFlow: "NEW_CHAT" }));
     router.push(`/chat/${currentConversationId}`);
   };
 
@@ -48,6 +50,12 @@ const NewChat = () => {
       ),
     },
   ];
+
+  // Reset relevant states when the component mounts
+  useEffect(() => {
+    dispatch(clearChat());
+    dispatch(setChat({ repoName: "", branchName: "", chatStep: 1 }));
+  }, [dispatch]);
 
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-2 lg:col-span-2">

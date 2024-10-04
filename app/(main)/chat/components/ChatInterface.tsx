@@ -67,10 +67,10 @@ const ChatInterface = ({
     if (chatFlow === "EXISTING_CHAT") {
       const observer = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting && !isFirstRender) {
-            const conversation = conversations.find(
-              (c) => c.conversationId === currentConversationId
-            );
+          const conversation = conversations.find(
+            (c) => c.conversationId === currentConversationId
+          );
+          if (entry.isIntersecting && !isFirstRender && conversation?.start != 0) {
             const start = conversation?.start || 0;
             dispatch(
               setStart({ chatId: currentConversationId, start: start - 10 })

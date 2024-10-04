@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ChatInterface from "../components/ChatInterface";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -15,6 +15,15 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import getHeaders from "@/app/utils/headers.util";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
 import axios from "axios";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, Loader, XCircle } from "lucide-react";
 
 interface SendMessageArgs {
   message: string;
@@ -23,11 +32,19 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { pendingMessage, projectId, selectedNodes, conversations, chatFlow,status } = useSelector(
-    (state: RootState) => state.chat
-  );
-
+  const {
+    pendingMessage,
+    projectId,
+    selectedNodes,
+    conversations,
+    chatFlow,
+    repoName,
+    branchName,
+    status
+  } = useSelector((state: RootState) => state.chat);
+  
   const pendingMessageSent = useRef(false);
+  const [parsingStatus, setParsingStatus] = useState<string>("");
 
   /*
   This function is to send a message.
@@ -123,32 +140,54 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     queryFn: async () => {
       if (chatFlow !== "EXISTING_CHAT") return;
 
-      const headers = await getHeaders();
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
-        {
-          headers: headers,
-        }
-      );
-
-      const totalMessages = response.data.total_messages;
-
-      if (totalMessages > 0) {
-        dispatch(
-          setStart({
-            chatId: params.chatId,
-            start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
-          })
+        const headers = await getHeaders();
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
+          {
+            headers: headers,
+          }
         );
+        const totalMessages = response.data.total_messages;
+        dispatch(setChat({ projectId: response.data.project_ids[0], agentId: response.data.agent_ids[0] }));
         dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
-        dispatch(setChat({
-          agentId: response.data.agent_ids[0],
-        }))
-      }
 
-      return totalMessages;
+        if (totalMessages > 0) {
+          dispatch(
+            setStart({
+              chatId: params.chatId,
+              start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
+            })
+          );
+          dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
+        }
+
+        return totalMessages;
+      },
+      enabled: chatFlow === "EXISTING_CHAT",
+    });
+
+  const { data: IsLatest, isLoading: isLoadingIsLatest } = useQuery({
+    queryKey: ["is-latest", params.chatId],
+    queryFn: async () => {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+      const statusResponse = axios
+        .get(`${baseUrl}/api/v1/parsing-status/${projectId}`, {
+          headers: headers,
+        })
+        .then((response) => {
+          if (response.data.latest !== true && repoName && branchName) {
+            parseRepo(repoName, branchName);
+          }
+          return response.data.latest;
+        })
+        .catch((error) => {
+          console.log(error);
+          return "error";
+        });
     },
-    enabled: chatFlow === "EXISTING_CHAT", 
+    enabled: !isLoadingTotalMessages && !!projectId,
   });
   /*
   Query to fetch paginated messages from the conversation.
@@ -188,18 +227,23 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       });
 
       if (pendingMessage) {
-        dispatch(
-          addMessageToConversation({
-            chatId: params.chatId,
-            message: {
-              sender: "user",
-              text: pendingMessage,
-            },
-          })
-        );
-        dispatch(setChat({ status: "loading" }));
-        dispatch(clearPendingMessage());
-        return response.data
+        const conversation = conversations.find(conv => conv.conversationId === params.chatId);
+        const lastMessage = conversation?.messages?.[conversation.messages.length - 1]?.text;
+        // Adding extra check if the message is already present, dont add it again
+        if (lastMessage !== pendingMessage) {
+          dispatch(
+            addMessageToConversation({
+              chatId: params.chatId,
+              message: {
+                sender: "user",
+                text: pendingMessage,
+              },
+            })
+          );
+          dispatch(setChat({ status: "loading" }));
+          dispatch(clearPendingMessage());
+          return response.data;
+        }
       }
 
       dispatch(setChat({ status: "active" }));
@@ -227,6 +271,58 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     });
   };
 
+  const parseRepo = async (repo_name: string, branch_name: string) => {
+    setParsingStatus("parsing");
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+    try {
+      const parseResponse = await axios.post(
+        `${baseUrl}/api/v1/parse`,
+        { repo_name, branch_name },
+        { headers: headers }
+      );
+
+      if (repo_name !== null || branch_name !== null) {
+        dispatch(setChat({ projectId: parseResponse.data.project_id }));
+      }
+
+      const projectId = parseResponse.data.project_id;
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
+      let parsingStatus = "";
+      while (true) {
+        const statusResponse = await axios.get(
+          `${baseUrl}/api/v1/parsing-status/${projectId}`,
+          { headers: headers }
+        );
+
+        parsingStatus = statusResponse.data.status;
+        setParsingStatus(parsingStatus);
+
+        if (parsingStatus === "ready") {
+          dispatch(setChat({ chatStep: 2 }));
+          setParsingStatus("Ready");
+          break;
+        } else if (parsingStatus === "submitted") {
+          setParsingStatus("Parsing");
+        } else if (parsingStatus === "parsed") {
+          setParsingStatus("Understanding your code");
+        } else if (parsingStatus === "error") {
+          setParsingStatus("error");
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      return parseResponse.data;
+    } catch (err) {
+      console.error("Error during parsing:", err);
+      setParsingStatus("error");
+      return err;
+    }
+  };
+
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
       <ChatInterface currentConversationId={params.chatId} />
@@ -236,6 +332,41 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         disabled={status === "loading"}
       />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
+      <Dialog open={!!IsLatest}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Reparsing your latest code changes </DialogTitle>
+          </DialogHeader>
+          {parsingStatus !== "error" && parsingStatus === "Ready" ? (
+            <div className="flex justify-start items-center gap-3 mt-5 ml-5">
+              <CheckCircle className="text-[#00C313] h-4 w-4" />{" "}
+              <span className="text-[#00C313]">{parsingStatus}</span>
+            </div>
+          ) : parsingStatus !== "error" && parsingStatus !== "" ? (
+            <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
+              <Loader
+                className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
+              />{" "}
+              <span>{parsingStatus}</span>
+            </div>
+          ) : null}
+          {parsingStatus === "error" && (
+            <div className="flex gap-4 items-center my-3">
+              <div className="flex justify-start items-center gap-3 ">
+                <XCircle className="text-[#E53E3E] h-4 w-4" />{" "}
+                <span>{parsingStatus}</span>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => branchName && parseRepo(repoName, branchName)}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

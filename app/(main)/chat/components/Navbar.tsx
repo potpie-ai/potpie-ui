@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 
 const Navbar = () => {
-  const { title, agentId } = useSelector((state: RootState) => state.chat);
+  const { title, agentId, allAgents } = useSelector((state: RootState) => state.chat);
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = React.useState(title);
   const handleInputChange = (event: any) => {
@@ -113,7 +113,8 @@ const Navbar = () => {
             </Dialog>
           </div>
           <div className="gap-5 text-muted flex items-center justify-start">
-            {agentId && (
+            {agentId && allAgents && (
+              allAgents.find(agent => agent.id === agentId)?.name ||
               agentId.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2")
             )}
           </div>

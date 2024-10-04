@@ -17,6 +17,12 @@ interface Conversation {
   start?: number;
 }
 
+interface Agent {
+  id?: string;
+  name?: string;
+  description?: string;
+}
+
 interface chatState {
   repoName: string;
   branchName?: string;
@@ -30,6 +36,7 @@ interface chatState {
   currentConversationId: string;
   pendingMessage: string | null;
   chatFlow: string;
+  allAgents: Agent[];
 }
 
 const initialState: chatState = {
@@ -44,7 +51,8 @@ const initialState: chatState = {
   currentConversationId: "",
   pendingMessage: "",
   selectedNodes: [],
-  chatFlow: "EXISTING_CHAT"
+  chatFlow: "EXISTING_CHAT",
+  allAgents: []
 };
 
 const chatSlice = createSlice({
@@ -130,7 +138,7 @@ const chatSlice = createSlice({
     },
 
     clearChat: (state) => {
-      const { projectId, branchName, repoName, selectedNodes, title, chatFlow,agentId } = state;  
+      const { projectId, branchName, repoName, selectedNodes, title, chatFlow,agentId, allAgents } = state;  
       return {
         ...initialState,
         projectId,
@@ -139,7 +147,8 @@ const chatSlice = createSlice({
         selectedNodes,
         title,
         chatFlow,
-        agentId
+        agentId,
+        allAgents
       };
     },
 

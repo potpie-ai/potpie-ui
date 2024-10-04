@@ -29,7 +29,7 @@ const Step2 = () => {
           headers: headers,
         }
       );
-
+      dispatch(setChat( {allAgents: response.data}))
       return response.data;
     },
   });

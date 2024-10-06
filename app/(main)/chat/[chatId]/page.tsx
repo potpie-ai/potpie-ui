@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ChatInterface from "../components/ChatInterface";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -15,6 +15,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import getHeaders from "@/app/utils/headers.util";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
 import axios from "axios";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface SendMessageArgs {
   message: string;
@@ -23,10 +24,9 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const dispatch = useDispatch();
-  const { pendingMessage, projectId, selectedNodes, conversations, chatFlow } = useSelector(
-    (state: RootState) => state.chat
-  );
-
+  const { pendingMessage, projectId, selectedNodes, conversations, chatFlow } =
+    useSelector((state: RootState) => state.chat);
+  const [chatAccess, setChatAccess] = useState("");
   const pendingMessageSent = useRef(false);
 
   /*
@@ -117,35 +117,36 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   /*
   Query to fetch total messages for the conversation.
   */
-  const { isLoading: isLoadingTotalMessages, data: totalMessagesData } = useQuery({
-    queryKey: ["total-messages", params.chatId],
-    queryFn: async () => {
-      if (chatFlow !== "EXISTING_CHAT") return;
+  const { isLoading: isLoadingTotalMessages, data: totalMessagesData } =
+    useQuery({
+      queryKey: ["total-messages", params.chatId],
+      queryFn: async () => {
+        if (chatFlow !== "EXISTING_CHAT") return;
 
-      const headers = await getHeaders();
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
-        {
-          headers: headers,
-        }
-      );
-
-      const totalMessages = response.data.total_messages;
-
-      if (totalMessages > 0) {
-        dispatch(
-          setStart({
-            chatId: params.chatId,
-            start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
-          })
+        const headers = await getHeaders();
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
+          {
+            headers: headers,
+          }
         );
-        dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
-      }
 
-      return totalMessages;
-    },
-    enabled: chatFlow === "EXISTING_CHAT", 
-  });
+        const totalMessages = response.data.total_messages;
+
+        if (totalMessages > 0) {
+          dispatch(
+            setStart({
+              chatId: params.chatId,
+              start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
+            })
+          );
+          dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
+        }
+        setChatAccess(response.data.access_type);
+        return totalMessages;
+      },
+      enabled: chatFlow === "EXISTING_CHAT",
+    });
   /*
   Query to fetch paginated messages from the conversation.
   */
@@ -195,20 +196,25 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         );
         dispatch(setChat({ status: "loading" }));
         dispatch(clearPendingMessage());
-        return response.data
+        return response.data;
       }
 
       dispatch(setChat({ status: "active" }));
       return response.data;
     },
     refetchOnWindowFocus: false,
-    enabled: chatFlow === "EXISTING_CHAT" || !!pendingMessage,
+    enabled:
+      chatFlow === "EXISTING_CHAT" ||
+      (!!pendingMessage && chatAccess !== "not_found"),
   });
 
   useEffect(() => {
     if (pendingMessage && !pendingMessageSent.current) {
       try {
-        messageMutation.mutate({ message: pendingMessage, selectedNodes: selectedNodes });
+        messageMutation.mutate({
+          message: pendingMessage,
+          selectedNodes: selectedNodes,
+        });
         pendingMessageSent.current = true;
       } catch (error) {
         console.error("Error sending pending message:", error);
@@ -217,21 +223,38 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   }, [params.chatId, pendingMessage]);
 
   const handleFormSubmit = (message: string) => {
-    messageMutation.mutate({ 
-      message, 
-      selectedNodes: selectedNodes 
+    messageMutation.mutate({
+      message,
+      selectedNodes: selectedNodes,
     });
   };
-
+  if (chatAccess === "not_found") {
+    return (
+      <Dialog open>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>You are not allowed to access this chat</DialogTitle>
+            <DialogDescription>
+              Please contact the project owner to request access.
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
       <ChatInterface currentConversationId={params.chatId} />
-      <NodeSelectorForm
-        projectId={projectId}
-        onSubmit={handleFormSubmit}
-        disabled={false}
-      />
-      <div className="h-6 w-full bg-background sticky bottom-0"></div>
+      {chatAccess === "write" && (
+        <>
+          <NodeSelectorForm
+            projectId={projectId}
+            onSubmit={handleFormSubmit}
+            disabled={false}
+          />
+          <div className="h-6 w-full bg-background sticky bottom-0"></div>
+        </>
+      )}
     </div>
   );
 };

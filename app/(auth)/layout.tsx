@@ -1,6 +1,6 @@
 "use client";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
 
 export default function AuthLayout({
@@ -9,9 +9,12 @@ export default function AuthLayout({
   children: React.ReactNode;
 }>) {
   const { user } = useAuthContext();
+  const searchParams = useSearchParams();
+
+  const redirectUrl = searchParams.get("redirect");
   const router = useRouter();
   if (user) {
-    router.push("/");
+    router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
     return null;
   } else {
     return (

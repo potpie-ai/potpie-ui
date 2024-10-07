@@ -1,6 +1,6 @@
 "use client";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/components/Layouts/Sidebar";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
@@ -13,9 +13,9 @@ export default function RootLayout({
 }>) {
   const { user } = useAuthContext();
   const router = useRouter();
-
+  const pathname = usePathname();
   if (user == null) {
-    router.push("/sign-in");
+    router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`); 
     return null;
   }
 

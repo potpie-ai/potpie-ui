@@ -25,9 +25,10 @@ import { Share2Icon } from "lucide-react";
 import { z } from "zod";
 
 const emailSchema = z.string().email({ message: "Invalid email address" });
+import { Download, Share2 } from "lucide-react";
 
 const Navbar = ({ showShare }: { showShare?: boolean }) => {
-  const { title } = useSelector((state: RootState) => state.chat);
+  const { title, agentId, allAgents } = useSelector((state: RootState) => state.chat);
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = useState(title);
   const [emailValue, setEmailValue] = useState("");
@@ -123,40 +124,41 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
           </Link>
         </div>
         <div className="flex w-full justify-between items-center">
-          <div className="flex items-center w-full px-6 pb-2 gap-5 ">
+          <div className="flex items-center justify-between w-full px-6 pb-2 gap-5 ">
+            <div className="gap-5 flex items-center justify-start">
             <Image
-              src={"/images/msg-grey.svg"}
-              alt="logo"
-              width={20}
-              height={20}
-            />
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger>
-                <span className="text-muted text-xl">{title}</span>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[487px]" showX={false}>
-                <DialogHeader>
-                  <DialogTitle className="text-center">
-                    Edit chat name
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="">
-                    <Input
-                      id="name"
-                      value={inputValue}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
+                src={"/images/msg-grey.svg"}
+                alt="logo"
+                width={20}
+                height={20}
+              />
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger>
+                  <span className="text-muted text-xl">{title}</span>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[487px]" showX={false}>
+                  <DialogHeader>
+                    <DialogTitle className="text-center">
+                      Edit chat name
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="">
+                      <Input
+                        id="name"
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                      />
+                    </div>
                   </div>
-                </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button">Cancel</Button>
-                  </DialogClose>
-                  <Button type="button" onClick={handleSave}>
-                    Save
-                  </Button>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button">Cancel</Button>
+                    </DialogClose>
+                      <Button type="button" onClick={handleSave}>
+                      Save
+                    </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -190,7 +192,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
               <DialogFooter>
                 <DialogClose asChild>
                   <Button type="button">Cancel</Button>
-                </DialogClose>
+                  </DialogClose>
                 <Button
                   type="button"
                   onClick={handleEmailSave}
@@ -198,9 +200,27 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
                 >
                   Share
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
+            </div>
+            <div>
+              <Download className="text-gray-500 hover:text-gray-700 w-5 h-5" />
+            </div>
+            <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+              <span className="text-gray-700">
+                {agentId && allAgents && (
+                  allAgents.find(agent => agent.id === agentId)?.name ||
+                  agentId.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2")
+                )}
+              </span>
+            </div>
+          </div>
         </div>
       </header>
     </>

@@ -153,7 +153,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
        {citations.map((citation, index) => (
          <div key={index} className="bg-gray-200 mb-2 rounded-md flex items-center">
            <a
-             href={"https://github.com/"+repoName}
+             href={"https://github.com/"+repoName+"/blob/"+branchName+"/"+citation}
              target="_blank"
              rel="noopener noreferrer"
              className="flex items-center text-green-700 hover:underline flex-grow"

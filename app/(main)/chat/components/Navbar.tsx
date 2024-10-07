@@ -31,6 +31,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
   );
+  const pathname = usePathname();
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = useState(title);
   const [emailValue, setEmailValue] = useState("");
@@ -89,11 +90,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
           { headers: headers }
         )
         .then((res) => {
-          navigator.clipboard.writeText(
-            process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL +
-              "/chat/" +
-              currentConversationId
-          );
+          navigator.clipboard.writeText(pathname);
           toast.success("Link copied to clipboard");
           return res.data;
         })

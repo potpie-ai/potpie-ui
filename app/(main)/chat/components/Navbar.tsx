@@ -90,7 +90,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
           { headers: headers }
         )
         .then((res) => {
-          navigator.clipboard.writeText(pathname);
+          navigator.clipboard.writeText(`https://app.potpie.ai/` + pathname);
           toast.success("Link copied to clipboard");
           return res.data;
         })

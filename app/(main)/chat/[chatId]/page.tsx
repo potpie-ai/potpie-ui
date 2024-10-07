@@ -354,12 +354,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           />
           <div className="h-6 w-full bg-background sticky bottom-0"></div>
         </>
-      )}
-      <NodeSelectorForm
-        projectId={projectId}
-        onSubmit={handleFormSubmit}
-        disabled={status === "loading"}
-      />
+      )} 
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
       <Dialog open={!!IsLatest}>
         <DialogContent className="sm:max-w-[425px]">

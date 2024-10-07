@@ -81,7 +81,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
       const headers = await getHeaders();
       axios
         .post(
-          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share/`,
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,
           {
             conversation_id: currentConversationId,
             recipientEmails: [emailValue],

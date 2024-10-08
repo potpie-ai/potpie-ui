@@ -89,7 +89,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
         // Set new timeout for debounce
         const timeoutId = setTimeout(() => {
           fetchNodes(query);
-        }, 2000); // 2-second debounce
+        }, 300); // 300ms debounce
 
         setSearchTimeout(timeoutId); // Store the timeout ID
       } else {

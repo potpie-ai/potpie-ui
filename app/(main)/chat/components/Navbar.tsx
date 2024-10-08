@@ -1,12 +1,10 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
-import dayjs from "dayjs";
 import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -23,10 +21,11 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
-import { Download, Share2 } from "lucide-react";
 
 const Navbar = () => {
-  const { title, agentId, allAgents } = useSelector((state: RootState) => state.chat);
+  const { title, agentId, allAgents } = useSelector(
+    (state: RootState) => state.chat
+  );
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = React.useState(title);
   const handleInputChange = (event: any) => {
@@ -114,15 +113,19 @@ const Navbar = () => {
             </Dialog>
           </div>
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-              <span className="text-gray-700">
-                {agentId && allAgents && (
-                  allAgents.find(agent => agent.id === agentId)?.name ||
-                  agentId.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2")
-                )}
-              </span>
-            </div>
+            {agentId && allAgents && (
+              <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                <span className="text-gray-700">
+                  {agentId &&
+                    allAgents &&
+                    (allAgents.find((agent) => agent.id === agentId)?.name ||
+                      agentId
+                        .replace(/_/g, " ")
+                        .replace(/([a-z])([A-Z])/g, "$1 $2"))}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </header>

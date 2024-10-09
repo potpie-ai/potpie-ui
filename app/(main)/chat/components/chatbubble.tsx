@@ -166,9 +166,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       >
         {/* Citations Section */}
         {sender === "agent" && citations && citations.length > 0 && (
-          <div className="mb-2 flex ">
-            <div className="flex flex-col">
-              {citations.map((citation, index) => (
+          <div className="mb-2">
+            {citations.map((citation, index) => {
+              const filename = citation.split("/").pop();
+              return (
                 <div
                   key={index}
                   className="bg-gray-200 mb-2 rounded-md flex items-center"
@@ -188,20 +189,20 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
                     style={{ wordBreak: "break-all" }}
                   >
                     <Github className="w-4 h-4" />
-                    <span className="mx-2">{citation}</span>
+                    <span className="mx-2">{filename}</span>
                   </a>
+                  {/* Repo and Branch Name to the right */}
+                  <div className="flex items-center space-x-2 ml-auto">
+                    <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                      {branchName}
+                    </code>
+                    <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                      {repoName}
+                    </code>
+                  </div>
                 </div>
-              ))}
-            </div>
-            {/* Repo and Branch Name to the right */}
-            <div className="flex items-center space-x-2 ml-auto">
-              <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-                {branchName}
-              </code>
-              <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-                {repoName}
-              </code>
-            </div>
+              );
+            })}
           </div>
         )}
 

@@ -143,9 +143,9 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
 
   const renderNodeList = () => {
     if (!isNodeListVisible || nodeOptions.length === 0) return null;
-
+  
     const formRect = formRef.current?.getBoundingClientRect();
-
+  
     return ReactDOM.createPortal(
       <div
         ref={nodeListRef}
@@ -167,9 +167,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
             >
               <div className="font-semibold">{node.name}</div>
               <div className="text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
-                {node.file_path.length > 100
-                  ? '...' + node.file_path.slice(-100)
-                  : node.file_path}
+                {truncateFilePath(node.path)}
               </div>
             </li>
           ))}
@@ -178,6 +176,24 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
       document.body
     );
   };
+  
+  const truncateFilePath = (filePath: string) => {
+    const maxLength = 100; // Maximum length to display path
+    if (filePath.length <= maxLength) {
+      return filePath;
+    }
+  
+    const fileNameIndex = filePath.lastIndexOf('/');
+    const fileName = filePath.slice(fileNameIndex + 1); 
+  
+    const truncatedPath =
+      filePath.length > maxLength
+        ? '...' + filePath.slice(-maxLength + fileName.length + 3) // +3 for '...'
+        : filePath;
+  
+    return truncatedPath;
+  };
+  
 
   return (
     <form

@@ -62,8 +62,8 @@ jobs:
           echo "NEXT_PUBLIC_SKIP_PRO_CHECK=${{ secrets.STAGE_NEXT_PUBLIC_SKIP_PRO_CHECK }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GITHUB_APP_NAME=${{ secrets.STAGE_NEXT_PUBLIC_GITHUB_APP_NAME }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_CONVERSATION_BASE_URL }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_KEY }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_HOST }}" >> $GITHUB_ENV
 
       # Build the Docker image
       - name: Build

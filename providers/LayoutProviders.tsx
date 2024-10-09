@@ -13,8 +13,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 if (typeof window !== "undefined") {
   posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-    // TODO: Turn it off later, this might not be required in future as we have more custom events
     capture_pageview: true,
+    loaded: () => {
+      if (typeof window !== 'undefined') {
+        posthog.startSessionRecording();
+      }
+    },
   });
 }
 const LayoutProviders = ({ children }: { children: React.ReactNode }) => {

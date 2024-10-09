@@ -133,6 +133,11 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       return err;
     }
   };
+  citations = [
+    "projects/Yash-pede-AI_YASH-main-05VQ725HKZWldJG7MsYFKWcMnAg1/test.pyprojects/Yash-pede-AI_YASH-main-05VQ725HKZWldJG7MsYFKWcMnAg1/SpeekandRecoginze.py",
+    "path/to/file2.js",
+    "path/to/file3.js",
+  ]; // Example citations array
 
   return (
     <div
@@ -161,43 +166,42 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       >
         {/* Citations Section */}
         {sender === "agent" && citations && citations.length > 0 && (
-          <div className="mb-2">
-            {citations.map((citation, index) => (
-              <div
-                key={index}
-                className="bg-gray-200 mb-2 rounded-md flex items-center"
-              >
-                <a
-                  href={
-                    "https://github.com/" +
-                    repoName +
-                    "/blob/" +
-                    branchName +
-                    "/" +
-                    citation
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center text-green-700 hover:underline flex-grow"
-                  style={{ wordBreak: "break-all" }}
+          <div className="mb-2 flex ">
+            <div className="flex flex-col">
+              {citations.map((citation, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-200 mb-2 rounded-md flex items-center"
                 >
-                  <Github className="w-4 h-4" />
-                  <span className="mx-2">
-                    {citation}
-                  </span>
-                </a>
-
-                {/* Repo and Branch Name to the right */}
-                <div className="flex items-center space-x-2 ml-auto">
-                  <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-                    {branchName}
-                  </code>
-                  <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-                    {repoName}
-                  </code>
+                  <a
+                    href={
+                      "https://github.com/" +
+                      repoName +
+                      "/blob/" +
+                      branchName +
+                      "/" +
+                      citation
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center text-green-700 hover:underline flex-grow"
+                    style={{ wordBreak: "break-all" }}
+                  >
+                    <Github className="w-4 h-4" />
+                    <span className="mx-2">{citation}</span>
+                  </a>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            {/* Repo and Branch Name to the right */}
+            <div className="flex items-center space-x-2 ml-auto">
+              <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                {branchName}
+              </code>
+              <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                {repoName}
+              </code>
+            </div>
           </div>
         )}
 

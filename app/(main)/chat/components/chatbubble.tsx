@@ -6,16 +6,15 @@ import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { cn } from "@/lib/utils";
 import { LucideRepeat2, RotateCw, Github } from "lucide-react"; // Import GitHub icon
 import { useDispatch, useSelector } from "react-redux";
-import { Key, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { RootState } from "@/lib/state/store";
-import Link from "next/link";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string;
   sender: "user" | "agent";
-  citations: string[] | any;
+  citations: string[] | undefined;
   className?: string;
   isLast?: boolean;
   currentConversationId: string;
@@ -27,7 +26,7 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
 const ChatBubble: React.FC<ChatBubbleProps> = ({
   message,
   sender,
-  citations = [], // Default to an empty array if undefined
+  citations,
   className,
   isLast,
   currentConversationId,
@@ -44,7 +43,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   const userImage = user.photoUrl;
   const agentImage = "/images/logo.svg";
-
   const parseMessage = (message: string) => {
     const sections = [];
     const codeRegex = /```(\w+?)\n([\s\S]*?)```/g;
@@ -74,6 +72,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const regenerateMessage = async () => {
     setIsRegenerating(true);
     const headers = await getHeaders();
+    let accumulatedMessage = "";
 
     try {
       const response = await fetch(
@@ -134,6 +133,11 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       return err;
     }
   };
+  citations = [
+    "projects/Yash-pede-AI_YASH-main-05VQ725HKZWldJG7MsYFKWcMnAg1/test.pyprojects/Yash-pede-AI_YASH-main-05VQ725HKZWldJG7MsYFKWcMnAg1/SpeekandRecoginze.py",
+    "path/to/file2.js",
+    "path/to/file3.js",
+  ]; // Example citations array
 
   return (
     <div
@@ -162,51 +166,42 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       >
         {/* Citations Section */}
         {sender === "agent" && citations && citations.length > 0 && (
-          <div className="mb-2">
-            {citations.map((citation: string[], index: Key | null | undefined) => {
-                return (
+          <div className="mb-2 flex ">
+            <div className="flex flex-col">
+              {citations.map((citation, index) => (
                 <div
                   key={index}
-                  className="bg-gray-200 mb-2 rounded-md flex flex-col items-start w-full gap-2"
+                  className="bg-gray-200 mb-2 rounded-md flex items-center"
                 >
-                  {citation.map((c: string, index: Key | null | undefined) => {
-                    const displayText =
-                      c.length > 30
-                        ? c.split("/").pop()
-                        : c; 
-                    return (
-                      <div key={index} className="flex justify-between w-full">
-                        <Link
-                          href={
-                            "https://github.com/" +
-                            repoName +
-                            "/blob/" +
-                            branchName +
-                            "/" +
-                            c.split("/").pop()
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center text-green-700 hover:underline flex-grow"
-                          style={{ wordBreak: "break-all" }}
-                        >
-                          <Github className="w-4 h-4" />
-                          <span className="mx-2">{displayText}</span>
-                        </Link>
-                        <div className="flex items-center space-x-2 ml-auto">
-                          <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-                            {branchName}
-                          </code>
-                          <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-                            {repoName}
-                          </code>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <a
+                    href={
+                      "https://github.com/" +
+                      repoName +
+                      "/blob/" +
+                      branchName +
+                      "/" +
+                      citation
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center text-green-700 hover:underline flex-grow"
+                    style={{ wordBreak: "break-all" }}
+                  >
+                    <Github className="w-4 h-4" />
+                    <span className="mx-2">{citation}</span>
+                  </a>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+            {/* Repo and Branch Name to the right */}
+            <div className="flex items-center space-x-2 ml-auto">
+              <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                {branchName}
+              </code>
+              <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                {repoName}
+              </code>
+            </div>
           </div>
         )}
 

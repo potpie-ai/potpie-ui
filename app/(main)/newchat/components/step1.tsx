@@ -85,6 +85,13 @@ const Step1 = () => {
 
       const projectId = parseResponse.data.project_id;
 
+      // Check if the initial parse response status is "ready"
+      if (parseResponse.data.status === "ready") {
+        dispatch(setChat({ chatStep: 2 }));
+        setParsingStatus("Ready");
+        return parseResponse.data;
+      }
+
       let parsingStatus = "";
 
       while (true) {

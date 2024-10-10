@@ -6,15 +6,16 @@ import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { cn } from "@/lib/utils";
 import { LucideRepeat2, RotateCw, Github } from "lucide-react"; // Import GitHub icon
 import { useDispatch, useSelector } from "react-redux";
-import { useState } from "react";
+import { Key, useState } from "react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { RootState } from "@/lib/state/store";
+import Link from "next/link";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string;
   sender: "user" | "agent";
-  citations: string[] | undefined; 
+  citations: string[] | any;
   className?: string;
   isLast?: boolean;
   currentConversationId: string;
@@ -26,7 +27,7 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
 const ChatBubble: React.FC<ChatBubbleProps> = ({
   message,
   sender,
-  citations,
+  citations = [], // Default to an empty array if undefined
   className,
   isLast,
   currentConversationId,
@@ -43,6 +44,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   const userImage = user.photoUrl;
   const agentImage = "/images/logo.svg";
+
   const parseMessage = (message: string) => {
     const sections = [];
     const codeRegex = /```(\w+?)\n([\s\S]*?)```/g;
@@ -51,7 +53,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
     while ((match = codeRegex.exec(message)) !== null) {
       if (match.index > lastIndex) {
-        sections.push({ type: "text", content: message.slice(lastIndex, match.index) });
+        sections.push({
+          type: "text",
+          content: message.slice(lastIndex, match.index),
+        });
       }
       sections.push({ type: "code", content: match[2], language: match[1] });
       lastIndex = match.index + match[0].length;
@@ -69,7 +74,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const regenerateMessage = async () => {
     setIsRegenerating(true);
     const headers = await getHeaders();
-    let accumulatedMessage = "";
 
     try {
       const response = await fetch(
@@ -93,7 +97,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       let accumulatedMessage = "";
 
       while (true) {
-        const { done, value } = (await reader?.read()) || { done: true, value: undefined };
+        const { done, value } = (await reader?.read()) || {
+          done: true,
+          value: undefined,
+        };
         if (done) break;
 
         const chunk = decoder.decode(value);
@@ -129,10 +136,16 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   };
 
   return (
-    <div className={`flex items-start ${sender === "user" ? "justify-end" : "justify-start"} w-full`}>
+    <div
+      className={`flex items-start ${sender === "user" ? "justify-end" : "justify-start"} w-full`}
+    >
       {/* Agent Image on the Left */}
       {sender === "agent" && (
-        <img src={agentImage} alt="Agent" className="w-9 h-9 rounded-full object-contain bg-background mr-2" />
+        <img
+          src={agentImage}
+          alt="Agent"
+          className="w-9 h-9 rounded-full object-contain bg-background mr-2"
+        />
       )}
 
       {/* Chat Bubble */}
@@ -149,34 +162,52 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       >
         {/* Citations Section */}
         {sender === "agent" && citations && citations.length > 0 && (
-       <div className="mb-2">
-       {citations.map((citation, index) => (
-         <div key={index} className="bg-gray-200 mb-2 rounded-md flex items-center">
-           <a
-             href={"https://github.com/"+repoName+"/blob/"+branchName+"/"+citation}
-             target="_blank"
-             rel="noopener noreferrer"
-             className="flex items-center text-green-700 hover:underline flex-grow"
-           >
-             {/* GitHub Icon and File Name */}
-             <Github className="w-4 h-4" />
-             <span className="ml-2">{citation}</span>
-           </a>
-           
-           {/* Repo and Branch Name to the right */}
-           <div className="flex items-center space-x-2 ml-auto">
-             <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-               {branchName}
-             </code>
-             <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-               {repoName}
-             </code>
-           </div>
-         </div>
-       ))}
-     </div>
-     
-       
+          <div className="mb-2">
+            {citations?.map((citation: string[], index: Key | null | undefined) => {
+                return (
+                <div
+                  key={index}
+                  className="bg-gray-200 mb-2 rounded-md flex flex-col items-start w-full gap-2"
+                >
+                  {citation && citation?.map((c: string, index: Key | null | undefined) => {
+                    const displayText =
+                      c.length > 30
+                        ? c.split("/").pop()
+                        : c; 
+                    return (
+                      <div key={index} className="flex justify-between w-full">
+                        <Link
+                          href={
+                            "https://github.com/" +
+                            repoName +
+                            "/blob/" +
+                            branchName +
+                            "/" +
+                            c.split("/").pop()
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center text-green-700 hover:underline flex-grow"
+                          style={{ wordBreak: "break-all" }}
+                        >
+                          <Github className="w-4 h-4" />
+                          <span className="mx-2">{displayText}</span>
+                        </Link>
+                        <div className="flex items-center space-x-2 ml-auto">
+                          <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                            {branchName}
+                          </code>
+                          <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                            {repoName}
+                          </code>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {parsedSections.map((section, index) => (
@@ -197,7 +228,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             )}
             {section.type === "code" && (
               <div className="pb-4">
-                <MyCodeBlock code={section.content} language={section.language || "json"} />
+                <MyCodeBlock
+                  code={section.content}
+                  language={section.language || "json"}
+                />
               </div>
             )}
           </div>
@@ -236,7 +270,11 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
       {/* User Image on the Right */}
       {sender === "user" && (
-        <img src={user.photoURL} alt="User" className="w-9 h-9 rounded-full object-cover ml-2" />
+        <img
+          src={user.photoURL}
+          alt="User"
+          className="w-9 h-9 rounded-full object-cover ml-2"
+        />
       )}
     </div>
   );

@@ -178,6 +178,9 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
   };
   
   const truncateFilePath = (filePath: string) => {
+    if(!filePath){
+      return;
+    }
     const maxLength = 100; // Maximum length to display path
     if (filePath.length <= maxLength) {
       return filePath;

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { Validator } from "jsonschema";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import axios from "axios";
 
 import { Button } from "@/components/ui/button";
@@ -138,9 +138,18 @@ function CustomAgent() {
 
     form.setValue(`tasks.${taskIndex}.tools`, tools);
   };
-
+  const submitCustomAgentForm = useMutation({
+    mutationFn: async (customAgent: z.infer<typeof formSchema>) => {
+      const header = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      return axios.post(`${baseUrl}/api/v1/agents/`, customAgent, {
+        headers: header,
+      });
+    },
+  })
   function onSubmit(values: z.infer<typeof formSchema>) {
     console.log(values);
+    submitCustomAgentForm.mutateAsync(values);
   }
   const steps = [
     {
@@ -369,7 +378,7 @@ function CustomAgent() {
                                   </FormLabel>
                                   {!toolsLoading && toolsData ? (
                                     <MultiSelect
-                                      options={toolsData.map((tool) => ({
+                                      options={toolsData.map((tool:any) => ({
                                         value: tool.id,
                                         label: tool.name,
                                       }))}
@@ -444,6 +453,9 @@ function CustomAgent() {
                     <CardDescription>
                       You have successfully created an agent.
                     </CardDescription>
+                    <CardContent>
+                      <h3>{submitCustomAgentForm.isSuccess && (<>success</>)}</h3>
+                    </CardContent>
                   </CardHeader>
                 </Card>
               )}
@@ -477,7 +489,6 @@ const Footer = ({
     isOptionalStep,
     currentStep,
   } = useStepper();
-  console.log(currentStep);
 
   const validateCurrentStep = async () => {
     let isValid = false;

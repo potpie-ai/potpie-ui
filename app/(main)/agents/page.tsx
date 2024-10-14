@@ -43,7 +43,7 @@ const Agents = () => {
                 <CardContent className="flex justify-between items-center">
                   <div className="flex flex-col gap-2">
                     <h3 className="text-lg font-semibold">{name}</h3>
-                    <p className="text-sm truncate max-w-xs">{description}</p>
+                    <p className="text-sm truncate max-w-md">{description}</p>
                   </div>
                   <div className="flex space-x-2">
                     <Button variant="outline" className="hover:bg-gray-200">

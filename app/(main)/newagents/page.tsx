@@ -15,13 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { InfoIcon, Plus, X } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import getHeaders from "@/app/utils/headers.util";
@@ -35,6 +29,7 @@ import { Step, Stepper } from "@/components/ui/stepper";
 import InputField from "./components/InputFields";
 import Footer from "./components/Footer";
 import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
+import { redirect } from "next/navigation";
 
 const CustomAgent: React.FC = () => {
   const form = useForm<CustomAgentsFormValues>({
@@ -90,10 +85,15 @@ const CustomAgent: React.FC = () => {
     },
   });
 
-  const onSubmit: SubmitHandler<CustomAgentsFormValues> = (values) => {
-    submitCustomAgentForm.mutateAsync(values);
+  const onSubmit: SubmitHandler<CustomAgentsFormValues> = async (values) => {
+    await submitCustomAgentForm.mutateAsync(values, {
+      onSuccess: () => {
+        form.reset();
+        redirect("/customagents");
+      },
+    });
   };
-
+  
   const steps = [
     {
       id: "0",

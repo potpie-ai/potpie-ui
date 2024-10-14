@@ -29,9 +29,10 @@ import { Step, Stepper } from "@/components/ui/stepper";
 import InputField from "./components/InputFields";
 import Footer from "./components/Footer";
 import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 const CustomAgent: React.FC = () => {
+  const router = useRouter();
   const form = useForm<CustomAgentsFormValues>({
     resolver: zodResolver(CustomAgentsFormSchema),
     defaultValues: {
@@ -84,12 +85,12 @@ const CustomAgent: React.FC = () => {
       });
     },
   });
-
+  
   const onSubmit: SubmitHandler<CustomAgentsFormValues> = async (values) => {
     await submitCustomAgentForm.mutateAsync(values, {
       onSuccess: () => {
         form.reset();
-        redirect("/customagents");
+        router.push("/agents");
       },
     });
   };
@@ -115,6 +116,7 @@ const CustomAgent: React.FC = () => {
         initialStep={0}
         steps={steps}
         variant="circle"
+        size="lg"
       >
         {steps.map((stepProps, index) => (
           <Step
@@ -125,7 +127,7 @@ const CustomAgent: React.FC = () => {
             }}
           >
             {index === 0 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto">
+              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form
@@ -144,7 +146,7 @@ const CustomAgent: React.FC = () => {
               </Card>
             )}
             {index === 1 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto">
+              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form
@@ -175,7 +177,7 @@ const CustomAgent: React.FC = () => {
               </Card>
             )}
             {index === 2 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto">
+              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form

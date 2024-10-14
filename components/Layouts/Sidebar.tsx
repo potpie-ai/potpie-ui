@@ -187,7 +187,7 @@ const SidebarItems = [
         icons: "/images/robot.svg",
         title: "Custom Agents",
         soon: true,
-        href:"#"
+        href:"/agents"
       },
     ],
   },

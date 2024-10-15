@@ -4,7 +4,6 @@ import { useState } from "react";
 import Step1 from "./components/step1";
 import Step2 from "./components/step2";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
-import dayjs from "dayjs";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { setChat, setPendingMessage } from "@/lib/state/Reducers/chat";
@@ -30,7 +29,7 @@ const NewChat = () => {
   const handleFormSubmit = (message: string) => {
     if(!projectId || !currentConversationId) return;
     dispatch(setPendingMessage(message));
-    dispatch(setChat({ chatFlow: "NEW_CHAT" }));
+    dispatch(setChat({ chatFlow: "NEW_CHAT", temporaryContext: {branch:branchName, repo: repoName}, agentId: agentId }));
     router.push(`/chat/${currentConversationId}`);
   };
 

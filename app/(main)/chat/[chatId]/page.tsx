@@ -1,9 +1,8 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import ChatInterface from "../components/ChatInterface";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import getHeaders from "@/app/utils/headers.util";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
 import axios from "axios";
@@ -16,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader, XCircle } from "lucide-react";
 import { setChat } from "@/lib/state/Reducers/chat";
+import ChatBubble from "../components/chatbubble";
 
 interface SendMessageArgs {
   message: string;
@@ -38,6 +38,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const [projectId, setProjectId] = useState<string>("");
   const [parsingStatus, setParsingStatus] = useState<string>("")
   const currentConversationId = params.chatId;
+  const bottomOfPanel = useRef<HTMLDivElement>(null);
+  const upPanelRef = useRef<HTMLDivElement>(null);
+  const [infoLoaded, setInfoLoaded] = useState(false);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
 
   const {
     pendingMessage,
@@ -105,106 +109,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }));
 
     setStatus("active");
-    setFetchingResponse(false)
+    setFetchingResponse(false);
     return accumulatedMessage;
-  };
-
-  const messageMutation = useMutation({
-    mutationFn: sendMessage,
-    onMutate: ({ message }) => {
-      setStatus("loading");
-      // Push user's message to currentConversation
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        messages: [
-          ...prevConversation.messages,
-          {
-            sender: "user",
-            text: message,
-          },
-        ],
-      }));
-    },
-    onSuccess: () => {
-      setStatus("active");
-    },
-    onError: (error) => {
-      console.error("Error sending message:", error);
-      setStatus("error");
-    },
-  });
-
-  const { isLoading: isLoadingTotalMessages } = useQuery({
-    queryKey: ["total-messages", currentConversationId],
-    queryFn: async () => {
-      if (chatFlow !== "EXISTING_CHAT") return;
-
-      const headers = await getHeaders();
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/info/`,
-        {
-          headers: headers,
-        }
-      );
-      const totalMessages = response.data.total_messages;
-
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        totalMessages,
-      }));
-      dispatch(setChat({ agentId: response.data.agentIds[0], temporaryContext: { branch: response.data?.branchName, repo: response.data?.repoName } }));
-      setProjectId(response.data.projectIds[0])
-      return totalMessages;
-    },
-    enabled: chatFlow === "EXISTING_CHAT",
-  });
-
-  const { data: isLatest, isLoading: isLoadingIsLatest } = useQuery({
-    queryKey: ["is-latest", projectId],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-
-      const statusResponse = await axios
-        .get(`${baseUrl}/api/v1/parsing-status/${projectId}`, {
-          headers: headers,
-        })
-        .then((response) => {
-          if (response.data.latest !== true && temporaryContext.repo && temporaryContext.branch) {
-            parseRepo(temporaryContext.repo, temporaryContext.branch);
-          }
-          return response.data.latest;
-        })
-        .catch((error) => {
-          console.log(error);
-          return "error";
-        });
-
-      return statusResponse;
-    },
-    enabled: !!projectId,
-  });
-
-  useEffect(() => {
-    fetchConversations();
-    if (pendingMessage && !pendingMessageSent.current) {
-      try {
-        messageMutation.mutate({
-          message: pendingMessage,
-          selectedNodes: selectedNodes,
-        });
-        pendingMessageSent.current = true;
-      } catch (error) {
-        console.error("Error sending pending message:", error);
-      }
-    }
-  }, [currentConversationId, pendingMessage]);
-
-  const handleFormSubmit = (message: string) => {
-    messageMutation.mutate({
-      message,
-      selectedNodes: selectedNodes,
-    });
   };
 
   const parseRepo = async (repoName: string, branchName: string) => {
@@ -246,7 +152,32 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   };
 
-  const fetchConversations = async () => {
+  const messageMutation = useMutation({
+    mutationFn: sendMessage,
+    onMutate: ({ message }) => {
+      setStatus("loading");
+      // Push user's message to currentConversation
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        messages: [
+          ...prevConversation.messages,
+          {
+            sender: "user",
+            text: message,
+          },
+        ],
+      }));
+    },
+    onSuccess: () => {
+      setStatus("active");
+    },
+    onError: (error) => {
+      console.error("Error sending message:", error);
+      setStatus("error");
+    },
+  });
+
+  const loadMessages = async () => {
     try {
       setStatus("loading");
       const headers = await getHeaders();
@@ -256,7 +187,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           headers: headers,
           params: {
             start: 0,
-            limit: 10,
+            limit: 50,
           },
         }
       );
@@ -272,6 +203,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         start: 0,
       };
       setCurrentConversation(newConversation);
+      setMessagesLoaded(true);  // Mark messages as loaded
       setStatus("active");
     } catch (error) {
       console.error("Error fetching conversations:", error);
@@ -279,59 +211,81 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   };
 
-  const loadOlderMessages = async () => {
-    const start = currentConversation?.start || 0;
-
-    if (start > 0) {
-      try {
-        const headers = await getHeaders();
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/messages/`,
-          {
-            headers: headers,
-            params: {
-              start: start - 10,
-              limit: 10,
-            },
-          }
-        );
-
-        const newMessages = response.data;
-
-        setCurrentConversation((prevConversation: any) => {
-          const existingMessageIds = new Set(prevConversation.messages.map((msg: any) => msg.id));
-
-          const formattedMessages = newMessages
-            .filter((message: any) => !existingMessageIds.has(message.id))
-            .map((message: { id: any; content: any; type: string; citations: any; }) => ({
-              id: message.id,
-              text: message.content,
-              sender: message.type === "HUMAN" ? "user" : "agent",
-              citations: message.citations || [],
-            }));
-
-          return {
-            ...prevConversation,
-            messages: [...formattedMessages, ...prevConversation.messages],
-            start: start - 10,
-            totalMessages: prevConversation.totalMessages + formattedMessages.length,
-          };
-        });
-      } catch (error) {
-        console.error("Error loading older messages:", error);
+  const loadInfoOnce = async () => {
+    if (infoLoaded || chatFlow !== "EXISTING_CHAT") return;
+    const headers = await getHeaders();
+    const response = await axios.get(
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/info/`,
+      {
+        headers: headers,
       }
-    }
+    );
+    const totalMessages = response.data.total_messages;
+    setCurrentConversation((prevConversation: any) => ({
+      ...prevConversation,
+      totalMessages,
+    }));
+    dispatch(setChat({
+      agentId: response.data.agent_ids[0],
+      temporaryContext: {
+        branch: response.data?.branchName,
+        repo: response.data?.repoName
+      }
+    }));
+    setProjectId(response.data.project_ids[0]);
+    setInfoLoaded(true);
+  };
+
+  useEffect(() => {
+    loadInfoOnce();
+    loadMessages().then(() => {
+      if (pendingMessage && !pendingMessageSent.current && messagesLoaded) {
+        try {
+          messageMutation.mutate({
+            message: pendingMessage,
+            selectedNodes: selectedNodes,
+          });
+          pendingMessageSent.current = true;
+        } catch (error) {
+          console.error("Error sending pending message:", error);
+        }
+      }
+    });
+  }, [currentConversationId, pendingMessage, messagesLoaded]);
+
+  const handleFormSubmit = (message: string) => {
+    messageMutation.mutate({
+      message,
+      selectedNodes: selectedNodes,
+    });
   };
 
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
-      <ChatInterface
-        currentConversation={currentConversation}
-        status={status}
-        fetchingResponse={fetchingResponse}
-        chatFlow={chatFlow}
-        onLoadMoreMessages={loadOlderMessages}
-      />
+      <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
+        <div ref={upPanelRef} className="w-full"></div>
+        {currentConversation &&
+          currentConversation.messages.map((message: { citations: any; text: string; sender: "user" | "agent" }, i: number) => (
+            <ChatBubble
+              key={`${currentConversation.conversationId}-${i}`}
+              citations={Array.isArray(message.citations) && Array.isArray(message.citations[0]) ? message.citations.flat() : (message.citations || [])}
+              message={message.text}
+              sender={message.sender}
+              isLast={i === currentConversation.messages.length - 1}
+              currentConversationId={currentConversation.conversationId}
+            />
+          ))}
+
+        {status === "loading" || fetchingResponse && (
+          <div className="flex items-center space-x-1 mr-auto">
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+          </div>
+        )}
+
+        <div ref={bottomOfPanel} />
+      </div>
       <NodeSelectorForm
         projectId={projectId}
         onSubmit={handleFormSubmit}

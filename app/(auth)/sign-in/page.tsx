@@ -74,8 +74,6 @@ export default function Signin() {
         // alert(JSON.stringify({ ...result.user, providerUsername: result._tokenResponse.screenName }));
         const credential = GithubAuthProvider.credentialFromResult(result);
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-        console.log(result.user);
-        console.log(credential);
         if (credential) {
           const userSignup = axios
             .post(`${baseUrl}/api/v1/signup`, {

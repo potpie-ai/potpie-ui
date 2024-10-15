@@ -552,12 +552,7 @@ const VerticalStep = React.forwardRef<HTMLDivElement, VerticalStepProps>(
         data-optional={steps[index || 0]?.optional}
         data-completed={isCompletedStep}
         data-active={active}
-        data-clickable={clickable || !!onClickStep}
         data-invalid={localIsError}
-        onClick={() =>
-          onClickStep?.(index || 0, setStep) ||
-          onClickStepGeneral?.(index || 0, setStep)
-        }
       >
         <div
           data-vertical={true}
@@ -569,6 +564,11 @@ const VerticalStep = React.forwardRef<HTMLDivElement, VerticalStepProps>(
               "border-s-[3px] data-[active=true]:border-primary py-2 ps-3",
             styles?.["vertical-step-container"]
           )}
+          data-clickable={clickable || !!onClickStep}
+          onClick={() =>
+            onClickStep?.(index || 0, setStep) ||
+            onClickStepGeneral?.(index || 0, setStep)
+          }
         >
           <StepButtonContainer
             {...{ isLoading: localIsLoading, isError: localIsError, ...props }}

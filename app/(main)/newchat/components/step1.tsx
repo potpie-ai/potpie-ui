@@ -99,6 +99,9 @@ const Step1 = () => {
           `${baseUrl}/api/v1/parsing-status/${projectId}`,
           { headers: headers }
         );
+        if(!statusResponse.data.status) {
+          throw new Error("Error during parsing");
+        }
 
         parsingStatus = statusResponse.data.status;
         setParsingStatus(parsingStatus);

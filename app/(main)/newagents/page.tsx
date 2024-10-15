@@ -45,6 +45,48 @@ const CustomAgent: React.FC = () => {
       ],
     },
   });
+  const [errorStates, setErrorStates] = useState<("error" | "loading" | undefined)[]>([
+    undefined,
+    undefined,
+    undefined,
+  ]);
+  const [currentStep, setCurrentStep] = useState(0);
+
+
+  const validateCurrentStep = async (stepIndex: number) => {
+    let isValid = false;
+
+    if (stepIndex === 0) {
+      isValid = await form.trigger("system");
+    } else if (stepIndex === 1) {
+      isValid = await form.trigger(["role", "goal", "backstory"]);
+    } else if (stepIndex === 2) {
+      const result = await form.trigger("tasks");
+      const taskCount = form.getValues("tasks").length;
+      isValid = result && taskCount > 0;
+    }
+
+    setErrorStates((prev) => {
+      const updatedStates = [...prev];
+      updatedStates[stepIndex] = isValid ? undefined : "error";
+      return updatedStates;
+    });
+
+    return isValid;
+  };
+
+  const handleStepClick = async (stepIndex: number, setStep: (step: number) => void) => {
+    if (stepIndex < currentStep) {
+      setCurrentStep(stepIndex);
+      setStep(stepIndex);
+    } else {
+      const isValid = await validateCurrentStep(currentStep);
+      if (isValid) {
+        setCurrentStep(stepIndex);
+        setStep(stepIndex);
+      }
+    }
+  };
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -122,9 +164,8 @@ const CustomAgent: React.FC = () => {
           <Step
             key={stepProps.label}
             {...stepProps}
-            onClickStep={(step, setStep) => {
-              setStep(step);
-            }}
+            state={errorStates[index]}
+            onClickStep={(step, setStep) => handleStepClick(step,setStep)}
           >
             {index === 0 && (
               <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">

@@ -1,6 +1,4 @@
-import getHeaders from "@/app/utils/headers.util";
-import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
-import axios from "axios";
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import dayjs from "dayjs";
 
 interface Message {
@@ -24,29 +22,21 @@ interface Agent {
 }
 
 interface chatState {
-  repoName: string;
-  branchName?: string;
-  chatStep?: number;
+  title: string;
   agentId: string;
-  projectId: string;
+  allAgents: Agent[];
   conversations: Conversation[];
   selectedNodes: any[]
-  title: string;
   status: string;
   currentConversationId: string;
   pendingMessage: string | null;
   chatFlow: string;
-  allAgents: Agent[];
 }
 
 const initialState: chatState = {
-  repoName: "",
-  branchName: "",
-  chatStep: 1,
   agentId: "",
-  projectId: "",
+  title: dayjs().format("MMMM DD, YYYY") + " Untitled Chat",
   conversations: [],
-  title: dayjs().format("MMMM DD, YYYY") + " Untitled",
   status: "loading",
   currentConversationId: "",
   pendingMessage: "",
@@ -138,16 +128,13 @@ const chatSlice = createSlice({
     },
 
     clearChat: (state) => {
-      const { projectId, branchName, repoName, selectedNodes, title, chatFlow,agentId, allAgents } = state;  
+      const { selectedNodes, chatFlow, allAgents, title, agentId } = state;  
       return {
         ...initialState,
-        projectId,
-        branchName,
-        repoName,
-        selectedNodes,
         title,
-        chatFlow,
         agentId,
+        selectedNodes,
+        chatFlow,
         allAgents
       };
     },

@@ -26,11 +26,11 @@ const Sidebar = () => {
   const router = useRouter();
   const dispatch = useDispatch();
 
-  const redirectToNewChat = (e:any) => {
-    router.push("/newchat")
-    dispatch(clearFullChat())
-  }
-  
+  const redirectToNewChat = () => {
+    dispatch(clearFullChat());
+    window.location.href = "/newchat";
+  };
+
   React.useEffect(() => {
     const timer = setTimeout(() => setProgress(5), 500);
     return () => clearTimeout(timer);
@@ -46,7 +46,7 @@ const Sidebar = () => {
           </Link>
           <hr className="absolute right-0 -bottom-5 h-px w-full border-0 bg-border" />
         </div>
-        <Button className="flex gap-3 mx-5 mb-7" onClick={() => redirectToNewChat(event)}>
+        <Button className="flex gap-3 mx-5 mb-7" onClick={() => redirectToNewChat()}>
           <Plus /> <span>New Chat</span>
         </Button>
         <div className="flex-1">

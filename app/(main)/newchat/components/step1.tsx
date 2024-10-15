@@ -1,10 +1,3 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle,
@@ -16,9 +9,6 @@ import {
   Info,
 } from "lucide-react";
 import Link from "next/link";
-import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "@/lib/state/store";
-import { setChat } from "@/lib/state/Reducers/chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -45,11 +35,23 @@ import {
 } from "@/components/ui/command";
 import { CommandSeparator } from "cmdk";
 
-const Step1 = () => {
-  const dispatch = useDispatch();
-  const { repoName, branchName } = useSelector(
-    (state: RootState) => state.chat
-  );
+interface Step1Props {
+  repoName: string;
+  branchName: string;
+  setRepoName: (name: string) => void;
+  setBranchName: (name: string) => void;
+  setProjectId: (id: string) => void;
+  setChatStep: (step: number) => void;
+}
+
+const Step1: React.FC<Step1Props> = ({
+  repoName,
+  branchName,
+  setRepoName,
+  setBranchName,
+  setProjectId,
+  setChatStep,
+}) => {
   const [parsingStatus, setParsingStatus] = useState<string>("");
 
   const githubAppUrl =
@@ -71,33 +73,41 @@ const Step1 = () => {
     setParsingStatus("loading");
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-
+  
     try {
+      // Initial API call to parse the repository
       const parseResponse = await axios.post(
         `${baseUrl}/api/v1/parse`,
         { repo_name, branch_name },
         { headers: headers }
       );
-
-      if (repo_name !== null || branch_name !== null) {
-        dispatch(setChat({ projectId: parseResponse.data.project_id }));
-      }
-
+  
       const projectId = parseResponse.data.project_id;
-
-      let parsingStatus = "";
-
-      while (true) {
+      const initialStatus = parseResponse.data.status;
+  
+      if (projectId) {
+        setProjectId(projectId);
+      }
+  
+      if (initialStatus === "ready") {
+        setParsingStatus("Ready");
+        setChatStep(2); 
+        return parseResponse.data;
+      }
+  
+      // Start polling if the initial status is not "ready"
+      let parsingStatus = initialStatus;
+      while (parsingStatus !== "ready") {
         const statusResponse = await axios.get(
           `${baseUrl}/api/v1/parsing-status/${projectId}`,
           { headers: headers }
         );
-
+  
         parsingStatus = statusResponse.data.status;
         setParsingStatus(parsingStatus);
-
+  
         if (parsingStatus === "ready") {
-          dispatch(setChat({ chatStep: 2 }));
+          setChatStep(2); // Move to step 2
           setParsingStatus("Ready");
           break;
         } else if (parsingStatus === "submitted") {
@@ -110,9 +120,11 @@ const Step1 = () => {
           setParsingStatus("Error");
           break;
         }
-
+  
+        // Wait for 5 seconds before checking the status again
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
+  
       return parseResponse.data;
     } catch (err) {
       console.error("Error during parsing:", err);
@@ -120,6 +132,7 @@ const Step1 = () => {
       return err;
     }
   };
+  
 
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
     UserRepo[]
@@ -177,15 +190,18 @@ const Step1 = () => {
 
   // Reset repoName, branchName, and chatStep when the component mounts
   useEffect(() => {
-    dispatch(setChat({ repoName: "", branchName: "", chatStep: 1 }));
-  }, [dispatch]);
+    setRepoName(""); // Clear repo name
+    setBranchName(""); // Clear branch name
+  }, []);
+
   const [repoOpen, setRepoOpen] = useState(false);
-  const [branchOpen, setbranchOpen] = useState(false);
+  const [branchOpen, setBranchOpen] = useState(false);
+
   return (
     <div className="text-muted">
       <h1 className="text-lg">Select a repository and branch</h1>
       <Link href={"#"} className="text-accent underline">
-        need help?
+        Need help?
       </Link>
       <div className="flex items-center gap-4 mt-4 ml-5">
         {UserRepositorysLoading ? (
@@ -195,7 +211,7 @@ const Step1 = () => {
             <PopoverTrigger asChild className="w-[220px]">
               {UserRepositorys?.length === 0 || !repoName ? (
                 <Button
-                  className="flex gap-3 items-center font-semibold"
+                  className="flex gap-3 items-center font-semibold justify-start"
                   variant="outline"
                 >
                   <Github
@@ -206,7 +222,7 @@ const Step1 = () => {
                 </Button>
               ) : (
                 <Button
-                  className="flex gap-3 items-center font-semibold"
+                  className="flex gap-3 items-center font-semibold justify-start"
                   variant="outline"
                 >
                   <Github
@@ -230,11 +246,7 @@ const Step1 = () => {
                         key={value.id}
                         value={value.full_name}
                         onSelect={(value) => {
-                          if (value !== "new") {
-                            dispatch(setChat({ repoName: value }));
-                          } else {
-                            openPopup();
-                          }
+                          setRepoName(value);
                           setRepoOpen(false);
                         }}
                       >
@@ -261,11 +273,11 @@ const Step1 = () => {
         {UserBranchLoading ? (
           <Skeleton className="w-[220px] h-10" />
         ) : (
-          <Popover open={branchOpen} onOpenChange={setbranchOpen}>
+          <Popover open={branchOpen} onOpenChange={setBranchOpen}>
             <PopoverTrigger asChild className="w-[220px]">
-              {UserRepositorys?.length === 0 || !branchName ? (
+              {UserBranch?.length === 0 || !branchName ? (
                 <Button
-                  className="flex gap-3 items-center font-semibold "
+                  className="flex gap-3 items-center font-semibold justify-start"
                   variant="outline"
                 >
                   <GitBranch
@@ -276,7 +288,7 @@ const Step1 = () => {
                 </Button>
               ) : (
                 <Button
-                  className="flex gap-3 items-center font-semibold w-[220px]"
+                  className="flex gap-3 items-center font-semibold w-[220px] justify-start"
                   variant="outline"
                 >
                   <GitBranch
@@ -295,28 +307,18 @@ const Step1 = () => {
                 <CommandList>
                   <CommandEmpty>No branch found.</CommandEmpty>
                   <CommandGroup>
-                    {!UserBranchLoading ? (
-                      UserBranch?.map((value: any) => (
-                        <CommandItem
-                          key={value}
-                          value={value}
-                          onSelect={(value) => {
-                            dispatch(setChat({ branchName: value }));
-                            setbranchOpen(false);
-                          }}
-                        >
-                          {value}
-                        </CommandItem>
-                      ))
-                    ) : (
-                      <SelectItem
-                        value="loading"
-                        disabled
-                        className="pointer-events-none"
+                    {UserBranch?.map((value: any) => (
+                      <CommandItem
+                        key={value}
+                        value={value}
+                        onSelect={(value) => {
+                          setBranchName(value);
+                          setBranchOpen(false);
+                        }}
                       >
-                        <Skeleton className="w-[180px] h-7" />
-                      </SelectItem>
-                    )}
+                        {value}
+                      </CommandItem>
+                    ))}
                   </CommandGroup>
                 </CommandList>
               </Command>

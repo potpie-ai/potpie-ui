@@ -31,6 +31,7 @@ const persistConfig = {
   key: "root",
   storage,
   version: 1,
+  blacklist: ['chat','branch']
 };
 const persistedReducer = persistReducer(persistConfig, rootReducers);
 

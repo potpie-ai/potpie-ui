@@ -2,15 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import ChatInterface from "../components/ChatInterface";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "@/lib/state/store";
-import {
-  clearChat,
-  clearPendingMessage,
-  setChat,
-  addMessageToConversation,
-  setStart,
-  setTotalMessages,
-} from "@/lib/state/Reducers/chat";
+import { AppDispatch, RootState } from "@/lib/state/store";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import getHeaders from "@/app/utils/headers.util";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
@@ -20,10 +12,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader, XCircle } from "lucide-react";
+import { setChat } from "@/lib/state/Reducers/chat";
 
 interface SendMessageArgs {
   message: string;
@@ -31,30 +23,36 @@ interface SendMessageArgs {
 }
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
-  const dispatch = useDispatch();
+  const { temporaryContext } = useSelector(
+    (state: RootState) => state.chat
+  );
+  const dispatch: AppDispatch = useDispatch();
+  const [currentConversation, setCurrentConversation] = useState<any>({
+    conversationId: params.chatId,
+    messages: [],
+    totalMessages: 0,
+    start: 0,
+  });
+  const [status, setStatus] = useState<string>("loading");
+  const [fetchingResponse, setFetchingResponse] = useState<Boolean>(false);
+  const [projectId, setProjectId] = useState<string>("");
+  const [parsingStatus, setParsingStatus] = useState<string>("")
+  const currentConversationId = params.chatId;
+
   const {
     pendingMessage,
-    projectId,
     selectedNodes,
-    conversations,
     chatFlow,
-    repoName,
-    branchName,
-    status
   } = useSelector((state: RootState) => state.chat);
-  
-  const pendingMessageSent = useRef(false);
-  const [parsingStatus, setParsingStatus] = useState<string>("");
 
-  /*
-  This function is to send a message.
-  */
+  const pendingMessageSent = useRef(false);
 
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     const headers = await getHeaders();
-    dispatch(setChat({ status: "loading" }));
+    setStatus("loading");
+    setFetchingResponse(true);
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/message/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/message/`,
       {
         method: "POST",
         headers: {
@@ -75,10 +73,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     let accumulatedCitation = "";
 
     while (true) {
-      const { done, value } = (await reader?.read()) || {
-        done: true,
-        value: undefined,
-      };
+      const { done, value } = (await reader?.read()) || { done: true, value: undefined };
       if (done) break;
 
       const chunk = decoder.decode(value);
@@ -86,99 +81,97 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         const parsedChunks = chunk
           .split("}")
           .filter(Boolean)
-          .map((c) => JSON.parse(c + "}")); // Ensure that chunks are closed properly
+          .map((c) => JSON.parse(c + "}"));
 
         for (const parsedChunk of parsedChunks) {
           accumulatedMessage += parsedChunk.message;
           accumulatedCitation = parsedChunk.citations;
         }
       } catch (error) {
-        // TODO: Implement this later
+        // TODO: Handle the error
       }
     }
-    dispatch(
-      addMessageToConversation({
-        chatId: params.chatId,
-        message: {
+
+    setCurrentConversation((prevConversation: any) => ({
+      ...prevConversation,
+      messages: [
+        ...prevConversation.messages,
+        {
           sender: "agent",
           text: accumulatedMessage,
           citations: [accumulatedCitation],
         },
-      })
-    );
+      ],
+    }));
 
-    dispatch(setChat({ status: "active" }));
+    setStatus("active");
+    setFetchingResponse(false)
     return accumulatedMessage;
   };
-  /*
-  This mutation hook handles the process of sending messages.
-  */
+
   const messageMutation = useMutation({
     mutationFn: sendMessage,
     onMutate: ({ message }) => {
-      dispatch(setChat({ status: "loading" }));
-      dispatch(
-        addMessageToConversation({
-          chatId: params.chatId,
-          message: { sender: "user", text: message },
-        })
-      );
+      setStatus("loading");
+      // Push user's message to currentConversation
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        messages: [
+          ...prevConversation.messages,
+          {
+            sender: "user",
+            text: message,
+          },
+        ],
+      }));
     },
     onSuccess: () => {
-      dispatch(setChat({ status: "active" }));
+      setStatus("active");
     },
     onError: (error) => {
       console.error("Error sending message:", error);
-      dispatch(setChat({ status: "error" }));
+      setStatus("error");
     },
   });
-  /*
-  Query to fetch total messages for the conversation.
-  */
-  const { isLoading: isLoadingTotalMessages, data: totalMessagesData } = useQuery({
-    queryKey: ["total-messages", params.chatId],
+
+  const { isLoading: isLoadingTotalMessages } = useQuery({
+    queryKey: ["total-messages", currentConversationId],
     queryFn: async () => {
       if (chatFlow !== "EXISTING_CHAT") return;
 
-        const headers = await getHeaders();
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/info/`,
-          {
-            headers: headers,
-          }
-        );
-        const totalMessages = response.data.total_messages;
-        dispatch(setChat({ projectId: response.data.project_ids[0], agentId: response.data.agent_ids[0] }));
-        dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
-
-        if (totalMessages > 0) {
-          dispatch(
-            setStart({
-              chatId: params.chatId,
-              start: totalMessages - 10 > 0 ? totalMessages - 10 : 0,
-            })
-          );
-          dispatch(setTotalMessages({ chatId: params.chatId, totalMessages }));
+      const headers = await getHeaders();
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/info/`,
+        {
+          headers: headers,
         }
+      );
+      const totalMessages = response.data.total_messages;
 
-        return totalMessages;
-      },
-      enabled: chatFlow === "EXISTING_CHAT",
-    });
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        totalMessages,
+      }));
+      dispatch(setChat({ agentId: response.data.agentIds[0], temporaryContext: { branch: response.data?.branchName, repo: response.data?.repoName } }));
+      setProjectId(response.data.projectIds[0])
+      return totalMessages;
+    },
+    enabled: chatFlow === "EXISTING_CHAT",
+  });
 
-  const { data: IsLatest, isLoading: isLoadingIsLatest } = useQuery({
-    queryKey: ["is-latest", params.chatId],
+  const { data: isLatest, isLoading: isLoadingIsLatest } = useQuery({
+    queryKey: ["is-latest", projectId],
     queryFn: async () => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
-      const statusResponse = axios
+      const statusResponse = await axios
         .get(`${baseUrl}/api/v1/parsing-status/${projectId}`, {
           headers: headers,
         })
         .then((response) => {
-          if (response.data.latest !== true && repoName && branchName) {
-            parseRepo(repoName, branchName);
+          if (response.data.latest !== true && temporaryContext.repo && temporaryContext.branch) {
+            parseRepo(temporaryContext.repo, temporaryContext.branch);
           }
           return response.data.latest;
         })
@@ -186,92 +179,35 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           console.log(error);
           return "error";
         });
+
+      return statusResponse;
     },
-    enabled: !isLoadingTotalMessages && !!projectId,
-  });
-  /*
-  Query to fetch paginated messages from the conversation.
-  */
-  const { refetch: refetchMessages } = useQuery({
-    queryKey: ["chat-messages", params.chatId],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const conversation = conversations.find(
-        (c) => c.conversationId === params.chatId
-      );
-      const start = conversation?.start || 0;
-
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${params.chatId}/messages/`,
-        {
-          headers: headers,
-          params: {
-            start,
-            limit: 10,
-          },
-        }
-      );
-
-      dispatch(clearChat());
-      response.data.forEach((message: any) => {
-        dispatch(
-          addMessageToConversation({
-            chatId: params.chatId,
-            message: {
-              id: message.id,
-              sender: message.type !== "HUMAN" ? "agent" : "user",
-              text: message.content,
-            },
-          })
-        );
-      });
-
-      if (pendingMessage) {
-        const conversation = conversations.find(conv => conv.conversationId === params.chatId);
-        const lastMessage = conversation?.messages?.[conversation.messages.length - 1]?.text;
-        // Adding extra check if the message is already present, dont add it again
-        if (lastMessage !== pendingMessage) {
-          dispatch(
-            addMessageToConversation({
-              chatId: params.chatId,
-              message: {
-                sender: "user",
-                text: pendingMessage,
-              },
-            })
-          );
-          dispatch(setChat({ status: "loading" }));
-          dispatch(clearPendingMessage());
-          return response.data;
-        }
-      }
-
-      dispatch(setChat({ status: "active" }));
-      return response.data;
-    },
-    refetchOnWindowFocus: false,
-    enabled: chatFlow === "EXISTING_CHAT" || !!pendingMessage,
+    enabled: !!projectId,
   });
 
   useEffect(() => {
+    fetchConversations();
     if (pendingMessage && !pendingMessageSent.current) {
       try {
-        messageMutation.mutate({ message: pendingMessage, selectedNodes: selectedNodes });
+        messageMutation.mutate({
+          message: pendingMessage,
+          selectedNodes: selectedNodes,
+        });
         pendingMessageSent.current = true;
       } catch (error) {
         console.error("Error sending pending message:", error);
       }
     }
-  }, [params.chatId, pendingMessage]);
+  }, [currentConversationId, pendingMessage]);
 
   const handleFormSubmit = (message: string) => {
-    messageMutation.mutate({ 
-      message, 
-      selectedNodes: selectedNodes 
+    messageMutation.mutate({
+      message,
+      selectedNodes: selectedNodes,
     });
   };
 
-  const parseRepo = async (repo_name: string, branch_name: string) => {
+  const parseRepo = async (repoName: string, branchName: string) => {
     setParsingStatus("parsing");
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -279,15 +215,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     try {
       const parseResponse = await axios.post(
         `${baseUrl}/api/v1/parse`,
-        { repo_name, branch_name },
+        { repo_name: repoName, branch_name: branchName },
         { headers: headers }
       );
 
-      if (repo_name !== null || branch_name !== null) {
-        dispatch(setChat({ projectId: parseResponse.data.project_id }));
-      }
-
-      const projectId = parseResponse.data.project_id;
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
       let parsingStatus = "";
@@ -301,65 +232,138 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         setParsingStatus(parsingStatus);
 
         if (parsingStatus === "ready") {
-          dispatch(setChat({ chatStep: 2 }));
-          setParsingStatus("Ready");
-          break;
-        } else if (parsingStatus === "submitted") {
-          setParsingStatus("Parsing");
-        } else if (parsingStatus === "parsed") {
-          setParsingStatus("Understanding your code");
-        } else if (parsingStatus === "error") {
-          setParsingStatus("error");
           break;
         }
 
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
+
       return parseResponse.data;
-    } catch (err) {
-      console.error("Error during parsing:", err);
+    } catch (error) {
+      console.error("Error during parsing:", error);
       setParsingStatus("error");
-      return err;
+      return error;
+    }
+  };
+
+  const fetchConversations = async () => {
+    try {
+      setStatus("loading");
+      const headers = await getHeaders();
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/messages/`,
+        {
+          headers: headers,
+          params: {
+            start: 0,
+            limit: 10,
+          },
+        }
+      );
+
+      const newConversation = {
+        conversationId: currentConversationId,
+        messages: response.data.map((message: { id: any; content: any; type: string; citations: any; }) => ({
+          id: message.id,
+          text: message.content,
+          sender: message.type === "HUMAN" ? "user" : "agent",
+          citations: message.citations || [],
+        })),
+        start: 0,
+      };
+      setCurrentConversation(newConversation);
+      setStatus("active");
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      setStatus("error");
+    }
+  };
+
+  const loadOlderMessages = async () => {
+    const start = currentConversation?.start || 0;
+
+    if (start > 0) {
+      try {
+        const headers = await getHeaders();
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/messages/`,
+          {
+            headers: headers,
+            params: {
+              start: start - 10,
+              limit: 10,
+            },
+          }
+        );
+
+        const newMessages = response.data;
+
+        setCurrentConversation((prevConversation: any) => {
+          const existingMessageIds = new Set(prevConversation.messages.map((msg: any) => msg.id));
+
+          const formattedMessages = newMessages
+            .filter((message: any) => !existingMessageIds.has(message.id))
+            .map((message: { id: any; content: any; type: string; citations: any; }) => ({
+              id: message.id,
+              text: message.content,
+              sender: message.type === "HUMAN" ? "user" : "agent",
+              citations: message.citations || [],
+            }));
+
+          return {
+            ...prevConversation,
+            messages: [...formattedMessages, ...prevConversation.messages],
+            start: start - 10,
+            totalMessages: prevConversation.totalMessages + formattedMessages.length,
+          };
+        });
+      } catch (error) {
+        console.error("Error loading older messages:", error);
+      }
     }
   };
 
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
-      <ChatInterface currentConversationId={params.chatId} />
+      <ChatInterface
+        currentConversation={currentConversation}
+        status={status}
+        fetchingResponse={fetchingResponse}
+        chatFlow={chatFlow}
+        onLoadMoreMessages={loadOlderMessages}
+      />
       <NodeSelectorForm
         projectId={projectId}
         onSubmit={handleFormSubmit}
         disabled={status === "loading"}
       />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
-      <Dialog open={!!IsLatest}>
+      <Dialog open={parsingStatus === "parsing"}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Reparsing your latest code changes </DialogTitle>
+            <DialogTitle>Parsing your latest code changes</DialogTitle>
           </DialogHeader>
-          {parsingStatus !== "error" && parsingStatus === "Ready" ? (
+          {parsingStatus === "ready" ? (
             <div className="flex justify-start items-center gap-3 mt-5 ml-5">
-              <CheckCircle className="text-[#00C313] h-4 w-4" />{" "}
+              <CheckCircle className="text-[#00C313] h-4 w-4" />
               <span className="text-[#00C313]">{parsingStatus}</span>
             </div>
-          ) : parsingStatus !== "error" && parsingStatus !== "" ? (
-            <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
-              <Loader
-                className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
-              />{" "}
+          ) : parsingStatus === "parsing" ? (
+            <div className="flex justify-start items-center gap-3 mt-5 ml-5">
+              <Loader className="animate-spin h-4 w-4" />
               <span>{parsingStatus}</span>
             </div>
           ) : null}
           {parsingStatus === "error" && (
             <div className="flex gap-4 items-center my-3">
               <div className="flex justify-start items-center gap-3 ">
-                <XCircle className="text-[#E53E3E] h-4 w-4" />{" "}
+                <XCircle className="text-[#E53E3E] h-4 w-4" />
                 <span>{parsingStatus}</span>
               </div>
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => branchName && parseRepo(repoName, branchName)}
+                onClick={() => temporaryContext.repo && parseRepo(temporaryContext.repo, temporaryContext.branch)}
               >
                 Retry
               </Button>

@@ -1,60 +1,24 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "@/lib/state/store";
 import ChatBubble from "./chatbubble";
-import { Skeleton } from "@/components/ui/skeleton";
-import { addOlderMessages, setStart } from "@/lib/state/Reducers/chat";
-import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
-import { useQuery } from "@tanstack/react-query";
+
+interface ChatInterfaceProps {
+  currentConversation: any;
+  status: string;
+  chatFlow: string;
+  fetchingResponse: Boolean;
+  onLoadMoreMessages: () => void; 
+}
 
 const ChatInterface = ({
-  currentConversationId,
-}: {
-  currentConversationId: string;
-}) => {
-  const { conversations, status, chatFlow } = useSelector(
-    (state: RootState) => state.chat
-  );
-  const dispatch = useDispatch();
-
+  currentConversation,
+  status,
+  chatFlow,
+  fetchingResponse,
+  onLoadMoreMessages, 
+}: ChatInterfaceProps) => {
   const bottomOfPanel = useRef<HTMLDivElement>(null);
   const upPanelRef = useRef<HTMLDivElement>(null);
-  const currentConversation = conversations.find(
-    (c) => c.conversationId === currentConversationId
-  );
-
   const [isFirstRender, setIsFirstRender] = useState(true);
-
-  const { refetch: refetchMessages } = useQuery({
-    queryKey: ["chat-messages-refetch", currentConversationId],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const conversation = conversations.find(
-        (c) => c.conversationId === currentConversationId
-      );
-      const start = conversation?.start || 0;
-
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/messages/`,
-        {
-          headers: headers,
-          params: {
-            start,
-            limit: 10,
-          },
-        }
-      );
-      dispatch(
-        addOlderMessages({
-          chatId: currentConversationId,
-          messages: response.data,
-        })
-      );
-      return response.data;
-    },
-    enabled: false,
-  });
 
   useEffect(() => {
     if (bottomOfPanel.current) {
@@ -67,15 +31,8 @@ const ChatInterface = ({
     if (chatFlow === "EXISTING_CHAT") {
       const observer = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
-          const conversation = conversations.find(
-            (c) => c.conversationId === currentConversationId
-          );
-          if (entry.isIntersecting && !isFirstRender && conversation?.start != 0) {
-            const start = conversation?.start || 0;
-            dispatch(
-              setStart({ chatId: currentConversationId, start: start - 10 })
-            );
-            refetchMessages();
+          if (entry.isIntersecting && !isFirstRender && currentConversation?.start !== 0) {
+            onLoadMoreMessages(); 
           }
         });
       });
@@ -90,27 +47,27 @@ const ChatInterface = ({
         }
       };
     }
-  }, [isFirstRender, chatFlow, currentConversationId, conversations, dispatch, refetchMessages]);
+  }, [isFirstRender, chatFlow, currentConversation, onLoadMoreMessages]);
 
   return (
     <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
       <div ref={upPanelRef} className="w-full">
-        {/* <Skeleton className="w-full h-10" /> */}
+        {/* You can put any loading skeleton here */}
       </div>
 
       {currentConversation &&
-        currentConversation.messages.map((message, i) => (
+        currentConversation.messages.map((message: { citations: any; text: string; sender: "user" | "agent" }, i: number) => (
           <ChatBubble
-            key={`${currentConversationId}-${i}`}
-            citations={message.citations}
+            key={`${currentConversation.conversationId}-${i}`}
+            citations={Array.isArray(message.citations) && Array.isArray(message.citations[0]) ? message.citations.flat() : (message.citations || [])}
             message={message.text}
             sender={message.sender}
             isLast={i === currentConversation.messages.length - 1}
-            currentConversationId={currentConversationId}
+            currentConversationId={currentConversation.conversationId}
           />
         ))}
 
-      {status === "loading" && (
+      {status === "loading"|| fetchingResponse && (
         <div className="flex items-center space-x-1 mr-auto">
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>

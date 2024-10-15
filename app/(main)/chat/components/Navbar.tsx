@@ -23,7 +23,6 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
-import { Download, Share2 } from "lucide-react";
 
 const Navbar = () => {
   const { title, agentId, allAgents } = useSelector(
@@ -38,7 +37,6 @@ const Navbar = () => {
   const { refetch: refetchChatTitle } = useQuery({
     queryKey: ["chat-title"],
     queryFn: async () => {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
       axios
         .patch(

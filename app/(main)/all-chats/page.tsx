@@ -34,8 +34,7 @@ const AllChats = () => {
     queryKey: ["all-chats"],
     queryFn: async () => {
       const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(`${ process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/user/conversations`, {
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/user/conversations`, {
         params: {
           start: 0,
           limit: 1000,
@@ -121,7 +120,7 @@ const AllChats = () => {
   };
 
   const handleChatClick = (chat: any) => {
-    dispatch(setChat({ projectId: chat.project_ids[0], branchName: chat.branch, repoName:chat.repository, selectedNodes: [], title: chat.title, chatFlow:"EXISTING_CHAT" }));
+    dispatch(setChat({ agentId: chat.agent_id, temporaryContext: { branch: chat.branch, repo: chat.repository }, selectedNodes: [], title: chat.title, chatFlow: "EXISTING_CHAT" }));
   };
 
   return (
@@ -172,7 +171,7 @@ const AllChats = () => {
                                 setCurrentConversationId(chat.id);
                               }}
                             >
-                              <LucideEdit className="h-4 w-4" /> 
+                              <LucideEdit className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
                           <DialogContent

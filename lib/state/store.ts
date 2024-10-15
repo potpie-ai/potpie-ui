@@ -1,12 +1,10 @@
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import { persistReducer, persistStore } from "redux-persist";
 import chatReducer from "./Reducers/chat";
-import branchSliceReducer from "./Reducers/branch";
 import createWebStorage from "redux-persist/lib/storage/createWebStorage";
 
 const rootReducers = combineReducers({
   chat: chatReducer,
-  branch: branchSliceReducer,
 });
 
 const createNoopStorage = () => {

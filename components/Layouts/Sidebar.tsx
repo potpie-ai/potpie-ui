@@ -1,4 +1,4 @@
-import { CircleDollarSignIcon, KeyRound, LogOut, MessageCircleQuestion, Plus } from "lucide-react";
+import { KeyRound, LogOut, MessageCircleQuestion, Plus } from "lucide-react";
 import Link from "next/link";
 import React from "react";
 import { Button } from "../ui/button";
@@ -17,7 +17,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { signOut } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { useDispatch } from "react-redux";
-import { clearChat, clearFullChat } from "@/lib/state/Reducers/chat";
+import { clearChat } from "@/lib/state/Reducers/chat";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu";
 
 const Sidebar = () => {
@@ -27,7 +27,7 @@ const Sidebar = () => {
   const dispatch = useDispatch();
 
   const redirectToNewChat = () => {
-    dispatch(clearFullChat());
+    dispatch(clearChat());
     window.location.href = "/newchat";
   };
 

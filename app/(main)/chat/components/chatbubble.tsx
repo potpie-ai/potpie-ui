@@ -2,7 +2,7 @@ import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { LucideRepeat2, RotateCw, Github } from "lucide-react"; // Import GitHub icon
+import { LucideRepeat2, RotateCw, Github } from "lucide-react"; 
 import { useSelector } from "react-redux";
 import { useState } from "react";
 import { toast } from "sonner";

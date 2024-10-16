@@ -145,4 +145,36 @@ export default class ChatService {
             throw new Error("Error creating conversation");
         }
     }
+
+    static async getAllChats() {
+        const headers = await getHeaders();
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/user/conversations`, {
+            params: {
+                start: 0,
+                limit: 1000,
+            },
+            headers: headers,
+        });
+        return response.data.reverse();
+    }
+
+    static async renameChat(conversationId: string, title: string) {
+        const headers = await getHeaders();
+        const response = await axios.patch(
+            `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/rename/`,
+            {
+                title: title,
+            },
+            { headers: headers }
+        );
+        return response.data;
+    }
+
+    static async deleteChat(conversationId: string) {
+        const headers = await getHeaders();
+        const response = await axios.delete(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/`, {
+            headers,
+        });
+        return response.data;
+    }
 }

@@ -5,7 +5,7 @@ import { AppDispatch, RootState } from "@/lib/state/store";
 import { useMutation } from "@tanstack/react-query";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
 import { clearPendingMessage, setChat } from "@/lib/state/Reducers/chat";
-import ChatBubble from "../components/chatbubble";
+import ChatBubble from "../components/Chatbubble";
 import {
   Dialog,
   DialogContent,

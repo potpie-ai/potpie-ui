@@ -98,7 +98,9 @@ export default class BranchAndRepositoryService {
           setParsingStatus(getStatusMessage(parsingStatus));
     
           if (parsingStatus === "ready") {
-            setChatStep(2);
+            if (setChatStep) {
+              setChatStep(2); 
+            }
             setParsingStatus("Ready");
             return;
           }

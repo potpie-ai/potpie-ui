@@ -72,6 +72,7 @@ const AllChats = () => {
     },
     enabled: false,
   });
+
   const { refetch: refetchChatDelete } = useQuery({
     queryKey: ["chat-title"],
     queryFn: async () => {
@@ -120,6 +121,7 @@ const AllChats = () => {
   };
 
   const handleChatClick = (chat: any) => {
+    console.log(chat)
     dispatch(setChat({ agentId: chat.agent_id, temporaryContext: { branch: chat.branch, repo: chat.repository }, selectedNodes: [], title: chat.title, chatFlow: "EXISTING_CHAT" }));
   };
 

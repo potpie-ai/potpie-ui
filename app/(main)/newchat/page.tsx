@@ -29,7 +29,7 @@ const NewChat = () => {
   const handleFormSubmit = (message: string) => {
     if(!projectId || !currentConversationId) return;
     dispatch(setPendingMessage(message));
-    dispatch(setChat({ chatFlow: "NEW_CHAT", temporaryContext: {branch:branchName, repo: repoName}, agentId: agentId }));
+    dispatch(setChat({ chatFlow: "NEW_CHAT", temporaryContext: {branch:branchName, repo: repoName, projectId: projectId}, agentId: agentId }));
     router.push(`/chat/${currentConversationId}`);
   };
 

@@ -79,7 +79,7 @@ const AllChats = () => {
   };
 
   const handleChatClick = (chat: any) => {
-    dispatch(setChat({ agentId: chat.agent_id, temporaryContext: { branch: chat.branch, repo: chat.repository }, selectedNodes: [], title: chat.title, chatFlow: "EXISTING_CHAT" }));
+    dispatch(setChat({ agentId: chat.agent_id, temporaryContext: { branch: chat.branch, repo: chat.repository, projectId: chat.project_ids[0] }, selectedNodes: [], title: chat.title, chatFlow: "EXISTING_CHAT" }));
   };
 
   return (

@@ -10,6 +10,7 @@ interface Agent {
 interface TemporaryContext {
   branch: string;
   repo: string;
+  projectId: string;
 }
 
 interface chatState {
@@ -29,7 +30,7 @@ const initialState: chatState = {
   pendingMessage: "",
   selectedNodes: [],
   chatFlow: "EXISTING_CHAT",
-  temporaryContext: { branch: "", repo: "" }
+  temporaryContext: { branch: "", repo: "", projectId: "" }
 };
 
 const chatSlice = createSlice({

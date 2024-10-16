@@ -12,8 +12,6 @@ import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
 import {
   Tooltip,
   TooltipContent,
@@ -34,6 +32,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { CommandSeparator } from "cmdk";
+import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 
 interface Step1Props {
   repoName: string;
@@ -53,14 +52,12 @@ const Step1: React.FC<Step1Props> = ({
   setChatStep,
 }) => {
   const [parsingStatus, setParsingStatus] = useState<string>("");
-
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
     "/installations/select_target?setup_action=install";
   const popupRef = useRef<Window | null>(null);
 
-  // Open popup for linking a new repo
   const openPopup = () => {
     popupRef.current = window.open(
       githubAppUrl,
@@ -71,19 +68,11 @@ const Step1: React.FC<Step1Props> = ({
 
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
-    const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
   
     try {
-      // Initial API call to parse the repository
-      const parseResponse = await axios.post(
-        `${baseUrl}/api/v1/parse`,
-        { repo_name, branch_name },
-        { headers: headers }
-      );
-  
-      const projectId = parseResponse.data.project_id;
-      const initialStatus = parseResponse.data.status;
+      const parseResponse = await BranchAndRepositoryService.parseRepo(repo_name, branch_name);
+      const projectId = parseResponse.project_id;
+      const initialStatus = parseResponse.status;
   
       if (projectId) {
         setProjectId(projectId);
@@ -91,86 +80,31 @@ const Step1: React.FC<Step1Props> = ({
   
       if (initialStatus === "ready") {
         setParsingStatus("Ready");
-        setChatStep(2); 
-        return parseResponse.data;
+        setChatStep(2);
+        return;
       }
   
-      // Start polling if the initial status is not "ready"
-      let parsingStatus = initialStatus;
-      while (parsingStatus !== "ready") {
-        const statusResponse = await axios.get(
-          `${baseUrl}/api/v1/parsing-status/${projectId}`,
-          { headers: headers }
-        );
-  
-        parsingStatus = statusResponse.data.status;
-        setParsingStatus(parsingStatus);
-  
-        if (parsingStatus === "ready") {
-          setChatStep(2); // Move to step 2
-          setParsingStatus("Ready");
-          break;
-        } else if (parsingStatus === "submitted") {
-          setParsingStatus("Cloning your repository");
-        } else if (parsingStatus === "cloned") {
-          setParsingStatus("Parsing your code");
-        } else if (parsingStatus === "parsed") {
-          setParsingStatus("Understanding your codebase");
-        } else if (parsingStatus === "error") {
-          setParsingStatus("Error");
-          break;
-        }
-  
-        // Wait for 5 seconds before checking the status again
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      }
-  
-      return parseResponse.data;
+      await BranchAndRepositoryService.pollParsingStatus(projectId, initialStatus, setParsingStatus, setChatStep);
     } catch (err) {
       console.error("Error during parsing:", err);
       setParsingStatus("Error");
-      return err;
     }
   };
-  
 
-  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery<
-    UserRepo[]
-  >({
-    queryKey: ["user-repository"],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
-        headers,
-      });
-      return response.data.repositories;
-    },
+  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery({
+    queryKey: ["user-repository"], 
+    queryFn: () => BranchAndRepositoryService.getUserRepositories(), 
   });
-
+  
   const {
     data: UserBranch,
     isLoading: UserBranchLoading,
-    error: UserBranchError,
-  } = useQuery<UserRepo[]>({
-    queryKey: ["user-branch", repoName],
-    queryFn: async () => {
-      const headers = await getHeaders(); // Wait for the headers
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL; // Read base URL from the environment variable
-
-      const response = await axios.get(
-        `${baseUrl}/api/v1/github/get-branch-list`,
-        {
-          params: {
-            repo_name: repoName,
-          },
-          headers: headers,
-        }
-      );
-      return response.data.branches;
-    },
-    enabled: !!repoName && repoName !== "",
+  } = useQuery({
+    queryKey: ["user-branch", repoName], 
+    queryFn: () => BranchAndRepositoryService.getBranchList(repoName), 
+    enabled: !!repoName && repoName !== "", 
   });
+  
 
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -188,10 +122,9 @@ const Step1: React.FC<Step1Props> = ({
 
   const isParseDisabled = !repoName || !branchName || parsingStatus !== "";
 
-  // Reset repoName, branchName, and chatStep when the component mounts
   useEffect(() => {
-    setRepoName(""); // Clear repo name
-    setBranchName(""); // Clear branch name
+    setRepoName("");
+    setBranchName(""); 
   }, []);
 
   const [repoOpen, setRepoOpen] = useState(false);

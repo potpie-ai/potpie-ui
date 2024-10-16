@@ -4,12 +4,11 @@ import Image from "next/image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { auth } from "@/configs/Firebase-config";
-import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
-import dayjs from "dayjs";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { AppDispatch } from "@/lib/state/store";
 import { useDispatch } from "react-redux";
+import AgentService from "@/services/AgentService";
+import ChatService from "@/services/ChatService";
 
 interface AgentType {
   id: string;
@@ -19,7 +18,7 @@ interface AgentType {
 
 interface Step2Props {
   projectId: string | null;
-  title: string,
+  title: string;
   setChatStep: (step: number) => void;
   setCurrentConversationId: (id: string) => void;
   setAgentId: (id: string) => void;
@@ -38,40 +37,23 @@ const Step2: React.FC<Step2Props> = ({
   const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<AgentType[]>({
     queryKey: ["agent-types"],
     queryFn: async () => {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(`${baseUrl}/api/v1/list-available-agents/`, {
-        headers: headers,
-      });
-      dispatch(setChat( {allAgents: response.data}))
-
-      return response.data;
+      const agentTypes = await AgentService.getAgentTypes();
+      dispatch(setChat({ allAgents: agentTypes }));
+      return agentTypes;
     },
   });
 
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
 
   const createConversation = async (agentId: string) => {
-    const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/`,
-        {
-          user_id: userId,
-          title: title,
-          status: "active",
-          project_ids: [projectId],
-          agent_ids: [agentId],
-        },
-        { headers: headers }
-      );
+      const response = await ChatService.createConversation(userId, title, projectId, agentId);
       setAgentId(agentId);
       setChatStep(3);
-      setCurrentConversationId(response.data.conversation_id);
+      setCurrentConversationId(response.conversation_id);
     } catch (err) {
       console.error("Unable to create conversation:", err);
-      setChatStep(2); 
+      setChatStep(2);
     }
   };
 

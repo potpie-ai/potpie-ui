@@ -148,21 +148,26 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   useEffect(() => {
     loadInfoOnce();
-    loadMessages().then(() => {
-      if (pendingMessage && !pendingMessageSent.current && messagesLoaded) {
-        try {
-          messageMutation.mutate({
-            message: pendingMessage,
-            selectedNodes: selectedNodes,
-          });
-          pendingMessageSent.current = true;
-          dispatch(clearPendingMessage());
-        } catch (error) {
-          console.error("Error sending pending message:", error);
+  }, [currentConversationId]);
+  
+  useEffect(() => {
+    if (!messagesLoaded) {
+      loadMessages().then(() => {
+        if (pendingMessage && !pendingMessageSent.current) {
+          try {
+            messageMutation.mutate({
+              message: pendingMessage,
+              selectedNodes: selectedNodes,
+            });
+            pendingMessageSent.current = true;
+            dispatch(clearPendingMessage());
+          } catch (error) {
+            console.error("Error sending pending message:", error);
+          }
         }
-      }
-    });
-  }, [currentConversationId, pendingMessage, messagesLoaded]);
+      });
+    }
+  }, [messagesLoaded, pendingMessage]);  
 
   const handleFormSubmit = (message: string) => {
     messageMutation.mutate({

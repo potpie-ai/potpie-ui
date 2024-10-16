@@ -3,9 +3,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { useMutation } from "@tanstack/react-query";
-import getHeaders from "@/app/utils/headers.util";
 import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
-import axios from "axios";
+import { clearPendingMessage, setChat } from "@/lib/state/Reducers/chat";
+import ChatBubble from "../components/chatbubble";
 import {
   Dialog,
   DialogContent,
@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader, XCircle } from "lucide-react";
-import { setChat } from "@/lib/state/Reducers/chat";
-import ChatBubble from "../components/chatbubble";
+import ChatService from "@/services/ChatService";
+import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 
 interface SendMessageArgs {
   message: string;
@@ -33,15 +33,16 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     totalMessages: 0,
     start: 0,
   });
-  const [status, setStatus] = useState<string>("loading");
   const [fetchingResponse, setFetchingResponse] = useState<Boolean>(false);
   const [projectId, setProjectId] = useState<string>("");
   const [parsingStatus, setParsingStatus] = useState<string>("")
+  const [infoLoaded, setInfoLoaded] = useState(false);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
   const currentConversationId = params.chatId;
   const bottomOfPanel = useRef<HTMLDivElement>(null);
   const upPanelRef = useRef<HTMLDivElement>(null);
-  const [infoLoaded, setInfoLoaded] = useState(false);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
+  const pendingMessageSent = useRef(false);
+
 
   const {
     pendingMessage,
@@ -49,52 +50,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     chatFlow,
   } = useSelector((state: RootState) => state.chat);
 
-  const pendingMessageSent = useRef(false);
-
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
-    const headers = await getHeaders();
-    setStatus("loading");
     setFetchingResponse(true);
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/message/`,
-      {
-        method: "POST",
-        headers: {
-          ...headers,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ content: message, node_ids: selectedNodes }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Network response was not ok");
-    }
-
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let accumulatedMessage = "";
-    let accumulatedCitation = "";
-
-    while (true) {
-      const { done, value } = (await reader?.read()) || { done: true, value: undefined };
-      if (done) break;
-
-      const chunk = decoder.decode(value);
-      try {
-        const parsedChunks = chunk
-          .split("}")
-          .filter(Boolean)
-          .map((c) => JSON.parse(c + "}"));
-
-        for (const parsedChunk of parsedChunks) {
-          accumulatedMessage += parsedChunk.message;
-          accumulatedCitation = parsedChunk.citations;
-        }
-      } catch (error) {
-        // TODO: Handle the error
-      }
-    }
+    const { accumulatedMessage, accumulatedCitation } = await ChatService.sendMessage(currentConversationId, message, selectedNodes);
 
     setCurrentConversation((prevConversation: any) => ({
       ...prevConversation,
@@ -108,55 +66,37 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       ],
     }));
 
-    setStatus("active");
     setFetchingResponse(false);
     return accumulatedMessage;
   };
 
-  const parseRepo = async (repoName: string, branchName: string) => {
-    setParsingStatus("parsing");
-    const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-
+  const parseRepo = async (repo_name: string, branch_name: string) => {
+    setParsingStatus("loading");
+  
     try {
-      const parseResponse = await axios.post(
-        `${baseUrl}/api/v1/parse`,
-        { repo_name: repoName, branch_name: branchName },
-        { headers: headers }
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
-      let parsingStatus = "";
-      while (true) {
-        const statusResponse = await axios.get(
-          `${baseUrl}/api/v1/parsing-status/${projectId}`,
-          { headers: headers }
-        );
-
-        parsingStatus = statusResponse.data.status;
-        setParsingStatus(parsingStatus);
-
-        if (parsingStatus === "ready") {
-          break;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+      const parseResponse = await BranchAndRepositoryService.parseRepo(repo_name, branch_name);
+      const projectId = parseResponse.project_id;
+      const initialStatus = parseResponse.status;
+  
+      if (projectId) {
+        setProjectId(projectId);
       }
-
-      return parseResponse.data;
-    } catch (error) {
-      console.error("Error during parsing:", error);
-      setParsingStatus("error");
-      return error;
+  
+      if (initialStatus === "ready") {
+        setParsingStatus("Ready");
+        return;
+      }
+  
+      await BranchAndRepositoryService.pollParsingStatus(projectId, initialStatus, setParsingStatus);
+    } catch (err) {
+      console.error("Error during parsing:", err);
+      setParsingStatus("Error");
     }
   };
 
   const messageMutation = useMutation({
     mutationFn: sendMessage,
     onMutate: ({ message }) => {
-      setStatus("loading");
-      // Push user's message to currentConversation
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
         messages: [
@@ -168,72 +108,42 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         ],
       }));
     },
-    onSuccess: () => {
-      setStatus("active");
-    },
-    onError: (error) => {
-      console.error("Error sending message:", error);
-      setStatus("error");
-    },
   });
 
   const loadMessages = async () => {
     try {
-      setStatus("loading");
-      const headers = await getHeaders();
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/messages/`,
-        {
-          headers: headers,
-          params: {
-            start: 0,
-            limit: 50,
-          },
-        }
-      );
-
-      const newConversation = {
-        conversationId: currentConversationId,
-        messages: response.data.map((message: { id: any; content: any; type: string; citations: any; }) => ({
-          id: message.id,
-          text: message.content,
-          sender: message.type === "HUMAN" ? "user" : "agent",
-          citations: message.citations || [],
-        })),
-        start: 0,
-      };
-      setCurrentConversation(newConversation);
-      setMessagesLoaded(true);  // Mark messages as loaded
-      setStatus("active");
+      const messages = await ChatService.loadMessages(currentConversationId, 0, 50);
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        messages,
+      }));
+      setMessagesLoaded(true);
     } catch (error) {
       console.error("Error fetching conversations:", error);
-      setStatus("error");
     }
   };
 
   const loadInfoOnce = async () => {
     if (infoLoaded || chatFlow !== "EXISTING_CHAT") return;
-    const headers = await getHeaders();
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/info/`,
-      {
-        headers: headers,
-      }
-    );
-    const totalMessages = response.data.total_messages;
-    setCurrentConversation((prevConversation: any) => ({
-      ...prevConversation,
-      totalMessages,
-    }));
-    dispatch(setChat({
-      agentId: response.data.agent_ids[0],
-      temporaryContext: {
-        branch: response.data?.branchName,
-        repo: response.data?.repoName
-      }
-    }));
-    setProjectId(response.data.project_ids[0]);
-    setInfoLoaded(true);
+    try {
+      const info = await ChatService.loadConversationInfo(currentConversationId);
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        totalMessages: info.total_messages,
+      }));
+      dispatch(setChat({
+        agentId: info.agent_ids[0],
+        // TODO: Enable later when we start getting the branch and repo name from info api
+        // temporaryContext: {
+        //   branch: info?.branchName,
+        //   repo: info?.repoName,
+        // },
+      }));
+      setProjectId(info.project_ids[0]);
+      setInfoLoaded(true);
+    } catch (error) {
+      console.error("Error loading conversation info:", error);
+    }
   };
 
   useEffect(() => {
@@ -246,6 +156,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             selectedNodes: selectedNodes,
           });
           pendingMessageSent.current = true;
+          dispatch(clearPendingMessage());
         } catch (error) {
           console.error("Error sending pending message:", error);
         }
@@ -276,7 +187,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             />
           ))}
 
-        {status === "loading" || fetchingResponse && (
+        {fetchingResponse && (
           <div className="flex items-center space-x-1 mr-auto">
             <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
             <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
@@ -289,7 +200,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       <NodeSelectorForm
         projectId={projectId}
         onSubmit={handleFormSubmit}
-        disabled={status === "loading"}
+        disabled={!!fetchingResponse}
       />
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
       <Dialog open={parsingStatus === "parsing"}>

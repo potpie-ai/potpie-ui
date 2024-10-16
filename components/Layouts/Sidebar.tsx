@@ -86,7 +86,7 @@ const Sidebar = () => {
               <CardTitle className="text-lg">Free Plan</CardTitle>
               <CardDescription className="flex flex-row justify-between text-tertiary">
                 <span>Credits used</span>
-                <span>15/5.0k</span>
+                <span>0/50k</span>
               </CardDescription>
             </CardHeader>
             <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex ">

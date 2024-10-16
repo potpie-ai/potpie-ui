@@ -109,8 +109,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         className={cn(
           "rounded-lg px-4 py-2 max-w-[75%] break-words text-sm",
           sender === "user"
-            ? "bg-primary text-white ml-2"
-            : "bg-gray-200 text-muted mr-2",
+            ? "bg-[#f7e6e6] text-white ml-2"
+            : "bg-[#edecf4] text-muted mr-2",
           isStreaming && "animate-pulse",
           className
         )}

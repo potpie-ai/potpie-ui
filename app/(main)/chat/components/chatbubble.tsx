@@ -1,5 +1,4 @@
 import ReactMarkdown from "react-markdown";
-import getHeaders from "@/app/utils/headers.util";
 import MyCodeBlock from "@/components/codeBlock";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -10,6 +9,7 @@ import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { RootState } from "@/lib/state/store";
 import Link from "next/link";
+import ChatService from "@/services/ChatService";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string;
@@ -46,7 +46,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   const parseMessage = (message: string) => {
     if (message == undefined) {
-      return
+      return;
     }
     const sections = [];
     const codeRegex = /```(\w+?)\n([\s\S]*?)```/g;
@@ -75,60 +75,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   const regenerateMessage = async () => {
     setIsRegenerating(true);
-    const headers = await getHeaders();
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/regenerate/`,
-        {
-          method: "POST",
-          headers: {
-            ...headers,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ node_ids: selectedNodes }), // Only send node_ids
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedMessage = "";
-      let accumulatedCitation = "";
-  
-      while (true) {
-        const { done, value } = (await reader?.read()) || { done: true, value: undefined };
-        if (done) break;
-  
-        const chunk = decoder.decode(value);
-        try {
-          const parsedChunks = chunk
-            .split("}")
-            .filter(Boolean)
-            .map((c) => JSON.parse(c + "}"));
-  
-          for (const parsedChunk of parsedChunks) {
-            accumulatedMessage += parsedChunk.message;
-            accumulatedCitation = parsedChunk.citations;
-          }
-        } catch (error) {
-          // TODO: Handle the error
-        }
-      }
+      const { accumulatedMessage, accumulatedCitation } = await ChatService.regenerateMessage(currentConversationId, selectedNodes);
+      
       setMessage(accumulatedMessage);
       setCitations(accumulatedCitation);
       setIsEmptyResponse(false);
       setIsRegenerating(false);
-      return accumulatedMessage;
     } catch (err) {
-      console.log(err);
+      console.error(err);
       toast.error("Unable to regenerate response");
       setIsRegenerating(false);
       setIsEmptyResponse(true);
-      return err;
     }
   };
 
@@ -193,7 +152,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             })}
           </div>
         )}
-
 
         {parsedSections?.map((section, index) => (
           <div key={index}>

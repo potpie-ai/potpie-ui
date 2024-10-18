@@ -30,7 +30,7 @@ const Footer: React.FC<{ submitForm: () => void; form: any }> = ({
     let isValid = false;
 
     if (currentStep.id === "0") {
-      isValid = await form.trigger("system");
+      isValid = await form.trigger("system_prompt");
     } else if (currentStep.id === "1") {
       isValid = await form.trigger(["role", "goal", "backstory"]);
     } else if (currentStep.id === "2") {

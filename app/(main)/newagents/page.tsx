@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFieldArray, SubmitHandler } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import axios from "axios";
+import axios, { AxiosResponse } from "axios";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -30,13 +30,14 @@ import InputField from "./components/InputFields";
 import Footer from "./components/Footer";
 import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 const CustomAgent: React.FC = () => {
   const router = useRouter();
   const form = useForm<CustomAgentsFormValues>({
     resolver: zodResolver(CustomAgentsFormSchema),
     defaultValues: {
-      system: "",
+      system_prompt: "",
       role: "",
       goal: "",
       backstory: "",
@@ -45,19 +46,16 @@ const CustomAgent: React.FC = () => {
       ],
     },
   });
-  const [errorStates, setErrorStates] = useState<("error" | "loading" | undefined)[]>([
-    undefined,
-    undefined,
-    undefined,
-  ]);
+  const [errorStates, setErrorStates] = useState<
+    ("error" | "loading" | undefined)[]
+  >([undefined, undefined, undefined]);
   const [currentStep, setCurrentStep] = useState(0);
-
 
   const validateCurrentStep = async (stepIndex: number) => {
     let isValid = false;
 
     if (stepIndex === 0) {
-      isValid = await form.trigger("system");
+      isValid = await form.trigger("system_prompt");
     } else if (stepIndex === 1) {
       isValid = await form.trigger(["role", "goal", "backstory"]);
     } else if (stepIndex === 2) {
@@ -75,7 +73,10 @@ const CustomAgent: React.FC = () => {
     return isValid;
   };
 
-  const handleStepClick = async (stepIndex: number, setStep: (step: number) => void) => {
+  const handleStepClick = async (
+    stepIndex: number,
+    setStep: (step: number) => void
+  ) => {
     if (stepIndex < currentStep) {
       setCurrentStep(stepIndex);
       setStep(stepIndex);
@@ -121,22 +122,56 @@ const CustomAgent: React.FC = () => {
   const submitCustomAgentForm = useMutation({
     mutationFn: async (customAgent: CustomAgentsFormValues) => {
       const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      return axios.post(`${baseUrl}/api/v1/agents/`, customAgent, {
+      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      return (await axios.post(`${baseUrl}/custom-agents/agents`, customAgent, {
         headers: header,
-      });
+      })) as AxiosResponse<CustomAgentType, any>;
     },
   });
-  
+
+  const deployCustomAgent = useMutation({
+    mutationFn: async (customAgent: { agent_id: string }) => {
+      const header = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      return (await axios.post(
+        `${baseUrl}/deployment/agents/${customAgent.agent_id}/deploy`,
+        customAgent,
+        {
+          headers: header,
+        }
+      )) as AxiosResponse<
+        {
+          agent_id: "string";
+          deployment_url: "string";
+        },
+        any
+      >;
+    },
+  });
+
   const onSubmit: SubmitHandler<CustomAgentsFormValues> = async (values) => {
     await submitCustomAgentForm.mutateAsync(values, {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        // alert(JSON.stringify(response.data));
+        toast.success("Agent created successfully");
+        deployCustomAgent.mutateAsync(
+          { agent_id: response.data.id },
+          {
+            onSuccess: (res) => {
+              navigator.clipboard.writeText(res.data.deployment_url);
+              toast.success("Agent deployed successfully");
+            },
+            onError: () => {
+              toast.error("Failed to deploy agent");
+            },
+          }
+        );
         form.reset();
         router.push("/agents");
       },
     });
   };
-  
+
   const steps = [
     {
       id: "0",
@@ -165,7 +200,7 @@ const CustomAgent: React.FC = () => {
             key={stepProps.label}
             {...stepProps}
             state={errorStates[index]}
-            onClickStep={(step, setStep) => handleStepClick(step,setStep)}
+            onClickStep={(step, setStep) => handleStepClick(step, setStep)}
           >
             {index === 0 && (
               <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
@@ -176,7 +211,7 @@ const CustomAgent: React.FC = () => {
                       className="space-y-8"
                     >
                       <InputField
-                        name="system"
+                        name="system_prompt"
                         label="System Input"
                         placeholder="What will be the system input"
                         form={form}

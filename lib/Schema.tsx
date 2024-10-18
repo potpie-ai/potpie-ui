@@ -57,7 +57,7 @@ export const CustomAgentsTaskSchema = z.object({
 });
 
 export const CustomAgentsFormSchema = z.object({
-  system: z.string().min(1, { message: "System Input is required" }),
+  system_prompt: z.string().min(1, { message: "System Input is required" }),
   role: z.string().min(1, { message: "Role is required" }),
   goal: z.string().min(1, { message: "Goal is required" }),
   backstory: z.string().min(1, { message: "Backstory is required" }),

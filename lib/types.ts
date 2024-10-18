@@ -55,7 +55,23 @@ type AgentType = {
   description: string;
 };
 
-interface AxiosResponse {
-  data: any;
-  error?: string;
+
+interface TaskType {
+  description: string;
+  tools: string[];
+  expected_output: string;
+  id: number;
+}
+
+interface CustomAgentType {
+  role: string;
+  goal: string;
+  backstory: string;
+  system_prompt: string;
+  id: string;
+  user_id: string;
+  tasks: TaskType[];
+  deployment_url: string | null;
+  created_at: string; // ISO date string format
+  updated_at: string; // ISO date string format
 }

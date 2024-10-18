@@ -29,19 +29,40 @@ import { Step, Stepper } from "@/components/ui/stepper";
 import InputField from "./components/InputFields";
 import Footer from "./components/Footer";
 import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 const CustomAgent: React.FC = () => {
+  const searchParams = useSearchParams();
+
+  const agentIdParam = searchParams.get("edit");
+
+  const { data: agentDetails, isLoading: agentDetailsLoading } = useQuery({
+    queryKey: ["agents", agentIdParam],
+    queryFn: async () => {
+      const header = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+      const response = await axios.get(
+        `${baseUrl}/api/v1/custom-agents/agents/${agentIdParam}`,
+        {
+          headers: header,
+        }
+      );
+      return response.data as CustomAgentType;
+    },
+    enabled: !!agentIdParam,
+  });
+
   const router = useRouter();
   const form = useForm<CustomAgentsFormValues>({
     resolver: zodResolver(CustomAgentsFormSchema),
     defaultValues: {
-      system_prompt: "",
-      role: "",
-      goal: "",
-      backstory: "",
-      tasks: [
+      system_prompt: agentDetails?.system_prompt || "",
+      role: agentDetails?.role || "",
+      goal: agentDetails?.goal || "",
+      backstory: agentDetails?.backstory || "",
+      tasks: (agentDetails?.tasks as any) || [
         { description: "", tools: [""], expected_output: { output: "" } },
       ],
     },
@@ -148,28 +169,50 @@ const CustomAgent: React.FC = () => {
       >;
     },
   });
+  const updateCustomAgentForm = useMutation({
+    mutationFn: async (customAgent: CustomAgentsFormValues) => {
+      const header = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      return (await axios.put(
+        `${baseUrl}/custom-agents/${agentIdParam}`,
+        customAgent,
+        {
+          headers: header,
+        }
+      )) as AxiosResponse<CustomAgentType, any>;
+    },
+  });
 
   const onSubmit: SubmitHandler<CustomAgentsFormValues> = async (values) => {
-    await submitCustomAgentForm.mutateAsync(values, {
-      onSuccess: (response) => {
-        // alert(JSON.stringify(response.data));
-        toast.success("Agent created successfully");
-        deployCustomAgent.mutateAsync(
-          { agent_id: response.data.id },
-          {
-            onSuccess: (res) => {
-              navigator.clipboard.writeText(res.data.deployment_url);
-              toast.success("Agent deployed successfully");
-            },
-            onError: () => {
-              toast.error("Failed to deploy agent");
-            },
-          }
-        );
-        form.reset();
-        router.push("/agents");
-      },
-    });
+    if (agentIdParam) {
+      await updateCustomAgentForm.mutateAsync(values, {
+        onSuccess: (response) => {
+          toast.success("Agent updated successfully");
+          router.push("/agents");
+        },
+      });
+    } else {
+      await submitCustomAgentForm.mutateAsync(values, {
+        onSuccess: (response) => {
+          // alert(JSON.stringify(response.data));
+          toast.success("Agent created successfully");
+          deployCustomAgent.mutateAsync(
+            { agent_id: response.data.id },
+            {
+              onSuccess: (res) => {
+                navigator.clipboard.writeText(res.data.deployment_url);
+                toast.success("Agent deployed successfully");
+              },
+              onError: () => {
+                toast.error("Failed to deploy agent");
+              },
+            }
+          );
+          form.reset();
+          router.push("/agents");
+        },
+      });
+    }
   };
 
   const steps = [

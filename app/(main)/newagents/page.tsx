@@ -19,7 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import getHeaders from "@/app/utils/headers.util";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -58,11 +58,11 @@ const CustomAgent: React.FC = () => {
   const form = useForm<CustomAgentsFormValues>({
     resolver: zodResolver(CustomAgentsFormSchema),
     defaultValues: {
-      system_prompt: agentDetails?.system_prompt || "",
-      role: agentDetails?.role || "",
-      goal: agentDetails?.goal || "",
-      backstory: agentDetails?.backstory || "",
-      tasks: (agentDetails?.tasks as any) || [
+      system_prompt: "",
+      role: "",
+      goal: "",
+      backstory: "",
+      tasks: [
         { description: "", tools: [""], expected_output: { output: "" } },
       ],
     },
@@ -71,6 +71,20 @@ const CustomAgent: React.FC = () => {
     ("error" | "loading" | undefined)[]
   >([undefined, undefined, undefined]);
   const [currentStep, setCurrentStep] = useState(0);
+
+  useEffect(() => {
+    if (agentDetails && !agentDetailsLoading) {
+      form.reset({
+        system_prompt: agentDetails.system_prompt || "",
+        role: agentDetails.role || "",
+        goal: agentDetails.goal || "",
+        backstory: agentDetails.backstory || "",
+        tasks: agentDetails.tasks as any || [
+          { description: "", tools: [""], expected_output: { output: "" } },
+        ],
+      });
+    }
+  }, [agentDetails, agentDetailsLoading, form]);
 
   const validateCurrentStep = async (stepIndex: number) => {
     let isValid = false;

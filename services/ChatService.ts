@@ -24,7 +24,17 @@ export default class ChatService {
         const decoder = new TextDecoder();
         let accumulatedMessage = "";
         let accumulatedCitation = "";
+        
+        if (!response.headers.get('content-type')?.includes('text/event-stream')) {
+            // Handle non-streaming response
+            const data = await response.json();
+            return {
+                accumulatedMessage: data.message || '',
+                accumulatedCitation: data.citations || ''
+            };
+        }
 
+        // For streaming response
         while (true) {
             const { done, value } = (await reader?.read()) || { done: true, value: undefined };
             if (done) break;

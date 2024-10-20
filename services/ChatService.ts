@@ -25,6 +25,22 @@ export default class ChatService {
         let accumulatedMessage = "";
         let accumulatedCitation = "";
 
+        if (reader) {
+            const { value } = await reader.read();
+            if (value) {
+                const chunk = decoder.decode(value);
+                try {
+                    const parsedChunk = JSON.parse(chunk);
+                    accumulatedMessage = parsedChunk.message;
+                    accumulatedCitation = parsedChunk.citations;
+                    return { accumulatedMessage, accumulatedCitation };
+                } catch (error) {
+                    console.error("Error parsing single chunk response:", error);
+                }
+            }
+        }
+
+        // For streaming response
         while (true) {
             const { done, value } = (await reader?.read()) || { done: true, value: undefined };
             if (done) break;

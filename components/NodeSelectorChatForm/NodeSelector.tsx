@@ -167,7 +167,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
             >
               <div className="font-semibold">{node.name}</div>
               <div className="text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
-                {truncateFilePath(node.path)}
+                {truncateFilePath(node.file_path)}
               </div>
             </li>
           ))}
@@ -197,7 +197,6 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     return truncatedPath;
   };
   
-
   return (
     <form
       className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col"

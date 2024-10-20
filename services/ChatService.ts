@@ -24,14 +24,20 @@ export default class ChatService {
         const decoder = new TextDecoder();
         let accumulatedMessage = "";
         let accumulatedCitation = "";
-        
-        if (!response.headers.get('content-type')?.includes('text/event-stream')) {
-            // Handle non-streaming response
-            const data = await response.json();
-            return {
-                accumulatedMessage: data.message || '',
-                accumulatedCitation: data.citations || ''
-            };
+
+        if (reader) {
+            const { value } = await reader.read();
+            if (value) {
+                const chunk = decoder.decode(value);
+                try {
+                    const parsedChunk = JSON.parse(chunk);
+                    accumulatedMessage = parsedChunk.message;
+                    accumulatedCitation = parsedChunk.citations;
+                    return { accumulatedMessage, accumulatedCitation };
+                } catch (error) {
+                    console.error("Error parsing single chunk response:", error);
+                }
+            }
         }
 
         // For streaming response

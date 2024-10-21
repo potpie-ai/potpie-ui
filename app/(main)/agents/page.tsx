@@ -167,25 +167,25 @@ const CustomAgent: React.FC = () => {
     },
   });
 
-  const deployCustomAgent = useMutation({
-    mutationFn: async (customAgent: { agent_id: string }) => {
-      const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
-      return (await axios.post(
-        `${baseUrl}/deployment/agents/${customAgent.agent_id}/deploy`,
-        customAgent,
-        {
-          headers: header,
-        }
-      )) as AxiosResponse<
-        {
-          agent_id: "string";
-          deployment_url: "string";
-        },
-        any
-      >;
-    },
-  });
+  // const deployCustomAgent = useMutation({
+  //   mutationFn: async (customAgent: { agent_id: string }) => {
+  //     const header = await getHeaders();
+  //     const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+  //     return (await axios.post(
+  //       `${baseUrl}/deployment/agents/${customAgent.agent_id}/deploy`,
+  //       customAgent,
+  //       {
+  //         headers: header,
+  //       }
+  //     )) as AxiosResponse<
+  //       {
+  //         agent_id: "string";
+  //         deployment_url: "string";
+  //       },
+  //       any
+  //     >;
+  //   },
+  // });
 
   const updateCustomAgentForm = useMutation({
     mutationFn: async (customAgent: CustomAgentsFormValues) => {
@@ -214,20 +214,20 @@ const CustomAgent: React.FC = () => {
         onSuccess: (response) => {
           // alert(JSON.stringify(response.data));
           toast.success("Agent created successfully");
-          deployCustomAgent.mutateAsync(
-            { agent_id: response.data.id },
-            {
-              onSuccess: (res) => {
-                navigator.clipboard.writeText(res.data.deployment_url);
-                toast.success("Agent deployed successfully");
-              },
-              onError: () => {
-                toast.error("Failed to deploy agent");
-              },
-            }
-          );
+          // deployCustomAgent.mutateAsync(
+          //   { agent_id: response.data.id },
+          //   {
+          //     onSuccess: (res) => {
+          //       navigator.clipboard.writeText(res.data.deployment_url);
+          //       toast.success("Agent deployed successfully");
+          //     },
+          //     onError: () => {
+          //       toast.error("Failed to deploy agent");
+          //     },
+          //   }
+          // );
           form.reset();
-          router.push("/agents");
+          router.push("/all-agents");
         },
       });
     }

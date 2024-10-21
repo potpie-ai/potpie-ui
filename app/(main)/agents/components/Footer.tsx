@@ -101,7 +101,7 @@ const Footer: React.FC<{ submitForm: () => void; form: any }> = ({
               type="button"
               onClick={handleNextStep}
             >
-              {isLastStep ? "Create and Deploy" : isOptionalStep ? "Skip" : "Next"}
+              {isLastStep ? "Create" : isOptionalStep ? "Skip" : "Next"}
             </Button>
           </>
         )}

@@ -73,10 +73,12 @@ export default class BranchAndRepositoryService {
         initialStatus: string,
         setParsingStatus: (status: string) => void,
         setChatStep?: (step: number) => void,
-        maxRetries = 12
+        maxDuration = 30 * 60 * 1000 // 30 minutes in milliseconds
       ) {
-        let retries = 0;
         let parsingStatus = initialStatus;
+        let baseDelay = 5000; // Start with 5 seconds
+        let maxDelay = 60000; // Max delay of 1 minute
+        const startTime = Date.now();
     
         const getStatusMessage = (status: string) => {
           switch (status) {
@@ -93,7 +95,7 @@ export default class BranchAndRepositoryService {
           }
         };
     
-        while (parsingStatus !== "ready" && retries < maxRetries) {
+        while (parsingStatus !== "ready" && Date.now() - startTime < maxDuration) {
           parsingStatus = await BranchAndRepositoryService.getParsingStatus(projectId);
           setParsingStatus(getStatusMessage(parsingStatus));
     
@@ -110,11 +112,14 @@ export default class BranchAndRepositoryService {
             return;
           }
     
-          retries += 1;
-          await new Promise((resolve) => setTimeout(resolve, 5000));
+          // Exponential backoff with jitter
+          const jitter = Math.random() * 1000;
+          const delay = Math.min(baseDelay + jitter, maxDelay);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          baseDelay = Math.min(baseDelay * 2, maxDelay);
         }
     
-        if (retries >= maxRetries) {
+        if (Date.now() - startTime >= maxDuration) {
           setParsingStatus("Timeout exceeded, please try again.");
         }
       }

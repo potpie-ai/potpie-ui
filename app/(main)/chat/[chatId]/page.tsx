@@ -212,7 +212,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           },
         }
       );
-
+      if(response.status === 404 || response.status === 403) {
+        setChatAccess("not_found");
+      }
       dispatch(clearChat());
       response.data.forEach((message: any) => {
         dispatch(

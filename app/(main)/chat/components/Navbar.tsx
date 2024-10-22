@@ -21,19 +21,22 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
-import { Share2Icon } from "lucide-react";
 import { z } from "zod";
-import { Download, Share2 } from "lucide-react";
+import { Share2 } from "lucide-react";
 
-  const emailSchema = z.string().email({ message: "Invalid email address" });
-  const Navbar = ({ showShare }: { showShare?: boolean }) => {
+const emailSchema = z
+  .string()
+  .email({ message: "Invalid email address" })
+  .or(z.array(z.string().email({ message: "Invalid email address" })));
+
+const Navbar = ({ showShare }: { showShare?: boolean }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
   );
   const pathname = usePathname();
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = useState(title);
-  const [emailValue, setEmailValue] = useState("");
+  const [emailValue, setEmailValue] = useState<string>("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -47,24 +50,25 @@ import { Download, Share2 } from "lucide-react";
   };
 
   const currentConversationId = usePathname()?.split("/").pop();
+
   const { refetch: refetchChatTitle } = useQuery({
     queryKey: ["chat-title"],
     queryFn: async () => {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
-      axios
+      return axios
         .patch(
           `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename/`,
           { title: inputValue },
-          { headers: headers }
+          { headers }
         )
         .then((res) => {
-          if (res.data.status === "success")
+          if (res.data.status === "success") {
             toast.success("Title updated successfully");
+          }
           return res.data;
         })
         .catch((err) => {
-          console.log(err);
+          console.error(err);
           return err.response.data;
         });
     },
@@ -75,36 +79,43 @@ import { Download, Share2 } from "lucide-react";
     refetchChatTitle();
     dispatch(setChat({ title: inputValue }));
   };
+
   const { refetch: refetchChatShare } = useQuery({
     queryKey: ["chat-share"],
     queryFn: async () => {
       const headers = await getHeaders();
-      axios
+      return axios
         .post(
           `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,
           {
             conversation_id: currentConversationId,
-            recipientEmails: [emailValue],
+            recipientEmails: emailValue
+              .split(",")
+              .map((email: string) => email.trim()),
           },
-          { headers: headers }
+          { headers }
         )
         .then((res) => {
-          navigator.clipboard.writeText(`https://app.potpie.ai` + pathname);
-          toast.success("Link copied to clipboard");
+          navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_BASE_URL}/${pathname}`);
+          toast.message(<div className="flex flex-col gap-1"> 
+            <p className="text-primary font-semibold">Link copied to clipboard</p>
+            <p className="text-sm text-muted">Link: {`${process.env.NEXT_PUBLIC_BASE_URL}${pathname}`}</p>
+          </div>) 
           return res.data;
         })
         .catch((err) => {
-          console.log(err);
+          console.error(err);
           toast.error("Unable to share");
           return err.response.data;
         });
     },
     enabled: false,
   });
+
   const handleEmailSave = () => {
     try {
-      emailSchema.parse(emailValue);
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const emails = emailValue.split(",").map((email) => email.trim());
+      emails.forEach((email) => emailSchema.parse(email));
       refetchChatShare();
       setIsDialogOpen(false);
     } catch (error) {
@@ -116,15 +127,18 @@ import { Download, Share2 } from "lucide-react";
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white flex h-[70px] items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6 ">
+      <header className="sticky top-0 z-50 bg-white flex h-[70px] items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6">
         <div className="bg-[#4479FF] w-full text-center bg-opacity-[0.37] text-muted">
           Hello beta user! Please refer to this Notion doc to get started.{" "}
-          <Link href="https://momentumsh.notion.site/potpie-s-beta-program-10cc13a23aa8801e8e2bd34d8f1488f5?pvs=4" className="text-[#0267FF] underline">
+          <Link
+            href="https://momentumsh.notion.site/potpie-s-beta-program-10cc13a23aa8801e8e2bd34d8f1488f5?pvs=4"
+            className="text-[#0267FF] underline"
+          >
             Click here.
           </Link>
         </div>
         <div className="flex w-full justify-between items-center">
-          <div className="flex items-center justify-between w-full px-6 pb-2 gap-5 ">
+          <div className="flex items-center justify-between w-full px-6 pb-2 gap-5">
             <div className="gap-5 flex items-center justify-start">
               <Image
                 src={"/images/msg-grey.svg"}
@@ -206,17 +220,15 @@ import { Download, Share2 } from "lucide-react";
           </div>
           <div className="flex items-center justify-between gap-4">
             {agentId && allAgents && (
-            <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-              <span className="text-gray-700">
-              {agentId &&
-                  allAgents &&
-                  (allAgents.find((agent) => agent.id === agentId)?.name ||
+              <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                <span className="text-gray-700">
+                  {allAgents.find((agent) => agent.id === agentId)?.name ||
                     agentId
                       .replace(/_/g, " ")
-                      .replace(/([a-z])([A-Z])/g, "$1 $2"))}
-              </span>
-            </div>
+                      .replace(/([a-z])([A-Z])/g, "$1 $2")}
+                </span>
+              </div>
             )}
           </div>
         </div>

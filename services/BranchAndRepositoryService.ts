@@ -120,7 +120,7 @@ export default class BranchAndRepositoryService {
         }
     
         if (Date.now() - startTime >= maxDuration) {
-          setParsingStatus("Timeout exceeded, please try again.");
+          setParsingStatus("Error");
         }
       }
 }

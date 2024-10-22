@@ -206,7 +206,7 @@ const CustomAgent: React.FC = () => {
       await updateCustomAgentForm.mutateAsync(values, {
         onSuccess: (response) => {
           toast.success("Agent updated successfully");
-          router.push("/agents");
+          router.push("/all-agents");
         },
       });
     } else {
@@ -434,7 +434,7 @@ const CustomAgent: React.FC = () => {
             )}
           </Step>
         ))}
-        <Footer form={form} submitForm={form.handleSubmit(onSubmit)} />
+        <Footer form={form} submitForm={form.handleSubmit(onSubmit)} update={!!agentIdParam} />
       </Stepper>
     </>
   );

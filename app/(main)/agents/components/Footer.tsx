@@ -2,9 +2,10 @@ import { Button } from "@/components/ui/button";
 import { useStepper } from "@/components/ui/stepper";
 import { toast } from "sonner";
 
-const Footer: React.FC<{ submitForm: () => void; form: any }> = ({
+const Footer: React.FC<{ submitForm: () => void; form: any; update: boolean }> = ({
   submitForm,
   form,
+  update,
 }) => {
   const {
     nextStep,
@@ -101,7 +102,7 @@ const Footer: React.FC<{ submitForm: () => void; form: any }> = ({
               type="button"
               onClick={handleNextStep}
             >
-              {isLastStep ? "Create" : isOptionalStep ? "Skip" : "Next"}
+              {isLastStep ?  update? "Update" : "Create" : isOptionalStep ? "Skip" : "Next"}
             </Button>
           </>
         )}

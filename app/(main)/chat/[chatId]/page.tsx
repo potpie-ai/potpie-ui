@@ -18,6 +18,7 @@ import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import ChatBubble from "../components/ChatBubble";
 import { toast } from "sonner";
+import GlobalError from "@/app/error";
 
 interface SendMessageArgs {
   message: string;
@@ -46,6 +47,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const { pendingMessage, selectedNodes, chatFlow } = useSelector(
     (state: RootState) => state.chat
   );
+  const [Error, setError] = useState({
+    isError: false,
+    message: "",
+    description: "",
+  });
 
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     setFetchingResponse(true);
@@ -142,10 +148,22 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const info = await ChatService.loadConversationInfo(
         currentConversationId
       );
-      if (info.status === "error") {
-        toast.info(info.message);
+      if (info.status !== 200) {
+        if (info.status === 404) {
+          toast.info(info.message);
+        }
+        else if (info.status === 401) {
+          setChatAccess(info.message);
+          toast.info(info.description);
+        }
+        setError({
+          isError: true,
+          message: info.message,
+          description: info.description,
+        });
         return;
       }
+
       setChatAccess(info.access_type);
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
@@ -198,6 +216,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     });
   };
 
+  if(Error.isError) return <GlobalError title={Error.message} description={Error.description} />
   if (chatAccess === "not_found") {
     return (
       <Dialog open>

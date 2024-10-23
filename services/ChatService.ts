@@ -82,10 +82,25 @@ export default class ChatService {
     static async loadConversationInfo(conversationId: string) {
         const headers = await getHeaders();
         const response = await axios.get(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/info/`, { headers });
-        if(response.status === 400) {
+        if(response.status !== 200) {
+            if(response.status === 404) {
+                return {
+                    status:response.status,
+                    message: "error",
+                    description: "Conversation already shared with user"
+                } 
+            }
+            else if(response.status === 401) {
+                return {
+                    status:response.status,
+                    message: "not_found",
+                    description: "Not authorized to access conversation"
+                } 
+            }
             return {
-                status: "error",
-                message: "Conversation already shared with user"
+                status:response.status,
+                message: "error",
+                description: response.data ?? "Failed to load conversation info"
             }
         }
         return response.data;

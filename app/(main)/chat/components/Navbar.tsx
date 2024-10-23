@@ -80,6 +80,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
     refetchChatTitle();
     dispatch(setChat({ title: inputValue }));
   };
+
   const { refetch: refetchChatShare } = useQuery({
     queryKey: ["chat-share"],
     queryFn: async () => {
@@ -87,12 +88,17 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
         .split(",")
         .map((email: string) => email.trim());
 
-      if (currentConversationId === undefined) return;
-      
+      if (!currentConversationId) return;
+
       const res = await ChatService.shareConversation(
         currentConversationId,
         recipientEmails
       );
+
+      if (res.type === "error") {
+        toast.error(res.message || "Unable to share");
+        return res;
+      }
 
       navigator.clipboard.writeText(
         `${process.env.NEXT_PUBLIC_BASE_URL}/${pathname}`
@@ -200,6 +206,24 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
                       <p className="text-red-500 text-sm">{emailError}</p>
                     )}
                   </div>
+
+                  <div className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
+                    <p className="text-sm text-muted">
+                      {`${process.env.NEXT_PUBLIC_APP_URL}${pathname}`}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
+                        );
+                        toast.success("Link copied to clipboard");
+                      }}
+                    >
+                      Copy Link
+                    </Button>
+                  </div>
                 </div>
                 <DialogFooter>
                   <DialogClose asChild>
@@ -210,7 +234,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
                     onClick={handleEmailSave}
                     disabled={emailValue === ""}
                   >
-                    Share
+                    Share via Email
                   </Button>
                 </DialogFooter>
               </DialogContent>

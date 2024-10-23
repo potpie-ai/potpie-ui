@@ -81,32 +81,55 @@ export default class ChatService {
 
     static async loadConversationInfo(conversationId: string) {
         const headers = await getHeaders();
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/info/`, { headers });
-        if(response.status !== 200) {
-            if(response.status === 404) {
+        
+        try {
+            const response = await axios.get(
+                `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/info/`, 
+                { headers }
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response) {
+                const { status, data } = error.response;
+                
+                if (status === 404) {
+                    return {
+                        type: "error",
+                        status,
+                        message: "Conversation not found",
+                        description: "The conversation does not exist or has been deleted."
+                    };
+                } else if (status === 401) {
+                    return {
+                        type: "error",
+                        status,
+                        message: "Unauthorized",
+                        description: "You do not have permission to access this conversation."
+                    };
+                } else if (status === 500) {
+                    return {
+                        type: "error",
+                        status,
+                        message: "Server Error",
+                        description: "There was a problem with the server. Please try again later."
+                    };
+                }
+                
                 return {
                     type: "error",
-                    status:response.status,
-                    message: "Already shared",
-                    description: "Conversation already shared with user"
-                } 
-            }
-            else if(response.status === 401) {
+                    status,
+                    message: "error",
+                    description: data?.message ?? "Failed to load conversation info"
+                };
+            } else {
                 return {
                     type: "error",
-                    status:response.status,
-                    message: "not_found",
-                    description: "Not authorized to access conversation"
-                } 
-            }
-            return {
-                type: "error",
-                status:response.status,
-                message: "error",
-                description: response.data ?? "Failed to load conversation info"
+                    status: 500,
+                    message: "Network Error",
+                    description: "Failed to load conversation due to network or server issues."
+                };
             }
         }
-        return response.data;
     }
 
     static async regenerateMessage(conversationId: string, selectedNodes: any[]) {
@@ -218,24 +241,33 @@ export default class ChatService {
         return response.data;
     }
 
-    static async shareConversation(
-        conversationId: string,
-        recipientEmails: string[]
-      ) {
+    static async shareConversation(conversationId: string, recipientEmails: string[]) {
         const headers = await getHeaders();
         try {
-          const response = await axios.post(
-            `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,
-            {
-              conversation_id: conversationId,
-              recipientEmails: recipientEmails,
-            },
-            { headers }
-          );
-          return response.data;
-        } catch (error) {
-          console.error("Error sharing conversation:", error);
-          throw error;
+            const response = await axios.post(
+                `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,
+                {
+                    conversation_id: conversationId,
+                    recipientEmails: recipientEmails,
+                },
+                { headers }
+            );
+
+            return response.data;
+        } catch (error: any) {
+            if (error.response) {
+                if (error.response.data && error.response.data.detail) {
+                    return {
+                        type: "error",
+                        message: error.response.data.detail,
+                    };
+                }
+            }
+
+            return {
+                type: "error",
+                message: "Unable to share the conversation.",
+            };
         }
-      }
+    }
 }

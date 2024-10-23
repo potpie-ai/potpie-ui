@@ -144,23 +144,28 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const loadInfoOnce = async () => {
     if (infoLoaded || chatFlow !== "EXISTING_CHAT") return;
+
     try {
       const info = await ChatService.loadConversationInfo(
         currentConversationId
       );
+
       if (info.type === "error") {
         if (info.status === 404) {
           toast.info(info.message);
-        }
-        else if (info.status === 401) {
+        } else if (info.status === 401) {
           setChatAccess(info.message);
           toast.info(info.description);
+        } else {
+          toast.error(info.description);
         }
+
         setError({
           isError: true,
           message: info.message,
           description: info.description,
         });
+
         return;
       }
 
@@ -169,6 +174,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         ...prevConversation,
         totalMessages: info.total_messages,
       }));
+
       dispatch(
         setChat({
           agentId: info.agent_ids[0],
@@ -179,10 +185,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           // },
         })
       );
+
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
     } catch (error) {
       console.error("Error loading conversation info:", error);
+      toast.error("Failed to load conversation info");
     }
   };
 
@@ -216,7 +224,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     });
   };
 
-  if(Error.isError) return <GlobalError title={Error.message} description={Error.description} />
+  if (Error.isError)
+    return (
+      <GlobalError title={Error.message} description={Error.description} />
+    );
   if (chatAccess === "not_found") {
     return (
       <Dialog open>

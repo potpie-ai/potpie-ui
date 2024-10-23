@@ -101,7 +101,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
       toast.message(
         <div className="flex flex-col gap-1">
           <p className="text-primary font-semibold">URL copied to clipboard</p>
-          <p className="text-sm text-muted">{`${process.env.NEXT_PUBLIC_BASE_URL}${pathname}`}</p>
+          <p className="text-sm text-muted">{`${process.env.NEXT_PUBLIC_APP_URL}${pathname}`}</p>
         </div>
       );
 

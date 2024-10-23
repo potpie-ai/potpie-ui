@@ -17,6 +17,7 @@ import { CheckCircle, Loader, XCircle } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import ChatBubble from "../components/ChatBubble";
+import { toast } from "sonner";
 
 interface SendMessageArgs {
   message: string;
@@ -141,6 +142,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const info = await ChatService.loadConversationInfo(
         currentConversationId
       );
+      if (info.status === "error") {
+        toast.info(info.message);
+        return;
+      }
       setChatAccess(info.access_type);
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,

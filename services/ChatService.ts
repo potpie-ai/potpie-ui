@@ -82,6 +82,12 @@ export default class ChatService {
     static async loadConversationInfo(conversationId: string) {
         const headers = await getHeaders();
         const response = await axios.get(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/info/`, { headers });
+        if(response.status === 400) {
+            return {
+                status: "error",
+                message: "Conversation already shared with user"
+            }
+        }
         return response.data;
     }
 

@@ -24,9 +24,8 @@ interface SendMessageArgs {
 }
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
-  const { temporaryContext } = useSelector(
-    (state: RootState) => state.chat
-  );
+  const { temporaryContext } = useSelector((state: RootState) => state.chat);
+  const [chatAccess, setChatAccess] = useState("");
   const dispatch: AppDispatch = useDispatch();
   const [currentConversation, setCurrentConversation] = useState<any>({
     conversationId: params.chatId,
@@ -36,22 +35,25 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   });
   const [fetchingResponse, setFetchingResponse] = useState<Boolean>(false);
   const [projectId, setProjectId] = useState<string>("");
-  const [parsingStatus, setParsingStatus] = useState<string>("")
+  const [parsingStatus, setParsingStatus] = useState<string>("");
   const [infoLoaded, setInfoLoaded] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const currentConversationId = params.chatId;
   const bottomOfPanel = useRef<HTMLDivElement>(null);
   const upPanelRef = useRef<HTMLDivElement>(null);
   const pendingMessageSent = useRef(false);
-  const {
-    pendingMessage,
-    selectedNodes,
-    chatFlow,
-  } = useSelector((state: RootState) => state.chat);
+  const { pendingMessage, selectedNodes, chatFlow } = useSelector(
+    (state: RootState) => state.chat
+  );
 
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     setFetchingResponse(true);
-    const { accumulatedMessage, accumulatedCitation } = await ChatService.sendMessage(currentConversationId, message, selectedNodes);
+    const { accumulatedMessage, accumulatedCitation } =
+      await ChatService.sendMessage(
+        currentConversationId,
+        message,
+        selectedNodes
+      );
 
     setCurrentConversation((prevConversation: any) => ({
       ...prevConversation,
@@ -71,22 +73,29 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
-  
+
     try {
-      const parseResponse = await BranchAndRepositoryService.parseRepo(repo_name, branch_name);
+      const parseResponse = await BranchAndRepositoryService.parseRepo(
+        repo_name,
+        branch_name
+      );
       const projectId = parseResponse.project_id;
       const initialStatus = parseResponse.status;
-  
+
       if (projectId) {
         setProjectId(projectId);
       }
-  
+
       if (initialStatus === "ready") {
         setParsingStatus("Ready");
         return;
       }
-  
-      await BranchAndRepositoryService.pollParsingStatus(projectId, initialStatus, setParsingStatus);
+
+      await BranchAndRepositoryService.pollParsingStatus(
+        projectId,
+        initialStatus,
+        setParsingStatus
+      );
     } catch (err) {
       console.error("Error during parsing:", err);
       setParsingStatus("Error");
@@ -111,7 +120,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const loadMessages = async () => {
     try {
-      const messages = await ChatService.loadMessages(currentConversationId, 0, 50);
+      const messages = await ChatService.loadMessages(
+        currentConversationId,
+        0,
+        50
+      );
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
         messages,
@@ -125,19 +138,24 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const loadInfoOnce = async () => {
     if (infoLoaded || chatFlow !== "EXISTING_CHAT") return;
     try {
-      const info = await ChatService.loadConversationInfo(currentConversationId);
+      const info = await ChatService.loadConversationInfo(
+        currentConversationId
+      );
+      setChatAccess(info.access_type);
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
         totalMessages: info.total_messages,
       }));
-      dispatch(setChat({
-        agentId: info.agent_ids[0],
-        // TODO: Enable later when we start getting the branch and repo name from info api
-        // temporaryContext: {
-        //   branch: info?.branchName,
-        //   repo: info?.repoName,
-        // },
-      }));
+      dispatch(
+        setChat({
+          agentId: info.agent_ids[0],
+          // TODO: Enable later when we start getting the branch and repo name from info api
+          // temporaryContext: {
+          //   branch: info?.branchName,
+          //   repo: info?.repoName,
+          // },
+        })
+      );
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
     } catch (error) {
@@ -148,7 +166,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   useEffect(() => {
     loadInfoOnce();
   }, [currentConversationId]);
-  
+
   useEffect(() => {
     if (!messagesLoaded) {
       loadMessages().then(() => {
@@ -166,7 +184,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         }
       });
     }
-  }, [messagesLoaded, pendingMessage]);  
+  }, [messagesLoaded, pendingMessage]);
 
   const handleFormSubmit = (message: string) => {
     messageMutation.mutate({
@@ -175,22 +193,50 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     });
   };
 
+  if (chatAccess === "not_found") {
+    return (
+      <Dialog open>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>You are not allowed to access this chat</DialogTitle>
+            <DialogDescription>
+              Please contact the project owner to request access.
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
       <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
         <div ref={upPanelRef} className="w-full"></div>
         {currentConversation &&
-          currentConversation.messages.map((message: { citations: any; text: string; sender: "user" | "agent" }, i: number) => (
-            <ChatBubble
-              key={`${currentConversation.conversationId}-${i}`}
-              citations={Array.isArray(message.citations) && Array.isArray(message.citations[0]) ? message.citations.flat() : (message.citations || [])}
-              message={message.text}
-              sender={message.sender}
-              isLast={i === currentConversation.messages.length - 1}
-              currentConversationId={currentConversation.conversationId}
-            />
-          ))}
+          currentConversation.messages.map(
+            (
+              message: {
+                citations: any;
+                text: string;
+                sender: "user" | "agent";
+              },
+              i: number
+            ) => (
+              <ChatBubble
+                key={`${currentConversation.conversationId}-${i}`}
+                citations={
+                  Array.isArray(message.citations) &&
+                  Array.isArray(message.citations[0])
+                    ? message.citations.flat()
+                    : message.citations || []
+                }
+                message={message.text}
+                sender={message.sender}
+                isLast={i === currentConversation.messages.length - 1}
+                currentConversationId={currentConversation.conversationId}
+              />
+            )
+          )}
 
         {fetchingResponse && (
           <div className="flex items-center space-x-1 mr-auto">
@@ -202,11 +248,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
         <div ref={bottomOfPanel} />
       </div>
-      <NodeSelectorForm
-        projectId={projectId}
-        onSubmit={handleFormSubmit}
-        disabled={!!fetchingResponse}
-      />
+      {chatAccess === "write" && (
+        <>
+          <NodeSelectorForm
+            projectId={projectId}
+            onSubmit={handleFormSubmit}
+            disabled={!!fetchingResponse}
+          />
+        </>
+      )}
       <div className="h-6 w-full bg-background sticky bottom-0"></div>
       <Dialog open={parsingStatus === "parsing"}>
         <DialogContent className="sm:max-w-[425px]">
@@ -233,7 +283,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => temporaryContext.repo && parseRepo(temporaryContext.repo, temporaryContext.branch)}
+                onClick={() =>
+                  temporaryContext.repo &&
+                  parseRepo(temporaryContext.repo, temporaryContext.branch)
+                }
               >
                 Retry
               </Button>

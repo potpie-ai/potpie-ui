@@ -220,15 +220,17 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
           </div>
           <div className="flex items-center justify-between gap-4">
             {agentId && allAgents && (
-              <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                <span className="text-gray-700">
+                <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                  <span className="text-gray-700">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
                     agentId
-                      .replace(/_/g, " ")
-                      .replace(/([a-z])([A-Z])/g, "$1 $2")}
-                </span>
-              </div>
+                      .replace(/_/g, " ") // Replace underscores with spaces
+                      .replace(/([a-z])([A-Z])/g, "$1 $2" // Add space between camelCase words
+                        .replace(/\b\w/g, (char) => char.toUpperCase()) // Capitalize the first letter of each word
+                    )}
+                  </span>
+                </div>
             )}
           </div>
         </div>

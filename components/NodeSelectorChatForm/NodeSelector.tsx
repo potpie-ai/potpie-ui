@@ -167,7 +167,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
             >
               <div className="font-semibold">{node.name}</div>
               <div className="text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
-                {truncateFilePath(node.path)}
+                {truncateFilePath(node.file_path)}
               </div>
             </li>
           ))}
@@ -197,10 +197,9 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     return truncatedPath;
   };
   
-
   return (
     <form
-      className="sticky bottom-6 overflow-hidden rounded-lg bg-card border shadow-md flex flex-col"
+      className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col"
       onSubmit={handleSubmit}
       ref={formRef}
     >
@@ -208,7 +207,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
         {selectedNodes.map((node) => (
           <div
             key={node.node_id}
-            className="flex items-center space-x-2 bg-primary p-1 rounded-lg mr-2"
+            className="flex items-center space-x-2 bg-[#f7e6e6] p-1 rounded-lg mr-2"
           >
             <span className="pl-1">{node.name}</span>
             <Button

@@ -85,19 +85,22 @@ export default class ChatService {
         if(response.status !== 200) {
             if(response.status === 404) {
                 return {
+                    type: "error",
                     status:response.status,
-                    message: "error",
+                    message: "Already shared",
                     description: "Conversation already shared with user"
                 } 
             }
             else if(response.status === 401) {
                 return {
+                    type: "error",
                     status:response.status,
                     message: "not_found",
                     description: "Not authorized to access conversation"
                 } 
             }
             return {
+                type: "error",
                 status:response.status,
                 message: "error",
                 description: response.data ?? "Failed to load conversation info"

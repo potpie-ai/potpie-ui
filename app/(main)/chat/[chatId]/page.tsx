@@ -148,7 +148,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const info = await ChatService.loadConversationInfo(
         currentConversationId
       );
-      if (info.status !== 200) {
+      if (info.type === "error") {
         if (info.status === 404) {
           toast.info(info.message);
         }

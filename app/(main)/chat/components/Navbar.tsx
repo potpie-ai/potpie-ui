@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 import { z } from "zod";
 import { Share2 } from "lucide-react";
+import ChatService from "@/services/ChatService";
 
 const emailSchema = z
   .string()
@@ -79,35 +80,32 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
     refetchChatTitle();
     dispatch(setChat({ title: inputValue }));
   };
-
   const { refetch: refetchChatShare } = useQuery({
     queryKey: ["chat-share"],
     queryFn: async () => {
-      const headers = await getHeaders();
-      return axios
-        .post(
-          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,
-          {
-            conversation_id: currentConversationId,
-            recipientEmails: emailValue
-              .split(",")
-              .map((email: string) => email.trim()),
-          },
-          { headers }
-        )
-        .then((res) => {
-          navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_BASE_URL}/${pathname}`);
-          toast.message(<div className="flex flex-col gap-1"> 
-            <p className="text-primary font-semibold">URL copied to clipboard</p>
-            <p className="text-sm text-muted">{`${process.env.NEXT_PUBLIC_BASE_URL}${pathname}`}</p>
-          </div>) 
-          return res.data;
-        })
-        .catch((err) => {
-          console.error(err);
-          toast.error("Unable to share");
-          return err.response.data;
-        });
+      const recipientEmails = emailValue
+        .split(",")
+        .map((email: string) => email.trim());
+
+      if (currentConversationId === undefined) return;
+      
+      const res = await ChatService.shareConversation(
+        currentConversationId,
+        recipientEmails
+      );
+
+      navigator.clipboard.writeText(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/${pathname}`
+      );
+
+      toast.message(
+        <div className="flex flex-col gap-1">
+          <p className="text-primary font-semibold">URL copied to clipboard</p>
+          <p className="text-sm text-muted">{`${process.env.NEXT_PUBLIC_BASE_URL}${pathname}`}</p>
+        </div>
+      );
+
+      return res;
     },
     enabled: false,
   });
@@ -220,17 +218,19 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
           </div>
           <div className="flex items-center justify-between gap-4">
             {agentId && allAgents && (
-                <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                  <span className="text-gray-700">
+              <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                <span className="text-gray-700">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
                     agentId
                       .replace(/_/g, " ") // Replace underscores with spaces
-                      .replace(/([a-z])([A-Z])/g, "$1 $2" // Add space between camelCase words
-                        .replace(/\b\w/g, (char) => char.toUpperCase()) // Capitalize the first letter of each word
-                    )}
-                  </span>
-                </div>
+                      .replace(
+                        /([a-z])([A-Z])/g,
+                        "$1 $2" // Add space between camelCase words
+                          .replace(/\b\w/g, (char) => char.toUpperCase()) // Capitalize the first letter of each word
+                      )}
+                </span>
+              </div>
             )}
           </div>
         </div>

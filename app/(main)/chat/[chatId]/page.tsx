@@ -43,9 +43,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const bottomOfPanel = useRef<HTMLDivElement>(null);
   const upPanelRef = useRef<HTMLDivElement>(null);
   const pendingMessageSent = useRef(false);
-
-
-  const [chatAccess, setChatAccess] = useState("");
   const {
     pendingMessage,
     selectedNodes,

@@ -193,4 +193,25 @@ export default class ChatService {
         });
         return response.data;
     }
+
+    static async shareConversation(
+        conversationId: string,
+        recipientEmails: string[]
+      ) {
+        const headers = await getHeaders();
+        try {
+          const response = await axios.post(
+            `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,
+            {
+              conversation_id: conversationId,
+              recipientEmails: recipientEmails,
+            },
+            { headers }
+          );
+          return response.data;
+        } catch (error) {
+          console.error("Error sharing conversation:", error);
+          throw error;
+        }
+      }
 }

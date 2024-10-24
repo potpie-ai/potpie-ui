@@ -44,21 +44,28 @@ const Navbar = ({
   );
   const pathname = usePathname();
   const dispatch = useDispatch();
-  const [inputValue, setInputValue] = useState(title);
+  const [displayTitle, setDisplayTitle] = useState<string>("Untitled");
+  const [inputValue, setInputValue] = useState<string>("");
   const [emailValue, setEmailValue] = useState<string>("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
 
   useEffect(() => {
-    setInputValue(title);
-  }, [title, pathname]);
-  
-  const handleInputChange = (event: any) => {
+    if (chatTitle) {
+      setDisplayTitle(chatTitle);
+      setInputValue(chatTitle);
+    } else if (title) {
+      setDisplayTitle(title);
+      setInputValue(title);
+    }
+  }, [title, chatTitle, pathname]);
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(event.target.value);
   };
 
-  const handleEmailChange = (event: any) => {
+  const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setEmailValue(event.target.value);
     setEmailError(null);
   };
@@ -66,37 +73,42 @@ const Navbar = ({
   const currentConversationId = usePathname()?.split("/").pop();
 
   const { refetch: refetchChatTitle } = useQuery({
-    queryKey: ["chat-title"],
+    queryKey: ["chat-title", currentConversationId],
     queryFn: async () => {
       const headers = await getHeaders();
-      return axios
-        .patch(
+      try {
+        const response = await axios.patch(
           `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename/`,
           { title: inputValue },
           { headers }
-        )
-        .then((res) => {
-          if (res.data.status === "success") {
-            setIsTitleDialogOpen(false);
-            toast.success("Title updated successfully");
-          }
-          return res.data;
-        })
-        .catch((err) => {
-          console.error(err);
-          return err.response.data;
-        });
+        );
+        
+        if (response.data.status === "success") {
+          setIsTitleDialogOpen(false);
+          setDisplayTitle(inputValue);
+          dispatch(setChat({ title: inputValue }));
+          toast.success("Title updated successfully");
+        }
+        return response.data;
+      } catch (err:any) {
+        console.error(err);
+        toast.error("Failed to update title");
+        return err.response?.data;
+      }
     },
     enabled: false,
   });
 
   const handleSave = () => {
+    if (!inputValue.trim()) {
+      toast.error("Title cannot be empty");
+      return;
+    }
     refetchChatTitle();
-    dispatch(setChat({ title: inputValue }));
   };
 
   const { refetch: refetchChatShare } = useQuery({
-    queryKey: ["chat-share"],
+    queryKey: ["chat-share", currentConversationId],
     queryFn: async () => {
       const recipientEmails = emailValue
         .split(",")
@@ -114,14 +126,13 @@ const Navbar = ({
         return res;
       }
 
-      navigator.clipboard.writeText(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/${pathname}`
-      );
+      const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`;
+      navigator.clipboard.writeText(shareUrl);
 
       toast.message(
         <div className="flex flex-col gap-1">
           <p className="text-primary font-semibold">URL copied to clipboard</p>
-          <p className="text-sm text-muted">{`${process.env.NEXT_PUBLIC_APP_URL}${pathname}`}</p>
+          <p className="text-sm text-muted">{shareUrl}</p>
         </div>
       );
 
@@ -142,6 +153,7 @@ const Navbar = ({
       }
     }
   };
+
   if (hidden) return null;
 
   return (
@@ -165,13 +177,13 @@ const Navbar = ({
                 width={20}
                 height={20}
               />
-              <Dialog
+               <Dialog
                 open={isTitleDialogOpen}
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger>
                   <span className="text-muted text-xl">
-                    {chatTitle || title}
+                    {displayTitle}
                   </span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
@@ -187,14 +199,19 @@ const Navbar = ({
                         value={inputValue}
                         onChange={handleInputChange}
                         className="col-span-3"
+                        placeholder="Enter chat title"
                       />
                     </div>
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button">Cancel</Button>
+                      <Button type="button" variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button type="button" onClick={handleSave}>
+                    <Button 
+                      type="button" 
+                      onClick={handleSave}
+                      disabled={!inputValue.trim()}
+                    >
                       Save
                     </Button>
                   </DialogFooter>
@@ -267,11 +284,11 @@ const Navbar = ({
                 <span className="text-gray-700">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
                     agentId
-                      .replace(/_/g, " ") // Replace underscores with spaces
+                      .replace(/_/g, " ")
                       .replace(
                         /([a-z])([A-Z])/g,
-                        "$1 $2" // Add space between camelCase words
-                          .replace(/\b\w/g, (char) => char.toUpperCase()) // Capitalize the first letter of each word
+                        "$1 $2" 
+                          .replace(/\b\w/g, (char) => char.toUpperCase())
                       )}
                 </span>
               </div>

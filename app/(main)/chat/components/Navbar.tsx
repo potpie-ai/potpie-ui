@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
@@ -30,7 +30,15 @@ const emailSchema = z
   .email({ message: "Invalid email address" })
   .or(z.array(z.string().email({ message: "Invalid email address" })));
 
-const Navbar = ({ showShare }: { showShare?: boolean }) => {
+const Navbar = ({
+  showShare,
+  hidden = false,
+  chatTitle,
+}: {
+  showShare?: boolean;
+  hidden?: boolean;
+  chatTitle?: string;
+}) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
   );
@@ -40,7 +48,12 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
   const [emailValue, setEmailValue] = useState<string>("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
 
+  useEffect(() => {
+    setInputValue(title);
+  }, [title, pathname]);
+  
   const handleInputChange = (event: any) => {
     setInputValue(event.target.value);
   };
@@ -64,6 +77,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
         )
         .then((res) => {
           if (res.data.status === "success") {
+            setIsTitleDialogOpen(false);
             toast.success("Title updated successfully");
           }
           return res.data;
@@ -128,6 +142,7 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
       }
     }
   };
+  if (hidden) return null;
 
   return (
     <>
@@ -150,9 +165,14 @@ const Navbar = ({ showShare }: { showShare?: boolean }) => {
                 width={20}
                 height={20}
               />
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog
+                open={isTitleDialogOpen}
+                onOpenChange={setIsTitleDialogOpen}
+              >
                 <DialogTrigger>
-                  <span className="text-muted text-xl">{title}</span>
+                  <span className="text-muted text-xl">
+                    {chatTitle || title}
+                  </span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>

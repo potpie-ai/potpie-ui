@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { useMutation } from "@tanstack/react-query";
@@ -145,13 +145,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   const loadInfoOnce = async () => {
-    if (infoLoaded || chatFlow !== "EXISTING_CHAT") return;
+    if (infoLoaded) return;
 
     try {
       const info = await ChatService.loadConversationInfo(
         currentConversationId
       );
-
       if (info.type === "error") {
         if (info.status === 404) {
           toast.info(info.message);
@@ -196,8 +195,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       toast.error("Failed to load conversation info");
     }
   };
-
-  useEffect(() => {
+  
+  useLayoutEffect(() => {
     loadInfoOnce();
   }, [currentConversationId]);
 

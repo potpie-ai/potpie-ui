@@ -32,7 +32,7 @@ const GlobalError = ({
               <span>Go back</span>
             </Button>
 
-            <Button className="w-1/2 px-5 py-2 text-sm tracking-wide transition-colors duration-200 rounded-lg shrink-0 sm:w-auto">
+            <Button className="w-1/2 px-5 py-2 text-sm tracking-wide transition-colors duration-200 rounded-lg shrink-0 sm:w-auto" onClick={() => router.push("/")}>
               Take me home
             </Button>
           </div>

@@ -20,6 +20,7 @@ import ChatBubble from "../components/ChatBubble";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "../components/Navbar";
+import getHeaders from "@/app/utils/headers.util";
 
 interface SendMessageArgs {
   message: string;
@@ -56,30 +57,50 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   });
 
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
+    const headers = await getHeaders();
     setFetchingResponse(true);
-    const { accumulatedMessage, accumulatedCitation } =
-      await ChatService.sendMessage(
-        currentConversationId,
-        message,
-        selectedNodes
-      );
-
-    setCurrentConversation((prevConversation: any) => ({
-      ...prevConversation,
-      messages: [
-        ...prevConversation.messages,
-        {
-          sender: "agent",
-          text: accumulatedMessage,
-          citations: [accumulatedCitation],
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/message/`,
+      {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
         },
-      ],
-    }));
+        body: JSON.stringify({ content: message, node_ids: selectedNodes }),
+      }
+    );
 
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedMessage = "";
+    let accumulatedCitation = "";
+
+    while (true) {
+      const { done, value } = (await reader?.read()) || { done: true, value: undefined };
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      try {
+        const parsedChunks = chunk
+          .split("}")
+          .filter(Boolean)
+          .map((c) => JSON.parse(c + "}"));
+
+        for (const parsedChunk of parsedChunks) {
+          accumulatedMessage += parsedChunk.message;
+          accumulatedCitation = parsedChunk.citations;
+        }
+      } catch (error) {
+        // TODO: Handle the error
+      }
+    }
     setFetchingResponse(false);
-    return accumulatedMessage;
-  };
 
+    console.log("Response : ", accumulatedMessage)
+
+  }
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
 
@@ -136,7 +157,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       );
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
-        messages,
+        messages:[...prevConversation.messages,...messages],
       }));
       setMessagesLoaded(true);
     } catch (error) {
@@ -195,7 +216,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       toast.error("Failed to load conversation info");
     }
   };
-  
+
   useLayoutEffect(() => {
     loadInfoOnce();
   }, [currentConversationId]);

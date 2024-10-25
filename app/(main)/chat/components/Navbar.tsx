@@ -34,10 +34,12 @@ const Navbar = ({
   showShare,
   hidden = false,
   chatTitle,
+  showTitle = true,
 }: {
   showShare?: boolean;
   hidden?: boolean;
   chatTitle?: string;
+  showTitle?: boolean;
 }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
@@ -82,7 +84,7 @@ const Navbar = ({
           { title: inputValue },
           { headers }
         );
-        
+
         if (response.data.status === "success") {
           setIsTitleDialogOpen(false);
           setDisplayTitle(inputValue);
@@ -90,7 +92,7 @@ const Navbar = ({
           toast.success("Title updated successfully");
         }
         return response.data;
-      } catch (err:any) {
+      } catch (err: any) {
         console.error(err);
         toast.error("Failed to update title");
         return err.response?.data;
@@ -168,133 +170,132 @@ const Navbar = ({
             Click here.
           </Link>
         </div>
-        <div className="flex w-full justify-between items-center">
-          <div className="flex items-center justify-between w-full px-6 pb-2 gap-5">
-            <div className="gap-5 flex items-center justify-start">
-              <Image
-                src={"/images/msg-grey.svg"}
-                alt="logo"
-                width={20}
-                height={20}
-              />
-               <Dialog
-                open={isTitleDialogOpen}
-                onOpenChange={setIsTitleDialogOpen}
-              >
-                <DialogTrigger>
-                  <span className="text-muted text-xl">
-                    {displayTitle}
-                  </span>
+        {showTitle && (
+          <div className="flex w-full justify-between items-center">
+            <div className="flex items-center justify-between w-full px-6 pb-2 gap-5">
+              <div className="gap-5 flex items-center justify-start">
+                <Image
+                  src={"/images/msg-grey.svg"}
+                  alt="logo"
+                  width={20}
+                  height={20}
+                />
+                <Dialog
+                  open={isTitleDialogOpen}
+                  onOpenChange={setIsTitleDialogOpen}
+                >
+                  <DialogTrigger>
+                    <span className="text-muted text-xl">{displayTitle}</span>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[487px]" showX={false}>
+                    <DialogHeader>
+                      <DialogTitle className="text-center">
+                        Edit chat name
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="">
+                        <Input
+                          id="name"
+                          value={inputValue}
+                          onChange={handleInputChange}
+                          className="col-span-3"
+                          placeholder="Enter chat title"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="outline">
+                          Cancel
+                        </Button>
+                      </DialogClose>
+                      <Button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={!inputValue.trim()}
+                      >
+                        Save
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger hidden={!showShare}>
+                  <Button size="icon" variant="ghost">
+                    <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
+                  </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
                     <DialogTitle className="text-center">
-                      Edit chat name
+                      Share chat with others
                     </DialogTitle>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="">
                       <Input
-                        id="name"
-                        value={inputValue}
-                        onChange={handleInputChange}
+                        id="email"
+                        placeholder="Email"
+                        value={emailValue}
+                        onChange={handleEmailChange}
                         className="col-span-3"
-                        placeholder="Enter chat title"
                       />
+                      {emailError && (
+                        <p className="text-red-500 text-sm">{emailError}</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
+                      <p className="text-sm text-muted">
+                        {`${process.env.NEXT_PUBLIC_APP_URL}${pathname}`}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
+                          );
+                          toast.success("Link copied to clipboard");
+                        }}
+                      >
+                        Copy Link
+                      </Button>
                     </div>
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="outline">Cancel</Button>
+                      <Button type="button">Cancel</Button>
                     </DialogClose>
-                    <Button 
-                      type="button" 
-                      onClick={handleSave}
-                      disabled={!inputValue.trim()}
+                    <Button
+                      type="button"
+                      onClick={handleEmailSave}
+                      disabled={emailValue === ""}
                     >
-                      Save
+                      Share via Email
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger hidden={!showShare}>
-                <Button size="icon" variant="ghost">
-                  <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[487px]" showX={false}>
-                <DialogHeader>
-                  <DialogTitle className="text-center">
-                    Share chat with others
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="">
-                    <Input
-                      id="email"
-                      placeholder="Email"
-                      value={emailValue}
-                      onChange={handleEmailChange}
-                      className="col-span-3"
-                    />
-                    {emailError && (
-                      <p className="text-red-500 text-sm">{emailError}</p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
-                    <p className="text-sm text-muted">
-                      {`${process.env.NEXT_PUBLIC_APP_URL}${pathname}`}
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
-                        );
-                        toast.success("Link copied to clipboard");
-                      }}
-                    >
-                      Copy Link
-                    </Button>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button">Cancel</Button>
-                  </DialogClose>
-                  <Button
-                    type="button"
-                    onClick={handleEmailSave}
-                    disabled={emailValue === ""}
-                  >
-                    Share via Email
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            {agentId && allAgents && (
-              <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                <span className="text-gray-700">
-                  {allAgents.find((agent) => agent.id === agentId)?.name ||
-                    agentId
-                      .replace(/_/g, " ")
-                      .replace(
+            <div className="flex items-center justify-between gap-4">
+              {agentId && allAgents && (
+                <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                  <span className="text-gray-700">
+                    {allAgents.find((agent) => agent.id === agentId)?.name ||
+                      agentId.replace(/_/g, " ").replace(
                         /([a-z])([A-Z])/g,
-                        "$1 $2" 
-                          .replace(/\b\w/g, (char) => char.toUpperCase())
+                        "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
                       )}
-                </span>
-              </div>
-            )}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </header>
     </>
   );

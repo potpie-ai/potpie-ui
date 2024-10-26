@@ -8,26 +8,19 @@ import debounce from "debounce";
 import getHeaders from "@/app/utils/headers.util";
 import axios, { AxiosResponse } from "axios";
 import Link from "next/link";
-import { Edit, Edit3, Play, Plus } from "lucide-react";
+import { Edit, Play, Pause, Loader, Plus, Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { auth } from "@/configs/Firebase-config";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import dayjs from "dayjs";
-import Image from "next/image";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const AllAgents = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  const [statuses, setStatuses] = useState<{ [id: string]: string }>({}); // Store deployment statuses
   const userId = auth.currentUser?.uid || "";
   const router = useRouter();
+
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["all-agents"],
     queryFn: async () => {
@@ -40,11 +33,41 @@ const AllAgents = () => {
       return response.data;
     },
   });
+
+  const fetchDeploymentStatus = async (conversationId: string) => {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    const response = await axios.get(
+      `${baseUrl}/api/v1/conversations/${conversationId}/info/`,
+      { headers }
+    );
+    return response.data.deployment_status; // Should return DEPLOYED, STOPPED, or IN_PROGRESS
+  };
+
+  useEffect(() => {
+    if (data && data.length > 0) {
+      const fetchStatuses = async () => {
+        const newStatuses: { [id: string]: string } = {};
+
+        await Promise.all(
+          data.map(async (agent: { id: string }) => {
+            const status = await fetchDeploymentStatus(agent.id);
+            newStatuses[agent.id] = status;
+          })
+        );
+
+        setStatuses(newStatuses);
+      };
+
+      fetchStatuses();
+    }
+  }, [data]);
+
   const deleteCustomAgentForm = useMutation({
-    mutationFn: async (agnetId: string) => {
+    mutationFn: async (agentId: string) => {
       const header = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
-      return (await axios.delete(`${baseUrl}/custom-agents/agents/${agnetId}`, {
+      return (await axios.delete(`${baseUrl}/custom-agents/agents/${agentId}`, {
         headers: header,
       })) as AxiosResponse<CustomAgentType, any>;
     },
@@ -57,6 +80,7 @@ const AllAgents = () => {
       toast.error("Failed to delete agent");
     },
   });
+
   useEffect(() => {
     const handler = debounce((value) => {
       setDebouncedSearchTerm(value);
@@ -85,33 +109,46 @@ const AllAgents = () => {
             (
               content: { id: string; name: string; description: string },
               index: React.Key
-            ) => (
-              <Card
-              key={index}
-              className={`pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E] hover:border-2 hover:shadow-md`}
-            >
-              <CardHeader className="p-1 px-6 font-normal flex flex-row justify-between items-center">
-                <CardTitle className="text-lg text-muted truncate max-w-[250px]">
-                  {content.name}
-                </CardTitle>
-                <Link href={`/agents?edit=${content.id}`} className="ml-2">
-                  <Button variant="outline" className="text-primary p-2 rounded-full bg-transparent border border-gray-300 hover:bg-gray-100 transition-colors duration-200">
-                    <Edit className="w-5 h-5" />
-                  </Button>
-                </Link>
-              </CardHeader>
-            
-              <CardContent className="text-base text-muted-foreground leading-tight px-6 pb-4 flex flex-row justify-between h-full">
-                <p className="line-clamp-3 overflow-hidden flex-grow max-w-[380px]">
-                  {content.description}
-                </p>
-                <Button className="text-primary p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 mt-2 self-end">
-                  <Play className="w-6 h-6" />
-                </Button>
-              </CardContent>
-            </Card>
-            
-            )
+            ) => {
+              const deploymentStatus = statuses[content.id];
+
+              return (
+                <Card
+                  key={index}
+                  className={`pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E] hover:border-2 hover:shadow-md`}
+                >
+                  <CardHeader className="p-1 px-6 font-normal flex flex-row justify-between items-center">
+                    <CardTitle className="text-lg text-muted flex gap-2 truncate max-w-[250px]">
+                      <p>{content.name} </p> <Bot />
+                    </CardTitle>
+                    <Link href={`/agents?edit=${content.id}`} className="ml-2">
+                      <Button
+                        variant="outline"
+                        className="text-primary p-2 rounded-full bg-transparent border border-gray-300 hover:bg-gray-100 transition-colors duration-200"
+                      >
+                        <Edit className="w-5 h-5" />
+                      </Button>
+                    </Link>
+                  </CardHeader>
+                  <CardContent className="text-base text-muted-foreground leading-tight px-6 pb-4 flex flex-row justify-between h-full">
+                    <p className="line-clamp-3 overflow-hidden flex-grow max-w-[380px]">
+                      {content.description}
+                    </p>
+                    <Button className="text-primary p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 mt-2 self-end">
+                      {!deploymentStatus ? (
+                        <Loader className="w-6 h-6 animate-spin" />
+                      ) : deploymentStatus === "DEPLOYED" ? (
+                        <Pause className="w-6 h-6" />
+                      ) : deploymentStatus === "IN_PROGRESS" ? (
+                        <Loader className="w-6 h-6 animate-spin" />
+                      ) : (
+                        <Play className="w-6 h-6" />
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            }
           )
         ) : isLoading ? (
           Array.from({ length: 10 }).map((_, index) => (

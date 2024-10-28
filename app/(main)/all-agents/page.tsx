@@ -8,11 +8,26 @@ import debounce from "debounce";
 import getHeaders from "@/app/utils/headers.util";
 import axios, { AxiosResponse } from "axios";
 import Link from "next/link";
-import { Edit, Play, Pause, Loader, Plus, Bot, AlertCircle } from "lucide-react";
+import {
+  Edit,
+  Play,
+  Pause,
+  Loader,
+  Plus,
+  Bot,
+  AlertCircle,
+  Trash,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { auth } from "@/configs/Firebase-config";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 const AllAgents = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,7 +103,11 @@ const AllAgents = () => {
     mutationFn: async (agentId: string) => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      return axios.post(`${baseUrl}/deployment/agents/${agentId}/deploy`, {}, { headers });
+      return axios.post(
+        `${baseUrl}/deployment/agents/${agentId}/deploy`,
+        {},
+        { headers }
+      );
     },
     onSuccess: () => {
       toast.success("Agent deployed successfully");
@@ -103,7 +122,11 @@ const AllAgents = () => {
     mutationFn: async (agentId: string) => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      return axios.post(`${baseUrl}/deployment/agents/${agentId}/stop`, {}, { headers });
+      return axios.post(
+        `${baseUrl}/deployment/agents/${agentId}/stop`,
+        {},
+        { headers }
+      );
     },
     onSuccess: () => {
       toast.success("Agent stopped successfully");
@@ -137,31 +160,55 @@ const AllAgents = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Button
-          className="gap-2"
-          onClick={() => router.push("/agents")}
-        >
+        <Button className="gap-2" onClick={() => router.push("/agents")}>
           <Plus /> Create New Agent
         </Button>
       </div>
       <div className={`flex flex-wrap gap-16 items-center h-full w-full`}>
-        {!isLoading && filteredData && filteredData.length > 0 ? (
+        {isLoading ? (
+          Array.from({ length: 10 }).map((_, index) => (
+            <Skeleton className="w-64 h-44" key={index} />
+          ))
+        ) : data && data.length === 0 && !searchTerm ? (
+          <Card className="p-6 w-full text-center shadow-md rounded-2xl">
+            <CardContent>
+              <p className="text-lg text-muted">No agents available.</p>
+              <Button className="mt-4" onClick={() => router.push("/agents")}>
+                <Plus /> Create New Agent
+              </Button>
+            </CardContent>
+          </Card>
+        ) : filteredData && filteredData.length === 0 && searchTerm ? (
+          <div className="flex flex-col items-center justify-center w-full py-10">
+            <p className="text-lg text-muted-foreground">
+              No agents found matching {debouncedSearchTerm}
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => setSearchTerm("")}
+            >
+              Clear Search
+            </Button>
+          </div>
+        ) : (
           filteredData.map(
             (
               content: { id: string; name: string; description: string },
               index: React.Key
             ) => {
               const deploymentStatus = statuses[content.id];
-
               return (
                 <Card
                   key={index}
                   className={`pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E] hover:border-2 hover:shadow-md`}
                 >
                   <CardHeader className="p-1 px-6 font-normal flex flex-row justify-between items-center">
-                    <CardTitle className="text-lg text-muted flex gap-2 truncate max-w-[250px]">
-                      <p>{content.name} </p> <Bot />
+                    <CardTitle className="text-lg text-muted flex gap-2 items-center max-w-[250px]">
+                      <div className="truncate">{content.name}</div>
+                      <Bot className="flex-shrink-0" />
                     </CardTitle>
+
                     <Link href={`/agents?edit=${content.id}`} className="ml-2">
                       <Button
                         variant="outline"
@@ -171,7 +218,7 @@ const AllAgents = () => {
                       </Button>
                     </Link>
                   </CardHeader>
-                  <CardContent className="text-base text-muted-foreground leading-tight px-6 pb-4 flex flex-row justify-between h-full">
+                  <CardContent className="text-base text-muted-foreground leading-tight px-6 pb-4 flex flex-row justify-between h-full relative">
                     <p className="line-clamp-3 overflow-hidden flex-grow max-w-[380px]">
                       {content.description}
                     </p>
@@ -196,25 +243,19 @@ const AllAgents = () => {
                       )}
                     </Button>
                   </CardContent>
+                  <CardFooter>
+                    <Button
+                      variant="destructive"
+                      className="text-primary p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+                      onClick={() => deleteCustomAgentForm.mutate(content.id)}
+                    >
+                      <Trash className="w-6 h-6" />
+                    </Button>
+                  </CardFooter>
                 </Card>
               );
             }
           )
-        ) : isLoading ? (
-          Array.from({ length: 10 }).map((_, index) => (
-            <Skeleton className="w-64 h-44" key={index} />
-          ))
-        ) : (
-          <div className="flex flex-col items-center justify-center w-full py-10">
-            <p className="text-lg text-muted-foreground">No agents found matching {debouncedSearchTerm}</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => setSearchTerm("")}
-            >
-              Clear Search
-            </Button>
-          </div>
         )}
       </div>
     </div>

@@ -34,12 +34,10 @@ const Navbar = ({
   showShare,
   hidden = false,
   chatTitle,
-  showTitle = true,
 }: {
   showShare?: boolean;
   hidden?: boolean;
   chatTitle?: string;
-  showTitle?: boolean;
 }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
@@ -52,6 +50,7 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
+  const showTitle = pathname.split("/").pop() !== "newchat";
 
   useEffect(() => {
     if (chatTitle) {

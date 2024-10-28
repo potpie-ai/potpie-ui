@@ -367,7 +367,13 @@ const CustomAgent: React.FC = () => {
                                         label: tool.name,
                                       })
                                     )}
-                                    defaultValue={field.value || undefined}
+                                    defaultValue={
+                                      Array.isArray(field.value) &&
+                                      field.value.length === 1 &&
+                                      field.value[0] === ""
+                                        ? []
+                                        : field.value
+                                    }
                                     value={selectedTools[idx] || []}
                                     onValueChange={(tools) =>
                                       handleToolChange(idx, tools)
@@ -434,7 +440,11 @@ const CustomAgent: React.FC = () => {
             )}
           </Step>
         ))}
-        <Footer form={form} submitForm={form.handleSubmit(onSubmit)} update={!!agentIdParam} />
+        <Footer
+          form={form}
+          submitForm={form.handleSubmit(onSubmit)}
+          update={!!agentIdParam}
+        />
       </Stepper>
     </>
   );

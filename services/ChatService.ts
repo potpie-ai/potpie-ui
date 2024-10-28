@@ -241,7 +241,7 @@ export default class ChatService {
         return response.data;
     }
 
-    static async shareConversation(conversationId: string, recipientEmails: string[]) {
+    static async shareConversation(conversationId: string, recipientEmails: string[], shareWithLink: boolean) {
         const headers = await getHeaders();
         try {
             const response = await axios.post(
@@ -249,6 +249,7 @@ export default class ChatService {
                 {
                     conversation_id: conversationId,
                     recipientEmails: recipientEmails,
+                    share_with_link: shareWithLink,
                 },
                 { headers }
             );

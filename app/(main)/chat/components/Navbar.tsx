@@ -25,6 +25,7 @@ import { z } from "zod";
 import { Share2 } from "lucide-react";
 import ChatService from "@/services/ChatService";
 
+
 const emailSchema = z
   .string()
   .email({ message: "Invalid email address" })
@@ -50,6 +51,7 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
+  const [shareWithLink, setShareWithLink] = useState(false)
 
   useEffect(() => {
     if (chatTitle) {
@@ -68,6 +70,10 @@ const Navbar = ({
   const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setEmailValue(event.target.value);
     setEmailError(null);
+  };
+  const handleShareOptionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setShareWithLink(event.target.value === "link");
+    setEmailValue(""); 
   };
 
   const currentConversationId = usePathname()?.split("/").pop();
@@ -118,7 +124,8 @@ const Navbar = ({
 
       const res = await ChatService.shareConversation(
         currentConversationId,
-        recipientEmails
+        recipientEmails,
+        shareWithLink
       );
 
       if (res.type === "error") {
@@ -141,18 +148,34 @@ const Navbar = ({
     enabled: false,
   });
 
-  const handleEmailSave = () => {
+  const handleEmailSave = async () => {
     try {
+      console.log(shareWithLink)
+      if(shareWithLink){
+        const res = await refetchChatShare();
+        if(res.data.type === "error") return;
+      }
+      else{
       const emails = emailValue.split(",").map((email) => email.trim());
       emails.forEach((email) => emailSchema.parse(email));
-      refetchChatShare();
+      await refetchChatShare();
+      }
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
         setEmailError(error.errors[0].message);
       }
+      else{
+        setEmailError("An error occurred while sharing the chat.");
+      }
     }
   };
+
+  const isShareDisabled = () => {
+    if (shareWithLink) return false;
+    const emails = emailValue.split(",").map((email) => email.trim())
+    return emails.some(email => !/\S+@\S+\.\S+/.test(email));
+  }
 
   if (hidden) return null;
 
@@ -231,6 +254,14 @@ const Navbar = ({
                   </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
+                    <div className="">
+                    <select onChange={handleShareOptionChange} className= "border border-gray-500 border-opacity-20 rounded-md col-span-3 flex items-center justify-center px-[9rem]" >
+                      <option value="email">With Email</option>
+                      <option value="link">Anyone With Link</option>
+                    </select>
+                    </div>
+                    {/* dropdown */}
+                  {!shareWithLink && (
                   <div className="">
                     <Input
                       id="email"
@@ -243,6 +274,7 @@ const Navbar = ({
                       <p className="text-red-500 text-sm">{emailError}</p>
                     )}
                   </div>
+                  )}
 
                   <div className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
                     <p className="text-sm text-muted">
@@ -269,9 +301,9 @@ const Navbar = ({
                   <Button
                     type="button"
                     onClick={handleEmailSave}
-                    disabled={emailValue === ""}
+                    disabled={isShareDisabled()}
                   >
-                    Share via Email
+                    Share
                   </Button>
                 </DialogFooter>
               </DialogContent>

@@ -67,6 +67,7 @@ jobs:
           echo "NEXT_PUBLIC_POTPIE_PLUS_URL=${{ secrets.STAGE_NEXT_PUBLIC_POTPIE_PLUS_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_APP_URL=${{ secrets.STAGE_NEXT_PUBLIC_APP_URL }}" >> $GITHUB_ENV
 
+
       # Build the Docker image
       - name: Build
         run: |-

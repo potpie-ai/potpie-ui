@@ -1,16 +1,15 @@
 import ReactMarkdown from "react-markdown";
-import getHeaders from "@/app/utils/headers.util";
 import MyCodeBlock from "@/components/codeBlock";
 import { Button } from "@/components/ui/button";
-import { addMessageToConversation, setChat } from "@/lib/state/Reducers/chat";
 import { cn } from "@/lib/utils";
-import { LucideRepeat2, RotateCw, Github } from "lucide-react"; // Import GitHub icon
-import { useDispatch, useSelector } from "react-redux";
-import { Key, useState } from "react";
+import { LucideRepeat2, RotateCw, Github } from "lucide-react"; 
+import { useSelector } from "react-redux";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { RootState } from "@/lib/state/store";
 import Link from "next/link";
+import ChatService from "@/services/ChatService";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string;
@@ -25,9 +24,9 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
-  message,
+  message: initialMessage,
   sender,
-  citations = [], // Default to an empty array if undefined
+  citations: initialCitations = [], // Default to an empty array if undefined
   className,
   isLast,
   currentConversationId,
@@ -35,17 +34,20 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   ...props
 }) => {
   const { user } = useAuthContext();
-  const dispatch = useDispatch();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEmptyResponse, setIsEmptyResponse] = useState(false);
-  const { branchName, repoName, selectedNodes } = useSelector(
+  const [message, setMessage] = useState(initialMessage); // Store the message in state
+  const [citations, setCitations] = useState(initialCitations); // Store the citations in state
+  const { temporaryContext, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
 
-  const userImage = user.photoUrl;
   const agentImage = "/images/logo.svg";
 
   const parseMessage = (message: string) => {
+    if (message == undefined) {
+      return;
+    }
     const sections = [];
     const codeRegex = /```(\w+?)\n([\s\S]*?)```/g;
     let lastIndex = 0;
@@ -73,65 +75,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   const regenerateMessage = async () => {
     setIsRegenerating(true);
-    const headers = await getHeaders();
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/regenerate/`,
-        {
-          method: "POST",
-          headers: {
-            ...headers,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ node_ids: selectedNodes }), // Only send node_ids
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedMessage = "";
-
-      while (true) {
-        const { done, value } = (await reader?.read()) || {
-          done: true,
-          value: undefined,
-        };
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const parsedChunks = chunk
-          .split("}")
-          .filter(Boolean)
-          .map((c) => JSON.parse(c + "}"));
-
-        for (const parsedChunk of parsedChunks) {
-          accumulatedMessage += parsedChunk.message;
-        }
-      }
-
-      dispatch(
-        addMessageToConversation({
-          chatId: currentConversationId,
-          message: { sender: "agent", text: accumulatedMessage },
-        })
-      );
-
-      dispatch(setChat({ status: "active" }));
+      const { accumulatedMessage, accumulatedCitation } = await ChatService.regenerateMessage(currentConversationId, selectedNodes);
+      
+      setMessage(accumulatedMessage);
+      setCitations(accumulatedCitation);
       setIsEmptyResponse(false);
       setIsRegenerating(false);
-      return accumulatedMessage;
     } catch (err) {
-      console.log(err);
-      dispatch(setChat({ status: "active" }));
+      console.error(err);
       toast.error("Unable to regenerate response");
       setIsRegenerating(false);
       setIsEmptyResponse(true);
-      return err;
     }
   };
 
@@ -153,8 +109,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         className={cn(
           "rounded-lg px-4 py-2 max-w-[75%] break-words text-sm",
           sender === "user"
-            ? "bg-primary text-white ml-2"
-            : "bg-gray-200 text-muted mr-2",
+            ? "bg-[#f7e6e6] text-white ml-2"
+            : "bg-[#edecf4] text-muted mr-2",
           isStreaming && "animate-pulse",
           className
         )}
@@ -163,54 +119,41 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         {/* Citations Section */}
         {sender === "agent" && citations && citations.length > 0 && (
           <div className="mb-2">
-            {citations?.map((citation: string[], index: Key | null | undefined) => {
-                return (
+            {citations.map((citation: string, index: number) => {
+              const displayText = citation.length > 30 ? citation.split("/").pop() : citation; // Display last part if long
+
+              return (
                 <div
                   key={index}
                   className="bg-gray-200 mb-2 rounded-md flex flex-col items-start w-full gap-2"
                 >
-                  {citation && citation?.map((c: string, index: Key | null | undefined) => {
-                    const displayText =
-                      c.length > 30
-                        ? c.split("/").pop()
-                        : c; 
-                    return (
-                      <div key={index} className="flex justify-between w-full">
-                        <Link
-                          href={
-                            "https://github.com/" +
-                            repoName +
-                            "/blob/" +
-                            branchName +
-                            "/" +
-                            c.split("/").pop()
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center text-green-700 hover:underline flex-grow"
-                          style={{ wordBreak: "break-all" }}
-                        >
-                          <Github className="w-4 h-4" />
-                          <span className="mx-2">{displayText}</span>
-                        </Link>
-                        <div className="flex items-center space-x-2 ml-auto">
-                          <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-                            {branchName}
-                          </code>
-                          <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
-                            {repoName}
-                          </code>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div className="flex justify-between w-full">
+                    <Link
+                      href={`https://github.com/${temporaryContext.repo}/blob/${temporaryContext.branch}/${citation.split("/").pop()}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center text-green-700 hover:underline flex-grow"
+                      style={{ wordBreak: "break-all" }}
+                    >
+                      <Github className="w-4 h-4" />
+                      <span className="mx-2">{displayText}</span>
+                    </Link>
+                    <div className="flex items-center space-x-2 ml-auto">
+                      <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                        {temporaryContext.branch}
+                      </code>
+                      <code className="bg-gray-100 text-red-400 rounded px-1 text-sm font-bold">
+                        {temporaryContext.repo}
+                      </code>
+                    </div>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
 
-        {parsedSections.map((section, index) => (
+        {parsedSections?.map((section, index) => (
           <div key={index}>
             {section.type === "text" && (
               <ReactMarkdown

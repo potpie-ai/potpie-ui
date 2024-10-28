@@ -1,4 +1,4 @@
-import { CircleDollarSignIcon, KeyRound, LogOut, MessageCircleQuestion, Plus } from "lucide-react";
+import { KeyRound, LogOut, MessageCircleQuestion, Plus } from "lucide-react";
 import Link from "next/link";
 import React from "react";
 import { Button } from "../ui/button";
@@ -17,7 +17,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { signOut } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { useDispatch } from "react-redux";
-import { clearChat, clearFullChat } from "@/lib/state/Reducers/chat";
+import { clearChat } from "@/lib/state/Reducers/chat";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu";
 
 const Sidebar = () => {
@@ -26,11 +26,11 @@ const Sidebar = () => {
   const router = useRouter();
   const dispatch = useDispatch();
 
-  const redirectToNewChat = (e:any) => {
-    router.push("/newchat")
-    dispatch(clearFullChat())
-  }
-  
+  const redirectToNewChat = () => {
+    dispatch(clearChat());
+    window.location.href = "/newchat";
+  };
+
   React.useEffect(() => {
     const timer = setTimeout(() => setProgress(5), 500);
     return () => clearTimeout(timer);
@@ -41,12 +41,12 @@ const Sidebar = () => {
       <div className="flex h-full max-h-screen sticky top-0 left-0 bottom-0 flex-col gap-2 overflow-auto no-scrollbar">
         <div className="relative flex h-14 items-center px-2 lg:px-6 mb-11 mt-7">
           <Link href="/" className="flex items-center gap-3 font-semibold ml-2">
-            <Image src={"/images/logo.svg"} alt="logo" width={35} height={35} />
+            <Image src={"/images/potpie-blue.svg"} alt="logo" width={35} height={35} />
             <span className="font-bold text-2xl">potpie</span>
           </Link>
           <hr className="absolute right-0 -bottom-5 h-px w-full border-0 bg-border" />
         </div>
-        <Button className="flex gap-3 mx-5 mb-7" onClick={() => redirectToNewChat(event)}>
+        <Button className="flex gap-3 mx-5 mb-7" onClick={() => redirectToNewChat()}>
           <Plus /> <span>New Chat</span>
         </Button>
         <div className="flex-1">
@@ -86,7 +86,7 @@ const Sidebar = () => {
               <CardTitle className="text-lg">Free Plan</CardTitle>
               <CardDescription className="flex flex-row justify-between text-tertiary">
                 <span>Credits used</span>
-                <span>15/5.0k</span>
+                <span>0/50k</span>
               </CardDescription>
             </CardHeader>
             <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex ">

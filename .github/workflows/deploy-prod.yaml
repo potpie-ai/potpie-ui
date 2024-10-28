@@ -62,6 +62,7 @@ jobs:
           echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=${{ secrets.PROD_PUBLIC_CONVERSATION_BASE_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.PROD_NEXT_PUBLIC_POSTHOG_KEY }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.PROD_NEXT_PUBLIC_POSTHOG_HOST }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_APP_URL=${{ secrets.PROD_NEXT_PUBLIC_APP_URL }}" >> $GITHUB_ENV
       # Build the Docker image
       - name: Build
         run: |-
@@ -84,6 +85,7 @@ jobs:
             --build-arg NEXT_PUBLIC_CONVERSATION_BASE_URL="${{ env.NEXT_PUBLIC_CONVERSATION_BASE_URL }}" \
             --build-arg NEXT_PUBLIC_POSTHOG_KEY="${{ env.NEXT_PUBLIC_POSTHOG_KEY }}" \
             --build-arg NEXT_PUBLIC_POSTHOG_HOST="${{ env.NEXT_PUBLIC_POSTHOG_HOST }}" \
+            --build-arg NEXT_PUBLIC_APP_URL="${{ env.NEXT_PUBLIC_APP_URL }}" \
             -f Dockerfile .
 
       # Push the Docker image to Google Artifact Registry

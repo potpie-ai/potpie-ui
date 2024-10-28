@@ -37,7 +37,7 @@ const AllAgents = () => {
   const fetchDeploymentStatus = async (agentId: string) => {
     try {
       const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
       const response = await axios.get(
         `${baseUrl}/deployment/agents/${agentId}/status`,
         { headers }
@@ -69,7 +69,7 @@ const AllAgents = () => {
   const deleteCustomAgentForm = useMutation({
     mutationFn: async (agentId: string) => {
       const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
       return (await axios.delete(`${baseUrl}/custom-agents/agents/${agentId}`, {
         headers: header,
       })) as AxiosResponse<CustomAgentType, any>;
@@ -87,7 +87,7 @@ const AllAgents = () => {
   const deployAgent = useMutation({
     mutationFn: async (agentId: string) => {
       const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
       return axios.post(`${baseUrl}/deployment/agents/${agentId}/deploy`, {}, { headers });
     },
     onSuccess: () => {
@@ -102,7 +102,7 @@ const AllAgents = () => {
   const stopAgent = useMutation({
     mutationFn: async (agentId: string) => {
       const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
       return axios.post(`${baseUrl}/deployment/agents/${agentId}/stop`, {}, { headers });
     },
     onSuccess: () => {

@@ -41,7 +41,7 @@ const CustomAgent: React.FC = () => {
     queryKey: ["agents", agentIdParam],
     queryFn: async () => {
       const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
 
       const response = await axios.get(
         `${baseUrl}/custom-agents/agents/${agentIdParam}`,
@@ -160,7 +160,7 @@ const CustomAgent: React.FC = () => {
   const submitCustomAgentForm = useMutation({
     mutationFn: async (customAgent: CustomAgentsFormValues) => {
       const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
       return (await axios.post(`${baseUrl}/custom-agents/agents/`, customAgent, {
         headers: header,
       })) as AxiosResponse<CustomAgentType, any>;
@@ -170,7 +170,7 @@ const CustomAgent: React.FC = () => {
   // const deployCustomAgent = useMutation({
   //   mutationFn: async (customAgent: { agent_id: string }) => {
   //     const header = await getHeaders();
-  //     const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+  //     const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
   //     return (await axios.post(
   //       `${baseUrl}/deployment/agents/${customAgent.agent_id}/deploy`,
   //       customAgent,
@@ -190,7 +190,7 @@ const CustomAgent: React.FC = () => {
   const updateCustomAgentForm = useMutation({
     mutationFn: async (customAgent: CustomAgentsFormValues) => {
       const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
       return (await axios.put(
         `${baseUrl}/custom-agents/agents/${agentIdParam}`,
         customAgent,

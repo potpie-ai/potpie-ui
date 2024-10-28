@@ -24,7 +24,13 @@ import { usePathname } from "next/navigation";
 import { z } from "zod";
 import { Share2 } from "lucide-react";
 import ChatService from "@/services/ChatService";
-
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const emailSchema = z
   .string()
@@ -51,7 +57,7 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
-  const [shareWithLink, setShareWithLink] = useState(false)
+  const [shareWithLink, setShareWithLink] = useState(false);
 
   useEffect(() => {
     if (chatTitle) {
@@ -71,10 +77,6 @@ const Navbar = ({
     setEmailValue(event.target.value);
     setEmailError(null);
   };
-  const handleShareOptionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setShareWithLink(event.target.value === "link");
-    setEmailValue(""); 
-  };
 
   const currentConversationId = usePathname()?.split("/").pop();
 
@@ -88,7 +90,7 @@ const Navbar = ({
           { title: inputValue },
           { headers }
         );
-        
+
         if (response.data.status === "success") {
           setIsTitleDialogOpen(false);
           setDisplayTitle(inputValue);
@@ -96,7 +98,7 @@ const Navbar = ({
           toast.success("Title updated successfully");
         }
         return response.data;
-      } catch (err:any) {
+      } catch (err: any) {
         console.error(err);
         toast.error("Failed to update title");
         return err.response?.data;
@@ -150,22 +152,20 @@ const Navbar = ({
 
   const handleEmailSave = async () => {
     try {
-      console.log(shareWithLink)
-      if(shareWithLink){
+      console.log(shareWithLink);
+      if (shareWithLink) {
         const res = await refetchChatShare();
-        if(res.data.type === "error") return;
-      }
-      else{
-      const emails = emailValue.split(",").map((email) => email.trim());
-      emails.forEach((email) => emailSchema.parse(email));
-      await refetchChatShare();
+        if (res.data.type === "error") return;
+      } else {
+        const emails = emailValue.split(",").map((email) => email.trim());
+        emails.forEach((email) => emailSchema.parse(email));
+        await refetchChatShare();
       }
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
         setEmailError(error.errors[0].message);
-      }
-      else{
+      } else {
         setEmailError("An error occurred while sharing the chat.");
       }
     }
@@ -173,9 +173,9 @@ const Navbar = ({
 
   const isShareDisabled = () => {
     if (shareWithLink) return false;
-    const emails = emailValue.split(",").map((email) => email.trim())
-    return emails.some(email => !/\S+@\S+\.\S+/.test(email));
-  }
+    const emails = emailValue.split(",").map((email) => email.trim());
+    return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
+  };
 
   if (hidden) return null;
 
@@ -200,14 +200,12 @@ const Navbar = ({
                 width={20}
                 height={20}
               />
-               <Dialog
+              <Dialog
                 open={isTitleDialogOpen}
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger>
-                  <span className="text-muted text-xl">
-                    {displayTitle}
-                  </span>
+                  <span className="text-muted text-xl">{displayTitle}</span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
@@ -228,10 +226,12 @@ const Navbar = ({
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="outline">Cancel</Button>
+                      <Button type="button" variant="outline">
+                        Cancel
+                      </Button>
                     </DialogClose>
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       onClick={handleSave}
                       disabled={!inputValue.trim()}
                     >
@@ -254,26 +254,37 @@ const Navbar = ({
                   </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                    <div className="">
-                    <select onChange={handleShareOptionChange} className= "border border-gray-500 border-opacity-20 rounded-md col-span-3 flex items-center justify-center px-[9rem]" >
-                      <option value="email">With Email</option>
-                      <option value="link">Anyone With Link</option>
-                    </select>
-                    </div>
-                    {/* dropdown */}
-                  {!shareWithLink && (
                   <div className="">
-                    <Input
-                      id="email"
-                      placeholder="Email"
-                      value={emailValue}
-                      onChange={handleEmailChange}
-                      className="col-span-3"
-                    />
-                    {emailError && (
-                      <p className="text-red-500 text-sm">{emailError}</p>
-                    )}
+                    <Select
+                      onValueChange={(value) => {
+                        setShareWithLink(value === "link");
+                        setEmailValue("");
+                      }}
+                      defaultValue="email"
+                    >
+                      <SelectTrigger className="">
+                        <SelectValue placeholder="Share with" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="email">With Email</SelectItem>
+                        <SelectItem value="link">Anyone With Link</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+                  {/* dropdown */}
+                  {!shareWithLink && (
+                    <div className="">
+                      <Input
+                        id="email"
+                        placeholder="Email"
+                        value={emailValue}
+                        onChange={handleEmailChange}
+                        className="col-span-3"
+                      />
+                      {emailError && (
+                        <p className="text-red-500 text-sm">{emailError}</p>
+                      )}
+                    </div>
                   )}
 
                   <div className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
@@ -315,13 +326,10 @@ const Navbar = ({
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
                 <span className="text-gray-700">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
-                    agentId
-                      .replace(/_/g, " ")
-                      .replace(
-                        /([a-z])([A-Z])/g,
-                        "$1 $2" 
-                          .replace(/\b\w/g, (char) => char.toUpperCase())
-                      )}
+                    agentId.replace(/_/g, " ").replace(
+                      /([a-z])([A-Z])/g,
+                      "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
+                    )}
                 </span>
               </div>
             )}

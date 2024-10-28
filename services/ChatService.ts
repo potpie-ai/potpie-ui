@@ -241,7 +241,7 @@ export default class ChatService {
         return response.data;
     }
 
-    static async shareConversation(conversationId: string, recipientEmails: string[], shareWithLink: boolean) {
+    static async shareConversation(conversationId: string, recipientEmails: string[], shareWithLink = false) {
         const headers = await getHeaders();
         try {
             const response = await axios.post(

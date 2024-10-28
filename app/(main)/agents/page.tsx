@@ -161,7 +161,7 @@ const CustomAgent: React.FC = () => {
     mutationFn: async (customAgent: CustomAgentsFormValues) => {
       const header = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
-      return (await axios.post(`${baseUrl}/custom-agents/agents`, customAgent, {
+      return (await axios.post(`${baseUrl}/custom-agents/agents/`, customAgent, {
         headers: header,
       })) as AxiosResponse<CustomAgentType, any>;
     },

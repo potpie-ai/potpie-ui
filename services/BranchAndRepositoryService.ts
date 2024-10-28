@@ -73,7 +73,7 @@ export default class BranchAndRepositoryService {
         initialStatus: string,
         setParsingStatus: (status: string) => void,
         setChatStep?: (step: number) => void,
-        maxDuration = 60 * 60 * 1000 // 60 minutes in milliseconds
+        maxDuration = 45 * 60 * 1000 // 45 minutes in milliseconds - to align with backend
       ) {
         let parsingStatus = initialStatus;
         let baseDelay = 5000; // Start with 5 seconds

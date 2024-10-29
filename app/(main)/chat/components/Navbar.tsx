@@ -130,7 +130,7 @@ const Navbar = ({
       navigator.clipboard.writeText(shareUrl);
 
       toast.message(
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 m-2">
           <p className="text-primary font-semibold">URL copied to clipboard</p>
           <p className="text-sm text-muted">{shareUrl}</p>
         </div>

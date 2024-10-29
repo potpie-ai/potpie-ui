@@ -204,26 +204,21 @@ const AllAgents = () => {
                   className={`pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E] hover:border-2 hover:shadow-md`}
                 >
                   <CardHeader className="p-1 px-6 font-normal flex flex-row justify-between items-center">
-                    <CardTitle className="text-lg text-muted flex gap-2 items-center max-w-[250px]">
+                    <CardTitle className="text-lg text-muted flex gap-2 items-center max-w-[380px]">
                       <div className="truncate">{content.name}</div>
                       <Bot className="flex-shrink-0" />
                     </CardTitle>
-
-                    <Link href={`/agents?edit=${content.id}`} className="ml-2">
-                      <Button
-                        variant="outline"
-                        className="text-primary p-2 rounded-full bg-transparent border border-gray-300 hover:bg-gray-100 transition-colors duration-200"
-                      >
-                        <Edit className="w-5 h-5" />
-                      </Button>
-                    </Link>
                   </CardHeader>
-                  <CardContent className="text-base text-muted-foreground leading-tight px-6 pb-4 flex flex-row justify-between h-full relative">
+                  <CardContent className="text-base text-muted-foreground leading-tight px-6 mt-4 pb-4 flex flex-row justify-between h-full relative">
                     <p className="line-clamp-3 overflow-hidden flex-grow max-w-[380px]">
                       {content.description}
                     </p>
+                  </CardContent>
+                  <CardFooter className="items-center flex justify-end">
                     <Button
-                      className="text-primary p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 mt-2 self-end"
+                      variant="ghost"
+                      size="icon"
+                      className="hover:text-primary"
                       onClick={() =>
                         deploymentStatus === "DEPLOYED"
                           ? stopAgent.mutate(content.id)
@@ -231,26 +226,34 @@ const AllAgents = () => {
                       }
                     >
                       {deploymentStatus === "ERROR" ? (
-                        <AlertCircle className="w-6 h-6 text-red-600" />
+                        <AlertCircle className="size-5 text-red-600" />
                       ) : !deploymentStatus ? (
-                        <Loader className="w-6 h-6 animate-spin" />
+                        <Loader className="size-5 animate-spin" />
                       ) : deploymentStatus === "DEPLOYED" ? (
-                        <Pause className="w-6 h-6" />
+                        <Pause className="size-5" />
                       ) : deploymentStatus === "IN_PROGRESS" ? (
-                        <Loader className="w-6 h-6 animate-spin" />
+                        <Loader className="size-5 animate-spin" />
                       ) : (
-                        <Play className="w-6 h-6" />
+                        <Play className="size-5" />
                       )}
-                    </Button>
-                  </CardContent>
-                  <CardFooter>
+                    </Button>{" "}
                     <Button
-                      variant="destructive"
-                      className="text-primary p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+                      variant="ghost"
+                      size="icon"
+                      className="hover:text-primary"
                       onClick={() => deleteCustomAgentForm.mutate(content.id)}
                     >
-                      <Trash className="w-6 h-6" />
+                      <Trash className="size-5" />
                     </Button>
+                    <Link href={`/agents?edit=${content.id}`}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="hover:text-primary"
+                      >
+                        <Edit className="w-5 h-5" />
+                      </Button>
+                    </Link>
                   </CardFooter>
                 </Card>
               );

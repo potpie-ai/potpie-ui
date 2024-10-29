@@ -31,6 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Visibility } from "@/lib/Constants";
+import { on } from "events";
 
 const emailSchema = z
   .string()
@@ -58,6 +60,8 @@ const Navbar = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
   const [shareWithLink, setShareWithLink] = useState(false);
+  const [accessList, setAccessList] = useState<string[]>([]);
+
 
   useEffect(() => {
     if (chatTitle) {
@@ -127,7 +131,7 @@ const Navbar = ({
       const res = await ChatService.shareConversation(
         currentConversationId,
         recipientEmails,
-        shareWithLink
+        shareWithLink ? Visibility.PUBLIC : Visibility.PRIVATE
       );
 
       if (res.type === "error") {
@@ -152,7 +156,6 @@ const Navbar = ({
 
   const handleEmailSave = async () => {
     try {
-      console.log(shareWithLink);
       if (shareWithLink) {
         const res = await refetchChatShare();
         if (res.data.type === "error") return;
@@ -175,6 +178,41 @@ const Navbar = ({
     if (shareWithLink) return false;
     const emails = emailValue.split(",").map((email) => email.trim());
     return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
+  };
+
+  const {refetch: refetchAccessList} = useQuery({
+    queryKey: ["access-list", currentConversationId],
+    queryFn: async () => {
+      if (!currentConversationId) return;
+      try {
+        const response = await ChatService.getChatAccess(currentConversationId);
+        if('data' in response){
+        if (Array.isArray(response.data)) {
+          setAccessList(response.data);
+        }
+        
+        return response.data;}
+      } catch (err: any) {
+        console.error(err);
+        toast.error("Failed to update title");
+        return err.response?.data;
+      }
+    },
+    enabled: false,
+  })
+  useEffect(() => {
+    if (isDialogOpen) {
+      refetchAccessList(); // Refetch access list when dialog opens
+    }
+  }, [isDialogOpen, refetchAccessList]);
+
+  const handleSelectChange = (value: string) => {
+    setShareWithLink(value === "link");
+    if (value === "email") {
+    setEmailValue(""); // Reset email value when switching
+    setEmailError(null); // Clear email error if switching to link
+      refetchAccessList(); // Fetch access list again for email option
+    }
   };
 
   if (hidden) return null;
@@ -257,10 +295,9 @@ const Navbar = ({
                   <div className="">
                     <Select
                       onValueChange={(value) => {
-                        setShareWithLink(value === "link");
-                        setEmailValue("");
+                        handleSelectChange(value);
                       }}
-                      defaultValue="email"
+                      defaultValue={shareWithLink ? "link" : "email"}
                     >
                       <SelectTrigger className="">
                         <SelectValue placeholder="Share with" />
@@ -304,6 +341,19 @@ const Navbar = ({
                       Copy Link
                     </Button>
                   </div>
+                  {!shareWithLink && (
+                  <div className="mt-4">
+                    <h3 className="text-lg font-semibold">People with access</h3>
+                    <ul>
+                      
+                    {accessList.map((email, index) => (
+                      <li key={index} className="flex justify-between">
+                       <span>{email}</span> 
+                </li>
+              ))}
+            </ul>
+                  </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <DialogClose asChild>

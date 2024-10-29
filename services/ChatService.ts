@@ -1,6 +1,6 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
-
+import { Visibility } from "@/lib/Constants";
 export default class ChatService {
     static async sendMessage(conversationId: string, message: string, selectedNodes: any[]) {
         const headers = await getHeaders();
@@ -241,16 +241,20 @@ export default class ChatService {
         return response.data;
     }
 
-    static async shareConversation(conversationId: string, recipientEmails: string[], shareWithLink = false) {
+    static async shareConversation(conversationId: string, recipientEmails: string[], visibility: Visibility) {
         const headers = await getHeaders();
+        const payload: any = {
+            conversation_id: conversationId,
+            visibility: visibility,
+        };
         try {
+            if (visibility === Visibility.PRIVATE) {
+                const filteredEmails = recipientEmails.filter(email => email.trim() !== "");
+                payload.recipientEmails = filteredEmails.length > 0 ? filteredEmails : undefined; // Set to undefined if empty
+            }
             const response = await axios.post(
                 `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,
-                {
-                    conversation_id: conversationId,
-                    recipientEmails: recipientEmails,
-                    share_with_link: shareWithLink,
-                },
+                payload,
                 { headers }
             );
 
@@ -271,4 +275,26 @@ export default class ChatService {
             };
         }
     }
+    static async getChatAccess(conversationId: string) {
+        const headers = await getHeaders();
+        try {
+          const response = await axios.get(
+            `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/shared-emails`,
+            { headers }
+          );
+          return response;
+        } catch (error: any) {
+          if (error.response) {
+            return {
+              type: "error",
+              message: error.response.data.detail || "Unable to fetch access list.",
+            };
+          }
+    
+          return {
+            type: "error",
+            message: "Network error while fetching access list.",
+          };
+        }
+      }
 }

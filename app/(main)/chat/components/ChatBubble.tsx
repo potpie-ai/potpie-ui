@@ -119,8 +119,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         {/* Citations Section */}
         {sender === "agent" && citations && citations.length > 0 && (
           <div className="mb-2">
-            {citations.map((citation: string, index: number) => {
-              const displayText = citation.length > 30 ? citation.split("/").pop() : citation; // Display last part if long
+            {citations?.map((citation: string, index: number) => {
+              const displayText = citation?.length > 30 ? citation.split("/").pop() : citation; // Display last part if long
 
               return (
                 <div

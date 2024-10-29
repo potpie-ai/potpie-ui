@@ -143,7 +143,7 @@ const Navbar = ({
 
   const handleEmailSave = () => {
     try {
-      const emails = emailValue.split(",").map((email) => email.trim());
+      const emails = emailValue?.split(",").map((email) => email.trim());
       emails.forEach((email) => emailSchema.parse(email));
       refetchChatShare();
       setIsDialogOpen(false);

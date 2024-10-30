@@ -264,7 +264,7 @@ const CustomAgent: React.FC = () => {
             onClickStep={(step, setStep) => handleStepClick(step, setStep)}
           >
             {index === 0 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
+              <Card className="h-[calc(100vh-20rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form
@@ -275,6 +275,7 @@ const CustomAgent: React.FC = () => {
                         name="system_prompt"
                         label="System Input"
                         placeholder="What will be the system input"
+                        InputClassName="min-h-[calc(100vh-25rem)]"
                         form={form}
                       />
                     </form>
@@ -283,7 +284,7 @@ const CustomAgent: React.FC = () => {
               </Card>
             )}
             {index === 1 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
+              <Card className="h-[calc(100vh-20rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form
@@ -314,7 +315,7 @@ const CustomAgent: React.FC = () => {
               </Card>
             )}
             {index === 2 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
+              <Card className="h-[calc(100vh-20rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form
@@ -341,6 +342,7 @@ const CustomAgent: React.FC = () => {
                             name={`tasks.${idx}.description`}
                             label="Description"
                             placeholder="Task description"
+                            InputClassName="min-h-[calc(100vh-55rem)]"
                             form={form}
                           />
                           <FormField
@@ -407,7 +409,7 @@ const CustomAgent: React.FC = () => {
                                   <Textarea
                                     placeholder='{"key": "value", "someotherkey": "value"}'
                                     {...field}
-                                    className="resize-y max-h-44"
+                                    className="resize-y min-h-[calc(100vh-55rem)]"
                                   />
                                 </FormControl>
                                 <FormMessage />

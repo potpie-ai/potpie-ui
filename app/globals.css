@@ -77,6 +77,33 @@
   scrollbar-width: none; /* Firefox */
 }
 
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background:  #eaeaea;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 4px;
+  border: 2px solid #f0f0f0
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
+}
+
+/* Firefox scrollbar styles */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #a1a1a1 #f0f0f0; 
+}
+
+
 .markdown p {
   margin: 0;
   line-height: 1.5;

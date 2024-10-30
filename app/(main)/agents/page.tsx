@@ -315,7 +315,7 @@ const CustomAgent: React.FC = () => {
               </Card>
             )}
             {index === 2 && (
-              <Card className="h-[calc(100vh-20rem)] overflow-auto border-none bg-background">
+              <Card className="h-[calc(100vh-21.5rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form

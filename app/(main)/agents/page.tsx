@@ -31,11 +31,13 @@ import Footer from "./components/Footer";
 import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { auth } from "@/configs/Firebase-config";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
 
   const agentIdParam = searchParams.get("edit");
+  const userId = auth.currentUser?.uid || "";
 
   const { data: agentDetails, isLoading: agentDetailsLoading } = useQuery({
     queryKey: ["agents", agentIdParam],
@@ -47,6 +49,9 @@ const CustomAgent: React.FC = () => {
         `${baseUrl}/custom-agents/agents/${agentIdParam}`,
         {
           headers: header,
+          params:{
+            user_id: userId
+          }
         }
       );
       return response.data as CustomAgentType;
@@ -264,7 +269,7 @@ const CustomAgent: React.FC = () => {
             onClickStep={(step, setStep) => handleStepClick(step, setStep)}
           >
             {index === 0 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
+              <Card className="h-[calc(100vh-20rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form
@@ -275,6 +280,7 @@ const CustomAgent: React.FC = () => {
                         name="system_prompt"
                         label="System Input"
                         placeholder="What will be the system input"
+                        InputClassName="min-h-[calc(100vh-25rem)]"
                         form={form}
                       />
                     </form>
@@ -283,7 +289,7 @@ const CustomAgent: React.FC = () => {
               </Card>
             )}
             {index === 1 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
+              <Card className="h-[calc(100vh-20rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form
@@ -314,7 +320,7 @@ const CustomAgent: React.FC = () => {
               </Card>
             )}
             {index === 2 && (
-              <Card className="max-h-[calc(100vh-18rem)] overflow-auto border-none bg-background">
+              <Card className="h-[calc(100vh-21.5rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
                     <form
@@ -341,6 +347,7 @@ const CustomAgent: React.FC = () => {
                             name={`tasks.${idx}.description`}
                             label="Description"
                             placeholder="Task description"
+                            InputClassName="min-h-[calc(100vh-55rem)]"
                             form={form}
                           />
                           <FormField
@@ -407,7 +414,7 @@ const CustomAgent: React.FC = () => {
                                   <Textarea
                                     placeholder='{"key": "value", "someotherkey": "value"}'
                                     {...field}
-                                    className="resize-y max-h-44"
+                                    className="resize-y min-h-[calc(100vh-55rem)]"
                                   />
                                 </FormControl>
                                 <FormMessage />

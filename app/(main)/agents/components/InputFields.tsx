@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { CustomAgentsFormValues } from "@/lib/Schema";
+import { cn } from "@/lib/utils";
 import { InfoIcon } from "lucide-react";
 
 interface InputFieldProps {
@@ -19,6 +20,7 @@ interface InputFieldProps {
   name: string;
   placeholder: string;
   label: string;
+  InputClassName?: string;
 }
 
 const InputField: React.FC<InputFieldProps> = ({
@@ -26,6 +28,7 @@ const InputField: React.FC<InputFieldProps> = ({
   name,
   placeholder,
   label,
+  InputClassName,
 }) => (
   <FormField
     control={form.control}
@@ -47,7 +50,7 @@ const InputField: React.FC<InputFieldProps> = ({
           <Textarea
             placeholder={placeholder}
             {...field}
-            className="resize-y max-h-44"
+            className={cn("resize-y min-h-52",InputClassName)}
           />
         </FormControl>
         <FormMessage />

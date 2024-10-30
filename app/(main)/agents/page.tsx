@@ -31,11 +31,13 @@ import Footer from "./components/Footer";
 import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { auth } from "@/configs/Firebase-config";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
 
   const agentIdParam = searchParams.get("edit");
+  const userId = auth.currentUser?.uid || "";
 
   const { data: agentDetails, isLoading: agentDetailsLoading } = useQuery({
     queryKey: ["agents", agentIdParam],
@@ -47,6 +49,9 @@ const CustomAgent: React.FC = () => {
         `${baseUrl}/custom-agents/agents/${agentIdParam}`,
         {
           headers: header,
+          params:{
+            user_id: userId
+          }
         }
       );
       return response.data as CustomAgentType;

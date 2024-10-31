@@ -213,14 +213,12 @@ const SidebarItems = [
       {
         icons: "/images/document.svg",
         title: "Documentation",
-        soon: true,
-        href:"#"
+        href:"https://docs.potpie.ai"
       },
       {
         icons: "/images/git.svg",
         title: "Open source",
-        soon: true,
-        href:"#"
+        href:"https://github.com/potpie-ai/potpie"
       },
       {
         icons: "/images/discord.svg",

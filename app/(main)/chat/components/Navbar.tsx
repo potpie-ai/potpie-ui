@@ -34,6 +34,7 @@ import {
 import { Visibility } from "@/lib/Constants";
 import { on } from "events";
 
+
 const emailSchema = z
   .string()
   .email({ message: "Invalid email address" })
@@ -61,7 +62,6 @@ const Navbar = ({
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
   const [shareWithLink, setShareWithLink] = useState(false);
   const [accessList, setAccessList] = useState<string[]>([]);
-
 
   useEffect(() => {
     if (chatTitle) {

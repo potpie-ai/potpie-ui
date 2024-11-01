@@ -340,8 +340,11 @@ const Navbar = ({
                     {accessList.map((email) => (
                       <Card key={email} className="border border-gray-300">
                         <CardContent className="p-3 flex items-center justify-between">
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-gray-700 capitalize">
                             {email}
+                          </p>
+                          <p className="text-muted text-sm">
+                            {email === user?.email ? "Owner" : "Viewer"}
                           </p>
                         </CardContent>
                       </Card>

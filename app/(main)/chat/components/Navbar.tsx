@@ -63,7 +63,6 @@ const Navbar = ({
   const [shareWithLink, setShareWithLink] = useState(false);
   const [accessList, setAccessList] = useState<string[]>([]);
 
-
   useEffect(() => {
     if (chatTitle) {
       setDisplayTitle(chatTitle);

@@ -24,6 +24,16 @@ import { usePathname } from "next/navigation";
 import { z } from "zod";
 import { Share2 } from "lucide-react";
 import ChatService from "@/services/ChatService";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Visibility } from "@/lib/Constants";
+import { on } from "events";
+
 
 const emailSchema = z
   .string()
@@ -50,6 +60,8 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
+  const [shareWithLink, setShareWithLink] = useState(false);
+  const [accessList, setAccessList] = useState<string[]>([]);
 
   useEffect(() => {
     if (chatTitle) {
@@ -82,7 +94,7 @@ const Navbar = ({
           { title: inputValue },
           { headers }
         );
-        
+
         if (response.data.status === "success") {
           setIsTitleDialogOpen(false);
           setDisplayTitle(inputValue);
@@ -90,7 +102,7 @@ const Navbar = ({
           toast.success("Title updated successfully");
         }
         return response.data;
-      } catch (err:any) {
+      } catch (err: any) {
         console.error(err);
         toast.error("Failed to update title");
         return err.response?.data;
@@ -118,7 +130,8 @@ const Navbar = ({
 
       const res = await ChatService.shareConversation(
         currentConversationId,
-        recipientEmails
+        recipientEmails,
+        shareWithLink ? Visibility.PUBLIC : Visibility.PRIVATE
       );
 
       if (res.type === "error") {
@@ -141,16 +154,64 @@ const Navbar = ({
     enabled: false,
   });
 
-  const handleEmailSave = () => {
+  const handleEmailSave = async () => {
     try {
-      const emails = emailValue.split(",").map((email) => email.trim());
-      emails.forEach((email) => emailSchema.parse(email));
-      refetchChatShare();
+      if (shareWithLink) {
+        const res = await refetchChatShare();
+        if (res.data.type === "error") return;
+      } else {
+        const emails = emailValue.split(",").map((email) => email.trim());
+        emails.forEach((email) => emailSchema.parse(email));
+        await refetchChatShare();
+      }
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
         setEmailError(error.errors[0].message);
+      } else {
+        setEmailError("An error occurred while sharing the chat.");
       }
+    }
+  };
+
+  const isShareDisabled = () => {
+    if (shareWithLink) return false;
+    const emails = emailValue.split(",").map((email) => email.trim());
+    return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
+  };
+
+  const {refetch: refetchAccessList} = useQuery({
+    queryKey: ["access-list", currentConversationId],
+    queryFn: async () => {
+      if (!currentConversationId) return;
+      try {
+        const response = await ChatService.getChatAccess(currentConversationId);
+        if('data' in response){
+        if (Array.isArray(response.data)) {
+          setAccessList(response.data);
+        }
+        
+        return response.data;}
+      } catch (err: any) {
+        console.error(err);
+        toast.error("Failed to update title");
+        return err.response?.data;
+      }
+    },
+    enabled: false,
+  })
+  useEffect(() => {
+    if (isDialogOpen) {
+      refetchAccessList(); // Refetch access list when dialog opens
+    }
+  }, [isDialogOpen, refetchAccessList]);
+
+  const handleSelectChange = (value: string) => {
+    setShareWithLink(value === "link");
+    if (value === "email") {
+    setEmailValue(""); // Reset email value when switching
+    setEmailError(null); // Clear email error if switching to link
+      refetchAccessList(); // Fetch access list again for email option
     }
   };
 
@@ -177,14 +238,12 @@ const Navbar = ({
                 width={20}
                 height={20}
               />
-               <Dialog
+              <Dialog
                 open={isTitleDialogOpen}
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger>
-                  <span className="text-muted text-xl">
-                    {displayTitle}
-                  </span>
+                  <span className="text-muted text-xl">{displayTitle}</span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
@@ -205,10 +264,12 @@ const Navbar = ({
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="outline">Cancel</Button>
+                      <Button type="button" variant="outline">
+                        Cancel
+                      </Button>
                     </DialogClose>
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       onClick={handleSave}
                       disabled={!inputValue.trim()}
                     >
@@ -232,17 +293,36 @@ const Navbar = ({
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="">
-                    <Input
-                      id="email"
-                      placeholder="Email"
-                      value={emailValue}
-                      onChange={handleEmailChange}
-                      className="col-span-3"
-                    />
-                    {emailError && (
-                      <p className="text-red-500 text-sm">{emailError}</p>
-                    )}
+                    <Select
+                      onValueChange={(value) => {
+                        handleSelectChange(value);
+                      }}
+                      defaultValue={shareWithLink ? "link" : "email"}
+                    >
+                      <SelectTrigger className="">
+                        <SelectValue placeholder="Share with" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="email">With Email</SelectItem>
+                        <SelectItem value="link">Anyone With Link</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+                  {/* dropdown */}
+                  {!shareWithLink && (
+                    <div className="">
+                      <Input
+                        id="email"
+                        placeholder="Email"
+                        value={emailValue}
+                        onChange={handleEmailChange}
+                        className="col-span-3"
+                      />
+                      {emailError && (
+                        <p className="text-red-500 text-sm">{emailError}</p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
                     <p className="text-sm text-muted">
@@ -261,6 +341,19 @@ const Navbar = ({
                       Copy Link
                     </Button>
                   </div>
+                  {!shareWithLink && (
+                  <div className="mt-4">
+                    <h3 className="text-lg font-semibold">People with access</h3>
+                    <ul>
+                      
+                    {accessList.map((email, index) => (
+                      <li key={index} className="flex justify-between">
+                       <span>{email}</span> 
+                </li>
+              ))}
+            </ul>
+                  </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <DialogClose asChild>
@@ -269,9 +362,9 @@ const Navbar = ({
                   <Button
                     type="button"
                     onClick={handleEmailSave}
-                    disabled={emailValue === ""}
+                    disabled={isShareDisabled()}
                   >
-                    Share via Email
+                    Share
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -283,13 +376,10 @@ const Navbar = ({
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
                 <span className="text-gray-700 whitespace-nowrap">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
-                    agentId
-                      .replace(/_/g, " ")
-                      .replace(
-                        /([a-z])([A-Z])/g,
-                        "$1 $2" 
-                          .replace(/\b\w/g, (char) => char.toUpperCase())
-                      )}
+                    agentId.replace(/_/g, " ").replace(
+                      /([a-z])([A-Z])/g,
+                      "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
+                    )}
                 </span>
               </div>
             )}

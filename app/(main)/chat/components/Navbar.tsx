@@ -22,7 +22,7 @@ import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 import { z } from "zod";
-import { Share2 } from "lucide-react";
+import { ClipboardCheck, Share2 } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import {
   Select,
@@ -32,8 +32,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Visibility } from "@/lib/Constants";
-import { on } from "events";
-
+import { useAuthContext } from "@/contexts/AuthContext";
+import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@radix-ui/react-scroll-area";
 
 const emailSchema = z
   .string()
@@ -53,6 +54,7 @@ const Navbar = ({
     (state: RootState) => state.chat
   );
   const pathname = usePathname();
+  const { user } = useAuthContext();
   const dispatch = useDispatch();
   const [displayTitle, setDisplayTitle] = useState<string>("Untitled");
   const [inputValue, setInputValue] = useState<string>("");
@@ -180,18 +182,19 @@ const Navbar = ({
     return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
   };
 
-  const {refetch: refetchAccessList} = useQuery({
+  const { refetch: refetchAccessList } = useQuery({
     queryKey: ["access-list", currentConversationId],
     queryFn: async () => {
       if (!currentConversationId) return;
       try {
         const response = await ChatService.getChatAccess(currentConversationId);
-        if('data' in response){
-        if (Array.isArray(response.data)) {
-          setAccessList(response.data);
+        if ("data" in response) {
+          if (Array.isArray(response.data)) {
+            setAccessList(response.data);
+          }
+
+          return response.data;
         }
-        
-        return response.data;}
       } catch (err: any) {
         console.error(err);
         toast.error("Failed to update title");
@@ -199,7 +202,7 @@ const Navbar = ({
       }
     },
     enabled: false,
-  })
+  });
   useEffect(() => {
     if (isDialogOpen) {
       refetchAccessList(); // Refetch access list when dialog opens
@@ -209,8 +212,8 @@ const Navbar = ({
   const handleSelectChange = (value: string) => {
     setShareWithLink(value === "link");
     if (value === "email") {
-    setEmailValue(""); // Reset email value when switching
-    setEmailError(null); // Clear email error if switching to link
+      setEmailValue(""); // Reset email value when switching
+      setEmailError(null); // Clear email error if switching to link
       refetchAccessList(); // Fetch access list again for email option
     }
   };
@@ -281,42 +284,38 @@ const Navbar = ({
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger hidden={!showShare}>
-                <Button size="icon" variant="ghost">
+                <Button size="icon" variant="outline">
                   <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[487px]" showX={false}>
+              <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
                 <DialogHeader>
-                  <DialogTitle className="text-center">
-                    Share chat with others
+                  <DialogTitle className="text-center font-semibold text-xl">
+                    Share Chat with Others
                   </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="">
-                    <Select
-                      onValueChange={(value) => {
-                        handleSelectChange(value);
-                      }}
-                      defaultValue={shareWithLink ? "link" : "email"}
-                    >
-                      <SelectTrigger className="">
-                        <SelectValue placeholder="Share with" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">With Email</SelectItem>
-                        <SelectItem value="link">Anyone With Link</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {/* dropdown */}
+                  <Select
+                    onValueChange={(value) => handleSelectChange(value)}
+                    defaultValue={shareWithLink ? "link" : "email"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Share with" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email">With Email</SelectItem>
+                      <SelectItem value="link">Anyone With Link</SelectItem>
+                    </SelectContent>
+                  </Select>
+
                   {!shareWithLink && (
-                    <div className="">
+                    <div>
                       <Input
                         id="email"
-                        placeholder="Email"
+                        placeholder="Enter Email"
                         value={emailValue}
                         onChange={handleEmailChange}
-                        className="col-span-3"
+                        className="border rounded-md p-2"
                       />
                       {emailError && (
                         <p className="text-red-500 text-sm">{emailError}</p>
@@ -324,45 +323,54 @@ const Navbar = ({
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
-                    <p className="text-sm text-muted">
-                      {`${process.env.NEXT_PUBLIC_APP_URL}${pathname}`}
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
-                        );
-                        toast.success("Link copied to clipboard");
-                      }}
-                    >
-                      Copy Link
-                    </Button>
-                  </div>
-                  {!shareWithLink && (
-                  <div className="mt-4">
-                    <h3 className="text-lg font-semibold">People with access</h3>
-                    <ul>
-                      
-                    {accessList.map((email, index) => (
-                      <li key={index} className="flex justify-between">
-                       <span>{email}</span> 
-                </li>
-              ))}
-            </ul>
-                  </div>
-                  )}
+                  <h3 className="mt-4 text-lg font-semibold">
+                    People with access
+                  </h3>
+                  <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-2">
+                    <Card className="border-gray-300">
+                      <CardContent className="flex justify-between p-4">
+                        <div className="flex flex-col">
+                          <p>{user?.displayName} (You)</p>
+                          <p className="text-sm text-muted">{user?.email}</p>
+                        </div>
+                        <div className="text-muted text-sm">Owner</div>
+                      </CardContent>
+                    </Card>
+
+                    {accessList.map((email) => (
+                      <Card key={email} className="border border-gray-300">
+                        <CardContent className="p-3 flex items-center justify-between">
+                          <p className="text-sm font-medium text-gray-700">
+                            {email}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </ScrollArea>
                 </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button">Cancel</Button>
+
+                <DialogFooter className="!justify-between">
+                  <DialogClose
+                    asChild
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
+                      );
+                      toast.success("Link copied to clipboard");
+                    }}
+                  >
+                    <Button
+                      type="button"
+                      className="gap-2 bg-blue-500 text-white hover:bg-blue-600"
+                    >
+                      <ClipboardCheck /> <span>Copy Link</span>
+                    </Button>
                   </DialogClose>
                   <Button
                     type="button"
                     onClick={handleEmailSave}
                     disabled={isShareDisabled()}
+                    className="bg-green-500 text-white hover:bg-green-600"
                   >
                     Share
                   </Button>

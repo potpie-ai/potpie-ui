@@ -28,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import AgentService from "@/services/AgentService";
 
 const AllAgents = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -49,29 +50,13 @@ const AllAgents = () => {
     },
   });
 
-  const fetchDeploymentStatus = async (agentId: string) => {
-    try {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      const response = await axios.get(
-        `${baseUrl}/deployment/agents/${agentId}/status`,
-        { headers }
-      );
-      return response.data.status;
-    } catch (error) {
-      console.error(`Failed to fetch status for agent ${agentId}:`, error);
-      toast.error(`Failed to fetch status for agent`);
-      return "ERROR";
-    }
-  };
-
   useEffect(() => {
     if (data && data.length > 0) {
       const fetchStatuses = async () => {
         const newStatuses: { [id: string]: string } = {};
         await Promise.all(
           data.map(async (agent: { id: string }) => {
-            const status = await fetchDeploymentStatus(agent.id);
+            const status = await AgentService.getAgentStatus(agent.id);
             newStatuses[agent.id] = status;
           })
         );

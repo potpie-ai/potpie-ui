@@ -9,6 +9,7 @@ import { AppDispatch } from "@/lib/state/store";
 import { useDispatch } from "react-redux";
 import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
+import { toast } from "sonner";
 
 interface AgentType {
   id: string;
@@ -47,6 +48,10 @@ const Step2: React.FC<Step2Props> = ({
 
   const createConversation = async (agentId: string) => {
     try {
+      const agentStatus = await AgentService.getAgentStatus(agentId);
+      if(agentStatus !== "RUNNING") {
+        return toast.info("Please start the agent to create the conversation.");
+      }
       const response = await ChatService.createConversation(userId, title, projectId, agentId);
       setAgentId(agentId);
       setChatStep(3);

@@ -22,6 +22,7 @@ import GlobalError from "@/app/error";
 import Navbar from "../components/Navbar";
 import getHeaders from "@/app/utils/headers.util";
 import axios from "axios";
+import AgentService from "@/services/AgentService";
 
 interface SendMessageArgs {
   message: string;
@@ -146,23 +147,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   };
 
-  const fetchDeploymentStatus = async (agentId: string) => {
-    console.log(agentId);
-    try {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      const response = await axios.get(
-        `${baseUrl}/deployment/agents/${agentId}/status`,
-        { headers }
-      );
-      return response.data.status;
-    } catch (error) {
-      console.error(`Failed to fetch status for agent ${agentId}:`, error);
-      toast.error(`Failed to fetch status for agent`);
-      return "ERROR";
-    }
-  };
-
   const loadInfoOnce = async () => {
     if (infoLoaded) return;
   
@@ -187,8 +171,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         return;
       }
       setChatAccess(info.access_type);
-      fetchDeploymentStatus(info.agent_ids[0]).then((status) => {
-        if (status !== "RUNNING") {
+      AgentService.getAgentStatus(info.agent_ids[0]).then((agentStatus) => {
+        if (agentStatus !== "RUNNING") {
           setChatAccess("not_running");
         }
       });
@@ -220,20 +204,25 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     if (!messagesLoaded) {
       loadMessages().then(() => {
         if (pendingMessage && !pendingMessageSent.current) {
-          try {
-            messageMutation.mutate({
-              message: pendingMessage,
-              selectedNodes: selectedNodes,
-            });
-            pendingMessageSent.current = true;
-            dispatch(clearPendingMessage());
-          } catch (error) {
-            console.error("Error sending pending message:", error);
+          if (chatAccess !== "not_running") {
+            try {
+              messageMutation.mutate({
+                message: pendingMessage,
+                selectedNodes: selectedNodes,
+              });
+              pendingMessageSent.current = true;
+              dispatch(clearPendingMessage());
+            } catch (error) {
+              console.error("Error sending pending message:", error);
+            }
+          } else {
+            console.warn("Agent is not running; pending message will not be sent.");
           }
         }
       });
     }
-  }, [messagesLoaded, pendingMessage]);
+  }, [messagesLoaded, pendingMessage, chatAccess]);
+  
 
   const handleFormSubmit = (message: string) => {
     messageMutation.mutate({
@@ -315,7 +304,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         {chatAccess === "not_running" && (
           <>
             <div className="sticky bottom-6 flex flex-col items-center">
-              <p className="text-sm text-gray-500">The agent is not running</p>
+              <p className="text-sm text-gray-500">Please start the agent to continue the conversation.</p>
             </div>
           </>
         )}

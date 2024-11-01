@@ -16,4 +16,17 @@ export default class AgentService {
         }
     }
 
+    static async getAgentStatus(agentId: string) {
+        const headers = await getHeaders();
+        const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+        try {
+            const response = await axios.get(`${baseUrl}/deployment/agents/${agentId}/status`, {
+                headers: headers,
+            });
+            return response.data.status;
+        } catch (error) {
+            throw new Error("Error fetching agent status");
+        }
+    }
+
 }

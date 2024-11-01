@@ -230,7 +230,7 @@ const Navbar = ({
           </Link>
         </div>
         <div className="flex w-full justify-between items-center">
-          <div className="flex items-center justify-between w-full px-6 pb-2 gap-5">
+          <div className="flex items-center justify-between w-full px-6 pt-1 pb-1 gap-5 border-0">
             <div className="gap-5 flex items-center justify-start">
               <Image
                 src={"/images/msg-grey.svg"}
@@ -374,7 +374,7 @@ const Navbar = ({
             {agentId && allAgents && (
               <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                <span className="text-gray-700">
+                <span className="text-gray-700 whitespace-nowrap">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
                     agentId.replace(/_/g, " ").replace(
                       /([a-z])([A-Z])/g,

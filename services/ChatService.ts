@@ -26,38 +26,58 @@ export default class ChatService {
         let accumulatedCitation = "";
 
         if (reader) {
+            // Try to read first chunk to check if it's a single response
             const { value } = await reader.read();
             if (value) {
                 const chunk = decoder.decode(value);
                 try {
+                    // Attempt to parse as single complete response
                     const parsedChunk = JSON.parse(chunk);
-                    accumulatedMessage = parsedChunk.message;
-                    accumulatedCitation = parsedChunk.citations;
-                    return { accumulatedMessage, accumulatedCitation };
+                    if (parsedChunk.message && !chunk.includes("}{")) {
+                        // Single complete response
+                        accumulatedMessage = parsedChunk.message;
+                        accumulatedCitation = parsedChunk.citations;
+                        console.log("SINGLE CHUNK RESPONSE")
+                        return { accumulatedMessage, accumulatedCitation };
+                    }
                 } catch (error) {
-                    console.error("Error parsing single chunk response:", error);
+                    // Not a complete JSON, treat as start of stream
+                    try {
+                        const parsedChunks = chunk
+                            .split("}")
+                            .filter(Boolean)
+                            .map(c => JSON.parse(c + "}"));
+                        
+                        for (const parsedChunk of parsedChunks) {
+                            accumulatedMessage += parsedChunk.message;
+                            accumulatedCitation = parsedChunk.citations;
+                        }
+                        console.log("MULTIPLE CHUNK RESPONSE")
+                    } catch (streamError) {
+                        console.error("Error parsing stream chunk:", streamError);
+                    }
                 }
             }
-        }
 
-        // For streaming response
-        while (true) {
-            const { done, value } = (await reader?.read()) || { done: true, value: undefined };
-            if (done) break;
+            // Continue reading stream
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
 
-            const chunk = decoder.decode(value);
-            try {
-                const parsedChunks = chunk
-                    .split("}")
-                    .filter(Boolean)
-                    .map((c) => JSON.parse(c + "}"));
+                const chunk = decoder.decode(value);
+                try {
+                    const parsedChunks = chunk
+                        .split("}")
+                        .filter(Boolean)
+                        .map(c => JSON.parse(c + "}"));
 
-                for (const parsedChunk of parsedChunks) {
-                    accumulatedMessage += parsedChunk.message;
-                    accumulatedCitation = parsedChunk.citations;
+                    for (const parsedChunk of parsedChunks) {
+                        accumulatedMessage += parsedChunk.message;
+                        accumulatedCitation = parsedChunk.citations;
+                    }
+                } catch (error) {
+                    console.error("Error parsing stream chunk:", error);
                 }
-            } catch (error) {
-                // Handle parsing error
             }
         }
 

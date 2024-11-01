@@ -36,7 +36,7 @@ const AllAgents = () => {
   const userId = auth.currentUser?.uid || "";
   const router = useRouter();
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["all-agents"],
     queryFn: async () => {
       const headers = await getHeaders();
@@ -91,7 +91,6 @@ const AllAgents = () => {
     },
     onSuccess: () => {
       router.refresh();
-      refetch();
       toast.success("Agent deleted successfully");
     },
     onError: () => {
@@ -109,14 +108,19 @@ const AllAgents = () => {
         { headers }
       );
     },
-    onSuccess: () => {
-      toast.success("Agent deployed successfully");
-      refetch();
+    onMutate: (agentId: string) => {
+      setStatuses((prev) => ({ ...prev, [agentId]: "IN_PROGRESS" }));
     },
-    onError: () => {
+    onSuccess: (data, agentId) => {
+      toast.success("Agent deployed successfully");
+      setStatuses((prev) => ({ ...prev, [agentId]: "RUNNING" }));
+    },
+    onError: (error, agentId) => {
       toast.error("Failed to deploy agent");
+      setStatuses((prev) => ({ ...prev, [agentId]: "ERROR" }));
     },
   });
+  
 
   const stopAgent = useMutation({
     mutationFn: async (agentId: string) => {
@@ -128,14 +132,19 @@ const AllAgents = () => {
         { headers }
       );
     },
-    onSuccess: () => {
-      toast.success("Agent stopped successfully");
-      refetch();
+    onMutate: (agentId: string) => {
+      setStatuses((prev) => ({ ...prev, [agentId]: "IN_PROGRESS" }));
     },
-    onError: () => {
+    onSuccess: (data, agentId) => {
+      toast.success("Agent stopped successfully");
+      setStatuses((prev) => ({ ...prev, [agentId]: "STOPPED" }));
+    },
+    onError: (error, agentId) => {
       toast.error("Failed to stop agent");
+      setStatuses((prev) => ({ ...prev, [agentId]: "ERROR" }));
     },
   });
+  
 
   useEffect(() => {
     const handler = debounce((value) => {
@@ -220,7 +229,7 @@ const AllAgents = () => {
                     size="icon"
                     className="hover:text-primary"
                     onClick={() =>
-                      deploymentStatus === "DEPLOYED"
+                      deploymentStatus !== "IN_PROGRESS" &&  deploymentStatus === "RUNNING"
                         ? stopAgent.mutate(content.id)
                         : deployAgent.mutate(content.id)
                     }

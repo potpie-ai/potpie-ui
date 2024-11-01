@@ -341,7 +341,7 @@ const Navbar = ({
                       <Card key={email} className="border border-gray-300">
                         <CardContent className="p-3 flex items-center justify-between">
                           <p className="text-sm font-medium text-gray-700 capitalize">
-                            {email}
+                          {email.charAt(0).toUpperCase() + email.slice(1)}
                           </p>
                           <p className="text-muted text-sm">
                             {email === user?.email ? "Owner" : "Viewer"}

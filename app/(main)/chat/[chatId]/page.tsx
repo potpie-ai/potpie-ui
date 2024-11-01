@@ -20,6 +20,8 @@ import ChatBubble from "../components/ChatBubble";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "../components/Navbar";
+import getHeaders from "@/app/utils/headers.util";
+import axios from "axios";
 
 interface SendMessageArgs {
   message: string;
@@ -45,8 +47,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const bottomOfPanel = useRef<HTMLDivElement>(null);
   const upPanelRef = useRef<HTMLDivElement>(null);
   const pendingMessageSent = useRef(false);
-  const [showNavbar , setShowNavbar] = useState(true);
-  const { pendingMessage, selectedNodes, chatFlow } = useSelector(
+  const [showNavbar, setShowNavbar] = useState(true);
+  const { pendingMessage, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
   const [Error, setError] = useState({
@@ -144,13 +146,28 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   };
 
+  const fetchDeploymentStatus = async (agentId: string) => {
+    console.log(agentId);
+    try {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+      const response = await axios.get(
+        `${baseUrl}/deployment/agents/${agentId}/status`,
+        { headers }
+      );
+      return response.data.status;
+    } catch (error) {
+      console.error(`Failed to fetch status for agent ${agentId}:`, error);
+      toast.error(`Failed to fetch status for agent`);
+      return "ERROR";
+    }
+  };
+
   const loadInfoOnce = async () => {
     if (infoLoaded) return;
-
+  
     try {
-      const info = await ChatService.loadConversationInfo(
-        currentConversationId
-      );
+      const info = await ChatService.loadConversationInfo(currentConversationId);
       if (info.type === "error") {
         if (info.status === 404) {
           toast.info(info.message);
@@ -166,28 +183,27 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           message: info.message,
           description: info.description,
         });
-
+  
         return;
       }
-
       setChatAccess(info.access_type);
+      fetchDeploymentStatus(info.agent_ids[0]).then((status) => {
+        if (status !== "RUNNING") {
+          setChatAccess("not_running");
+        }
+      });
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
         totalMessages: info.total_messages,
       }));
-
+  
       dispatch(
         setChat({
           agentId: info.agent_ids[0],
           title: info.title,
-          // TODO: Enable later when we start getting the branch and repo name from info api
-          // temporaryContext: {
-          //   branch: info?.branchName,
-          //   repo: info?.repoName,
-          // },
         })
       );
-
+  
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
     } catch (error) {
@@ -294,6 +310,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               onSubmit={handleFormSubmit}
               disabled={!!fetchingResponse}
             />
+          </>
+        )}
+        {chatAccess === "not_running" && (
+          <>
+            <div className="sticky bottom-6 flex flex-col items-center">
+              <p className="text-sm text-gray-500">The agent is not running</p>
+            </div>
           </>
         )}
         <div className="h-6 w-full bg-background sticky bottom-0"></div>

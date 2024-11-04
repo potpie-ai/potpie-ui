@@ -44,10 +44,12 @@ const Navbar = ({
   showShare,
   hidden = false,
   chatTitle,
+  disableShare = false,
 }: {
   showShare?: boolean;
   hidden?: boolean;
   chatTitle?: string;
+  disableShare?: boolean;
 }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
@@ -157,6 +159,7 @@ const Navbar = ({
 
   const handleEmailSave = async () => {
     try {
+      if(disableShare) throw new Error("Sharing is disabled for this conversation");
       if (shareWithLink) {
         const res = await refetchChatShare();
         if (res.data.type === "error") return;
@@ -176,6 +179,7 @@ const Navbar = ({
   };
 
   const isShareDisabled = () => {
+    if (disableShare) return true;
     if (shareWithLink) return false;
     const emails = emailValue.split(",").map((email) => email.trim());
     return emails.some((email) => !/\S+@\S+\.\S+/.test(email));

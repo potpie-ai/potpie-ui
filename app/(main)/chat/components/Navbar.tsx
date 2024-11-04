@@ -36,6 +36,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@radix-ui/react-scroll-area";
 
+
 const emailSchema = z
   .string()
   .email({ message: "Invalid email address" })
@@ -62,8 +63,6 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
-  const [shareWithLink, setShareWithLink] = useState(false);
-  const [accessList, setAccessList] = useState<string[]>([]);
 
   useEffect(() => {
     if (chatTitle) {
@@ -96,7 +95,7 @@ const Navbar = ({
           { title: inputValue },
           { headers }
         );
-
+        
         if (response.data.status === "success") {
           setIsTitleDialogOpen(false);
           setDisplayTitle(inputValue);
@@ -104,7 +103,7 @@ const Navbar = ({
           toast.success("Title updated successfully");
         }
         return response.data;
-      } catch (err: any) {
+      } catch (err:any) {
         console.error(err);
         toast.error("Failed to update title");
         return err.response?.data;
@@ -132,8 +131,7 @@ const Navbar = ({
 
       const res = await ChatService.shareConversation(
         currentConversationId,
-        recipientEmails,
-        shareWithLink ? Visibility.PUBLIC : Visibility.PRIVATE
+        recipientEmails
       );
 
       if (res.type === "error") {
@@ -156,22 +154,15 @@ const Navbar = ({
     enabled: false,
   });
 
-  const handleEmailSave = async () => {
+  const handleEmailSave = () => {
     try {
-      if (shareWithLink) {
-        const res = await refetchChatShare();
-        if (res.data.type === "error") return;
-      } else {
-        const emails = emailValue.split(",").map((email) => email.trim());
-        emails.forEach((email) => emailSchema.parse(email));
-        await refetchChatShare();
-      }
+      const emails = emailValue.split(",").map((email) => email.trim());
+      emails.forEach((email) => emailSchema.parse(email));
+      refetchChatShare();
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
         setEmailError(error.errors[0].message);
-      } else {
-        setEmailError("An error occurred while sharing the chat.");
       }
     }
   };
@@ -241,12 +232,14 @@ const Navbar = ({
                 width={20}
                 height={20}
               />
-              <Dialog
+               <Dialog
                 open={isTitleDialogOpen}
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger>
-                  <span className="text-muted text-xl">{displayTitle}</span>
+                  <span className="text-muted text-xl">
+                    {displayTitle}
+                  </span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
@@ -267,12 +260,10 @@ const Navbar = ({
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="outline">
-                        Cancel
-                      </Button>
+                      <Button type="button" variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button
-                      type="button"
+                    <Button 
+                      type="button" 
                       onClick={handleSave}
                       disabled={!inputValue.trim()}
                     >
@@ -322,6 +313,7 @@ const Navbar = ({
                       )}
                     </div>
                   )}
+
 
                   <h3 className="mt-4 text-lg font-semibold">
                     People with access
@@ -375,7 +367,7 @@ const Navbar = ({
                     disabled={isShareDisabled()}
                     className="bg-green-500 text-white hover:bg-green-600"
                   >
-                    Share
+                    Share via Email
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -387,10 +379,13 @@ const Navbar = ({
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
                 <span className="text-gray-700 whitespace-nowrap">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
-                    agentId.replace(/_/g, " ").replace(
-                      /([a-z])([A-Z])/g,
-                      "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
-                    )}
+                    agentId
+                      .replace(/_/g, " ")
+                      .replace(
+                        /([a-z])([A-Z])/g,
+                        "$1 $2" 
+                          .replace(/\b\w/g, (char) => char.toUpperCase())
+                      )}
                 </span>
               </div>
             )}

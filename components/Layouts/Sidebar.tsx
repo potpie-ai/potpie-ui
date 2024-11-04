@@ -72,6 +72,11 @@ const Sidebar = () => {
                           Coming soon
                         </span>
                       )}
+                      {link.upgrade && (
+                        <span className="bg-gradient-to-r from-[#FFAD62] to-[#5356FF] rounded-full px-2 text-[0.6rem]">
+                          Upgrade
+                        </span>
+                      )}
                     </Link>
                   </div>
                 ))}
@@ -181,13 +186,14 @@ const SidebarItems = [
       {
         icons: "/images/msg.svg",
         title: "All chats",
-        href:"/all-chats"
+        href:"/all-chats",
+        upgrade: false,
       },
       {
         icons: "/images/robot.svg",
         title: "Custom Agents",
-        soon: true,
-        href:"#"
+        href:"https://potpie.ai/pricing",
+        upgrade: true,
       },
     ],
   },
@@ -197,13 +203,15 @@ const SidebarItems = [
       {
         icons: "/images/git.svg",
         title: "Repositories",
-        href:"/repositories"
+        href:"/repositories",
+        upgrade: false,
       },
       {
         icons: "/images/document.svg",
         title: "Text resources",
         soon: true,
-        href:"#"
+        href:"#",
+        upgrade: false,
       },
     ],
   },
@@ -213,20 +221,21 @@ const SidebarItems = [
       {
         icons: "/images/document.svg",
         title: "Documentation",
-        soon: true,
-        href:"#"
+        href:"https://docs.potpie.ai",
+        upgrade: false,
       },
       {
         icons: "/images/git.svg",
         title: "Open source",
-        soon: true,
-        href:"#"
+        href:"https://github.com/potpie-ai/potpie",
+        upgrade: false,
       },
       {
         icons: "/images/discord.svg",
         title: "Discord",
         soon: true,
-        href:"#"
+        href:"#",
+        upgrade: false,
       },
     ],
   },

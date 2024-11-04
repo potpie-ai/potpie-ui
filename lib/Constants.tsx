@@ -3,7 +3,3 @@ export enum planTypes {
   PRO = "PRO",
   ENTERPRISE = "ENTERPRISE",
 }
-export enum Visibility {
-  PUBLIC = "public",
-  PRIVATE = "private",
-}

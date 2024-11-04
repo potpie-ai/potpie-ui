@@ -45,10 +45,12 @@ const Navbar = ({
   showShare,
   hidden = false,
   chatTitle,
+  disableShare = false,
 }: {
   showShare?: boolean;
   hidden?: boolean;
   chatTitle?: string;
+  disableShare?: boolean;
 }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
@@ -155,9 +157,15 @@ const Navbar = ({
 
   const handleEmailSave = () => {
     try {
-      const emails = emailValue.split(",").map((email) => email.trim());
-      emails.forEach((email) => emailSchema.parse(email));
-      refetchChatShare();
+      if(disableShare) throw new Error("Sharing is disabled for this conversation");
+      if (shareWithLink) {
+        const res = await refetchChatShare();
+        if (res.data.type === "error") return;
+      } else {
+        const emails = emailValue.split(",").map((email) => email.trim());
+        emails.forEach((email) => emailSchema.parse(email));
+        await refetchChatShare();
+      }
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -167,6 +175,7 @@ const Navbar = ({
   };
 
   const isShareDisabled = () => {
+    if (disableShare) return true;
     if (shareWithLink) return false;
     const emails = emailValue.split(",").map((email) => email.trim());
     return emails.some((email) => !/\S+@\S+\.\S+/.test(email));

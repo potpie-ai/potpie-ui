@@ -46,7 +46,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const upPanelRef = useRef<HTMLDivElement>(null);
   const pendingMessageSent = useRef(false);
   const [showNavbar , setShowNavbar] = useState(true);
-  const { pendingMessage, selectedNodes, chatFlow } = useSelector(
+  const [isCreator, setIsCreator] = useState(false);
+  const { pendingMessage, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
   const [Error, setError] = useState({
@@ -170,6 +171,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         return;
       }
 
+      setIsCreator(info.is_creator);
       setChatAccess(info.access_type);
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
@@ -247,7 +249,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   return (
     <>
-      <Navbar showShare hidden={!showNavbar || Error.isError} />
+      <Navbar disableShare={!isCreator} showShare hidden={!showNavbar || Error.isError} />
       <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
         <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
           <div ref={upPanelRef} className="w-full"></div>

@@ -34,7 +34,7 @@ import {
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@radix-ui/react-scroll-area";
-
+import { Visibility } from "@/lib/Constants";
 
 const emailSchema = z
   .string()
@@ -45,12 +45,10 @@ const Navbar = ({
   showShare,
   hidden = false,
   chatTitle,
-  disableShare = false,
 }: {
   showShare?: boolean;
   hidden?: boolean;
   chatTitle?: string;
-  disableShare?: boolean;
 }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
@@ -64,6 +62,8 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
+  const [shareWithLink, setShareWithLink] = useState(false);
+  const [accessList, setAccessList] = useState<string[]>([]);
 
   useEffect(() => {
     if (chatTitle) {
@@ -96,7 +96,7 @@ const Navbar = ({
           { title: inputValue },
           { headers }
         );
-        
+
         if (response.data.status === "success") {
           setIsTitleDialogOpen(false);
           setDisplayTitle(inputValue);
@@ -104,7 +104,7 @@ const Navbar = ({
           toast.success("Title updated successfully");
         }
         return response.data;
-      } catch (err:any) {
+      } catch (err: any) {
         console.error(err);
         toast.error("Failed to update title");
         return err.response?.data;
@@ -132,7 +132,8 @@ const Navbar = ({
 
       const res = await ChatService.shareConversation(
         currentConversationId,
-        recipientEmails
+        recipientEmails,
+        shareWithLink ? Visibility.PUBLIC : Visibility.PRIVATE
       );
 
       if (res.type === "error") {
@@ -155,9 +156,8 @@ const Navbar = ({
     enabled: false,
   });
 
-  const handleEmailSave = () => {
+  const handleEmailSave = async () => {
     try {
-      if(disableShare) throw new Error("Sharing is disabled for this conversation");
       if (shareWithLink) {
         const res = await refetchChatShare();
         if (res.data.type === "error") return;
@@ -170,12 +170,13 @@ const Navbar = ({
     } catch (error) {
       if (error instanceof z.ZodError) {
         setEmailError(error.errors[0].message);
+      } else {
+        setEmailError("An error occurred while sharing the chat.");
       }
     }
   };
 
   const isShareDisabled = () => {
-    if (disableShare) return true;
     if (shareWithLink) return false;
     const emails = emailValue.split(",").map((email) => email.trim());
     return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
@@ -240,14 +241,12 @@ const Navbar = ({
                 width={20}
                 height={20}
               />
-               <Dialog
+              <Dialog
                 open={isTitleDialogOpen}
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger>
-                  <span className="text-muted text-xl">
-                    {displayTitle}
-                  </span>
+                  <span className="text-muted text-xl">{displayTitle}</span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
@@ -268,10 +267,12 @@ const Navbar = ({
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="outline">Cancel</Button>
+                      <Button type="button" variant="outline">
+                        Cancel
+                      </Button>
                     </DialogClose>
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       onClick={handleSave}
                       disabled={!inputValue.trim()}
                     >
@@ -321,35 +322,39 @@ const Navbar = ({
                       )}
                     </div>
                   )}
+                  {!shareWithLink && (
+                    <>
+                      <h3 className="mt-4 text-lg font-semibold">
+                        People with access
+                      </h3>
+                      <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-2">
+                        <Card className="border-gray-300">
+                          <CardContent className="flex justify-between p-4">
+                            <div className="flex flex-col">
+                              <p>{user?.displayName} (You)</p>
+                              <p className="text-sm text-muted">
+                                {user?.email}
+                              </p>
+                            </div>
+                            <div className="text-muted text-sm">Owner</div>
+                          </CardContent>
+                        </Card>
 
-
-                  <h3 className="mt-4 text-lg font-semibold">
-                    People with access
-                  </h3>
-                  <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-2">
-                    <Card className="border-gray-300">
-                      <CardContent className="flex justify-between p-4">
-                        <div className="flex flex-col">
-                          <p>{user?.displayName} (You)</p>
-                          <p className="text-sm text-muted">{user?.email}</p>
-                        </div>
-                        <div className="text-muted text-sm">Owner</div>
-                      </CardContent>
-                    </Card>
-
-                    {accessList.map((email) => (
-                      <Card key={email} className="border border-gray-300">
-                        <CardContent className="p-3 flex items-center justify-between">
-                          <p className="text-sm font-medium text-gray-700 capitalize">
-                          {email.charAt(0).toUpperCase() + email.slice(1)}
-                          </p>
-                          <p className="text-muted text-sm">
-                            {email === user?.email ? "Owner" : "Viewer"}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </ScrollArea>
+                        {accessList.map((email) => (
+                          <Card key={email} className="border border-gray-300">
+                            <CardContent className="p-3 flex items-center justify-between">
+                              <p className="text-sm font-medium text-gray-700">
+                                {email}
+                              </p>
+                              <p className="text-muted text-sm">
+                                {email === user?.email ? "Owner" : "Viewer"}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </ScrollArea>
+                    </>
+                  )}
                 </div>
 
                 <DialogFooter className="!justify-between">
@@ -364,7 +369,7 @@ const Navbar = ({
                   >
                     <Button
                       type="button"
-                      className="gap-2 bg-blue-500 text-white hover:bg-blue-600"
+                      className="gap-2 bg-[#4479FF] text-white hover:bg-blue-600"
                     >
                       <ClipboardCheck /> <span>Copy Link</span>
                     </Button>
@@ -373,9 +378,8 @@ const Navbar = ({
                     type="button"
                     onClick={handleEmailSave}
                     disabled={isShareDisabled()}
-                    className="bg-green-500 text-white hover:bg-green-600"
                   >
-                    Share via Email
+                    Share
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -387,13 +391,10 @@ const Navbar = ({
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
                 <span className="text-gray-700 whitespace-nowrap">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
-                    agentId
-                      .replace(/_/g, " ")
-                      .replace(
-                        /([a-z])([A-Z])/g,
-                        "$1 $2" 
-                          .replace(/\b\w/g, (char) => char.toUpperCase())
-                      )}
+                    agentId.replace(/_/g, " ").replace(
+                      /([a-z])([A-Z])/g,
+                      "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
+                    )}
                 </span>
               </div>
             )}

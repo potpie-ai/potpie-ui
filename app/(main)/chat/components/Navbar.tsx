@@ -326,7 +326,7 @@ const Navbar = ({
                       )}
                     </div>
                   )}
-                  {!shareWithLink && (
+                  {!shareWithLink && !isShareDisabled() && (
                     <>
                       <h3 className="mt-4 text-lg font-semibold">
                         People with access

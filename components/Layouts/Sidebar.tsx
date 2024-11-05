@@ -29,7 +29,7 @@ import { Skeleton } from "../ui/skeleton";
 
 const Sidebar = () => {
   const [progress, setProgress] = React.useState(90);
-  const { user, userSubscription,subscriptionLoading } = useAuthContext();
+  const { user, userSubscription, subscriptionLoading } = useAuthContext();
   const router = useRouter();
   const dispatch = useDispatch();
 
@@ -106,16 +106,23 @@ const Sidebar = () => {
               <CardTitle className="text-lg">
                 {(() => {
                   const now = new Date().toISOString();
-                  if(subscriptionLoading) return <Skeleton className="w-28 h-6" />
+                  if (subscriptionLoading)
+                    return <Skeleton className="w-28 h-6" />;
                   if (
-                    !userSubscription ||
-                    userSubscription.plan_type === "free" ||
+                    (!userSubscription ||
+                      userSubscription.plan_type === "free") &&
                     userSubscription.end_date <= now
                   ) {
                     return "Free Plan";
-                  } else if (userSubscription.plan_type === "startup") {
-                    return "Startup Plan";
-                  } else if (userSubscription.plan_type === "pro") {
+                  } else if (
+                    userSubscription.plan_type === "startup" &&
+                    userSubscription.end_date <= now
+                  ) {
+                    return "Early-Stage";
+                  } else if (
+                    userSubscription.plan_type === "pro" &&
+                    userSubscription.end_date <= now
+                  ) {
                     return "Individual - Pro";
                   }
                 })()}
@@ -126,14 +133,14 @@ const Sidebar = () => {
                   {(() => {
                     const now = new Date().toISOString();
                     if (
-                      !userSubscription ||
-                      userSubscription.plan_type === "free" ||
-                      userSubscription.end_date <= now
+                     ( !userSubscription ||
+                      (userSubscription.plan_type === "free") &&
+                        userSubscription.end_date <= now)
                     ) {
                       return "0/50";
-                    } else if (userSubscription.plan_type === "startup") {
+                    } else if (userSubscription.plan_type === "startup" && userSubscription.end_date <= now) {
                       return "0/50";
-                    } else if (userSubscription.plan_type === "pro") {
+                    } else if (userSubscription.plan_type === "pro" && userSubscription.end_date <= now) {
                       return "0/500";
                     }
                   })()}

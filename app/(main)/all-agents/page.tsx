@@ -142,9 +142,9 @@ const AllAgents = () => {
     agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   );
   
-  const flagEnabled = useFeatureFlagEnabled("custom_agents");
+  const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 
-  if (!flagEnabled) {
+  if (customAgentsFlag === false) {
     router.push("/");
     setTimeout(() => {
       window.open("https://potpie.ai/pricing", "_blank");
@@ -165,7 +165,7 @@ const AllAgents = () => {
         </Button>
       </div>
       <div className={`flex flex-wrap gap-16 items-center h-full w-full`}>
-        {isLoading ? (
+        {isLoading || customAgentsFlag !== true? (
           Array.from({ length: 10 }).map((_, index) => (
             <Skeleton className="w-64 h-44" key={index} />
           ))

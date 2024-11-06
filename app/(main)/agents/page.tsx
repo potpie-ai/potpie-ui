@@ -253,9 +253,9 @@ const CustomAgent: React.FC = () => {
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
 
-  const flagEnabled = useFeatureFlagEnabled("custom_agents");
+  const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 
-  if (!flagEnabled) {
+  if (!customAgentsFlag) {
     router.push("https://potpie.ai/pricing")
   }
 

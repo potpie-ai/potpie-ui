@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { auth } from "@/configs/Firebase-config";
 import {
   Card,
   CardContent,
@@ -29,12 +28,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import AgentService from "@/services/AgentService";
+import { useFeatureFlagEnabled } from "posthog-js/react";
 
 const AllAgents = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [statuses, setStatuses] = useState<{ [id: string]: string }>({});
-  const userId = auth.currentUser?.uid || "";
   const router = useRouter();
 
   const { data, isLoading } = useQuery({
@@ -143,6 +142,12 @@ const AllAgents = () => {
     agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   );
 
+  const flagEnabled = useFeatureFlagEnabled("custom_agents");
+
+  if (!flagEnabled) {
+     router.push("https://potpie.ai/pricing")
+  }
+
   return (
     <div className="m-10">
       <div className="flex w-full mx-auto items-center space-x-2 mb-5">
@@ -214,7 +219,7 @@ const AllAgents = () => {
                       onClick={() =>
                         deploymentStatus === "RUNNING"
                           ? stopAgent.mutate(content.id)
-                          :deployAgent.mutate(content.id)
+                          : deployAgent.mutate(content.id)
                       }
                     >
                       {deploymentStatus === "ERRORED" ? (

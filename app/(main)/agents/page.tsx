@@ -32,6 +32,7 @@ import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { auth } from "@/configs/Firebase-config";
+import { useFeatureFlagEnabled } from "posthog-js/react";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
@@ -251,6 +252,12 @@ const CustomAgent: React.FC = () => {
     },
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
+
+  const flagEnabled = useFeatureFlagEnabled("custom_agents");
+
+  if (!flagEnabled) {
+    router.push("https://potpie.ai/pricing")
+  }
 
   return (
     <>

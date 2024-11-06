@@ -1,11 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { useStepper } from "@/components/ui/stepper";
+import { Loader } from "lucide-react";
 import { toast } from "sonner";
 
-const Footer: React.FC<{ submitForm: () => void; form: any; update: boolean }> = ({
+const Footer: React.FC<{ submitForm: () => void; form: any; update: boolean, primaryBtnLoading?: boolean }> = ({
   submitForm,
   form,
   update,
+  primaryBtnLoading = false
 }) => {
   const {
     nextStep,
@@ -101,8 +103,16 @@ const Footer: React.FC<{ submitForm: () => void; form: any; update: boolean }> =
               size="sm"
               type="button"
               onClick={handleNextStep}
+              disabled={primaryBtnLoading}
             >
-              {isLastStep ?  update? "Update" : "Create" : isOptionalStep ? "Skip" : "Next"}
+                {primaryBtnLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader className="w-4 h-4 animate-spin" />
+                  {isLastStep ? (update ? "Update" : "Create") : isOptionalStep ? "Skip" : "Next"}
+                </div>
+              ) : (
+                isLastStep ? (update ? "Update" : "Create") : isOptionalStep ? "Skip" : "Next"
+              )}
             </Button>
           </>
         )}

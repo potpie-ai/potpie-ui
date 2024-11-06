@@ -21,6 +21,7 @@ interface InputFieldProps {
   placeholder: string;
   label: string;
   InputClassName?: string;
+  tooltip?: string;
 }
 
 const InputField: React.FC<InputFieldProps> = ({
@@ -29,6 +30,7 @@ const InputField: React.FC<InputFieldProps> = ({
   placeholder,
   label,
   InputClassName,
+  tooltip,
 }) => (
   <FormField
     control={form.control}
@@ -42,7 +44,7 @@ const InputField: React.FC<InputFieldProps> = ({
               <InfoIcon className="size-5" />
             </TooltipTrigger>
             <TooltipContent>
-              <p>Description about the Input</p>
+              <p>{tooltip}</p>
             </TooltipContent>
           </Tooltip>
         </FormLabel>

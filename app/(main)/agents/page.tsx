@@ -73,6 +73,7 @@ const CustomAgent: React.FC = () => {
       ],
     },
   });
+
   const [errorStates, setErrorStates] = useState<
     ("error" | "loading" | undefined)[]
   >([undefined, undefined, undefined]);
@@ -173,26 +174,6 @@ const CustomAgent: React.FC = () => {
     },
   });
 
-  // const deployCustomAgent = useMutation({
-  //   mutationFn: async (customAgent: { agent_id: string }) => {
-  //     const header = await getHeaders();
-  //     const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-  //     return (await axios.post(
-  //       `${baseUrl}/deployment/agents/${customAgent.agent_id}/deploy`,
-  //       customAgent,
-  //       {
-  //         headers: header,
-  //       }
-  //     )) as AxiosResponse<
-  //       {
-  //         agent_id: "string";
-  //         deployment_url: "string";
-  //       },
-  //       any
-  //     >;
-  //   },
-  // });
-
   const updateCustomAgentForm = useMutation({
     mutationFn: async (customAgent: CustomAgentsFormValues) => {
       const header = await getHeaders();
@@ -257,7 +238,10 @@ const CustomAgent: React.FC = () => {
 
   useEffect(() => {
     if (customAgentsFlag === false) {
-      router.push("https://potpie.ai/pricing");
+      router.push("/");
+      setTimeout(() => {
+        window.open("https://potpie.ai/pricing", "_blank");
+      }, 500);
     }
   }, [customAgentsFlag, router]);
 
@@ -295,6 +279,7 @@ const CustomAgent: React.FC = () => {
                         placeholder="What will be the system input"
                         InputClassName="min-h-[calc(100vh-25rem)]"
                         form={form}
+                        tooltip="set of instructions that the agent"
                       />
                     </form>
                   </Form>
@@ -314,18 +299,21 @@ const CustomAgent: React.FC = () => {
                         label="Role"
                         placeholder="What will be the role of the agent?"
                         form={form}
+                        tooltip="Defines the agent&apos;s function."
                       />
                       <InputField
                         name="goal"
                         label="Goal"
                         placeholder="What will be the goal of the agent?"
                         form={form}
+                        tooltip="The individual objective that the agent aims to achieve."
                       />
                       <InputField
                         name="backstory"
                         label="Backstory"
                         placeholder="What will be the backstory of the agent?"
                         form={form}
+                        tooltip="Provides context to the agent&apos;s role and goal."
                       />
                     </form>
                   </Form>
@@ -362,6 +350,7 @@ const CustomAgent: React.FC = () => {
                             placeholder="Task description"
                             InputClassName="min-h-[calc(100vh-55rem)]"
                             form={form}
+                            tooltip="A clear, concise statement of what the task entails."
                           />
                           <FormField
                             control={form.control}
@@ -375,7 +364,7 @@ const CustomAgent: React.FC = () => {
                                       <InfoIcon className="size-5" />
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      <p>Description about the Input</p>
+                                      <p>The functions or capabilities the agent can utilize to perform the task.</p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </FormLabel>
@@ -419,7 +408,7 @@ const CustomAgent: React.FC = () => {
                                       <InfoIcon className="size-5" />
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      <p>Description about the Input</p>
+                                      <p>The functions or capabilities the agent can utilize to perform the task.</p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </FormLabel>
@@ -464,6 +453,7 @@ const CustomAgent: React.FC = () => {
           form={form}
           submitForm={form.handleSubmit(onSubmit)}
           update={!!agentIdParam}
+          primaryBtnLoading={updateCustomAgentForm.isPending || submitCustomAgentForm.isPending}
         />
       </Stepper>
     </>

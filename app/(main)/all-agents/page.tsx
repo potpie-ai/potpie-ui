@@ -29,22 +29,32 @@ import {
 } from "@/components/ui/card";
 import AgentService from "@/services/AgentService";
 import { useFeatureFlagEnabled } from "posthog-js/react";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const AllAgents = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [statuses, setStatuses] = useState<{ [id: string]: string }>({});
+  const [filteredData, setFilteredData] = useState<any>([]);
+  const [deleteDailogOpen, setDeleteDialogOpen] = useState(false);
+
   const router = useRouter();
 
   const { data, isLoading } = useQuery({
     queryKey: ["all-agents"],
     queryFn: async () => {
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(
-        `${baseUrl}/api/v1/list-available-agents/`,
-        { params: { list_system_agents: false }, headers: headers }
-      );
+      const response: any = await AgentService.getAgentList();
+      setFilteredData( response?.filter((agent: { name: string }) =>
+        agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+      ));
       return response.data;
     },
   });
@@ -73,9 +83,11 @@ const AllAgents = () => {
         headers: header,
       })) as AxiosResponse<CustomAgentType, any>;
     },
-    onSuccess: () => {
+    onSuccess: (data, agentId) => {
       router.refresh();
+      setFilteredData((prevData:any) => prevData.filter((agent: any) => agent.id !== agentId));
       toast.success("Agent deleted successfully");
+      setDeleteDialogOpen(false);
     },
     onError: () => {
       toast.error("Failed to delete agent");
@@ -138,10 +150,6 @@ const AllAgents = () => {
     };
   }, [searchTerm]);
 
-  const filteredData = data?.filter((agent: { name: string }) =>
-    agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-  );
-  
   const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 
   if (customAgentsFlag === false) {
@@ -165,7 +173,7 @@ const AllAgents = () => {
         </Button>
       </div>
       <div className={`flex flex-wrap gap-16 items-center h-full w-full`}>
-        {isLoading || customAgentsFlag !== true? (
+        {isLoading || customAgentsFlag !== true ? (
           Array.from({ length: 10 }).map((_, index) => (
             <Skeleton className="w-64 h-44" key={index} />
           ))
@@ -239,14 +247,37 @@ const AllAgents = () => {
                         <AlertCircle className="size-5 text-red-600" />
                       )}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="hover:text-primary"
-                      onClick={() => deleteCustomAgentForm.mutate(content.id)}
-                    >
-                      <Trash className="size-5" />
-                    </Button>
+                    <Dialog open={deleteDailogOpen} onOpenChange={setDeleteDialogOpen}>
+                      <DialogTrigger>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="hover:text-primary"
+                        >
+                          <Trash className="size-5" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Are you sure ?</DialogTitle>
+                        </DialogHeader>
+                        <DialogFooter>
+                          <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                          </DialogClose>
+                          <Button
+                            variant="destructive"
+                            onClick={() =>
+                              deleteCustomAgentForm.mutate(content.id)
+                            }
+                            className="gap-2"
+                          >
+                          {deleteCustomAgentForm.isPending ? <Loader className="w-5 h-5 animate-spin" /> : null}  <span>Delete</span>
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
                     <Link href={`/agents?edit=${content.id}`}>
                       <Button
                         variant="ghost"

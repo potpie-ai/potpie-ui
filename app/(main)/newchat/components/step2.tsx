@@ -10,6 +10,7 @@ import { useDispatch } from "react-redux";
 import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
 import { toast } from "sonner";
+import { list_system_agents } from "@/lib/utils";
 
 interface AgentType {
   id: string;
@@ -34,8 +35,10 @@ const Step2: React.FC<Step2Props> = ({
 }) => {
   const userId = auth.currentUser?.uid || "";
   const dispatch: AppDispatch = useDispatch();
-  
-  const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<AgentType[]>({
+
+  const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
+    AgentType[]
+  >({
     queryKey: ["agent-types"],
     queryFn: async () => {
       const agentTypes = await AgentService.getAgentTypes();
@@ -48,11 +51,20 @@ const Step2: React.FC<Step2Props> = ({
 
   const createConversation = async (agentId: string) => {
     try {
-      const agentStatus = await AgentService.getAgentStatus(agentId);
-      if(agentStatus !== "RUNNING") {
-        return toast.info("Please start the agent to create the conversation.");
+      if (!list_system_agents.includes(agentId)) {
+        const agentStatus = await AgentService.getAgentStatus(agentId);
+        if (agentStatus !== "RUNNING") {
+          return toast.info(
+            "Please start the agent to create the conversation."
+          );
+        }
       }
-      const response = await ChatService.createConversation(userId, title, projectId, agentId);
+      const response = await ChatService.createConversation(
+        userId,
+        title,
+        projectId,
+        agentId
+      );
       setAgentId(agentId);
       setChatStep(3);
       setCurrentConversationId(response.conversation_id);

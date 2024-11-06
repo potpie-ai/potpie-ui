@@ -26,12 +26,30 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { Skeleton } from "../ui/skeleton";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 
 const Sidebar = () => {
   const [progress, setProgress] = React.useState(90);
-  const { user, userSubscription, subscriptionLoading } = useAuthContext();
+  const { user } = useAuthContext();
   const router = useRouter();
   const dispatch = useDispatch();
+
+  const fetchUserSubscription = async (userId: string) => {
+    const baseUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
+    const response = await axios.get(
+      `${baseUrl}/subscriptions/info?user_id=${userId}`
+    );
+    return response.data;
+  };
+
+  const userId = user?.uid;
+  const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
+    queryKey: ["userSubscription", userId],
+    queryFn: () => fetchUserSubscription(userId as string),
+    enabled: !!userId,
+    retry: false,
+  });
 
   const redirectToNewChat = () => {
     dispatch(clearChat());
@@ -105,25 +123,30 @@ const Sidebar = () => {
             <CardHeader className="p-2 pt-0 md:p-4">
               <CardTitle className="text-lg">
                 {(() => {
-                  const now = new Date().toISOString();
+                  const now = new Date();
+                  const subscriptionEndDate = new Date(
+                    userSubscription?.end_date || 0
+                  );
+
                   if (subscriptionLoading)
                     return <Skeleton className="w-28 h-6" />;
                   if (
-                    (!userSubscription ||
-                      userSubscription.plan_type === "free") &&
-                    userSubscription.end_date <= now
+                    !userSubscription ||
+                    (userSubscription.plan_type === "free")
                   ) {
                     return "Free Plan";
                   } else if (
                     userSubscription.plan_type === "startup" &&
-                    userSubscription.end_date <= now
+                    subscriptionEndDate > now
                   ) {
                     return "Early-Stage";
                   } else if (
                     userSubscription.plan_type === "pro" &&
-                    userSubscription.end_date <= now
+                    subscriptionEndDate > now
                   ) {
                     return "Individual - Pro";
+                  } else {
+                    return "Expired Plan";
                   }
                 })()}
               </CardTitle>
@@ -131,22 +154,33 @@ const Sidebar = () => {
                 <span>Credits used</span>
                 <span>
                   {(() => {
-                    const now = new Date().toISOString();
+                    const now = new Date();
+                    const subscriptionEndDate = new Date(
+                      userSubscription?.end_date || 0
+                    );
                     if (
-                     ( !userSubscription ||
-                      (userSubscription.plan_type === "free") &&
-                        userSubscription.end_date <= now)
+                      !userSubscription ||
+                      (userSubscription.plan_type === "free")
                     ) {
                       return "0/50";
-                    } else if (userSubscription.plan_type === "startup" && userSubscription.end_date <= now) {
+                    } else if (
+                      userSubscription.plan_type === "startup" &&
+                      subscriptionEndDate > now
+                    ) {
                       return "0/50";
-                    } else if (userSubscription.plan_type === "pro" && userSubscription.end_date <= now) {
+                    } else if (
+                      userSubscription.plan_type === "pro" &&
+                      subscriptionEndDate > now
+                    ) {
                       return "0/500";
+                    } else {
+                      return "0/0";
                     }
                   })()}
                 </span>
               </CardDescription>
             </CardHeader>
+
             <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex">
               <Progress.Root
                 className="relative overflow-hidden bg-[#7F7F7F] rounded-full w-full h-[5px]"

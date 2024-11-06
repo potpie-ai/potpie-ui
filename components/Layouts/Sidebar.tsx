@@ -193,7 +193,7 @@ const SidebarItems = [
         icons: "/images/robot.svg",
         title: "Custom Agents",
         soon: true,
-        href:"/all-agents"
+        href:"/all-agents",
         upgrade: true,
       },
     ],

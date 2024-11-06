@@ -141,11 +141,14 @@ const AllAgents = () => {
   const filteredData = data?.filter((agent: { name: string }) =>
     agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   );
-
+  
   const flagEnabled = useFeatureFlagEnabled("custom_agents");
 
   if (!flagEnabled) {
-     router.push("https://potpie.ai/pricing")
+    router.push("/");
+    setTimeout(() => {
+      window.open("https://potpie.ai/pricing", "_blank");
+    }, 500);
   }
 
   return (

@@ -5,6 +5,7 @@ import {
   Github,
   Loader,
   Plus,
+  Forward,
   XCircle,
   Info,
 } from "lucide-react";
@@ -33,6 +34,12 @@ import {
 } from "@/components/ui/command";
 import { CommandSeparator } from "cmdk";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
+import { z, ZodError } from "zod"; 
+import { useForm } from "react-hook-form"; 
+import { toast } from "sonner";
+const repoLinkSchema = z.object({
+  repoLink: z.string().url("Please enter a valid URL").nonempty("Repository link cannot be empty"),
+});
 
 interface Step1Props {
   repoName: string;
@@ -52,6 +59,9 @@ const Step1: React.FC<Step1Props> = ({
   setChatStep,
 }) => {
   const [parsingStatus, setParsingStatus] = useState<string>("");
+  const [linkInputVisible, setLinkInputVisible] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [isValidLink, setIsValidLink] = useState(false); // To track if the input is a valid link
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -101,12 +111,41 @@ const Step1: React.FC<Step1Props> = ({
     isLoading: UserBranchLoading,
   } = useQuery({
     queryKey: ["user-branch", repoName], 
-    queryFn: () => BranchAndRepositoryService.getBranchList(repoName), 
+    queryFn: () => {
+      const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+      const match = repoName.match(regex);
+      if (match) {
+        const ownerRepo = `${match[1]}/${match[2]}`;
+        return BranchAndRepositoryService.getBranchList(ownerRepo); 
+      }
+      return BranchAndRepositoryService.getBranchList(repoName)
+    
+    },
     enabled: !!repoName && repoName !== "", 
   });
+
   
 
   const [showTooltip, setShowTooltip] = useState(false);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+
+    // Check if the input is a valid GitHub URL
+    const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+    const match = value.match(regex);
+    if (match) {
+      setIsValidLink(true);
+      const ownerRepo = `${match[1]}/${match[2]}`;
+      setRepoName(ownerRepo); // Set repo name to owner/repo format
+    } else {
+      setIsValidLink(false);
+    }
+  };
+  const handleValueChange = (search: string) => {
+    handleInputChange({ target: { value: search } } as React.ChangeEvent<HTMLInputElement>);
+  }
+
 
   const handleParse = () => {
     if (repoName && branchName) {
@@ -140,7 +179,13 @@ const Step1: React.FC<Step1Props> = ({
         {UserRepositorysLoading ? (
           <Skeleton className="w-[220px] h-10" />
         ) : (
-          <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+          <Popover open={repoOpen} onOpenChange={(isOpen) => {
+            setRepoOpen(isOpen);
+            if (!isOpen){ 
+              setLinkInputVisible(false)
+            }
+
+           }}>
             <PopoverTrigger asChild className="w-[220px]">
               {UserRepositorys?.length === 0 || !repoName ? (
                 <Button
@@ -162,17 +207,20 @@ const Step1: React.FC<Step1Props> = ({
                     className="h-4 w-4 text-[#7A7A7A]"
                     strokeWidth={1.5}
                   />
+                  {repoName ? (
                   <span className="truncate text-ellipsis whitespace-nowrap">
                     {repoName}
-                  </span>
+                  </span>):("Search or paste repo link")}
                 </Button>
               )}
             </PopoverTrigger>
             <PopoverContent className="w-auto min-w-[220px] max-w-[300px] p-0">
               <Command>
-                <CommandInput placeholder="Search repo..." />
+                <CommandInput placeholder="Search repo or paste link.." value={inputValue} onValueChange={handleValueChange}/>
                 <CommandList>
-                  <CommandEmpty>No Repository found.</CommandEmpty>
+                  <CommandEmpty>No Repository found.
+
+                  </CommandEmpty>
                   <CommandGroup>
                     {UserRepositorys?.map((value: any) => (
                       <CommandItem
@@ -180,7 +228,6 @@ const Step1: React.FC<Step1Props> = ({
                         value={value.full_name}
                         onSelect={(value) => {
                           setRepoName(value);
-                          setRepoOpen(false);
                         }}
                       >
                         {value.full_name}

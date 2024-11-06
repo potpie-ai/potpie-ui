@@ -214,8 +214,7 @@ const AllAgents = () => {
                       onClick={() =>
                         deploymentStatus === "RUNNING"
                           ? stopAgent.mutate(content.id)
-                          : deploymentStatus !== "STOPPED" &&
-                            deployAgent.mutate(content.id)
+                          :deployAgent.mutate(content.id)
                       }
                     >
                       {deploymentStatus === "ERRORED" ? (

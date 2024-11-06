@@ -25,7 +25,7 @@ export default class AgentService {
             });
             return response.data.status;
         } catch (error) {
-            throw new Error("Error fetching agent status");
+            console.log(error);
         }
     }
 

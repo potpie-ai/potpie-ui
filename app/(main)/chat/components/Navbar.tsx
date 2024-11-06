@@ -251,7 +251,7 @@ const Navbar = ({
               >
                 <DialogTrigger>
                   <span className="text-muted text-xl truncate max-w-[30rem] inline-block">
-                    {displayTitle}yashyashyashyashyashyashyashyash
+                    {displayTitle}
                   </span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>

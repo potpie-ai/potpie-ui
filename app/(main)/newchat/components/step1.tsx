@@ -62,6 +62,7 @@ const Step1: React.FC<Step1Props> = ({
   const [linkInputVisible, setLinkInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isValidLink, setIsValidLink] = useState(false); // To track if the input is a valid link
+  const [linkedRepoName, setLinkedRepoName] = useState<string | null>(null);
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -124,12 +125,36 @@ const Step1: React.FC<Step1Props> = ({
     enabled: !!repoName && repoName !== "", 
   });
 
-  
+  const checkAndSetRepo = async (value: string) => {
+    const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+    const match = value.match(regex);
+    if (match) {
+      const ownerRepo = `${match[1]}/${match[2]}`;
+      try {
+        const response = await BranchAndRepositoryService.check_public_repo(ownerRepo);
+        if (response.is_public) {
+          setIsValidLink(true);
+          setLinkedRepoName(ownerRepo); // Show the repo in the dropdown
+        } else {
+          setIsValidLink(false);
+          toast.error("This repository is private or not accessible.");
+        }
+      } catch (error) {
+        setIsValidLink(false);
+        toast.error("Repository not found or inaccessible.");
+      }
+    } else {
+      setIsValidLink(false);
+      setLinkedRepoName(null); // Clear previous linked repo if input is not a link
+    }
+  };
+
 
   const [showTooltip, setShowTooltip] = useState(false);
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
+    checkAndSetRepo(value);
 
     // Check if the input is a valid GitHub URL
     const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
@@ -145,7 +170,11 @@ const Step1: React.FC<Step1Props> = ({
   const handleValueChange = (search: string) => {
     handleInputChange({ target: { value: search } } as React.ChangeEvent<HTMLInputElement>);
   }
-
+  const handleRepoSelect = (repo: string) => {
+    setRepoName(repo);
+    setInputValue(repo); // Set input value to the selected repository
+    setLinkedRepoName(null); // Clear the linked repo after selection
+  };
 
   const handleParse = () => {
     if (repoName && branchName) {
@@ -158,8 +187,14 @@ const Step1: React.FC<Step1Props> = ({
     e.stopPropagation();
     setShowTooltip(!showTooltip);
   };
+  const filteredRepositories = UserRepositorys?.filter((repo: any) =>
+    repo.full_name.toLowerCase().includes(inputValue.toLowerCase())
+  ) || [];
 
   const isParseDisabled = !repoName || !branchName || parsingStatus !== "";
+  const isRepoListEmpty = !UserRepositorys || UserRepositorys.length === 0;
+  const showNoRepoFound = filteredRepositories.length === 0 && !isValidLink && !linkedRepoName;
+
 
   useEffect(() => {
     setRepoName("");
@@ -218,22 +253,29 @@ const Step1: React.FC<Step1Props> = ({
               <Command>
                 <CommandInput placeholder="Search repo or paste link.." value={inputValue} onValueChange={handleValueChange}/>
                 <CommandList>
-                  <CommandEmpty>No Repository found.
-
-                  </CommandEmpty>
-                  <CommandGroup>
-                    {UserRepositorys?.map((value: any) => (
-                      <CommandItem
-                        key={value.id}
-                        value={value.full_name}
-                        onSelect={(value) => {
-                          setRepoName(value);
-                        }}
-                      >
-                        {value.full_name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
+                  {showNoRepoFound ? (
+                    <CommandEmpty>No Repository found.</CommandEmpty>
+                  ) : (
+                    <CommandGroup>
+                      {UserRepositorys?.map((value: any) => (
+                        <CommandItem
+                          key={value.id}
+                          value={value.full_name}
+                          onSelect={() => handleRepoSelect(value.full_name)}
+                        >
+                          {value.full_name}
+                        </CommandItem>
+                      ))}
+                      {isValidLink && linkedRepoName && (
+                        <CommandItem
+                          value={linkedRepoName}
+                          onSelect={() => handleRepoSelect(linkedRepoName)}
+                        >
+                          {linkedRepoName}
+                        </CommandItem>
+                      )}
+                    </CommandGroup>
+                  )}
                   <CommandSeparator className="my-1" />
                   <CommandItem>
                     <span

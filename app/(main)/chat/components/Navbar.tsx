@@ -22,7 +22,7 @@ import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 import { z } from "zod";
-import { ClipboardCheck, Share2 } from "lucide-react";
+import { ClipboardCheck, Share2, X } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import {
   Select,
@@ -160,7 +160,7 @@ const Navbar = ({
 
   const handleEmailSave = async () => {
     try {
-      if(disableShare) throw new Error("Unable to share the chat");
+      if (disableShare) throw new Error("Unable to share the chat");
       if (shareWithLink) {
         const res = await refetchChatShare();
         if (res.data.type === "error") return;
@@ -180,10 +180,14 @@ const Navbar = ({
   };
 
   const isShareDisabled = () => {
-    if(disableShare) return true;
+    if (disableShare) return true;
     if (shareWithLink) return false;
     const emails = emailValue.split(",").map((email) => email.trim());
     return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
+  };
+
+  const isPeopleWithAccessVisible = () => {
+    if (disableShare || shareWithLink) return false;
   };
 
   const { refetch: refetchAccessList } = useQuery({
@@ -219,6 +223,26 @@ const Navbar = ({
       setEmailValue(""); // Reset email value when switching
       setEmailError(null); // Clear email error if switching to link
       refetchAccessList(); // Fetch access list again for email option
+    }
+  };
+
+  const handleDelete = async (email: string) => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
+      await axios.delete(
+        `${baseUrl}/api/v1/conversations/${currentConversationId}/access`,
+        {
+          headers: await getHeaders(),
+          data: {
+            emails: [email],
+          },
+        }
+      );
+      setAccessList(accessList.filter((e) => e !== email));
+
+      toast.success(`Access for ${email} has been removed.`);
+    } catch (error) {
+      toast.error(`Failed to remove access for ${email}.`);
     }
   };
 
@@ -326,13 +350,13 @@ const Navbar = ({
                       )}
                     </div>
                   )}
-                  {!shareWithLink && !isShareDisabled() && (
+                  {!shareWithLink && !isPeopleWithAccessVisible() && (
                     <>
                       <h3 className="mt-4 text-lg font-semibold">
                         People with access
                       </h3>
-                      <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-2">
-                        <Card className="border-gray-300">
+                      <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-3">
+                        <Card className="border-gray-300 w-[95%] mx-auto">
                           <CardContent className="flex justify-between p-4">
                             <div className="flex flex-col">
                               <p>{user?.displayName} (You)</p>
@@ -345,12 +369,24 @@ const Navbar = ({
                         </Card>
 
                         {accessList.map((email) => (
-                          <Card key={email} className="border border-gray-300">
-                            <CardContent className="p-3 flex items-center justify-between">
-                              <p className="text-sm font-medium text-gray-700">
+                          <Card
+                            key={email}
+                            className="relative border border-gray-300 w-[95%] mx-auto my-2 shadow-sm rounded-lg"
+                          >
+                            {email !== user?.email && (
+                              <Button
+                                onClick={() => handleDelete(email)}
+                                className="absolute -top-3 -right-3 bg-white rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
+                                aria-label="Delete viewer"
+                              >
+                                <X size={14} />
+                              </Button>
+                            )}
+                            <CardContent className="p-4 flex items-center justify-between">
+                              <p className="text-sm font-medium text-gray-800">
                                 {email}
                               </p>
-                              <p className="text-muted text-sm">
+                              <p className="text-gray-500 text-sm">
                                 {email === user?.email ? "Owner" : "Viewer"}
                               </p>
                             </CardContent>

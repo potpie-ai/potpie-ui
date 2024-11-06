@@ -255,10 +255,16 @@ const CustomAgent: React.FC = () => {
 
   const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 
-  if (!customAgentsFlag) {
-    router.push("https://potpie.ai/pricing")
-  }
+  useEffect(() => {
+    if (customAgentsFlag === false) {
+      router.push("https://potpie.ai/pricing");
+    }
+  }, [customAgentsFlag, router]);
 
+  if (customAgentsFlag === undefined) {
+    return <Skeleton className="h-[calc(100vh-5rem)]" />;
+  }
+  
   return (
     <>
       <Stepper

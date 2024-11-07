@@ -52,9 +52,11 @@ const AllAgents = () => {
     queryKey: ["all-agents"],
     queryFn: async () => {
       const response: any = await AgentService.getAgentList();
-      setFilteredData( response?.filter((agent: { name: string }) =>
-        agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-      ));
+      setFilteredData(
+        response?.filter((agent: { name: string }) =>
+          agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+        )
+      );
       return response.data;
     },
   });
@@ -85,7 +87,9 @@ const AllAgents = () => {
     },
     onSuccess: (data, agentId) => {
       router.refresh();
-      setFilteredData((prevData:any) => prevData.filter((agent: any) => agent.id !== agentId));
+      setFilteredData((prevData: any) =>
+        prevData.filter((agent: any) => agent.id !== agentId)
+      );
       toast.success("Agent deleted successfully");
       setDeleteDialogOpen(false);
     },
@@ -247,7 +251,10 @@ const AllAgents = () => {
                         <AlertCircle className="size-5 text-red-600" />
                       )}
                     </Button>
-                    <Dialog open={deleteDailogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <Dialog
+                      open={deleteDailogOpen}
+                      onOpenChange={setDeleteDialogOpen}
+                    >
                       <DialogTrigger>
                         <Button
                           variant="ghost"
@@ -259,7 +266,13 @@ const AllAgents = () => {
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Are you sure ?</DialogTitle>
+                          <DialogTitle className="truncate max-w-[400px] flex items-center">
+                            Are you sure you want to delete&nbsp;
+                            <span className="font-semibold inline-block max-w-[200px] truncate">
+                              {content.name}
+                            </span>&nbsp;
+                            ?
+                          </DialogTitle>
                         </DialogHeader>
                         <DialogFooter>
                           <DialogClose asChild>
@@ -272,7 +285,10 @@ const AllAgents = () => {
                             }
                             className="gap-2"
                           >
-                          {deleteCustomAgentForm.isPending ? <Loader className="w-5 h-5 animate-spin" /> : null}  <span>Delete</span>
+                            {deleteCustomAgentForm.isPending ? (
+                              <Loader className="w-5 h-5 animate-spin" />
+                            ) : null}{" "}
+                            <span>Delete</span>
                           </Button>
                         </DialogFooter>
                       </DialogContent>

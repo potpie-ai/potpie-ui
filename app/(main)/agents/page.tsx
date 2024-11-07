@@ -33,6 +33,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { auth } from "@/configs/Firebase-config";
 import { useFeatureFlagEnabled } from "posthog-js/react";
+import AgentService from "@/services/AgentService";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
@@ -166,59 +167,55 @@ const CustomAgent: React.FC = () => {
 
   const submitCustomAgentForm = useMutation({
     mutationFn: async (customAgent: CustomAgentsFormValues) => {
-      const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      return (await axios.post(`${baseUrl}/custom-agents/agents/`, customAgent, {
-        headers: header,
-      })) as AxiosResponse<CustomAgentType, any>;
+      return await AgentService.createAgent(customAgent);
     },
   });
 
   const updateCustomAgentForm = useMutation({
-    mutationFn: async (customAgent: CustomAgentsFormValues) => {
-      const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      return (await axios.put(
-        `${baseUrl}/custom-agents/agents/${agentIdParam}`,
-        customAgent,
-        {
-          headers: header,
-        }
-      )) as AxiosResponse<CustomAgentType, any>;
-    },
+     mutationFn:  async (customAgent: CustomAgentsFormValues) => {
+      return await AgentService.updateAgent(agentIdParam || "", customAgent);
+     }
+  });
+
+  const redeployCustomAgentForm = useMutation({
+     mutationFn:  async () => {
+      return await AgentService.redeployAgent(agentIdParam || "");
+     }
   });
 
   const onSubmit: SubmitHandler<CustomAgentsFormValues> = async (values) => {
     if (agentIdParam) {
-      await updateCustomAgentForm.mutateAsync(values, {
-        onSuccess: (response) => {
-          toast.success("Agent updated successfully");
-          router.push("/all-agents");
-        },
-      });
+        try {
+            await updateCustomAgentForm.mutateAsync(values);
+            toast.success("Agent updated successfully");
+        } catch (error) {
+            toast.error("Failed to update agent. Please try again.");
+            console.error("Update error:", error);
+            return;
+        }
+
+        try {
+            const redeployResponse = await redeployCustomAgentForm.mutateAsync();
+            toast.success("Agent redeployed successfully");
+            router.push("/all-agents");
+        } catch (error) {
+            toast.error("Failed to redeploy agent. Please try again.");
+            console.error("Redeploy error:", error);
+        }
     } else {
-      await submitCustomAgentForm.mutateAsync(values, {
-        onSuccess: (response) => {
-          // alert(JSON.stringify(response.data));
-          toast.success("Agent created successfully");
-          // deployCustomAgent.mutateAsync(
-          //   { agent_id: response.data.id },
-          //   {
-          //     onSuccess: (res) => {
-          //       navigator.clipboard.writeText(res.data.deployment_url);
-          //       toast.success("Agent deployed successfully");
-          //     },
-          //     onError: () => {
-          //       toast.error("Failed to deploy agent");
-          //     },
-          //   }
-          // );
-          form.reset();
-          router.push("/all-agents");
-        },
-      });
+        try {
+            await submitCustomAgentForm.mutateAsync(values);
+            toast.success("Agent created successfully");
+            form.reset();
+            router.push("/all-agents");
+        } catch (error) {
+            toast.error("Failed to create agent. Please try again.");
+            console.error("Creation error:", error);
+        }
     }
-  };
+};
+
+
 
   const steps = [
     {
@@ -453,7 +450,8 @@ const CustomAgent: React.FC = () => {
           form={form}
           submitForm={form.handleSubmit(onSubmit)}
           update={!!agentIdParam}
-          primaryBtnLoading={updateCustomAgentForm.isPending || submitCustomAgentForm.isPending}
+          primaryBtnLoading={updateCustomAgentForm.isPending || submitCustomAgentForm.isPending || redeployCustomAgentForm.isPending}
+          updateStatus={redeployCustomAgentForm.isPending ? "Redeploying" : "Updating"}
         />
       </Stepper>
     </>

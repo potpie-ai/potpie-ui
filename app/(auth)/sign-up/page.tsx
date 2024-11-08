@@ -1,4 +1,5 @@
 "use client";
+import getHeaders from "@/app/utils/headers.util";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/configs/Firebase-config";
 import {
@@ -29,9 +30,7 @@ const Onboarding = () => {
   posthog.capture("github login clicked");
   const openPopup = () => {
     popupRef.current = window.open(
-      githubAppUrl,
-      "_blank",
-      "width=1000,height=700"
+      githubAppUrl, '_blank', 'noopener,noreferrer'
     );
   };
 
@@ -42,6 +41,8 @@ const Onboarding = () => {
       const result = await signInWithPopup(auth, provider);
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const headers = await getHeaders();
+
       const userSignup = axios
         .post(`${baseUrl}/api/v1/signup`, {
           uid: result.user.uid,
@@ -58,7 +59,7 @@ const Onboarding = () => {
           providerData: result.user.providerData,
           accessToken: (result as any)._tokenResponse.oauthAccessToken,
           providerUsername: (result as any)._tokenResponse.screenName,
-        })
+        },{headers:headers})
         .then((res: { data: any }) => {
           openPopup();
           return res.data;

@@ -35,7 +35,10 @@ const Onboarding = () => {
   };
 
   const provider = new GithubAuthProvider();
-
+  provider.addScope('repo');
+  provider.addScope('read:org');
+  provider.addScope('user');
+  
   const onGithub = async () => {
     try {
       const result = await signInWithPopup(auth, provider);

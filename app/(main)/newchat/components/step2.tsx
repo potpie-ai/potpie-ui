@@ -52,6 +52,9 @@ const Step2: React.FC<Step2Props> = ({
 
   const createConversation = async (agentId: string) => {
     try {
+      if(AgentTypes?.filter((agent) => agent.status === "SYSTEM").length === 0){
+       return toast.error("Please select a valid agent");
+      }
       const response = await ChatService.createConversation(
         userId,
         title,

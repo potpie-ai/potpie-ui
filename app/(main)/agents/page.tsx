@@ -177,7 +177,7 @@ const CustomAgent: React.FC = () => {
     onError: (error) => {
       toast.error("Failed to create agent. Please try again.");
       console.error("Creation error:", error);
-    }
+    },
   });
 
   const updateCustomAgentForm = useMutation({
@@ -202,7 +202,6 @@ const CustomAgent: React.FC = () => {
     },
     onSuccess: () => {
       toast.success("Agent redeployed successfully");
-      router.push("/all-agents");
     },
     onError: (error) => {
       console.error("Redeploy error:", error);
@@ -210,10 +209,21 @@ const CustomAgent: React.FC = () => {
     },
   });
 
+  const { data: agentStatus, isLoading: agentStatusLoading } = useQuery({
+    queryKey: ["agent-status", agentIdParam],
+    queryFn: async () => {
+      return await AgentService.getAgentStatus(agentIdParam || "");
+    },
+    enabled: !!agentIdParam,
+  });
+
   const onSubmit: SubmitHandler<CustomAgentsFormValues> = async (values) => {
     if (agentIdParam) {
       await updateCustomAgentForm.mutateAsync(values);
-      await redeployCustomAgentForm.mutateAsync();
+      if (agentStatus === "RUNNING") {
+        await redeployCustomAgentForm.mutateAsync();
+      }
+      router.push("/all-agents");
     } else {
       await submitCustomAgentForm.mutateAsync(values);
     }
@@ -461,11 +471,10 @@ const CustomAgent: React.FC = () => {
           primaryBtnLoading={
             updateCustomAgentForm.isPending ||
             submitCustomAgentForm.isPending ||
-            redeployCustomAgentForm.isPending
+            redeployCustomAgentForm.isPending 
           }
-          updateStatus={
-            redeployCustomAgentForm.isPending ? "Redeploying" : "Updating"
-          }
+          redeploy={agentStatus === "RUNNING"}
+          statusLoading={agentIdParam !== "" && agentStatusLoading}
         />
       </Stepper>
     </>

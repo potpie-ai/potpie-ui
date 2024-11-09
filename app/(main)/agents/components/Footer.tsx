@@ -3,12 +3,20 @@ import { useStepper } from "@/components/ui/stepper";
 import { Loader } from "lucide-react";
 import { toast } from "sonner";
 
-const Footer: React.FC<{ submitForm: () => void; form: any; update: boolean, primaryBtnLoading?: boolean, updateStatus?: string }> = ({
+const Footer: React.FC<{
+  submitForm: () => void;
+  form: any;
+  update: boolean;
+  primaryBtnLoading?: boolean;
+  redeploy?: boolean;
+  statusLoading: boolean;
+}> = ({
   submitForm,
   form,
   update,
   primaryBtnLoading = false,
-  updateStatus = "Updating"
+  redeploy = false,
+  statusLoading,
 }) => {
   const {
     nextStep,
@@ -43,17 +51,19 @@ const Footer: React.FC<{ submitForm: () => void; form: any; update: boolean, pri
 
       const tasks = form.getValues("tasks");
       let jsonValid = true;
-      tasks.forEach((task: { expected_output: { output: string; }; }, index: any) => {
-        if (!isValidJSON(task.expected_output.output)) {
-          jsonValid = false;
-          form.setError(`tasks.${index}.expected_output.output`, {
-            type: 'manual',
-            message: 'Expected output must be valid JSON',
-          });
-        } else {
-          form.clearErrors(`tasks.${index}.expected_output.output`);
+      tasks.forEach(
+        (task: { expected_output: { output: string } }, index: any) => {
+          if (!isValidJSON(task.expected_output.output)) {
+            jsonValid = false;
+            form.setError(`tasks.${index}.expected_output.output`, {
+              type: "manual",
+              message: "Expected output must be valid JSON",
+            });
+          } else {
+            form.clearErrors(`tasks.${index}.expected_output.output`);
+          }
         }
-      });
+      );
 
       isValid = isValid && jsonValid;
     } else {
@@ -104,15 +114,31 @@ const Footer: React.FC<{ submitForm: () => void; form: any; update: boolean, pri
               size="sm"
               type="button"
               onClick={handleNextStep}
-              disabled={primaryBtnLoading}
+              disabled={primaryBtnLoading || (isLastStep && statusLoading)}
             >
-                {primaryBtnLoading ? (
+              {primaryBtnLoading || (isLastStep && statusLoading) ? (
                 <div className="flex items-center gap-2">
                   <Loader className="w-4 h-4 animate-spin" />
-                  {isLastStep ? (update ? updateStatus : "Create") : isOptionalStep ? "Skip" : "Next"}
+                  {isLastStep
+                    ? redeploy
+                      ? "Update and Redeploy"
+                      : update
+                      ? "Update"
+                      : "Create"
+                    : isOptionalStep
+                    ? "Skip"
+                    : "Next"}
                 </div>
+              ) : isLastStep ? (
+                redeploy
+                  ? "Update and Redeploy"
+                  : update
+                  ? "Update"
+                  : "Create"
+              ) : isOptionalStep ? (
+                "Skip"
               ) : (
-                isLastStep ? (update ? "Update and Redeploy" : "Create") : isOptionalStep ? "Skip" : "Next"
+                "Next"
               )}
             </Button>
           </>

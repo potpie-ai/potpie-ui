@@ -57,25 +57,23 @@ const AllAgents = () => {
           agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
         )
       );
-      return response.data;
+      return response;
     },
   });
 
   useEffect(() => {
-    if (data && data.length > 0) {
-      const fetchStatuses = async () => {
-        const newStatuses: { [id: string]: string } = {};
-        await Promise.all(
-          data.map(async (agent: { id: string }) => {
-            const status = await AgentService.getAgentStatus(agent.id);
-            newStatuses[agent.id] = status;
-          })
-        );
-        setStatuses(newStatuses);
-      };
-      fetchStatuses();
+    if (!isLoading && data && data.length > 0) {
+      const newStatuses = data.reduce(
+        (acc: { [id: string]: string }, agent: { id: string; status: string }) => {
+          acc[agent.id] = agent.status;
+          return acc;
+        },
+        {}
+      );
+
+      setStatuses(newStatuses);
     }
-  }, [data]);
+  }, [data, isLoading]);
 
   const deleteCustomAgentForm = useMutation({
     mutationFn: async (agentId: string) => {

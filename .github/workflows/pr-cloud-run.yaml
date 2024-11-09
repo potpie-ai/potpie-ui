@@ -67,6 +67,7 @@ jobs:
         echo "NEXT_PUBLIC_SUBSCRIPTION_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_SUBSCRIPTION_BASE_URL }}" >> $GITHUB_ENV
 
 
+
     # Build the Docker image
     - name: Build
       run: |-

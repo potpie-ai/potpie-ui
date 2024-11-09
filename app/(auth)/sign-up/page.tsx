@@ -1,83 +1,51 @@
 "use client";
-import Link from "next/link";
-
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  GithubAuthProvider,
-  createUserWithEmailAndPassword,
-  signInWithPopup,
-  updateProfile,
-} from "firebase/auth";
-import { auth } from "@/configs/Firebase-config";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { Github, Loader2 } from "lucide-react";
-import axios from "axios";
-import { headers } from "next/headers";
 import getHeaders from "@/app/utils/headers.util";
+import { Button } from "@/components/ui/button";
+import { auth } from "@/configs/Firebase-config";
+import {
+  arrowcon,
+  chat,
+  cloud,
+  cross,
+  logo60,
+  logoWithText,
+  sendBlue,
+  setting,
+} from "@/public";
+import axios from "axios";
+import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
+import { LucideCheck, LucideGithub } from "lucide-react";
+import Image from "next/image";
+import { usePostHog } from "posthog-js/react";
+import React, { useRef } from "react";
+import { toast } from "sonner";
 
-export default function SignUp() {
-  const formSchema = z.object({
-    firstName: z.string().min(1, { message: "First name is required" }),
-    lastName: z.string().min(1, { message: "Last name is required" }),
-    email: z.string().email(),
-    password: z.string().min(6, { message: "Password is required" }),
-  });
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      firstName: "",
-      lastName: "",
-      email: "",
-      password: "",
-    },
-  });
-
-  const route = useRouter();
-  const provider = new GithubAuthProvider();
-  const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    try {
-      const result = await createUserWithEmailAndPassword(
-        auth,
-        data.email,
-        data.password
-      );
-      await updateProfile(result.user, {
-        displayName: `${data.firstName} ${data.lastName}`,
-      });
-      form.reset();
-      toast.success(
-        "Account created successfully as  " + result.user.displayName
-      );
-      const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const userSignup = axios
-        .post(`${baseUrl}/api/v1/signup`, result,{headers:headers})
-        .then((res) => res.data)
-        .catch((e) => {
-          toast.error("Signup call unsuccessful");
-        });
-      route.push("/");
-    } catch (e) {
-      toast.error("Failed to create account");
-    }
+const Onboarding = () => {
+  const githubAppUrl =
+    "https://github.com/apps/" +
+    process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
+    "/installations/select_target?setup_action=install";
+  const posthog = usePostHog();
+  const popupRef = useRef<Window | null>(null);
+  posthog.capture("github login clicked");
+  const openPopup = () => {
+    popupRef.current = window.open(
+      githubAppUrl, '_blank', 'noopener,noreferrer'
+    );
   };
 
+  const provider = new GithubAuthProvider();
+  provider.addScope('repo');
+  provider.addScope('read:org');
+  provider.addScope('user');
+  
   const onGithub = async () => {
     try {
       const result = await signInWithPopup(auth, provider);
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const headers = await getHeaders();
+
       const userSignup = axios
         .post(`${baseUrl}/api/v1/signup`, {
           uid: result.user.uid,
@@ -92,9 +60,13 @@ export default function SignUp() {
             : "",
 
           providerData: result.user.providerData,
+          accessToken: (result as any)._tokenResponse.oauthAccessToken,
           providerUsername: (result as any)._tokenResponse.screenName,
+        },{headers:headers})
+        .then((res: { data: any }) => {
+          openPopup();
+          return res.data;
         })
-        .then((res: { data: any }) => res.data)
         .catch((e: any) => {
           toast.error("Signup call unsuccessful");
         });
@@ -107,117 +79,77 @@ export default function SignUp() {
   };
 
   return (
-    <Card className="mx-auto max-w-sm">
-      <CardHeader>
-        <CardTitle className="text-xl">Sign Up</CardTitle>
-        <CardDescription>
-          Enter your information to create an account
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {/* <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="firstName"
-                render={({ field }) => (
-                  <FormItem className="grid gap-2">
-                    <FormLabel>First name</FormLabel>
-                    <FormControl>
-                      <Input
-                        id="first-name"
-                        placeholder="Max"
-                        required
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="lastName"
-                render={({ field }) => (
-                  <FormItem className="grid gap-2">
-                    <FormLabel>Last name</FormLabel>
-                    <FormControl>
-                      <Input
-                        id="last-name"
-                        placeholder="Rosh"
-                        required
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+    <section className="flex items-center justify-between w-full h-screen relative">
+      <div className="w-full bg-[#515983] h-full flex flex-col items-center justify-center gap-28">
+        <div className="h-3/6 w-3/5 bg-white rounded-3xl relative">
+          <div className="flex justify-between flex-col w-full h-full">
+            <div className="mt-auto py-6 px-4 flex flex-col gap-5 h-full">
+              <div className="flex items-start justify-start gap-2">
+                <div className="w-10 h-10 bg-[#FFF1E0] rounded-full grid place-items-center text-primary">
+                  AK
+                </div>
+                <div className="bg-[#FFF1E0] h-20 w-[70%] rounded-lg"></div>
+              </div>
+              <div className="flex items-start justify-end gap-2">
+                <div className="bg-[#E0F3FF] h-20 w-[70%] rounded-lg"></div>
+                <div className="w-10 h-10 bg-[#FFF1E0] rounded-full grid place-items-center text-primary">
+                  <Image src={logo60} alt="logo60" className="rounded-full" />
+                </div>
+              </div>
+              <div className="flex items-start justify-start gap-2">
+                <div className="w-10 h-10 bg-[#FFF1E0] rounded-full grid place-items-center text-primary">
+                  AK
+                </div>
+                <div className="bg-[#FFF1E0] h-10 w-[70%] rounded-lg"></div>
+              </div>
             </div>
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem className="grid gap-2">
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="m@example.com"
-                      required
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem className="grid gap-2">
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input id="password" type="password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={form.formState.isSubmitting}
-            >
-              Create an account
-            </Button>
-          </form>
-        </Form> */}
-        <Button
-          variant="outline"
-          className="w-full text-background bg-[#2b3137] hover:bg-[#2b3137] outline-none border-none hover:opacity-95"
-          onClick={onGithub}
-          disabled={form.formState.isSubmitting}
-        >
-          {form.formState.isSubmitting ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <>
-              <Github className="mr-2 w-4 h-4" /> Sign up with GitHub
-            </>
-          )}
-        </Button>
-        <div className="mt-4 text-center text-sm">
-          Already have an account?
-          <Link href="/sign-in" className="underline">
-            {""} Sign in
-          </Link>
+            <div className="mb-6 w-5/6 mx-auto h-10 flex justify-end border-2 rounded-sm border-[#3E99DB]">
+              <Image src={sendBlue} alt="sendBlue" className="ml-auto mr-2" />
+            </div>
+          </div>
+          <Image
+            src={arrowcon}
+            className="absolute -bottom-[6rem] right-0 "
+            alt="arrowcon"
+          />
+          <Image src={cross} className="absolute top-0 -right-11" alt="cross" />
         </div>
-      </CardContent>
-    </Card>
+        <div className="text-xl text-center text-white font-bold mb-10">
+          Build AI agents specialised on your <br /> codebase in a minute
+        </div>
+      </div>
+      <div className="w-full h-full flex items-center justify-center flex-col gap-14">
+        <Image src={logoWithText} alt="logo" />
+        <div className="flex items-center justify-center flex-col text-border">
+          <h3 className="text-2xl font-bold text-black">Get Started!</h3>
+          <div className="flex items-start justify-start flex-col mt-10 gap-4">
+            <p className="flex items-center justify-center text-start gap-4">
+              <LucideCheck
+                size={20}
+                className="bg-primary rounded-full p-[0.5px] text-white"
+              />
+              Select the repositories you want to build your AI agents on.
+            </p>
+            <p className="flex items-center justify-center text-start gap-4">
+              <LucideCheck
+                size={20}
+                className="bg-primary rounded-full p-[0.5px] text-white"
+              />
+              You can choose to add more repositories later on from the
+              dashboard
+            </p>
+          </div>
+          <Button onClick={() => onGithub()} className="mt-14 gap-2">
+            <LucideGithub className=" rounded-full border border-white p-1" />
+            Continue with GitHub
+          </Button>
+        </div>
+      </div>
+      <Image src={chat} className="absolute top-0" alt="chat" />
+      <Image src={cloud} className="absolute bottom-2" alt="cloud" />
+      <Image src={setting} className="absolute top-0 right-0" alt="setting" />
+    </section>
   );
-}
+};
+
+export default Onboarding;

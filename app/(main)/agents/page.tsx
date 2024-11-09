@@ -51,9 +51,9 @@ const CustomAgent: React.FC = () => {
         `${baseUrl}/custom-agents/agents/${agentIdParam}`,
         {
           headers: header,
-          params:{
-            user_id: userId
-          }
+          params: {
+            user_id: userId,
+          },
         }
       );
       return response.data as CustomAgentType;
@@ -169,53 +169,55 @@ const CustomAgent: React.FC = () => {
     mutationFn: async (customAgent: CustomAgentsFormValues) => {
       return await AgentService.createAgent(customAgent);
     },
+    onSuccess: () => {
+      form.reset();
+      toast.success("Agent created successfully");
+      router.push("/all-agents");
+    },
+    onError: (error) => {
+      toast.error("Failed to create agent. Please try again.");
+      console.error("Creation error:", error);
+    }
   });
 
   const updateCustomAgentForm = useMutation({
-     mutationFn:  async (customAgent: CustomAgentsFormValues) => {
+    mutationFn: async (customAgent: CustomAgentsFormValues) => {
       return await AgentService.updateAgent(agentIdParam || "", customAgent);
-     }
+    },
+    onSuccess: () => {
+      toast.success("Agent updated successfully");
+    },
+    onError: (error) => {
+      console.error("Update error:", error);
+      toast.error("Failed to update agent. Please try again.");
+    },
   });
 
   const redeployCustomAgentForm = useMutation({
-     mutationFn:  async () => {
-      return await AgentService.redeployAgent(agentIdParam || "");
-     }
+    mutationFn: async () => {
+      if (!agentIdParam) {
+        throw new Error("Agent ID parameter is missing");
+      }
+      return await AgentService.redeployAgent(agentIdParam);
+    },
+    onSuccess: () => {
+      toast.success("Agent redeployed successfully");
+      router.push("/all-agents");
+    },
+    onError: (error) => {
+      console.error("Redeploy error:", error);
+      toast.error("Failed to redeploy agent. Please try again.");
+    },
   });
 
   const onSubmit: SubmitHandler<CustomAgentsFormValues> = async (values) => {
     if (agentIdParam) {
-        try {
-            await updateCustomAgentForm.mutateAsync(values);
-            toast.success("Agent updated successfully");
-        } catch (error) {
-            toast.error("Failed to update agent. Please try again.");
-            console.error("Update error:", error);
-            return;
-        }
-
-        try {
-            const redeployResponse = await redeployCustomAgentForm.mutateAsync();
-            toast.success("Agent redeployed successfully");
-            router.push("/all-agents");
-        } catch (error) {
-            toast.error("Failed to redeploy agent. Please try again.");
-            console.error("Redeploy error:", error);
-        }
+      await updateCustomAgentForm.mutateAsync(values);
+      await redeployCustomAgentForm.mutateAsync();
     } else {
-        try {
-            await submitCustomAgentForm.mutateAsync(values);
-            toast.success("Agent created successfully");
-            form.reset();
-            router.push("/all-agents");
-        } catch (error) {
-            toast.error("Failed to create agent. Please try again.");
-            console.error("Creation error:", error);
-        }
+      await submitCustomAgentForm.mutateAsync(values);
     }
-};
-
-
+  };
 
   const steps = [
     {
@@ -245,7 +247,7 @@ const CustomAgent: React.FC = () => {
   if (customAgentsFlag === undefined) {
     return <Skeleton className="h-[calc(100vh-5rem)]" />;
   }
-  
+
   return (
     <>
       <Stepper
@@ -296,7 +298,7 @@ const CustomAgent: React.FC = () => {
                         label="Role"
                         placeholder="What will be the role of the agent?"
                         form={form}
-                        tooltip="Defines the agent&apos;s function."
+                        tooltip="Defines the agent's function."
                       />
                       <InputField
                         name="goal"
@@ -310,7 +312,7 @@ const CustomAgent: React.FC = () => {
                         label="Backstory"
                         placeholder="What will be the backstory of the agent?"
                         form={form}
-                        tooltip="Provides context to the agent&apos;s role and goal."
+                        tooltip="Provides context to the agent's role and goal."
                       />
                     </form>
                   </Form>
@@ -361,7 +363,10 @@ const CustomAgent: React.FC = () => {
                                       <InfoIcon className="size-5" />
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      <p>The functions or capabilities the agent can utilize to perform the task.</p>
+                                      <p>
+                                        The functions or capabilities the agent
+                                        can utilize to perform the task.
+                                      </p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </FormLabel>
@@ -405,7 +410,10 @@ const CustomAgent: React.FC = () => {
                                       <InfoIcon className="size-5" />
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      <p>The functions or capabilities the agent can utilize to perform the task.</p>
+                                      <p>
+                                        The functions or capabilities the agent
+                                        can utilize to perform the task.
+                                      </p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </FormLabel>
@@ -450,8 +458,14 @@ const CustomAgent: React.FC = () => {
           form={form}
           submitForm={form.handleSubmit(onSubmit)}
           update={!!agentIdParam}
-          primaryBtnLoading={updateCustomAgentForm.isPending || submitCustomAgentForm.isPending || redeployCustomAgentForm.isPending}
-          updateStatus={redeployCustomAgentForm.isPending ? "Redeploying" : "Updating"}
+          primaryBtnLoading={
+            updateCustomAgentForm.isPending ||
+            submitCustomAgentForm.isPending ||
+            redeployCustomAgentForm.isPending
+          }
+          updateStatus={
+            redeployCustomAgentForm.isPending ? "Redeploying" : "Updating"
+          }
         />
       </Stepper>
     </>

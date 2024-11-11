@@ -38,6 +38,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { auth } from "@/configs/Firebase-config";
+import posthog from 'posthog-js';
 
 const AllAgents = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -151,6 +153,15 @@ const AllAgents = () => {
       handler.clear();
     };
   }, [searchTerm]);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user?.uid) {
+      posthog.setPersonPropertiesForFlags({
+        'id': user.uid
+      });
+    }
+  }, []);
 
   const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 

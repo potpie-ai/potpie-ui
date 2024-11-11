@@ -34,10 +34,10 @@ import { toast } from "sonner";
 import { auth } from "@/configs/Firebase-config";
 import { useFeatureFlagEnabled } from "posthog-js/react";
 import AgentService from "@/services/AgentService";
+import posthog from 'posthog-js';
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
-
   const agentIdParam = searchParams.get("edit");
   const userId = auth.currentUser?.uid || "";
 
@@ -242,6 +242,16 @@ const CustomAgent: React.FC = () => {
     },
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
+  
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user?.uid) {
+      posthog.setPersonPropertiesForFlags({
+        'id': user.uid
+      });
+      console.log('PostHog: Set user ID for feature flags:', user.uid);
+    }
+  }, []);
 
   const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 

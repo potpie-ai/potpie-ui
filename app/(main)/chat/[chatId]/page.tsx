@@ -23,6 +23,8 @@ import Navbar from "../components/Navbar";
 import getHeaders from "@/app/utils/headers.util";
 import axios from "axios";
 import AgentService from "@/services/AgentService";
+import { list_system_agents } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SendMessageArgs {
   message: string;
@@ -31,7 +33,7 @@ interface SendMessageArgs {
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const { temporaryContext } = useSelector((state: RootState) => state.chat);
-  const [chatAccess, setChatAccess] = useState("");
+  const [chatAccess, setChatAccess] = useState("loading");
   const dispatch: AppDispatch = useDispatch();
   const [currentConversation, setCurrentConversation] = useState<any>({
     conversationId: params.chatId,
@@ -48,7 +50,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const bottomOfPanel = useRef<HTMLDivElement>(null);
   const upPanelRef = useRef<HTMLDivElement>(null);
   const pendingMessageSent = useRef(false);
-  const [showNavbar , setShowNavbar] = useState(true);
+  const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
   const { pendingMessage, selectedNodes } = useSelector(
     (state: RootState) => state.chat
@@ -150,9 +152,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const loadInfoOnce = async () => {
     if (infoLoaded) return;
-  
+
     try {
-      const info = await ChatService.loadConversationInfo(currentConversationId);
+      const info = await ChatService.loadConversationInfo(
+        currentConversationId
+      );
       if (info.type === "error") {
         if (info.status === 404) {
           toast.info(info.message);
@@ -168,28 +172,34 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           message: info.message,
           description: info.description,
         });
-  
+
         return;
       }
       setIsCreator(info.is_creator);
-      setChatAccess(info.access_type);
-      AgentService.getAgentStatus(info.agent_ids[0]).then((agentStatus) => {
-        if (agentStatus !== "RUNNING") {
-          setChatAccess("not_running");
-        }
-      });
+
+      if (!list_system_agents.includes(info.agent_ids[0])) {
+        AgentService.getAgentStatus(info.agent_ids[0]).then((agentStatus) => {
+          if (agentStatus !== "RUNNING") {
+            setChatAccess("not_running");
+          } else {
+            setChatAccess(info.access_type);
+          }
+        });
+      } else {
+        setChatAccess(info.access_type);
+      }
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
         totalMessages: info.total_messages,
       }));
-  
+
       dispatch(
         setChat({
           agentId: info.agent_ids[0],
           title: info.title,
         })
       );
-  
+
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
     } catch (error) {
@@ -197,7 +207,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       toast.error("Failed to load conversation info");
     }
   };
-  
+
   useLayoutEffect(() => {
     loadInfoOnce();
   }, [currentConversationId]);
@@ -218,13 +228,14 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               console.error("Error sending pending message:", error);
             }
           } else {
-            console.warn("Agent is not running; pending message will not be sent.");
+            console.warn(
+              "Agent is not running; pending message will not be sent."
+            );
           }
         }
       });
     }
   }, [messagesLoaded, pendingMessage, chatAccess]);
-  
 
   const handleFormSubmit = (message: string) => {
     messageMutation.mutate({
@@ -254,7 +265,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   return (
     <>
-      <Navbar disableShare={!isCreator} showShare hidden={!showNavbar || Error.isError} />
+      <Navbar
+        disableShare={!isCreator}
+        showShare
+        hidden={!showNavbar || Error.isError}
+      />
       <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
         <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
           <div ref={upPanelRef} className="w-full"></div>
@@ -294,7 +309,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
           <div ref={bottomOfPanel} />
         </div>
-        {chatAccess === "write" && (
+        {chatAccess === "write" ? (
           <>
             <NodeSelectorForm
               projectId={projectId}
@@ -302,14 +317,16 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               disabled={!!fetchingResponse}
             />
           </>
-        )}
-        {chatAccess === "not_running" && (
-          <>
-            <div className="sticky bottom-6 flex flex-col items-center">
-              <p className="text-sm text-gray-500">Please start the agent to continue the conversation.</p>
-            </div>
-          </>
-        )}
+        ) : chatAccess === "loading" ? (
+          <Skeleton className="sticky bottom-6 overflow-hidden rounded-lg border-[#edecf4] shadow-md h-28" />
+        ) : chatAccess === "not_running" ? (
+          <div className="sticky bottom-6 flex flex-col items-center">
+            <p className="text-sm text-gray-500">
+              Please start the agent to continue the conversation.
+            </p>
+          </div>
+        ) : null}
+
         <div className="h-6 w-full bg-background sticky bottom-0"></div>
         <Dialog open={parsingStatus === "parsing"}>
           <DialogContent className="sm:max-w-[425px]">

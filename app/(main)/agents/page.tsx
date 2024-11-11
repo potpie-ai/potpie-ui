@@ -383,9 +383,10 @@ const CustomAgent: React.FC = () => {
                                 {!toolsLoading && toolsData ? (
                                   <MultiSelect
                                     options={toolsData.map(
-                                      (tool: { id: string; name: string }) => ({
+                                      (tool: { id: string; name: string; description: string }) => ({
                                         value: tool.id,
                                         label: tool.name,
+                                        description: tool.description,
                                       })
                                     )}
                                     defaultValue={

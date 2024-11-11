@@ -28,6 +28,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 /**
  * Variants for the multi-select component to handle different styles.
@@ -68,6 +69,8 @@ interface MultiSelectProps
     label: string;
     /** The unique value associated with the option. */
     value: string;
+    /** An optional description for the option. shown on the right side */
+    description?: string;
     /** Optional icon component to display alongside the option. */
     icon?: React.ComponentType<{ className?: string }>;
   }[];
@@ -313,26 +316,34 @@ export const MultiSelect = React.forwardRef<
                 {options.map((option) => {
                   const isSelected = selectedValues.includes(option.value);
                   return (
-                    <CommandItem
-                      key={option.value}
-                      onSelect={() => toggleOption(option.value)}
-                      className="cursor-pointer"
-                    >
-                      <div
-                        className={cn(
-                          "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : "opacity-50 [&_svg]:invisible"
-                        )}
-                      >
-                        <CheckIcon className="h-4 w-4" />
-                      </div>
-                      {option.icon && (
-                        <option.icon className="mr-2 h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span>{option.label}</span>
-                    </CommandItem>
+                    <Tooltip key={option.value}>
+                      <TooltipTrigger className="flex w-full">
+                        <CommandItem
+                          onSelect={() => toggleOption(option.value)}
+                          className="cursor-pointer flex items-center w-full"
+                        >
+                          <div
+                            className={cn(
+                              "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                              isSelected
+                                ? "bg-primary text-primary-foreground"
+                                : "opacity-50 [&_svg]:invisible"
+                            )}
+                          >
+                            <CheckIcon className="h-4 w-4" />
+                          </div>
+                          {option.icon && (
+                            <option.icon className="mr-2 h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span>{option.label}</span>
+                        </CommandItem>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <p className="text-sm text-muted-foreground max-w-md">
+                          {option.description}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
                   );
                 })}
               </CommandGroup>

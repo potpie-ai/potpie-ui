@@ -245,6 +245,7 @@ const CustomAgent: React.FC = () => {
   
   useLayoutEffect(() => {
     const user = auth.currentUser;
+    console.log("Fetching feature flag for User ID:", user?.uid);
     if (user?.uid) {
       posthog.setPersonPropertiesForFlags({
         'id': user.uid
@@ -256,6 +257,7 @@ const CustomAgent: React.FC = () => {
   const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 
   useEffect(() => {
+    console.log("Custom Agents Flag:", customAgentsFlag);
     if (customAgentsFlag === false) {
       router.push("/");
       setTimeout(() => {

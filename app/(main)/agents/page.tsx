@@ -243,17 +243,16 @@ const CustomAgent: React.FC = () => {
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
 
+  const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
+
+
   useEffect(() => {
     const user = auth.currentUser;
     if (user?.uid) {
       posthog.identify(user.uid);
       posthog.people.set({ id: user.uid });
+      posthog.reloadFeatureFlags();
     }
-  }, [auth?.currentUser]);
-
-  const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
-
-  useEffect(() => {
     if (customAgentsFlag === undefined) {
       return;
     }
@@ -263,7 +262,9 @@ const CustomAgent: React.FC = () => {
         window.open("https://potpie.ai/pricing", "_blank");
       }, 500);
     }
-  }, [router, customAgentsFlag,auth?.currentUser]);
+  }, [router, customAgentsFlag]);
+
+
 
   if (customAgentsFlag === undefined) {
     return <Skeleton className="h-[calc(100vh-5rem)]" />;

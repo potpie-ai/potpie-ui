@@ -154,18 +154,15 @@ const AllAgents = () => {
     };
   }, [searchTerm]);
 
-  
+  const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
+
   useEffect(() => {
     const user = auth.currentUser;
     if (user?.uid) {
       posthog.identify(user.uid);
       posthog.people.set({ id: user.uid });
+      posthog.reloadFeatureFlags();
     }
-  }, [auth?.currentUser]);
-
-  const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
-
-  useEffect(() => {
     if (customAgentsFlag === undefined) {
       return;
     }
@@ -175,8 +172,7 @@ const AllAgents = () => {
         window.open("https://potpie.ai/pricing", "_blank");
       }, 500);
     }
-  }, [router, customAgentsFlag,auth?.currentUser]);
-  
+  }, [router, customAgentsFlag]);
 
   return (
     <div className="m-10">

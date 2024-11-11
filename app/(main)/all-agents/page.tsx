@@ -175,7 +175,7 @@ const AllAgents = () => {
         window.open("https://potpie.ai/pricing", "_blank");
       }, 500);
     }
-  }, [router, customAgentsFlag]);
+  }, [router, customAgentsFlag,auth?.currentUser]);
   
 
   return (

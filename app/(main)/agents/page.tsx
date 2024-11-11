@@ -263,7 +263,7 @@ const CustomAgent: React.FC = () => {
         window.open("https://potpie.ai/pricing", "_blank");
       }, 500);
     }
-  }, [router, customAgentsFlag]);
+  }, [router, customAgentsFlag,auth?.currentUser]);
 
   if (customAgentsFlag === undefined) {
     return <Skeleton className="h-[calc(100vh-5rem)]" />;

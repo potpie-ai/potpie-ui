@@ -243,20 +243,23 @@ const CustomAgent: React.FC = () => {
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
   
-  useLayoutEffect(() => {
+  useEffect(() => {
     const user = auth.currentUser;
-    console.log("Fetching feature flag for User ID:", user?.uid);
     if (user?.uid) {
-      posthog.setPersonPropertiesForFlags({
-        'id': user.uid
-      });
+      console.log("Fetching feature flag for User ID:", user.uid);
+      posthog.identify(user.uid);
+      posthog.people.set({ id: user.uid });
       console.log('PostHog: Set user ID for feature flags:', user.uid);
     }
-  }, []);
+  }, [auth.currentUser]);
 
   const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 
   useEffect(() => {
+    if (customAgentsFlag === undefined) {
+      console.log("Custom Agents Flag is still loading...");
+      return;
+    }
     console.log("Custom Agents Flag:", customAgentsFlag);
     if (customAgentsFlag === false) {
       router.push("/");
@@ -264,7 +267,7 @@ const CustomAgent: React.FC = () => {
         window.open("https://potpie.ai/pricing", "_blank");
       }, 500);
     }
-  }, [customAgentsFlag, router]);
+  }, [router, customAgentsFlag]);
 
   if (customAgentsFlag === undefined) {
     return <Skeleton className="h-[calc(100vh-5rem)]" />;

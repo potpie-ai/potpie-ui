@@ -19,7 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import getHeaders from "@/app/utils/headers.util";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -243,7 +243,7 @@ const CustomAgent: React.FC = () => {
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
   
-  useEffect(() => {
+  useLayoutEffect(() => {
     const user = auth.currentUser;
     if (user?.uid) {
       posthog.setPersonPropertiesForFlags({

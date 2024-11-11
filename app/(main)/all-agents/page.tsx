@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import debounce from "debounce";
 import getHeaders from "@/app/utils/headers.util";
@@ -154,7 +154,7 @@ const AllAgents = () => {
     };
   }, [searchTerm]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const user = auth.currentUser;
     if (user?.uid) {
       posthog.setPersonPropertiesForFlags({

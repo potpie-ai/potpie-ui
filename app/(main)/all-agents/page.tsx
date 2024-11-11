@@ -158,19 +158,22 @@ const AllAgents = () => {
   useEffect(() => {
     const user = auth.currentUser;
     if (user?.uid) {
-      console.log("Fetching feature flag for User ID:", user.uid);
       posthog.identify(user.uid);
       posthog.people.set({ id: user.uid });
-      console.log('PostHog: Set user ID for feature flags:', user.uid);
     }
-  }, [auth.currentUser]);
+  }, [auth?.currentUser]);
 
   const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 
   useEffect(() => {
     if (customAgentsFlag === undefined) {
-      console.log("Custom Agents Flag is still loading...");
       return;
+    }
+    if (customAgentsFlag === false) {
+      router.push("/");
+      setTimeout(() => {
+        window.open("https://potpie.ai/pricing", "_blank");
+      }, 500);
     }
   }, [router, customAgentsFlag]);
   

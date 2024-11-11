@@ -242,25 +242,21 @@ const CustomAgent: React.FC = () => {
     },
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
-  
+
   useEffect(() => {
     const user = auth.currentUser;
     if (user?.uid) {
-      console.log("Fetching feature flag for User ID:", user.uid);
       posthog.identify(user.uid);
       posthog.people.set({ id: user.uid });
-      console.log('PostHog: Set user ID for feature flags:', user.uid);
     }
-  }, [auth.currentUser]);
+  }, [auth?.currentUser]);
 
   const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
 
   useEffect(() => {
     if (customAgentsFlag === undefined) {
-      console.log("Custom Agents Flag is still loading...");
       return;
     }
-    console.log("Custom Agents Flag:", customAgentsFlag);
     if (customAgentsFlag === false) {
       router.push("/");
       setTimeout(() => {

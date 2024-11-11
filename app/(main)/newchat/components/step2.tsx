@@ -52,14 +52,6 @@ const Step2: React.FC<Step2Props> = ({
 
   const createConversation = async (agentId: string) => {
     try {
-      if (AgentTypes?.filter((agent) => agent.id === agentId)[0].status !== "RUNNING" && AgentTypes?.filter((agent) => agent.id === agentId)[0].status !== "SYSTEM") {
-        const agentStatus = await AgentService.getAgentStatus(agentId);
-        if (agentStatus !== "RUNNING") {
-          return toast.info(
-            "Please start the agent to create the conversation."
-          );
-        }
-      }
       const response = await ChatService.createConversation(
         userId,
         title,
@@ -83,7 +75,7 @@ const Step2: React.FC<Step2Props> = ({
           ? Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="border-border w-[450px] h-40" />
             ))
-          : AgentTypes?.map((content, index) => (
+          : AgentTypes?.filter((agent) => agent.status === "RUNNING" || agent.status === "SYSTEM").map((content, index) => (
               <Card
                 key={index}
                 className={`pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 ${

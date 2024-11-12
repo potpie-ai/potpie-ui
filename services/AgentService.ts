@@ -90,7 +90,7 @@ export default class AgentService {
     const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
     try {
       const response = await axios.post(
-        `${baseUrl}/custom-agents/agents/${agentId}/redeploy`,{},{
+        `${baseUrl}/deployment/agents/${agentId}/redeploy`,{},{
           headers
         });
       return response.data as AxiosResponse<

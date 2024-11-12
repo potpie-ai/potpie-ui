@@ -35,6 +35,7 @@ import { auth } from "@/configs/Firebase-config";
 import { useFeatureFlagEnabled } from "posthog-js/react";
 import AgentService from "@/services/AgentService";
 import posthog from 'posthog-js';
+import { generateHmacSignature } from "@/app/utils/hmac.util";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
@@ -46,11 +47,19 @@ const CustomAgent: React.FC = () => {
     queryFn: async () => {
       const header = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-
+      const endpoint = `/custom-agents/agents/${agentIdParam}`;
+      
+      // Generate HMAC signature
+      const message = `GET${endpoint}?user_id=${userId}`;
+      const hmacSignature = generateHmacSignature(message);
+      
       const response = await axios.get(
-        `${baseUrl}/custom-agents/agents/${agentIdParam}`,
+        `${baseUrl}${endpoint}`,
         {
-          headers: header,
+          headers: {
+            ...header,
+            'X-Hmac-Signature': hmacSignature
+          },
           params: {
             user_id: userId,
           },

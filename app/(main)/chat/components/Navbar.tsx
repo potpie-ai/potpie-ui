@@ -274,7 +274,9 @@ const Navbar = ({
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger>
-                  <span className="text-muted text-xl">{displayTitle}</span>
+                  <span className="text-muted text-xl truncate max-w-[30rem] inline-block">
+                    {displayTitle}
+                  </span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
@@ -429,7 +431,7 @@ const Navbar = ({
             {agentId && allAgents && (
               <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                <span className="text-gray-700 whitespace-nowrap">
+                <span className="text-gray-700 whitespace-nowrap truncate max-w-[25rem] inline-block">
                   {allAgents.find((agent) => agent.id === agentId)?.name ||
                     agentId.replace(/_/g, " ").replace(
                       /([a-z])([A-Z])/g,

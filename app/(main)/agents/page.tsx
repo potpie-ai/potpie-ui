@@ -48,10 +48,7 @@ const CustomAgent: React.FC = () => {
       const header = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
       const endpoint = `/custom-agents/agents/${agentIdParam}`;
-      
-      // Generate HMAC signature
-      const message = `GET${endpoint}?user_id=${userId}`;
-      const hmacSignature = generateHmacSignature(message);
+      const hmacSignature = generateHmacSignature(userId);
       
       const response = await axios.get(
         `${baseUrl}${endpoint}`,

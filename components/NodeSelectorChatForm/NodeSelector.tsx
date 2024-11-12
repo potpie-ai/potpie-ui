@@ -52,6 +52,14 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     }
   };
 
+  useEffect(() => {
+    if (nodeListRef.current && selectedNodeIndex >= 0) {
+      const selectedNode = nodeListRef.current.querySelector(`li:nth-child(${selectedNodeIndex + 1})`);
+      selectedNode?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedNodeIndex]);
+  
+
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       if (isNodeListVisible && selectedNodeIndex >= 0) {
@@ -166,7 +174,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
     return ReactDOM.createPortal(
       <div
         ref={nodeListRef}
-        className="fixed w-[50%] bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50"
+        className="fixed w-[50%] bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto z-50"
         style={{
           left: formRect ? formRect.left : '0px',
           bottom: formRect ? window.innerHeight - formRect.top + 10 : '0px',
@@ -176,7 +184,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
           {nodeOptions.map((node, index) => (
             <li
               key={node.node_id}
-              className={`cursor-pointer p-1 ${index === selectedNodeIndex ? "bg-gray-200" : "hover:bg-gray-200"}`}
+              className={`cursor-pointer p-1 px-2 ${index === selectedNodeIndex ? "bg-gray-200" : "hover:bg-gray-200"}`}
               onClick={(e) => {
                 e.stopPropagation();
                 handleNodeSelect(node);

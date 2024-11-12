@@ -1,6 +1,7 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { Visibility } from "@/lib/Constants";
+
 export default class ChatService {
     static async sendMessage(conversationId: string, message: string, selectedNodes: any[]) {
         const headers = await getHeaders();
@@ -270,7 +271,7 @@ export default class ChatService {
         try {
             if (visibility === Visibility.PRIVATE) {
                 const filteredEmails = recipientEmails.filter(email => email.trim() !== "");
-                payload.recipientEmails = filteredEmails.length > 0 ? filteredEmails : undefined; // Set to undefined if empty
+                payload.recipientEmails = filteredEmails.length > 0 ? filteredEmails : null; // Set to undefined if empty
             }
             const response = await axios.post(
                 `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,

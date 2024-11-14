@@ -20,13 +20,7 @@ import ChatBubble from "../components/ChatBubble";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "../components/Navbar";
-import getHeaders from "@/app/utils/headers.util";
-import axios from "axios";
-import AgentService from "@/services/AgentService";
-import { list_system_agents } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
 import MinorService from "@/services/minorService";
-import { auth } from "@/configs/Firebase-config";
 
 interface SendMessageArgs {
   message: string;

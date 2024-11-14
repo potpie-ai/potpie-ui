@@ -25,6 +25,8 @@ import axios from "axios";
 import AgentService from "@/services/AgentService";
 import { list_system_agents } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import MinorService from "@/services/minorService";
+import { auth } from "@/configs/Firebase-config";
 
 interface SendMessageArgs {
   message: string;
@@ -52,6 +54,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const pendingMessageSent = useRef(false);
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
+  const [profilePicUrl, setProfilePicUrl] = useState(null);
   const { pendingMessage, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
@@ -133,6 +136,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     },
   });
 
+  const fetchProfilePicture = async (userId: string) => {
+    try {
+      const profilePicture = await MinorService.getProfilePicture(userId);
+      return profilePicture;
+    } catch (error) {
+      console.error("Error fetching profile picture:", error);
+    }
+  }
+
   const loadMessages = async () => {
     try {
       const messages = await ChatService.loadMessages(
@@ -202,6 +214,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
+
+      if(!info.is_creator){
+        fetchProfilePicture(info.creator_id).then((profilePicture) => {
+          setProfilePicUrl(profilePicture);
+        })
+      }
     } catch (error) {
       console.error("Error loading conversation info:", error);
       toast.error("Failed to load conversation info");
@@ -295,6 +313,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                   sender={message.sender}
                   isLast={i === currentConversation.messages.length - 1}
                   currentConversationId={currentConversation.conversationId}
+                  userImage={profilePicUrl}
                 />
               )
             )}

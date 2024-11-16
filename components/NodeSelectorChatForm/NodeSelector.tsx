@@ -9,6 +9,17 @@ import getHeaders from "@/app/utils/headers.util";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { useDispatch, useSelector } from "react-redux";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { systemAgents } from "@/lib/Constants";
 
 interface NodeSelectorFormProps {
   projectId: string;
@@ -16,17 +27,26 @@ interface NodeSelectorFormProps {
   onSubmit: (message: string) => void;
 }
 
-const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled, onSubmit }) => {
+const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
+  projectId,
+  disabled,
+  onSubmit,
+}) => {
   const [isNodeListVisible, setIsNodeListVisible] = useState(false);
   const [nodeOptions, setNodeOptions] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [isNodeSelected, setIsNodeSelected] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null); // Timeout reference for debounce
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
+    null
+  ); // Timeout reference for debounce
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const nodeListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const dispatch: AppDispatch = useDispatch();
-  const { selectedNodes } = useSelector((state: RootState) => state.chat);
+  const { selectedNodes, agentId } = useSelector(
+    (state: RootState) => state.chat
+  );
 
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
@@ -54,9 +74,14 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
-
+    if (
+      (agentId === "integration_test_agent" || agentId === "unit_test_agent") &&
+      !isNodeSelected
+    ) {
+      return setIsDialogOpen(true);
+    }
     // Remove @ symbols only before node names, ensuring a space before @
-    const processedMessage = message.replace(/(\s)@([^\s]+)(?=\s)/g, '$1$2');
+    const processedMessage = message.replace(/(\s)@([^\s]+)(?=\s)/g, "$1$2");
 
     onSubmit(processedMessage);
     setMessage("");
@@ -78,7 +103,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
 
     if (lastAtPosition !== -1 && cursorPosition > lastAtPosition) {
       if (isNodeSelected) {
-        setIsNodeSelected(false); 
+        setIsNodeSelected(false);
       }
       const query = value.substring(lastAtPosition + 1, cursorPosition);
 
@@ -120,12 +145,19 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
   };
 
   const handleNodeRemove = (node: any) => {
-    dispatch(setChat({ selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id) }));
+    dispatch(
+      setChat({
+        selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id),
+      })
+    );
   };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (nodeListRef.current && !nodeListRef.current.contains(event.target as any)) {
+      if (
+        nodeListRef.current &&
+        !nodeListRef.current.contains(event.target as any)
+      ) {
         setIsNodeListVisible(false);
       }
     };
@@ -143,16 +175,16 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
 
   const renderNodeList = () => {
     if (!isNodeListVisible || nodeOptions.length === 0) return null;
-  
+
     const formRect = formRef.current?.getBoundingClientRect();
-  
+
     return ReactDOM.createPortal(
       <div
         ref={nodeListRef}
         className="fixed w-[50%] bg-white border border-gray-300 rounded-lg p-2 shadow-lg max-h-40 overflow-y-auto z-50"
         style={{
-          left: formRect ? formRect.left : '0px',
-          bottom: formRect ? window.innerHeight - formRect.top + 10 : '0px',
+          left: formRect ? formRect.left : "0px",
+          bottom: formRect ? window.innerHeight - formRect.top + 10 : "0px",
         }}
       >
         <ul>
@@ -176,71 +208,98 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
       document.body
     );
   };
-  
+
   const truncateFilePath = (filePath: string) => {
-    if(!filePath){
+    if (!filePath) {
       return;
     }
     const maxLength = 100; // Maximum length to display path
     if (filePath.length <= maxLength) {
       return filePath;
     }
-  
-    const fileNameIndex = filePath.lastIndexOf('/');
-    const fileName = filePath.slice(fileNameIndex + 1); 
-  
+
+    const fileNameIndex = filePath.lastIndexOf("/");
+    const fileName = filePath.slice(fileNameIndex + 1);
+
     const truncatedPath =
       filePath.length > maxLength
-        ? '...' + filePath.slice(-maxLength + fileName.length + 3) // +3 for '...'
+        ? "..." + filePath.slice(-maxLength + fileName.length + 3) // +3 for '...'
         : filePath;
-  
+
     return truncatedPath;
   };
-  
+
   return (
-    <form
-      className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col"
-      onSubmit={handleSubmit}
-      ref={formRef}
-    >
-      <div className="flex items-center p-2 pl-4">
-        {selectedNodes.map((node) => (
-          <div
-            key={node.node_id}
-            className="flex items-center space-x-2 bg-[#f7e6e6] p-1 rounded-lg mr-2"
-          >
-            <span className="pl-1">{node.name}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-4 w-4 hover:bg-white"
-              onClick={() => handleNodeRemove(node)}
+    <>
+      <form
+        className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col"
+        onSubmit={handleSubmit}
+        ref={formRef}
+      >
+        <div className="flex items-center p-2 pl-4">
+          {selectedNodes.map((node) => (
+            <div
+              key={node.node_id}
+              className="flex items-center space-x-2 bg-[#f7e6e6] p-1 rounded-lg mr-2"
             >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-      </div>
+              <span className="pl-1">{node.name}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4 hover:bg-white"
+                onClick={() => handleNodeRemove(node)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
 
-      <Textarea
-        ref={messageRef}
-        value={message}
-        onChange={handleMessageChange}
-        id="message"
-        disabled={disabled}
-        placeholder="Type @ followed by file or function name"
-        className="min-h-12 text-base resize-none border-0 p-3 px-7"
-        onKeyPress={handleKeyPress}
-      />
+        <Textarea
+          ref={messageRef}
+          value={message}
+          onChange={handleMessageChange}
+          id="message"
+          disabled={disabled}
+          placeholder={systemAgents.find((a) => a.id === agentId)?.prompt}
+          className="min-h-12 text-base resize-none border-0 p-3 px-7"
+          onKeyPress={handleKeyPress}
+        />
 
-      {renderNodeList()}
+        {renderNodeList()}
 
-      <div className="flex items-center p-3 pt-0 ">
-        <Button type="submit" size="sm" className="ml-auto !bg-transparent mb-1 fill-primary" disabled={disabled}>
-          <Image src={"/images/sendmsg.svg"} alt="logo" width={20} height={20} />
-        </Button>
-      </div>
-    </form>
+        <div className="flex items-center p-3 pt-0 ">
+          <Button
+            type="submit"
+            size="sm"
+            className="ml-auto !bg-transparent mb-1 fill-primary"
+            disabled={disabled}
+          >
+            <Image
+              src={"/images/sendmsg.svg"}
+              alt="logo"
+              width={20}
+              height={20}
+            />
+          </Button>
+        </div>
+      </form>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select a Node before proceeding</DialogTitle>
+            <DialogDescription>
+              Type @ followed by file or function name to select a file or function
+            </DialogDescription>
+          </DialogHeader>
+        <DialogFooter>
+          <DialogClose>
+            <Button >Close</Button>
+          </DialogClose>
+        </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

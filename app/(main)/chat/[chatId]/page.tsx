@@ -172,7 +172,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       }
 
       setIsCreator(info.is_creator);
-      setChatAccess(info.is_creator ? "write" : "read");
+      setChatAccess(info.is_creator ? "write" : info.access_type);
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
         totalMessages: info.total_messages,

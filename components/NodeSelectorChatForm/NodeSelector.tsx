@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
-import { systemAgents } from "@/lib/Constants";
+import { agentsRequireNodes, systemAgents } from "@/lib/Constants";
 
 interface NodeSelectorFormProps {
   projectId: string;
@@ -75,7 +75,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
     e.preventDefault();
     if (!message.trim()) return;
     if (
-      (agentId === "integration_test_agent" || agentId === "unit_test_agent") &&
+      agentsRequireNodes.includes(agentId) &&
       !isNodeSelected
     ) {
       return setIsDialogOpen(true);

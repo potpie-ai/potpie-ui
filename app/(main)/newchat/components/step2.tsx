@@ -48,6 +48,7 @@ const Step2: React.FC<Step2Props> = ({
   const createConversation = async (agentId: string) => {
     try {
       const response = await ChatService.createConversation(userId, title, projectId, agentId);
+      dispatch(setChat({agentId: agentId}))
       setAgentId(agentId);
       setChatStep(3);
       setCurrentConversationId(response.conversation_id);

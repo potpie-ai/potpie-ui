@@ -51,7 +51,7 @@ export const systemAgents = [
     description:
       "An agent specialized in generating a low-level design plan for implementing a new feature.",
     status: "SYSTEM",
-    prompt: "What should be included in my low-level design?",
+    prompt: "Refer existing implementation and generate a low level design for implementing Firebase auth in our cart API",
   },
   {
     id: "code_changes_agent",

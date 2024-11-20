@@ -321,8 +321,7 @@ const SidebarItems = [
       {
         icons: "/images/discord.svg",
         title: "Discord",
-        soon: true,
-        href: "#",
+        href: "https://discord.gg/ryk5CMD5v6",
         upgrade: false,
       },
     ],

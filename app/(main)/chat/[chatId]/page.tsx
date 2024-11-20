@@ -176,7 +176,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         return;
       }
       setIsCreator(info.is_creator);
-
       if (!list_system_agents.includes(info.agent_ids[0])) {
         AgentService.getAgentStatus(info.agent_ids[0]).then((agentStatus) => {
           if (agentStatus !== "RUNNING") {
@@ -186,8 +185,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           }
         });
       } else {
-        setChatAccess(info.access_type);
+      setChatAccess(info.is_creator ? "write" : info.access_type);
       }
+
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
         totalMessages: info.total_messages,

@@ -14,39 +14,32 @@ export const AuthContext = React.createContext<any>({
 
 export const useAuthContext = () => React.useContext(AuthContext);
 
-export const AuthContextProvider = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+export const AuthContextProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
-  const [userSubscription, setUserSubscription] = React.useState<any>(null);
 
   React.useEffect(() => {
     const refreshToken = () => {
       auth.currentUser?.getIdToken(true);
     };
     const refreshInterval = setInterval(refreshToken, 50 * 60 * 1000);
-
     return () => clearInterval(refreshInterval);
   }, []);
 
   React.useEffect(() => {
-    const unsubscribe = onIdTokenChanged(auth, (user) => {
-      setUser(user);
+    const unsubscribe = onIdTokenChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, userSubscription }}>
+    <AuthContext.Provider value={{ user }}>
       {loading ? (
         <div className="w-full min-h-screen flex justify-center items-center">
-          <Button className="" type="button" variant={"ghost"}>
-            <div className="flex flex-col gap-4 items-center justify-center text-center w-full ">
+          <Button type="button" variant={"ghost"}>
+            <div className="flex flex-col gap-4 items-center justify-center text-center w-full">
               Please wait while we authenticate you
               <LoaderCircle className="w-10 h-10 animate-spin" />
             </div>

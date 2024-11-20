@@ -22,8 +22,19 @@ import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 import { z } from "zod";
-import { Share2 } from "lucide-react";
+import { ClipboardCheck, Share2, X } from "lucide-react";
 import ChatService from "@/services/ChatService";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@radix-ui/react-scroll-area";
+import { Visibility } from "@/lib/Constants";
 
 const emailSchema = z
   .string()
@@ -34,15 +45,18 @@ const Navbar = ({
   showShare,
   hidden = false,
   chatTitle,
+  disableShare = false,
 }: {
   showShare?: boolean;
   hidden?: boolean;
   chatTitle?: string;
+  disableShare?: boolean;
 }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
   );
   const pathname = usePathname();
+  const { user } = useAuthContext();
   const dispatch = useDispatch();
   const [displayTitle, setDisplayTitle] = useState<string>("Untitled");
   const [inputValue, setInputValue] = useState<string>("");
@@ -51,6 +65,8 @@ const Navbar = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
   const showTitle = pathname.split("/").pop() !== "newchat";
+  const [shareWithLink, setShareWithLink] = useState(false);
+  const [accessList, setAccessList] = useState<string[]>([]);
 
   useEffect(() => {
     if (chatTitle) {
@@ -83,7 +99,7 @@ const Navbar = ({
           { title: inputValue },
           { headers }
         );
-
+        
         if (response.data.status === "success") {
           setIsTitleDialogOpen(false);
           setDisplayTitle(inputValue);
@@ -119,7 +135,8 @@ const Navbar = ({
 
       const res = await ChatService.shareConversation(
         currentConversationId,
-        recipientEmails
+        recipientEmails,
+        shareWithLink ? Visibility.PUBLIC : Visibility.PRIVATE
       );
 
       if (res.type === "error") {
@@ -142,16 +159,91 @@ const Navbar = ({
     enabled: false,
   });
 
-  const handleEmailSave = () => {
+  const handleEmailSave = async () => {
     try {
-      const emails = emailValue.split(",").map((email) => email.trim());
-      emails.forEach((email) => emailSchema.parse(email));
-      refetchChatShare();
+      if (disableShare) throw new Error("Unable to share the chat");
+      if (shareWithLink) {
+        const res = await refetchChatShare();
+        if (res.data.type === "error") return;
+      } else {
+        const emails = emailValue.split(",").map((email) => email.trim());
+        emails.forEach((email) => emailSchema.parse(email));
+        await refetchChatShare();
+      }
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
         setEmailError(error.errors[0].message);
+      } else {
+        setEmailError("An error occurred while sharing the chat.");
       }
+    }
+  };
+
+  const isShareDisabled = () => {
+    if (disableShare) return true;
+    if (shareWithLink) return false;
+    const emails = emailValue.split(",").map((email) => email.trim());
+    return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
+  };
+
+  const isPeopleWithAccessVisible = () => {
+    if (disableShare || shareWithLink) return false;
+  };
+
+  const { refetch: refetchAccessList } = useQuery({
+    queryKey: ["access-list", currentConversationId],
+    queryFn: async () => {
+      if (!currentConversationId) return;
+      try {
+        const response = await ChatService.getChatAccess(currentConversationId);
+        if ("data" in response) {
+          if (Array.isArray(response.data)) {
+            setAccessList(response.data);
+          }
+
+          return response.data;
+        }
+      } catch (err: any) {
+        console.error(err);
+        toast.error("Failed to update title");
+        return err.response?.data;
+      }
+    },
+    enabled: false,
+  });
+  useEffect(() => {
+    if (isDialogOpen) {
+      refetchAccessList(); // Refetch access list when dialog opens
+    }
+  }, [isDialogOpen, refetchAccessList]);
+
+  const handleSelectChange = (value: string) => {
+    setShareWithLink(value === "link");
+    if (value === "email") {
+      setEmailValue(""); // Reset email value when switching
+      setEmailError(null); // Clear email error if switching to link
+      refetchAccessList(); // Fetch access list again for email option
+    }
+  };
+
+  const handleDelete = async (email: string) => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
+      await axios.delete(
+        `${baseUrl}/api/v1/conversations/${currentConversationId}/access`,
+        {
+          headers: await getHeaders(),
+          data: {
+            emails: [email],
+          },
+        }
+      );
+      setAccessList(accessList.filter((e) => e !== email));
+
+      toast.success(`Access for ${email} has been removed.`);
+    } catch (error) {
+      toast.error(`Failed to remove access for ${email}.`);
     }
   };
 
@@ -169,132 +261,186 @@ const Navbar = ({
             Click here.
           </Link>
         </div>
-        {showTitle && (
-          <div className="flex w-full justify-between items-center">
-            <div className="flex items-center justify-between w-full px-6 pb-2 gap-5">
-              <div className="gap-5 flex items-center justify-start">
-                <Image
-                  src={"/images/msg-grey.svg"}
-                  alt="logo"
-                  width={20}
-                  height={20}
-                />
-                <Dialog
-                  open={isTitleDialogOpen}
-                  onOpenChange={setIsTitleDialogOpen}
-                >
-                  <DialogTrigger>
-                    <span className="text-muted text-xl">{displayTitle}</span>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[487px]" showX={false}>
-                    <DialogHeader>
-                      <DialogTitle className="text-center">
-                        Edit chat name
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="">
-                        <Input
-                          id="name"
-                          value={inputValue}
-                          onChange={handleInputChange}
-                          className="col-span-3"
-                          placeholder="Enter chat title"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline">
-                          Cancel
-                        </Button>
-                      </DialogClose>
-                      <Button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={!inputValue.trim()}
-                      >
-                        Save
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger hidden={!showShare}>
-                  <Button size="icon" variant="ghost">
-                    <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
-                  </Button>
+        <div className="flex w-full justify-between items-center">
+          <div className="flex items-center justify-between w-full px-6 pt-1 pb-1 gap-5 border-0">
+            <div className="gap-5 flex items-center justify-start">
+              <Image
+                src={"/images/msg-grey.svg"}
+                alt="logo"
+                width={20}
+                height={20}
+              />
+              <Dialog
+                open={isTitleDialogOpen}
+                onOpenChange={setIsTitleDialogOpen}
+              >
+                <DialogTrigger>
+                  <span className="text-muted text-xl">{displayTitle}</span>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
                     <DialogTitle className="text-center">
-                      Share chat with others
+                      Edit chat name
                     </DialogTitle>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="">
                       <Input
-                        id="email"
-                        placeholder="Email"
-                        value={emailValue}
-                        onChange={handleEmailChange}
+                        id="name"
+                        value={inputValue}
+                        onChange={handleInputChange}
                         className="col-span-3"
+                        placeholder="Enter chat title"
                       />
-                      {emailError && (
-                        <p className="text-red-500 text-sm">{emailError}</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between bg-gray-100 p-2 rounded-md">
-                      <p className="text-sm text-muted">
-                        {`${process.env.NEXT_PUBLIC_APP_URL}${pathname}`}
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          navigator.clipboard.writeText(
-                            `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
-                          );
-                          toast.success("Link copied to clipboard");
-                        }}
-                      >
-                        Copy Link
-                      </Button>
                     </div>
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button">Cancel</Button>
+                      <Button type="button" variant="outline">
+                        Cancel
+                      </Button>
                     </DialogClose>
                     <Button
                       type="button"
-                      onClick={handleEmailSave}
-                      disabled={emailValue === ""}
+                      onClick={handleSave}
+                      disabled={!inputValue.trim()}
                     >
-                      Share via Email
+                      Save
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
-            <div className="flex items-center justify-between gap-4">
-              {agentId && allAgents && (
-                <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                  <span className="text-gray-700">
-                    {allAgents.find((agent) => agent.id === agentId)?.name ||
-                      agentId.replace(/_/g, " ").replace(
-                        /([a-z])([A-Z])/g,
-                        "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger hidden={!showShare}>
+                <Button size="icon" variant="outline">
+                  <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
+                <DialogHeader>
+                  <DialogTitle className="text-center font-semibold text-xl">
+                    Share Chat with Others
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <Select
+                    onValueChange={(value) => handleSelectChange(value)}
+                    defaultValue={shareWithLink ? "link" : "email"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Share with" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email">With Email</SelectItem>
+                      <SelectItem value="link">Anyone With Link</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {!shareWithLink && (
+                    <div>
+                      <Input
+                        id="email"
+                        placeholder="Enter Email"
+                        value={emailValue}
+                        onChange={handleEmailChange}
+                        className="border rounded-md p-2"
+                      />
+                      {emailError && (
+                        <p className="text-red-500 text-sm">{emailError}</p>
                       )}
-                  </span>
+                    </div>
+                  )}
+                  {!shareWithLink && !isPeopleWithAccessVisible() && (
+                    <>
+                      <h3 className="mt-4 text-lg font-semibold">
+                        People with access
+                      </h3>
+                      <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-3">
+                        <Card className="border-gray-300 w-[95%] mx-auto">
+                          <CardContent className="flex justify-between p-4">
+                            <div className="flex flex-col">
+                              <p>{user?.displayName} (You)</p>
+                              <p className="text-sm text-muted">
+                                {user?.email}
+                              </p>
+                            </div>
+                            <div className="text-muted text-sm">Owner</div>
+                          </CardContent>
+                        </Card>
+
+                        {accessList.map((email) => (
+                          <Card
+                            key={email}
+                            className="relative border border-gray-300 w-[95%] mx-auto my-2 shadow-sm rounded-lg"
+                          >
+                            {email !== user?.email && (
+                              <Button
+                                onClick={() => handleDelete(email)}
+                                className="absolute -top-3 -right-3 bg-white rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
+                                aria-label="Delete viewer"
+                              >
+                                <X size={14} />
+                              </Button>
+                            )}
+                            <CardContent className="p-4 flex items-center justify-between">
+                              <p className="text-sm font-medium text-gray-800">
+                                {email}
+                              </p>
+                              <p className="text-gray-500 text-sm">
+                                {email === user?.email ? "Owner" : "Viewer"}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </ScrollArea>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
+
+                <DialogFooter className="!justify-between">
+                  <DialogClose
+                    asChild
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
+                      );
+                      toast.success("Link copied to clipboard");
+                    }}
+                  >
+                    <Button
+                      type="button"
+                      className="gap-2 bg-[#4479FF] text-white hover:bg-blue-600"
+                    >
+                      <ClipboardCheck /> <span>Copy Link</span>
+                    </Button>
+                  </DialogClose>
+                  <Button
+                    type="button"
+                    onClick={handleEmailSave}
+                    disabled={isShareDisabled()}
+                  >
+                    Share
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
-        )}
+          <div className="flex items-center justify-between gap-4">
+            {agentId && allAgents && (
+              <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                <span className="text-gray-700 whitespace-nowrap">
+                  {allAgents.find((agent) => agent.id === agentId)?.name ||
+                    agentId.replace(/_/g, " ").replace(
+                      /([a-z])([A-Z])/g,
+                      "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
+                    )}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       </header>
     </>
   );

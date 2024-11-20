@@ -1,5 +1,6 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { Visibility } from "@/lib/Constants";
 
 export default class ChatService {
     static async sendMessage(conversationId: string, message: string, selectedNodes: any[]) {
@@ -26,38 +27,58 @@ export default class ChatService {
         let accumulatedCitation = "";
 
         if (reader) {
+            // Try to read first chunk to check if it's a single response
             const { value } = await reader.read();
             if (value) {
                 const chunk = decoder.decode(value);
                 try {
+                    // Attempt to parse as single complete response
                     const parsedChunk = JSON.parse(chunk);
-                    accumulatedMessage = parsedChunk.message;
-                    accumulatedCitation = parsedChunk.citations;
-                    return { accumulatedMessage, accumulatedCitation };
+                    if (parsedChunk.message && !chunk.includes("}{")) {
+                        // Single complete response
+                        accumulatedMessage = parsedChunk.message;
+                        accumulatedCitation = parsedChunk.citations;
+                        console.log("SINGLE CHUNK RESPONSE")
+                        return { accumulatedMessage, accumulatedCitation };
+                    }
                 } catch (error) {
-                    console.error("Error parsing single chunk response:", error);
+                    // Not a complete JSON, treat as start of stream
+                    try {
+                        const parsedChunks = chunk
+                            .split("}")
+                            .filter(Boolean)
+                            .map(c => JSON.parse(c + "}"));
+                        
+                        for (const parsedChunk of parsedChunks) {
+                            accumulatedMessage += parsedChunk.message;
+                            accumulatedCitation = parsedChunk.citations;
+                        }
+                        console.log("MULTIPLE CHUNK RESPONSE")
+                    } catch (streamError) {
+                        console.error("Error parsing stream chunk:", streamError);
+                    }
                 }
             }
-        }
 
-        // For streaming response
-        while (true) {
-            const { done, value } = (await reader?.read()) || { done: true, value: undefined };
-            if (done) break;
+            // Continue reading stream
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
 
-            const chunk = decoder.decode(value);
-            try {
-                const parsedChunks = chunk
-                    .split("}")
-                    .filter(Boolean)
-                    .map((c) => JSON.parse(c + "}"));
+                const chunk = decoder.decode(value);
+                try {
+                    const parsedChunks = chunk
+                        .split("}")
+                        .filter(Boolean)
+                        .map(c => JSON.parse(c + "}"));
 
-                for (const parsedChunk of parsedChunks) {
-                    accumulatedMessage += parsedChunk.message;
-                    accumulatedCitation = parsedChunk.citations;
+                    for (const parsedChunk of parsedChunks) {
+                        accumulatedMessage += parsedChunk.message;
+                        accumulatedCitation = parsedChunk.citations;
+                    }
+                } catch (error) {
+                    console.error("Error parsing stream chunk:", error);
                 }
-            } catch (error) {
-                // Handle parsing error
             }
         }
 
@@ -241,15 +262,20 @@ export default class ChatService {
         return response.data;
     }
 
-    static async shareConversation(conversationId: string, recipientEmails: string[]) {
+    static async shareConversation(conversationId: string, recipientEmails: string[], visibility: Visibility) {
         const headers = await getHeaders();
+        const payload: any = {
+            conversation_id: conversationId,
+            visibility: visibility,
+        };
         try {
+            if (visibility === Visibility.PRIVATE) {
+                const filteredEmails = recipientEmails.filter(email => email.trim() !== "");
+                payload.recipientEmails = filteredEmails.length > 0 ? filteredEmails : null; // Set to undefined if empty
+            }
             const response = await axios.post(
                 `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/share`,
-                {
-                    conversation_id: conversationId,
-                    recipientEmails: recipientEmails,
-                },
+                payload,
                 { headers }
             );
 
@@ -270,4 +296,26 @@ export default class ChatService {
             };
         }
     }
+    static async getChatAccess(conversationId: string) {
+        const headers = await getHeaders();
+        try {
+          const response = await axios.get(
+            `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/shared-emails`,
+            { headers }
+          );
+          return response;
+        } catch (error: any) {
+          if (error.response) {
+            return {
+              type: "error",
+              message: error.response.data.detail || "Unable to fetch access list.",
+            };
+          }
+    
+          return {
+            type: "error",
+            message: "Network error while fetching access list.",
+          };
+        }
+      }
 }

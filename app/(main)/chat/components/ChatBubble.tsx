@@ -49,23 +49,51 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       return;
     }
     const sections = [];
-    const codeRegex = /```(\w+?)\n([\s\S]*?)```/g;
     let lastIndex = 0;
-    let match;
-
-    while ((match = codeRegex.exec(message)) !== null) {
-      if (match.index > lastIndex) {
-        sections.push({
-          type: "text",
-          content: message.slice(lastIndex, match.index),
-        });
+    let inCodeBlock = false;
+    let currentLanguage = '';
+    let currentCode = '';
+    
+    const lines = message.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const codeBlockMatch = line.match(/^```(\w+)?$/);
+      
+      if (codeBlockMatch) {
+        if (!inCodeBlock) {
+          // Start of code block
+          if (lastIndex < i) {
+            // Add text section before code block
+            sections.push({
+              type: "text",
+              content: lines.slice(lastIndex, i).join('\n')
+            });
+          }
+          inCodeBlock = true;
+          currentLanguage = codeBlockMatch[1] || '';
+          currentCode = '';
+          lastIndex = i + 1;
+        } else {
+          // End of code block
+          sections.push({
+            type: "code",
+            content: currentCode.trim(),
+            language: currentLanguage
+          });
+          inCodeBlock = false;
+          lastIndex = i + 1;
+        }
+      } else if (inCodeBlock) {
+        currentCode += line + '\n';
       }
-      sections.push({ type: "code", content: match[2], language: match[1] });
-      lastIndex = match.index + match[0].length;
     }
 
-    if (lastIndex < message.length) {
-      sections.push({ type: "text", content: message.slice(lastIndex) });
+    if (lastIndex < lines.length) {
+      sections.push({
+        type: "text",
+        content: lines.slice(lastIndex).join('\n')
+      });
     }
 
     return sections;

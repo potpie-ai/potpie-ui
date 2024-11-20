@@ -9,6 +9,17 @@ import getHeaders from "@/app/utils/headers.util";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { useDispatch, useSelector } from "react-redux";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { agentsRequireNodes, systemAgents } from "@/lib/Constants";
 
 interface NodeSelectorFormProps {
   projectId: string;
@@ -16,7 +27,11 @@ interface NodeSelectorFormProps {
   onSubmit: (message: string) => void;
 }
 
-const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled, onSubmit }) => {
+const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
+  projectId,
+  disabled,
+  onSubmit,
+}) => {
   const [isNodeListVisible, setIsNodeListVisible] = useState(false);
   const [nodeOptions, setNodeOptions] = useState<any[]>([]);
   const [message, setMessage] = useState("");
@@ -28,7 +43,9 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
   const nodeListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const dispatch: AppDispatch = useDispatch();
-  const { selectedNodes } = useSelector((state: RootState) => state.chat);
+  const { selectedNodes, agentId } = useSelector(
+    (state: RootState) => state.chat
+  );
 
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
@@ -145,12 +162,19 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
   
 
   const handleNodeRemove = (node: any) => {
-    dispatch(setChat({ selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id) }));
+    dispatch(
+      setChat({
+        selectedNodes: selectedNodes.filter((n) => n.node_id !== node.node_id),
+      })
+    );
   };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (nodeListRef.current && !nodeListRef.current.contains(event.target as any)) {
+      if (
+        nodeListRef.current &&
+        !nodeListRef.current.contains(event.target as any)
+      ) {
         setIsNodeListVisible(false);
       }
     };
@@ -168,16 +192,16 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
 
   const renderNodeList = () => {
     if (!isNodeListVisible || nodeOptions.length === 0) return null;
-  
+
     const formRect = formRef.current?.getBoundingClientRect();
-  
+
     return ReactDOM.createPortal(
       <div
         ref={nodeListRef}
         className="fixed w-[50%] bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto z-50"
         style={{
-          left: formRect ? formRect.left : '0px',
-          bottom: formRect ? window.innerHeight - formRect.top + 10 : '0px',
+          left: formRect ? formRect.left : "0px",
+          bottom: formRect ? window.innerHeight - formRect.top + 10 : "0px",
         }}
       >
         <ul>
@@ -201,27 +225,27 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
       document.body
     );
   };
-  
+
   const truncateFilePath = (filePath: string) => {
-    if(!filePath){
+    if (!filePath) {
       return;
     }
     const maxLength = 100;
     if (filePath.length <= maxLength) {
       return filePath;
     }
-  
-    const fileNameIndex = filePath.lastIndexOf('/');
-    const fileName = filePath.slice(fileNameIndex + 1); 
-  
+
+    const fileNameIndex = filePath.lastIndexOf("/");
+    const fileName = filePath.slice(fileNameIndex + 1);
+
     const truncatedPath =
       filePath.length > maxLength
         ? '...' + filePath.slice(-maxLength + fileName.length + 3)
         : filePath;
-  
+
     return truncatedPath;
   };
-  
+
   return (
     <form
       className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col"
@@ -252,7 +276,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({ projectId, disabled
         onChange={handleMessageChange}
         id="message"
         disabled={disabled}
-        placeholder="Type @ followed by file or function name"
+        placeholder={systemAgents.find((a) => a.id === agentId)?.prompt ?? "Type @ followed by file or function name"}
         className="min-h-12 text-base resize-none border-0 p-3 px-7"
         onKeyDown={handleKeyPress}
       />

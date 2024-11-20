@@ -45,7 +45,7 @@
     "marked": "^14.1.0",
     "next": "14.1.4",
     "next-themes": "^0.3.0",
-    "posthog-js": "^1.139.3",
+    "posthog-js": "^1.142.1",
     "prism-react-renderer": "^2.4.0",
     "react": "^18.3.1",
     "react-code-block": "^1.0.0",

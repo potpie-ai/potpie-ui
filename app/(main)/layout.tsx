@@ -21,7 +21,7 @@ export default function RootLayout({
 
   return (
     <>
-      <div className="grid min-h-screen w-full md:grid-cols-[300px_1fr] lg:grid-cols-[280px_1fr]">
+      <div className="grid min-h-screen w-full md:grid-cols-[300px_1fr] lg:grid-cols-[280px_1fr] overflow-x-clip">
         <Sidebar />
         <div className="flex flex-col">
           <main  className={cn(

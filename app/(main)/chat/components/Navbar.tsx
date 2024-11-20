@@ -261,7 +261,7 @@ const Navbar = ({
             Click here.
           </Link>
         </div>
-        {/* {showTitle && ( */}
+        {showTitle && (
           <div className="flex w-full justify-between items-center">
             <div className="flex items-center justify-between w-full px-6 pt-1 pb-1 gap-5 border-0">
               <div className="gap-5 flex items-center justify-start">
@@ -442,7 +442,7 @@ const Navbar = ({
               )}
             </div>
           </div>
-        {/* )} */}
+        )}
       </header>
     </>
   );

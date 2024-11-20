@@ -186,7 +186,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           }
         });
       } else {
-        setChatAccess(info.access_type);
+        setChatAccess(info.is_creator ? "write" : info.access_type);
       }
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,

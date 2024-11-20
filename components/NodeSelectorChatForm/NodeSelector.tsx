@@ -38,7 +38,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
   const [isNodeSelected, setIsNodeSelected] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
-
+  const [placeholder, setPlaceholder] = useState("Type @ followed by file or function name");
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const nodeListRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -75,6 +75,14 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
       selectedNode?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [selectedNodeIndex]);
+
+  useEffect(() => {
+    if (agentId) {
+      setPlaceholder(
+        systemAgents.find((a) => a.id === agentId)?.prompt ?? "Type @ followed by file or function name"
+      );
+    }
+  }, [agentId]);
   
 
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -276,7 +284,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
         onChange={handleMessageChange}
         id="message"
         disabled={disabled}
-        placeholder={systemAgents.find((a) => a.id === agentId)?.prompt ?? "Type @ followed by file or function name"}
+        placeholder={placeholder}
         className="min-h-12 text-base resize-none border-0 p-3 px-7"
         onKeyDown={handleKeyPress}
       />

@@ -276,7 +276,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
         onChange={handleMessageChange}
         id="message"
         disabled={disabled}
-        placeholder="Type @ followed by file or function name"
+        placeholder={systemAgents.find((a) => a.id === agentId)?.prompt ?? "Type @ followed by file or function name"}
         className="min-h-12 text-base resize-none border-0 p-3 px-7"
         onKeyDown={handleKeyPress}
       />

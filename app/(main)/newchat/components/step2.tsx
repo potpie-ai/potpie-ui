@@ -58,6 +58,7 @@ const Step2: React.FC<Step2Props> = ({
         projectId,
         agentId
       );
+      dispatch(setChat({agentId: agentId}))
       setAgentId(agentId);
       setChatStep(3);
       setCurrentConversationId(response.conversation_id);

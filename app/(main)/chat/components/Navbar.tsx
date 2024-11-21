@@ -64,6 +64,7 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
+  const showTitle = pathname.split("/").pop() !== "newchat";
   const [shareWithLink, setShareWithLink] = useState(false);
   const [accessList, setAccessList] = useState<string[]>([]);
 
@@ -250,7 +251,7 @@ const Navbar = ({
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white flex h-[70px] items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6">
+      <header className="sticky top-0 z-50 bg-white flex items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6">
         <div className="bg-[#4479FF] w-full text-center bg-opacity-[0.37] text-muted">
           Hello beta user! Please refer to this Notion doc to get started.{" "}
           <Link
@@ -260,6 +261,7 @@ const Navbar = ({
             Click here.
           </Link>
         </div>
+        {showTitle && (
         <div className="flex w-full justify-between items-center">
           <div className="flex items-center justify-between w-full px-6 pt-1 pb-1 gap-5 border-0">
             <div className="gap-5 flex items-center justify-start">
@@ -274,7 +276,7 @@ const Navbar = ({
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger>
-                  <span className="text-muted text-xl truncate max-w-[30rem] inline-block">
+                <span className="text-muted text-xl truncate max-w-[30rem] inline-block">
                     {displayTitle}
                   </span>
                 </DialogTrigger>
@@ -338,66 +340,66 @@ const Navbar = ({
                     </SelectContent>
                   </Select>
 
-                  {!shareWithLink && (
-                    <div>
-                      <Input
-                        id="email"
-                        placeholder="Enter Email"
-                        value={emailValue}
-                        onChange={handleEmailChange}
-                        className="border rounded-md p-2"
-                      />
-                      {emailError && (
-                        <p className="text-red-500 text-sm">{emailError}</p>
-                      )}
-                    </div>
-                  )}
-                  {!shareWithLink && !isPeopleWithAccessVisible() && (
-                    <>
-                      <h3 className="mt-4 text-lg font-semibold">
-                        People with access
-                      </h3>
-                      <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-3">
-                        <Card className="border-gray-300 w-[95%] mx-auto">
-                          <CardContent className="flex justify-between p-4">
-                            <div className="flex flex-col">
-                              <p>{user?.displayName} (You)</p>
-                              <p className="text-sm text-muted">
-                                {user?.email}
-                              </p>
-                            </div>
-                            <div className="text-muted text-sm">Owner</div>
-                          </CardContent>
-                        </Card>
-
-                        {accessList.map((email) => (
-                          <Card
-                            key={email}
-                            className="relative border border-gray-300 w-[95%] mx-auto my-2 shadow-sm rounded-lg"
-                          >
-                            {email !== user?.email && (
-                              <Button
-                                onClick={() => handleDelete(email)}
-                                className="absolute -top-3 -right-3 bg-white rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
-                                aria-label="Delete viewer"
-                              >
-                                <X size={14} />
-                              </Button>
-                            )}
-                            <CardContent className="p-4 flex items-center justify-between">
-                              <p className="text-sm font-medium text-gray-800">
-                                {email}
-                              </p>
-                              <p className="text-gray-500 text-sm">
-                                {email === user?.email ? "Owner" : "Viewer"}
-                              </p>
+                    {!shareWithLink && (
+                      <div>
+                        <Input
+                          id="email"
+                          placeholder="Enter Email"
+                          value={emailValue}
+                          onChange={handleEmailChange}
+                          className="border rounded-md p-2"
+                        />
+                        {emailError && (
+                          <p className="text-red-500 text-sm">{emailError}</p>
+                        )}
+                      </div>
+                    )}
+                    {!shareWithLink && !isPeopleWithAccessVisible() && (
+                      <>
+                        <h3 className="mt-4 text-lg font-semibold">
+                          People with access
+                        </h3>
+                        <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-3">
+                          <Card className="border-gray-300 w-[95%] mx-auto">
+                            <CardContent className="flex justify-between p-4">
+                              <div className="flex flex-col">
+                                <p>{user?.displayName} (You)</p>
+                                <p className="text-sm text-muted">
+                                  {user?.email}
+                                </p>
+                              </div>
+                              <div className="text-muted text-sm">Owner</div>
                             </CardContent>
                           </Card>
-                        ))}
-                      </ScrollArea>
-                    </>
-                  )}
-                </div>
+
+                          {accessList.map((email) => (
+                            <Card
+                              key={email}
+                              className="relative border border-gray-300 w-[95%] mx-auto my-2 shadow-sm rounded-lg"
+                            >
+                              {email !== user?.email && (
+                                <Button
+                                  onClick={() => handleDelete(email)}
+                                  className="absolute -top-3 -right-3 bg-white rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
+                                  aria-label="Delete viewer"
+                                >
+                                  <X size={14} />
+                                </Button>
+                              )}
+                              <CardContent className="p-4 flex items-center justify-between">
+                                <p className="text-sm font-medium text-gray-800">
+                                  {email}
+                                </p>
+                                <p className="text-gray-500 text-sm">
+                                  {email === user?.email ? "Owner" : "Viewer"}
+                                </p>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </ScrollArea>
+                      </>
+                    )}
+                  </div>
 
                 <DialogFooter className="!justify-between">
                   <DialogClose
@@ -442,6 +444,7 @@ const Navbar = ({
             )}
           </div>
         </div>
+          )}
       </header>
     </>
   );

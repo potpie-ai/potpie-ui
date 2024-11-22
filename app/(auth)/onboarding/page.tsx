@@ -54,10 +54,13 @@ const Onboarding = () => {
       };
 
       // Save user to Firestore
-      await setDoc(doc(db, "users", uid), userDoc);
+      await setDoc(doc(db, "users", uid), userDoc).then(() => {
+ // Redirect to home
+        console.log("pushing to link github");
+        router.push("/link-github");
+      });
 
-      // Redirect to home
-      router.push("/newchat");
+     
     } catch (error) {
       console.error("Error saving onboarding data:", error);
       alert("Error saving onboarding data. Please try again.");
@@ -127,7 +130,7 @@ const Onboarding = () => {
               <input 
                 type="text"
                 placeholder="Enter your name"
-                value={name || ''}
+                value={formData.name || ''}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
                 className="w-80 p-2 border rounded-md"
                 required

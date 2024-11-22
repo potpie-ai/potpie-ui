@@ -1,7 +1,7 @@
 "use client";
 import getHeaders from "@/app/utils/headers.util";
 import { Button } from "@/components/ui/button";
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc } from "firebase/firestore";
 import {
   arrowcon,
   chat,
@@ -15,6 +15,7 @@ import {
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useRef, useState } from "react";
+import { db } from "@/configs/Firebase-config";
 
 const Onboarding = () => {
   const searchParams = useSearchParams();
@@ -35,18 +36,31 @@ const Onboarding = () => {
 
   const submitOnboarding = async () => {
     try {
+      //Validate UID
+      if (!uid) {
+        throw new Error("User ID is missing");
+      }
+
+      // Validate required fields
+      if (!formData.name || !formData.source || !formData.industry || !formData.jobTitle || !formData.companyName) {
+        throw new Error("Please fill out all required fields.");
+      }
+
+      // Prepare user document
       const userDoc = {
         uid,
         ...formData,
-        createdAt: new Date().toISOString()
+        signedUpAt: new Date().toISOString(),
       };
 
-      const db = getFirestore();
-      await setDoc(doc(db, "users", uid || ''), userDoc);
-      
-      router.push("/");
+      // Save user to Firestore
+      await setDoc(doc(db, "users", uid), userDoc);
+
+      // Redirect to home
+      router.push("/newchat");
     } catch (error) {
       console.error("Error saving onboarding data:", error);
+      alert("Error saving onboarding data. Please try again.");
     }
   };
 
@@ -93,7 +107,7 @@ const Onboarding = () => {
       <div className="w-full h-full flex items-center justify-center flex-col gap-14">
         <Image src={logoWithText} alt="logo" />
         <div className="flex items-center justify-center flex-col text-border">
-          <h3 className="text-2xl font-bold text-black">Lets get a few more info and you are good to go!</h3>
+          <h3 className="text-2xl font-bold text-black">Let's get a few more info and you are good to go!</h3>
 
           <form onSubmit={(e) => {
             e.preventDefault();

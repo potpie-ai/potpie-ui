@@ -114,7 +114,7 @@ const Onboarding = () => {
             submitOnboarding();
           }} className="flex items-start justify-start flex-col mt-10 gap-6">
              <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium font-black">Email</label>
+              <label className="text-sm font-medium text-black">Email</label>
               <input 
                 type="email"
                 value={email || ''}
@@ -123,7 +123,7 @@ const Onboarding = () => {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium font-black">Name</label>
+              <label className="text-sm font-medium text-black">Name</label>
               <input 
                 type="text"
                 placeholder="Enter your name"
@@ -134,7 +134,7 @@ const Onboarding = () => {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium font-black">How did you find us?</label>
+              <label className="text-sm font-medium text-black">How did you find us?</label>
               <select 
                 value={formData.source}
                 onChange={(e) => setFormData({...formData, source: e.target.value})}
@@ -151,7 +151,7 @@ const Onboarding = () => {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium font-black">Industry you work in?</label>
+              <label className="text-sm font-medium text-black">Industry you work in?</label>
               <input 
                 type="text"
                 placeholder="Enter your industry"
@@ -163,7 +163,7 @@ const Onboarding = () => {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium font-black">Your job title?</label>
+              <label className="text-sm font-medium text-black">Your job title?</label>
               <input
                 type="text" 
                 placeholder="Enter your job title"
@@ -175,7 +175,7 @@ const Onboarding = () => {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium font-black">Your company name?</label>
+              <label className="text-sm font-medium text-black">Your company name?</label>
               <input
                 type="text"
                 placeholder="Enter your company name"

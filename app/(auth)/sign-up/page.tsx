@@ -29,10 +29,19 @@ const Signup = () => {
   const posthog = usePostHog();
   const popupRef = useRef<Window | null>(null);
   posthog.capture("github login clicked");
-  const openPopup = () => {
-    popupRef.current = window.open(
-      githubAppUrl, '_blank', 'noopener,noreferrer'
-    );
+  const openPopup = (result: any) => {
+    const popup = window.open(githubAppUrl, '_blank', 'noopener,noreferrer');
+    popupRef.current = popup;
+    
+    if (popup) {
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          console.log("popup closed");
+          clearInterval(timer);
+          router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
+        }
+      }, 500);
+    }
   };
 
   const provider = new GithubAuthProvider();
@@ -43,7 +52,13 @@ const Signup = () => {
   
   const onGithub = async () => {
     try {
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider).then((res: any ) => {
+        router.push(`/onboarding?uid=${res.user.uid}&email=${encodeURIComponent(res.user.email || '')}&name=${encodeURIComponent(res.user.displayName || '')}`);
+        return res.data;
+      })
+      .catch((e: any) => {
+        toast.error("Signup call unsuccessful");
+      });;
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
@@ -66,7 +81,7 @@ const Signup = () => {
           providerUsername: (result as any)._tokenResponse.screenName,
         },{headers:headers})
         .then((res: { data: any }) => {
-          openPopup();
+          openPopup(result);
           router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
           return res.data;
         })

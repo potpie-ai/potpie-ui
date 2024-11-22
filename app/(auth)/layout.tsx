@@ -14,7 +14,7 @@ export default function AuthLayout({
   const redirectUrl = searchParams.get("redirect");
   const router = useRouter();
   if (user) {
-    if (!window.location.pathname.startsWith('/onboarding')) {
+    if (!window.location.pathname.startsWith('/onboarding') && !window.location.pathname.startsWith('/sign-up')) {
       router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
       return null;
     }

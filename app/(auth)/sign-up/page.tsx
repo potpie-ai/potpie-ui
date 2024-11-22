@@ -19,8 +19,9 @@ import Image from "next/image";
 import { usePostHog } from "posthog-js/react";
 import React, { useRef } from "react";
 import { toast } from "sonner";
+import { useRouter, useSearchParams } from "next/navigation";
 
-const Onboarding = () => {
+const Signup = () => {
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -38,6 +39,7 @@ const Onboarding = () => {
   provider.addScope('repo');
   provider.addScope('read:org');
   provider.addScope('user');
+  const router = useRouter();
   
   const onGithub = async () => {
     try {
@@ -65,6 +67,7 @@ const Onboarding = () => {
         },{headers:headers})
         .then((res: { data: any }) => {
           openPopup();
+          router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
           return res.data;
         })
         .catch((e: any) => {
@@ -152,4 +155,4 @@ const Onboarding = () => {
   );
 };
 
-export default Onboarding;
+export default Signup;

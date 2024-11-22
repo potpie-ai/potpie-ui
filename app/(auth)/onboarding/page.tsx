@@ -107,7 +107,7 @@ const Onboarding = () => {
       <div className="w-full h-full flex items-center justify-center flex-col gap-14">
         <Image src={logoWithText} alt="logo" />
         <div className="flex items-center justify-center flex-col text-border">
-          <h3 className="text-2xl font-bold text-black">Let's get a few more info and you are good to go!</h3>
+          <h3 className="text-2xl font-bold text-black">Lets get a few more info and you are good to go!</h3>
 
           <form onSubmit={(e) => {
             e.preventDefault();

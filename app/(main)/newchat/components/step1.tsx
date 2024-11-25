@@ -341,7 +341,7 @@ const Step1: React.FC<Step1Props> = ({
                                 <Loader className="mr-2 h-4 w-4 animate-spin " />
                               )}
                             </span>{" "}
-                            Parse
+                            Import
                           </Button>
                         </DialogFooter>
                       </DialogContent>
@@ -349,13 +349,13 @@ const Step1: React.FC<Step1Props> = ({
                   </CommandItem>
                   <CommandSeparator className="my-1" />
                   <CommandItem>
-                    <span
+                    <span className="flex items-center gap-2"
                       onClick={(e) => {
                         e.preventDefault();
                         openPopup();
                       }}
                     >
-                      + Link new repository
+                      <Plus className="size-4" /> Link new repository
                     </span>
                   </CommandItem>
                 </CommandList>

@@ -212,10 +212,6 @@ const Step1: React.FC<Step1Props> = ({
   };
 
   useEffect(() => {
-    const filteredRepositories =
-      UserRepositorys?.filter((repo: any) =>
-        repo.full_name.toLowerCase().includes(inputValue.toLowerCase())
-      ) || [];
     setIsParseDisabled(
         !repoName ||
         !branchName ||

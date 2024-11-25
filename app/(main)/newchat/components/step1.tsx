@@ -216,16 +216,14 @@ const Step1: React.FC<Step1Props> = ({
       UserRepositorys?.filter((repo: any) =>
         repo.full_name.toLowerCase().includes(inputValue.toLowerCase())
       ) || [];
-
-    if (
-      (filteredRepositories.length === 0 && !repoName) ||
-      !branchName ||
-      parsingStatus !== "" ||
-      !isValidLink
-    ) {
-      setIsParseDisabled(true);
-    }
+    setIsParseDisabled(
+      filteredRepositories.length === 0 ||
+        !repoName ||
+        !branchName ||
+        parsingStatus !== ""
+    );
   }, [repoName, branchName, parsingStatus, inputValue, isValidLink]);
+
   useEffect(() => {
     setRepoName("");
     setBranchName("");
@@ -290,6 +288,14 @@ const Step1: React.FC<Step1Props> = ({
                         {value.full_name}
                       </CommandItem>
                     ))}
+                    {isValidLink && linkedRepoName && (
+                      <CommandItem
+                        value={linkedRepoName}
+                        onSelect={() => handleRepoSelect(linkedRepoName)}
+                      >
+                        {linkedRepoName}
+                      </CommandItem>
+                    )}
                   </CommandGroup>
                   <CommandSeparator className="my-1" />
                   <CommandItem>
@@ -298,7 +304,9 @@ const Step1: React.FC<Step1Props> = ({
                       onOpenChange={setIsPublicRepoDailog}
                     >
                       <DialogTrigger asChild>
-                        <span className="flex items-center gap-2"><Plus className="size-4"/> Public Repository</span>
+                        <span className="flex items-center gap-2">
+                          <Plus className="size-4" /> Public Repository
+                        </span>
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
@@ -344,14 +352,6 @@ const Step1: React.FC<Step1Props> = ({
                       </DialogContent>
                     </Dialog>
                   </CommandItem>
-                  {isValidLink && linkedRepoName && (
-                    <CommandItem
-                      value={linkedRepoName}
-                      onSelect={() => handleRepoSelect(linkedRepoName)}
-                    >
-                      {linkedRepoName}
-                    </CommandItem>
-                  )}
                   <CommandSeparator className="my-1" />
                   <CommandItem>
                     <span

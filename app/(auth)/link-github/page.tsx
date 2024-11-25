@@ -124,14 +124,17 @@ const LinkGithub = () => {
       <div className="w-full h-full flex items-center justify-center flex-col gap-14">
         <Image src={logoWithText} alt="logo" />
         <div className="flex items-center justify-center flex-col text-border">
-          <h3 className="text-2xl font-bold text-black">Get Started!</h3>
+          <h3 className="text-2xl font-bold text-black">
+            One last step and you are ready to go!
+          </h3>
           <div className="flex items-start justify-start flex-col mt-10 gap-4">
             <p className="flex items-center justify-center text-start gap-4">
               <LucideCheck
                 size={20}
                 className="bg-primary rounded-full p-[0.5px] text-white"
               />
-              Select the repositories you want to build your AI agents on.
+              Link your GitHub account to select the repositories you want to
+              build your AI agents on.
             </p>
             <p className="flex items-center justify-center text-start gap-4">
               <LucideCheck
@@ -144,7 +147,7 @@ const LinkGithub = () => {
           </div>
           <Button onClick={() => onGithub()} className="mt-14 gap-2">
             <LucideGithub className=" rounded-full border border-white p-1" />
-            Continue with GitHub
+            Link your GitHub account
           </Button>
         </div>
       </div>

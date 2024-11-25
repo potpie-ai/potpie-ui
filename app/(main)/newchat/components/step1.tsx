@@ -217,7 +217,6 @@ const Step1: React.FC<Step1Props> = ({
         repo.full_name.toLowerCase().includes(inputValue.toLowerCase())
       ) || [];
     setIsParseDisabled(
-      filteredRepositories.length === 0 ||
         !repoName ||
         !branchName ||
         parsingStatus !== ""

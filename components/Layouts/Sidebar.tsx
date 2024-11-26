@@ -280,7 +280,7 @@ const SidebarItems = [
       {
         icons: "/images/robot.svg",
         title: "Custom Agents",
-        href: "https://potpie.ai/pricing",
+        href: "/all-agents",
         upgrade: true,
       },
     ],

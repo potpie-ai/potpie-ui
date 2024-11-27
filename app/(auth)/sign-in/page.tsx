@@ -26,6 +26,7 @@ import { LucideCheck, LucideGithub } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
+import posthog from "posthog-js";
 
 export default function Signin() {
   const formSchema = z.object({
@@ -95,6 +96,11 @@ export default function Signin() {
             .catch((e: any) => {
               toast.error("Signup call unsuccessful");
             });
+            posthog.identify(
+              result.user.uid,
+              { email: result.user.email, name: result.user?.displayName || "" }
+            );
+          
           toast.success("Logged in successfully");
         }
       })

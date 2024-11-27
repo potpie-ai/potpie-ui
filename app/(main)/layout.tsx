@@ -4,13 +4,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
+import posthog from "posthog-js";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/Layouts/Sidebar";
-import {
-  PageActions,
-  PageHeader,
-  PageHeaderHeading,
-} from "@/components/ui/header";
 
 export default function RootLayout({
   children,
@@ -24,6 +20,10 @@ export default function RootLayout({
     router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
     return null;
   }
+  posthog.identify(
+    user.id,
+    { email: user.email, name: user?.name || "" }
+  );
 
   return (
     <SidebarProvider>

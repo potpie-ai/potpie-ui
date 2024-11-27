@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Github, Plus } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -33,7 +33,8 @@ import { Skeleton } from "../ui/skeleton";
 import * as Progress from "@radix-ui/react-progress";
 import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
-import Msg from '@/public/images/msg.svg';
+import Msg from "@/public/images/msg.svg";
+import GithubLogo from "./images/git";
 
 export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);
@@ -102,26 +103,21 @@ export function AppSidebar() {
         {SidebarItems.map((item) => (
           <SidebarGroup key={item.title}>
             <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
-            <SidebarGroupContent>
+            <SidebarGroupContent className="ml-3 w-auto">
               <SidebarMenu>
-                {item.links.map((link) => (
-                  <SidebarMenuItem key={link.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === link.href.split("/").pop()}
-                    >
-                      <Link href={link.href}>
-                        <Image
-                          src={link.icons}
-                          alt={link.title}
-                          width={20}
-                          height={20}
-                        />
-                        <span>{link.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {item.links.map((link) => {
+                  const isActive = pathname === link.href.split("/").pop();
+                  return (
+                    <SidebarMenuItem key={link.title}>
+                      <SidebarMenuButton asChild isActive={isActive}>
+                        <Link href={link.href}>
+                          {link.icons && <span>{link.icons}</span>}
+                          <span>{link.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

@@ -1,3 +1,6 @@
+import { BotIcon, Github, LucideFileText, MessagesSquare } from "lucide-react";
+import Image from "next/image";
+
 export enum planTypes {
   FREE = "FREE",
   PRO = "PRO",
@@ -70,13 +73,13 @@ export const SidebarItems = [
     title: "Codebase Chat",
     links: [
       {
-        icons: "/images/msg.svg",
+        icons: <MessagesSquare size={20} strokeWidth={1.5} />,
         title: "All chats",
         href: "/all-chats",
         upgrade: false,
       },
       {
-        icons: "/images/robot.svg",
+        icons: <BotIcon size={20} strokeWidth={1.5}  />,
         title: "Custom Agents",
         href: "https://potpie.ai/pricing",
         upgrade: true,
@@ -87,13 +90,14 @@ export const SidebarItems = [
     title: "Knowledge Base",
     links: [
       {
-        icons: "/images/git.svg",
+        icons: <Github size={20} strokeWidth={1.5}  />,
+        icon: Github,
         title: "Repositories",
         href: "/repositories",
         upgrade: false,
       },
       {
-        icons: "/images/document.svg",
+        icons: <LucideFileText size={20} strokeWidth={1.5}  />,
         title: "Text resources",
         soon: true,
         href: "#",
@@ -105,19 +109,26 @@ export const SidebarItems = [
     title: "Support",
     links: [
       {
-        icons: "/images/document.svg",
+        icons: <LucideFileText size={20} strokeWidth={1.5}  />,
         title: "Documentation",
         href: "https://docs.potpie.ai",
         upgrade: false,
       },
       {
-        icons: "/images/git.svg",
+        icons: <Github size={20} strokeWidth={1.5}  />,
         title: "Open source",
         href: "https://github.com/potpie-ai/potpie",
         upgrade: false,
       },
       {
-        icons: "/images/discord.svg",
+        icons: (
+          <Image
+            src="/images/discord.svg"
+            alt="Discord"
+            width={20}
+            height={20}
+          />
+        ),
         title: "Discord",
         href: "https://discord.gg/ryk5CMD5v6",
         upgrade: false,

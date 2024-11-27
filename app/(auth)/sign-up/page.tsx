@@ -89,7 +89,7 @@ const Signup = () => {
         });
         posthog.identify(
           result.user.uid,
-          { email: result.user.email, name: result.user.displayName }
+          { email: result.user.email, name: result.user?.displayName || "" }
         );
       
       toast.success(

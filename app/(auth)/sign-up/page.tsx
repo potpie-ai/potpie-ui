@@ -19,8 +19,9 @@ import Image from "next/image";
 import { usePostHog } from "posthog-js/react";
 import React, { useRef } from "react";
 import { toast } from "sonner";
+import { useRouter, useSearchParams } from "next/navigation";
 
-const Onboarding = () => {
+const Signup = () => {
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -28,20 +29,35 @@ const Onboarding = () => {
   const posthog = usePostHog();
   const popupRef = useRef<Window | null>(null);
   posthog.capture("github login clicked");
-  const openPopup = () => {
-    popupRef.current = window.open(
-      githubAppUrl, '_blank', 'noopener,noreferrer'
-    );
+  const openPopup = (result: any) => {
+    const popup = window.open(githubAppUrl, '_blank', 'noopener,noreferrer');
+    popupRef.current = popup;
+    
+    if (popup) {
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          console.log("popup closed");
+          clearInterval(timer);
+          router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
+        }
+      }, 500);
+    }
   };
 
   const provider = new GithubAuthProvider();
-  provider.addScope('repo');
   provider.addScope('read:org');
-  provider.addScope('user');
+  provider.addScope('user:email');
+  const router = useRouter();
   
   const onGithub = async () => {
     try {
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider).then((res: any ) => {
+        router.push(`/onboarding?uid=${res.user.uid}&email=${encodeURIComponent(res.user.email || '')}&name=${encodeURIComponent(res.user.displayName || '')}`);
+        return res.data;
+      })
+      .catch((e: any) => {
+        toast.error("Signup call unsuccessful");
+      });;
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
@@ -64,7 +80,8 @@ const Onboarding = () => {
           providerUsername: (result as any)._tokenResponse.screenName,
         },{headers:headers})
         .then((res: { data: any }) => {
-          openPopup();
+          openPopup(result);
+          router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
           return res.data;
         })
         .catch((e: any) => {
@@ -152,4 +169,4 @@ const Onboarding = () => {
   );
 };
 
-export default Onboarding;
+export default Signup;

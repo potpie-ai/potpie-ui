@@ -28,16 +28,15 @@ const AllChats = () => {
   const dispatch = useDispatch();
   const [title, setTitle] = useState("");
   const [inputValue, setInputValue] = useState(title);
-  const [currentConversationId, setCurrentConversationId] = useState("");
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["all-chats"],
     queryFn: ChatService.getAllChats,
   });
 
-  const handleSave = async () => {
+  const handleSave = async (chatId: string) => {
     try {
-      const result = await ChatService.renameChat(currentConversationId, inputValue);
+      const result = await ChatService.renameChat(chatId, inputValue);
       if (result.status === "success") {
         refetch();
         toast.success("Title updated successfully");
@@ -49,9 +48,9 @@ const AllChats = () => {
     }
   };
 
-  const handleDeleteChat = async () => {
+  const handleDeleteChat = async (chatId: string) => {
     try {
-      const result = await ChatService.deleteChat(currentConversationId);
+      const result = await ChatService.deleteChat(chatId);
       if (result) {
         refetch();
         toast.success("Chat deleted successfully");
@@ -127,7 +126,6 @@ const AllChats = () => {
                               onClick={() => {
                                 setTitle(chat.title);
                                 setInputValue(chat.title);
-                                setCurrentConversationId(chat.id);
                               }}
                             >
                               <LucideEdit className="h-4 w-4" />
@@ -147,15 +145,14 @@ const AllChats = () => {
                                 <Button type="button">Cancel</Button>
                               </DialogClose>
                               <DialogClose asChild>
-                                <Button type="button" onClick={handleSave}>Save</Button>
+                                <Button type="button" onClick={() => handleSave(chat.id)}>Save</Button>
                               </DialogClose>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
                       </div>
                       <Button variant="outline" className="configure-button hover:bg-gray-200" onClick={() => {
-                        setCurrentConversationId(chat.id);
-                        handleDeleteChat();
+                        handleDeleteChat(chat.id);
                       }}>
                         <LucideTrash className="h-4 w-4" />
                       </Button>

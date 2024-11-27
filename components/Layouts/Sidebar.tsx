@@ -1,4 +1,4 @@
-import { Github, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -33,8 +33,6 @@ import { Skeleton } from "../ui/skeleton";
 import * as Progress from "@radix-ui/react-progress";
 import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
-import Msg from "@/public/images/msg.svg";
-import GithubLogo from "./images/git";
 
 export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);

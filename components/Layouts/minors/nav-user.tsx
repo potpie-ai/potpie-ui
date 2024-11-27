@@ -27,6 +27,7 @@ import {
 import { signOut } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export function NavUser({
   user,
@@ -37,7 +38,7 @@ export function NavUser({
     avatar: string;
   };
 }) {
-    const router = useRouter();
+  const router = useRouter();
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -78,24 +79,15 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={()=>router.push("https://potpie.ai/pricing")}>
-                <Sparkles />
-                Upgrade to Pro
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck />
-                Account
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/key-management")}>
                 <CreditCard />
                 Key Management
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <Bell />
-                Support
+                <Link href={"https://discord.gg/ryk5CMD5v6"} target="_blank" className="flex items-center gap-2">
+                  <Bell />
+                  Support
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

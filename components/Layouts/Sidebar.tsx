@@ -108,9 +108,14 @@ export function AppSidebar() {
                   return (
                     <SidebarMenuItem key={link.title}>
                       <SidebarMenuButton asChild isActive={isActive}>
-                        <Link href={link.href}>
+                        <Link href={link.href} className="flex gap-2 items-center w-full">
+                        <div className="flex gap-2">
                           {link.icons && <span>{link.icons}</span>}
                           <span>{link.title}</span>
+                        </div>
+                        {link.description && <span className="border border-white group-hover/menu-item:border-sidebar  group-hover/menu-item:bg-white group-hover/menu-item:text-foreground text-white rounded-full px-2 text-[0.6rem]">
+                          {link.description}
+                        </span>}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

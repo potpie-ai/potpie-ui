@@ -68,7 +68,7 @@ export const systemAgents = [
 
 export const agentsRequireNodes = ["integration_test_agent", "unit_test_agent"];
 
-export const SidebarItems = [
+export const SidebarItems: { title: string; links: any[] }[] = [
   {
     title: "Codebase Chat",
     links: [
@@ -76,13 +76,14 @@ export const SidebarItems = [
         icons: <MessagesSquare size={20} strokeWidth={1.5} />,
         title: "All chats",
         href: "/all-chats",
-        upgrade: false,
+        disabled: false,
       },
       {
-        icons: <BotIcon size={20} strokeWidth={1.5}  />,
+        icons: <BotIcon size={20} strokeWidth={1.5} />,
         title: "Custom Agents",
         href: "https://potpie.ai/pricing",
-        upgrade: true,
+        disabled: false,
+        description: "Upgrade",
       },
     ],
   },
@@ -90,18 +91,18 @@ export const SidebarItems = [
     title: "Knowledge Base",
     links: [
       {
-        icons: <Github size={20} strokeWidth={1.5}  />,
+        icons: <Github size={20} strokeWidth={1.5} />,
         icon: Github,
         title: "Repositories",
         href: "/repositories",
-        upgrade: false,
+        disabled: false,
       },
       {
-        icons: <LucideFileText size={20} strokeWidth={1.5}  />,
+        icons: <LucideFileText size={20} strokeWidth={1.5} />,
         title: "Text resources",
-        soon: true,
         href: "#",
-        upgrade: false,
+        disabled: true,
+        description: "Coming soon",
       },
     ],
   },
@@ -109,16 +110,16 @@ export const SidebarItems = [
     title: "Support",
     links: [
       {
-        icons: <LucideFileText size={20} strokeWidth={1.5}  />,
+        icons: <LucideFileText size={20} strokeWidth={1.5} />,
         title: "Documentation",
         href: "https://docs.potpie.ai",
-        upgrade: false,
+        disabled: false,
       },
       {
-        icons: <Github size={20} strokeWidth={1.5}  />,
+        icons: <Github size={20} strokeWidth={1.5} />,
         title: "Open source",
         href: "https://github.com/potpie-ai/potpie",
-        upgrade: false,
+        disabled: false,
       },
       {
         icons: (
@@ -131,7 +132,7 @@ export const SidebarItems = [
         ),
         title: "Discord",
         href: "https://discord.gg/ryk5CMD5v6",
-        upgrade: false,
+        disabled: false,
       },
     ],
   },

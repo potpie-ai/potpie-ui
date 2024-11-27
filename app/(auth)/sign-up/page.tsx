@@ -45,9 +45,8 @@ const Signup = () => {
   };
 
   const provider = new GithubAuthProvider();
-  provider.addScope('repo');
   provider.addScope('read:org');
-  provider.addScope('user');
+  provider.addScope('user:email');
   const router = useRouter();
   
   const onGithub = async () => {

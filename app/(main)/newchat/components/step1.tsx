@@ -183,7 +183,6 @@ const Step1: React.FC<Step1Props> = ({
         setIsPublicRepoDailog(false);
         return response;
       } catch (error: any) {
-        setIsValidLink(false);
         setLinkedRepoName(null);
         setIsPublicRepoDailog(false);
         
@@ -193,6 +192,7 @@ const Step1: React.FC<Step1Props> = ({
       }
     },
     enabled: false,
+    retry: false,
   });
   
 

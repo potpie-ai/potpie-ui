@@ -5,6 +5,7 @@ import Sidebar from "@/components/Layouts/Sidebar";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
+import posthog from "posthog-js";
 
 export default function RootLayout({
   children,
@@ -18,6 +19,10 @@ export default function RootLayout({
     router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`); 
     return null;
   }
+  posthog.identify(
+    user.id,
+    { email: user.email, name: user?.name || "" }
+  );
 
   return (
     <>

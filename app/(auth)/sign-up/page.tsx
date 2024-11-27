@@ -87,6 +87,11 @@ const Signup = () => {
         .catch((e: any) => {
           toast.error("Signup call unsuccessful");
         });
+        posthog.identify(
+          result.user.uid,
+          { email: result.user.email, name: result.user.displayName }
+        );
+      
       toast.success(
         "Account created successfully as  " + result.user.displayName
       );

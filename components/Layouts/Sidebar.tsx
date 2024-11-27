@@ -28,6 +28,7 @@ import {
 import { Skeleton } from "../ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
+import posthog from "posthog-js";
 
 const Sidebar = () => {
   const [progress, setProgress] = React.useState(90);
@@ -252,6 +253,7 @@ const Sidebar = () => {
               <DropdownMenuItem
                 className="hover:bg-transparent text-white"
                 onClick={() => {
+                  posthog.reset()
                   signOut(auth);
                   router.push("/sign-in");
                 }}

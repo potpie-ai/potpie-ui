@@ -28,6 +28,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import posthog from "posthog-js";
 
 export function NavUser({
   user,
@@ -84,14 +85,24 @@ export function NavUser({
                 Key Management
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <Link href={"https://discord.gg/ryk5CMD5v6"} target="_blank" className="flex items-center gap-2">
+                <Link
+                  href={"https://discord.gg/ryk5CMD5v6"}
+                  target="_blank"
+                  className="flex items-center gap-2"
+                >
                   <Bell />
                   Support
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut(auth)}>
+            <DropdownMenuItem
+              onClick={() => {
+                posthog.reset();
+                signOut(auth);
+                router.push("/sign-in");
+              }}
+            >
               <LogOut />
               Log out
             </DropdownMenuItem>

@@ -41,9 +41,8 @@ export default function Signin() {
   });
 
   const provider = new GithubAuthProvider();
-  provider.addScope('repo');
   provider.addScope('read:org');
-  provider.addScope('user');
+  provider.addScope('user:email');
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     signInWithEmailAndPassword(auth, data.email, data.password)

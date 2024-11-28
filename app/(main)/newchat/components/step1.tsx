@@ -305,6 +305,14 @@ const Step1: React.FC<Step1Props> = ({
                   </CommandEmpty>
 
                   <CommandGroup>
+                  {isValidLink && linkedRepoName && (
+                      <CommandItem
+                        value={linkedRepoName}
+                        onSelect={() => handleRepoSelect(linkedRepoName)}
+                      >
+                        {linkedRepoName}
+                      </CommandItem>
+                    )}
                     {UserRepositorys?.map((value: any) => (
                       <CommandItem
                         key={value.id}
@@ -317,14 +325,6 @@ const Step1: React.FC<Step1Props> = ({
                         {value.full_name}
                       </CommandItem>
                     ))}
-                    {isValidLink && linkedRepoName && (
-                      <CommandItem
-                        value={linkedRepoName}
-                        onSelect={() => handleRepoSelect(linkedRepoName)}
-                      >
-                        {linkedRepoName}
-                      </CommandItem>
-                    )}
                   </CommandGroup>
                   <CommandSeparator className="my-1" />
                   <CommandItem

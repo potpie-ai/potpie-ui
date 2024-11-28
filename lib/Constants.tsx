@@ -64,6 +64,14 @@ export const systemAgents = [
     prompt:
       "Which APIs are impacted by my current change? Help me under any cascading effects of my changes.",
   },
+  {
+    id: "code_generation_agent",
+    name: "Code Generation Agent",
+    description:
+      "An agent specialized in generating code for new features or fixing bugs.",
+    status: "SYSTEM",
+    prompt: "Generate complete code to implement redis caching in the @get_user_subscription method with 60 min TTL"
+  },
 ];
 
 export const agentsRequireNodes = ["integration_test_agent", "unit_test_agent"];

@@ -207,24 +207,6 @@ const Step1: React.FC<Step1Props> = ({
     setInputValue(repo);
     setLinkedRepoName(null);
   };
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInputValue(value);
-
-    const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
-    const match = value.match(regex);
-    if (match) {
-      setIsValidLink(true);
-    } else {
-      setIsValidLink(false);
-    }
-  };
-
-  const handleRepoSelect = (repo: string) => {
-    setRepoName(repo);
-    setInputValue(repo);
-    setLinkedRepoName(null);
-  };
   const handleParse = () => {
     if (repoName && branchName) {
       parseRepo(repoName, branchName);
@@ -311,20 +293,6 @@ const Step1: React.FC<Step1Props> = ({
                     {searchValue.startsWith("https://github.com/") ? (
                       <Button
                         onClick={() => {setIsPublicRepoDailog(true);setInputValue(searchValue)}}
-                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
-                      >
-                          <Plus className="size-4" /> <p> Public Repository</p>
-                    
-                      </Button>
-                    ) : (
-                      "No results found."
-                    )}
-                  </CommandEmpty>
-
-                  <CommandEmpty>
-                    {searchValue.startsWith("https://github.com/") ? (
-                      <Button
-                        onClick={() => setIsPublicRepoDailog(true)}
                         className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
                       >
                           <Plus className="size-4" /> <p> Public Repository</p>
@@ -566,7 +534,7 @@ const Step1: React.FC<Step1Props> = ({
                 value={inputValue}
                 placeholder="https://github.com/username/repo"
                 onChange={(e) => {
-                  handleInputChange(e);
+                  setInputValue(e.target.value);
                 }}
               />
             </div>

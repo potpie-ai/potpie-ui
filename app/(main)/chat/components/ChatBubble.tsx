@@ -19,7 +19,7 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   isLast?: boolean;
   currentConversationId: string;
   isStreaming?: boolean;
-  userImage?: string;
+  userImage?: string | null;
   agentImage?: string;
 }
 
@@ -31,6 +31,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   isLast,
   currentConversationId,
   isStreaming,
+  userImage,
   ...props
 }) => {
   const { user } = useAuthContext();
@@ -242,7 +243,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {/* User Image on the Right */}
       {sender === "user" && (
         <img
-          src={user.photoURL}
+          src={userImage || user.photoURL}
           alt="User"
           className="w-9 h-9 rounded-full object-cover ml-2"
         />

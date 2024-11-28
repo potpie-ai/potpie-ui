@@ -262,83 +262,83 @@ const Navbar = ({
           </Link>
         </div>
         {showTitle && (
-          <div className="flex w-full justify-between items-center">
-            <div className="flex items-center justify-between w-full px-6 pt-1 pb-1 gap-5 border-0">
-              <div className="gap-5 flex items-center justify-start">
-                <Image
-                  src={"/images/msg-grey.svg"}
-                  alt="logo"
-                  width={20}
-                  height={20}
-                />
-                <Dialog
-                  open={isTitleDialogOpen}
-                  onOpenChange={setIsTitleDialogOpen}
-                >
-                  <DialogTrigger>
-                  <span className="text-muted text-xl truncate max-w-[30rem] inline-block">
+        <div className="flex w-full justify-between items-center">
+          <div className="flex items-center justify-between w-full px-6 pt-1 pb-1 gap-5 border-0">
+            <div className="gap-5 flex items-center justify-start">
+              <Image
+                src={"/images/msg-grey.svg"}
+                alt="logo"
+                width={20}
+                height={20}
+              />
+              <Dialog
+                open={isTitleDialogOpen}
+                onOpenChange={setIsTitleDialogOpen}
+              >
+                <DialogTrigger>
+                <span className="text-muted text-xl truncate max-w-[30rem] inline-block">
                     {displayTitle}
                   </span>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[487px]" showX={false}>
-                    <DialogHeader>
-                      <DialogTitle className="text-center">
-                        Edit chat name
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="">
-                        <Input
-                          id="name"
-                          value={inputValue}
-                          onChange={handleInputChange}
-                          className="col-span-3"
-                          placeholder="Enter chat title"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline">
-                          Cancel
-                        </Button>
-                      </DialogClose>
-                      <Button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={!inputValue.trim()}
-                      >
-                        Save
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger hidden={!showShare}>
-                  <Button size="icon" variant="outline">
-                    <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
-                  </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
+                <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
-                    <DialogTitle className="text-center font-semibold text-xl">
-                      Share Chat with Others
+                    <DialogTitle className="text-center">
+                      Edit chat name
                     </DialogTitle>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <Select
-                      onValueChange={(value) => handleSelectChange(value)}
-                      defaultValue={shareWithLink ? "link" : "email"}
+                    <div className="">
+                      <Input
+                        id="name"
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                        placeholder="Enter chat title"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">
+                        Cancel
+                      </Button>
+                    </DialogClose>
+                    <Button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={!inputValue.trim()}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Share with" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">With Email</SelectItem>
-                        <SelectItem value="link">Anyone With Link</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      Save
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger hidden={!showShare}>
+                <Button size="icon" variant="outline">
+                  <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
+                <DialogHeader>
+                  <DialogTitle className="text-center font-semibold text-xl">
+                    Share Chat with Others
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <Select
+                    onValueChange={(value) => handleSelectChange(value)}
+                    defaultValue={shareWithLink ? "link" : "email"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Share with" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email">With Email</SelectItem>
+                      <SelectItem value="link">Anyone With Link</SelectItem>
+                    </SelectContent>
+                  </Select>
 
                     {!shareWithLink && (
                       <div>
@@ -401,50 +401,50 @@ const Navbar = ({
                     )}
                   </div>
 
-                  <DialogFooter className="!justify-between">
-                    <DialogClose
-                      asChild
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
-                        );
-                        toast.success("Link copied to clipboard");
-                      }}
-                    >
-                      <Button
-                        type="button"
-                        className="gap-2 bg-[#4479FF] text-white hover:bg-blue-600"
-                      >
-                        <ClipboardCheck /> <span>Copy Link</span>
-                      </Button>
-                    </DialogClose>
+                <DialogFooter className="!justify-between">
+                  <DialogClose
+                    asChild
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
+                      );
+                      toast.success("Link copied to clipboard");
+                    }}
+                  >
                     <Button
                       type="button"
-                      onClick={handleEmailSave}
-                      disabled={isShareDisabled()}
+                      className="gap-2 bg-[#4479FF] text-white hover:bg-blue-600"
                     >
-                      Share
+                      <ClipboardCheck /> <span>Copy Link</span>
                     </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              {agentId && allAgents && (
-                <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                  <span className="text-gray-700 whitespace-nowrap truncate max-w-[25rem] inline-block">
-                    {allAgents.find((agent) => agent.id === agentId)?.name ||
-                      agentId.replace(/_/g, " ").replace(
-                        /([a-z])([A-Z])/g,
-                        "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
-                      )}
-                  </span>
-                </div>
-              )}
-            </div>
+                  </DialogClose>
+                  <Button
+                    type="button"
+                    onClick={handleEmailSave}
+                    disabled={isShareDisabled()}
+                  >
+                    Share
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
-        )}
+          <div className="flex items-center justify-between gap-4">
+            {agentId && allAgents && (
+              <div className="flex items-center gap-3 px-4 shadow-md rounded-lg cursor-pointer bg-gray-100">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                <span className="text-gray-700 whitespace-nowrap truncate max-w-[25rem] inline-block">
+                  {allAgents.find((agent) => agent.id === agentId)?.name ||
+                    agentId.replace(/_/g, " ").replace(
+                      /([a-z])([A-Z])/g,
+                      "$1 $2".replace(/\b\w/g, (char) => char.toUpperCase())
+                    )}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+          )}
       </header>
     </>
   );

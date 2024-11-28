@@ -202,19 +202,6 @@ const Step1: React.FC<Step1Props> = ({
   
 
   const [showTooltip, setShowTooltip] = useState(false);
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInputValue(value);
-
-    const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
-    const match = value.match(regex);
-    if (match) {
-      setIsValidLink(true);
-    } else {
-      setIsValidLink(false);
-    }
-  };
-
   const handleRepoSelect = (repo: string) => {
     setRepoName(repo);
     setInputValue(repo);
@@ -240,6 +227,18 @@ const Step1: React.FC<Step1Props> = ({
     setRepoName("");
     setBranchName("");
   }, []);
+
+  useEffect(() => {
+    if(isPublicRepoDailog){
+      const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+      const match = inputValue.match(regex);
+      if (match) {
+        setIsValidLink(true);
+      } else {
+        setIsValidLink(false);
+      }
+    }
+  }, [inputValue, isPublicRepoDailog]);
 
   const [repoOpen, setRepoOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -293,7 +292,7 @@ const Step1: React.FC<Step1Props> = ({
                   <CommandEmpty>
                     {searchValue.startsWith("https://github.com/") ? (
                       <Button
-                        onClick={() => setIsPublicRepoDailog(true)}
+                        onClick={() => {setIsPublicRepoDailog(true);setInputValue(searchValue)}}
                         className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
                       >
                           <Plus className="size-4" /> <p> Public Repository</p>
@@ -492,8 +491,50 @@ const Step1: React.FC<Step1Props> = ({
                 className="col-span-3"
                 value={inputValue}
                 placeholder="https://github.com/username/repo"
+                onChange={(e) => setInputValue(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="submit"
+              onClick={() => {
+                if (isValidLink) {
+                  PublicRepoRefetch();
+                }
+              }}
+              disabled={PublicRepoLoading || !isValidLink}
+            >
+              <span>
+                {PublicRepoLoading && (
+                  <Loader className="mr-2 h-4 w-4 animate-spin " />
+                )}
+              </span>{" "}
+              Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isPublicRepoDailog} onOpenChange={setIsPublicRepoDailog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Parse Public Repository</DialogTitle>
+            <DialogDescription>
+              Paste the link to your public repository
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="link" className="text-right">
+                Link
+              </Label>
+              <Input
+                id="link"
+                className="col-span-3"
+                value={inputValue}
+                placeholder="https://github.com/username/repo"
                 onChange={(e) => {
-                  handleInputChange(e);
+                  setInputValue(e.target.value);
                 }}
               />
             </div>

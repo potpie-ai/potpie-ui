@@ -168,6 +168,11 @@ const Step1: React.FC<Step1Props> = ({
       const ownerRepo = `${match[1]}/${match[2]}`;
   
       try {
+        if(linkedRepoName === ownerRepo){
+        setIsPublicRepoDailog(false);
+        setIsValidLink(true);
+          return "Repo is public";
+        }
         const response =
           await BranchAndRepositoryService.check_public_repo(ownerRepo);
   

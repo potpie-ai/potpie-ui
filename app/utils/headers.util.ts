@@ -7,7 +7,7 @@ const getHeaders = async (existingHeaders = {}) => {
         if (user) {
             return {
                 ...existingHeaders,
-                Authorization: `Bearer ${idToken}`,
+                Authorization: `Bearer ${idToken}`
             };
         }
     } catch (error) {

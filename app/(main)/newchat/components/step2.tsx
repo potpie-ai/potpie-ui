@@ -9,11 +9,14 @@ import { AppDispatch } from "@/lib/state/store";
 import { useDispatch } from "react-redux";
 import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
+import { toast } from "sonner";
+import { list_system_agents } from "@/lib/utils";
 
 interface AgentType {
   id: string;
   name: string;
   description: string;
+  status	: string
 }
 
 interface Step2Props {
@@ -33,8 +36,10 @@ const Step2: React.FC<Step2Props> = ({
 }) => {
   const userId = auth.currentUser?.uid || "";
   const dispatch: AppDispatch = useDispatch();
-  
-  const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<AgentType[]>({
+
+  const { data: AgentTypes, isLoading: AgentTypesLoading } = useQuery<
+    AgentType[]
+  >({
     queryKey: ["agent-types"],
     queryFn: async () => {
       const agentTypes = await AgentService.getAgentTypes();
@@ -47,7 +52,13 @@ const Step2: React.FC<Step2Props> = ({
 
   const createConversation = async (agentId: string) => {
     try {
-      const response = await ChatService.createConversation(userId, title, projectId, agentId);
+      const response = await ChatService.createConversation(
+        userId,
+        title,
+        projectId,
+        agentId
+      );
+      dispatch(setChat({agentId: agentId}))
       setAgentId(agentId);
       setChatStep(3);
       setCurrentConversationId(response.conversation_id);

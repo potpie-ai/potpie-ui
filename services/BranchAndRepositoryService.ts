@@ -67,7 +67,25 @@ export default class BranchAndRepositoryService {
             throw new Error("Error fetching branch list");
         }
     }
+    static async check_public_repo(repoName: string) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
+      try {
+        const response = await axios.get(
+          `${baseUrl}/api/v1/github/check-public-repo`,
+          {
+            params: {
+              repo_name: repoName,
+            },
+            headers,
+          }
+        );
+        return response.data;
+      } catch (error) {
+        throw new Error("Error fetching Repository");
+      }
+    }
     static async pollParsingStatus(
         projectId: string,
         initialStatus: string,

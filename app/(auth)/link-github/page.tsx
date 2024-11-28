@@ -1,5 +1,7 @@
 "use client";
+import getHeaders from "@/app/utils/headers.util";
 import { Button } from "@/components/ui/button";
+import { auth } from "@/configs/Firebase-config";
 import {
   arrowcon,
   chat,
@@ -10,26 +12,75 @@ import {
   sendBlue,
   setting,
 } from "@/public";
-import { LucideCheck, LucideGithub } from "lucide-react";
+import axios from "axios";
+import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
+import { Link, LucideCheck, LucideGithub } from "lucide-react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
 import React, { useRef } from "react";
+import { toast } from "sonner";
 
-const Onboarding = () => {
+const LinkGithub = () => {
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
     "/installations/select_target?setup_action=install";
   const posthog = usePostHog();
+  const router = useRouter();
   const popupRef = useRef<Window | null>(null);
   posthog.capture("github login clicked");
   const openPopup = () => {
     popupRef.current = window.open(
-      githubAppUrl,
-      "_blank",
-      "width=1000,height=700"
+      githubAppUrl, '_blank', 'noopener,noreferrer'
     );
   };
+
+  const provider = new GithubAuthProvider();
+  provider.addScope('repo');
+  provider.addScope('read:org');
+  provider.addScope('user');
+  
+  const onGithub = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const headers = await getHeaders();
+
+      const userSignup = axios
+        .post(`${baseUrl}/api/v1/signup`, {
+          uid: result.user.uid,
+          email: result.user.email,
+          displayName: result.user.displayName || result.user.email?.split("@")[0],
+          emailVerified: result.user.emailVerified,
+          createdAt: result.user.metadata?.creationTime
+            ? new Date(result.user.metadata.creationTime).toISOString()
+            : "",
+          lastLoginAt: result.user.metadata?.lastSignInTime
+            ? new Date(result.user.metadata.lastSignInTime).toISOString()
+            : "",
+
+          providerData: result.user.providerData,
+          accessToken: (result as any)._tokenResponse.oauthAccessToken,
+          providerUsername: (result as any)._tokenResponse.screenName,
+        },{headers:headers})
+        .then((res: { data: any }) => {
+          openPopup();
+          router.push(`/newchat`);
+          return res.data;
+        })
+        .catch((e: any) => {
+          toast.error("Signup call unsuccessful");
+        });
+      toast.success(
+        "Account created successfully as  " + result.user.displayName
+      );
+    } catch (e) {
+      toast.error("Failed to create account");
+    }
+  };
+
   return (
     <section className="flex items-center justify-between w-full h-screen relative">
       <div className="w-full bg-[#515983] h-full flex flex-col items-center justify-center gap-28">
@@ -73,14 +124,17 @@ const Onboarding = () => {
       <div className="w-full h-full flex items-center justify-center flex-col gap-14">
         <Image src={logoWithText} alt="logo" />
         <div className="flex items-center justify-center flex-col text-border">
-          <h3 className="text-2xl font-bold text-black">Get Started!</h3>
+          <h3 className="text-2xl font-bold text-black">
+            One last step and you are ready to go!
+          </h3>
           <div className="flex items-start justify-start flex-col mt-10 gap-4">
             <p className="flex items-center justify-center text-start gap-4">
               <LucideCheck
                 size={20}
                 className="bg-primary rounded-full p-[0.5px] text-white"
               />
-              Select the repositories you want to build your AI agents on.
+              Link your GitHub account to select the repositories you want to
+              build your AI agents on.
             </p>
             <p className="flex items-center justify-center text-start gap-4">
               <LucideCheck
@@ -91,9 +145,9 @@ const Onboarding = () => {
               dashboard
             </p>
           </div>
-          <Button onClick={() => openPopup()} className="mt-14 gap-2">
+          <Button onClick={() => onGithub()} className="mt-14 gap-2">
             <LucideGithub className=" rounded-full border border-white p-1" />
-            Continue with GitHub
+            Link your GitHub account
           </Button>
         </div>
       </div>
@@ -104,4 +158,4 @@ const Onboarding = () => {
   );
 };
 
-export default Onboarding;
+export default LinkGithub;

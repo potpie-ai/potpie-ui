@@ -7,6 +7,7 @@ import {
   Plus,
   XCircle,
   Info,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,7 +34,26 @@ import {
 } from "@/components/ui/command";
 import { CommandSeparator } from "cmdk";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
-
+import { z } from "zod";
+import { toast } from "sonner";
+import { Dialog } from "@radix-ui/react-dialog";
+import {
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+const repoLinkSchema = z.object({
+  repoLink: z
+    .string()
+    .url("Please enter a valid URL")
+    .nonempty("Repository link cannot be empty"),
+});
 interface Step1Props {
   repoName: string;
   branchName: string;
@@ -52,6 +72,13 @@ const Step1: React.FC<Step1Props> = ({
   setChatStep,
 }) => {
   const [parsingStatus, setParsingStatus] = useState<string>("");
+  const [isPublicRepoDailog, setIsPublicRepoDailog] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [isValidLink, setIsValidLink] = useState(false);
+  const [linkedRepoName, setLinkedRepoName] = useState<string | null>(null);
+  const [isParseDisabled, setIsParseDisabled] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -68,46 +95,131 @@ const Step1: React.FC<Step1Props> = ({
 
   const parseRepo = async (repo_name: string, branch_name: string) => {
     setParsingStatus("loading");
-  
+
     try {
-      const parseResponse = await BranchAndRepositoryService.parseRepo(repo_name, branch_name);
+      const parseResponse = await BranchAndRepositoryService.parseRepo(
+        repo_name,
+        branch_name
+      );
       const projectId = parseResponse.project_id;
       const initialStatus = parseResponse.status;
-  
+
       if (projectId) {
         setProjectId(projectId);
       }
-  
+
       if (initialStatus === "ready") {
         setParsingStatus("Ready");
         setChatStep(2);
         return;
       }
-  
-      await BranchAndRepositoryService.pollParsingStatus(projectId, initialStatus, setParsingStatus, setChatStep);
+
+      await BranchAndRepositoryService.pollParsingStatus(
+        projectId,
+        initialStatus,
+        setParsingStatus,
+        setChatStep
+      );
     } catch (err) {
       console.error("Error during parsing:", err);
       setParsingStatus("Error");
     }
   };
 
-  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery({
-    queryKey: ["user-repository"], 
-    queryFn: () => BranchAndRepositoryService.getUserRepositories(), 
+  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery(
+    {
+      queryKey: ["user-repository"],
+      queryFn: () => BranchAndRepositoryService.getUserRepositories(),
+    }
+  );
+
+  const { data: UserBranch, isLoading: UserBranchLoading } = useQuery({
+    queryKey: ["user-branch", repoName],
+    queryFn: () => {
+      const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+      const match = repoName.match(regex);
+      if (match) {
+        const ownerRepo = `${match[1]}/${match[2]}`;
+        return BranchAndRepositoryService.getBranchList(ownerRepo);
+      }
+      return BranchAndRepositoryService.getBranchList(repoName);
+    },
+    enabled: !!repoName && repoName !== "",
   });
-  
+
+
   const {
-    data: UserBranch,
-    isLoading: UserBranchLoading,
+    data: PublicRepo,
+    isLoading: PublicRepoLoading,
+    refetch: PublicRepoRefetch,
   } = useQuery({
-    queryKey: ["user-branch", repoName], 
-    queryFn: () => BranchAndRepositoryService.getBranchList(repoName), 
-    enabled: !!repoName && repoName !== "", 
+    queryKey: ["public-repo"],
+    queryFn: async () => {
+      const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+      const match = inputValue.match(regex);
+      if (!match) {
+        setLinkedRepoName(null);
+        setIsValidLink(false);
+        setIsPublicRepoDailog(false);
+        toast.error("Invalid repository URL. Please try again.");
+        return "Invalid repository URL.";
+      }
+  
+      const ownerRepo = `${match[1]}/${match[2]}`;
+  
+      try {
+        if(linkedRepoName === ownerRepo){
+        setIsPublicRepoDailog(false);
+        setIsValidLink(true);
+          return "Repo is public";
+        }
+        const response =
+          await BranchAndRepositoryService.check_public_repo(ownerRepo);
+  
+        if (response.is_public) {
+          setIsValidLink(true);
+          setLinkedRepoName(ownerRepo);
+          setRepoName(ownerRepo);
+        } else {
+          setIsValidLink(false);
+          setLinkedRepoName(null);
+          toast.error("Repo is not public. Try linking a private repo.");
+        }
+        setIsPublicRepoDailog(false);
+        return response;
+      } catch (error: any) {
+        setLinkedRepoName(null);
+        setIsPublicRepoDailog(false);
+        
+        openPopup();
+       toast.error("Repo is not public try linking new private repo...")
+        throw error;
+      }
+    },
+    enabled: false,
+    retry: false,
   });
   
 
   const [showTooltip, setShowTooltip] = useState(false);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
 
+    const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+    const match = value.match(regex);
+    if (match) {
+      setIsValidLink(true);
+    } else {
+      setIsValidLink(false);
+    }
+  };
+
+  const handleRepoSelect = (repo: string) => {
+    setRepoName(repo);
+    setInputValue(repo);
+    setLinkedRepoName(null);
+  };
   const handleParse = () => {
     if (repoName && branchName) {
       parseRepo(repoName, branchName);
@@ -120,11 +232,13 @@ const Step1: React.FC<Step1Props> = ({
     setShowTooltip(!showTooltip);
   };
 
-  const isParseDisabled = !repoName || !branchName || parsingStatus !== "";
+  useEffect(() => {
+    setIsParseDisabled(!repoName || !branchName || parsingStatus !== "");
+  }, [repoName, branchName, parsingStatus, inputValue, isValidLink]);
 
   useEffect(() => {
     setRepoName("");
-    setBranchName(""); 
+    setBranchName("");
   }, []);
 
   const [repoOpen, setRepoOpen] = useState(false);
@@ -170,10 +284,35 @@ const Step1: React.FC<Step1Props> = ({
             </PopoverTrigger>
             <PopoverContent className="w-auto min-w-[220px] max-w-[300px] p-0">
               <Command>
-                <CommandInput placeholder="Search repo..." />
+                <CommandInput
+                  value={searchValue}
+                  onValueChange={(e) => setSearchValue(e)}
+                  placeholder="Search repo or paste link"
+                />
                 <CommandList>
-                  <CommandEmpty>No Repository found.</CommandEmpty>
+                  <CommandEmpty>
+                    {searchValue.startsWith("https://github.com/") ? (
+                      <Button
+                        onClick={() => setIsPublicRepoDailog(true)}
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                      >
+                          <Plus className="size-4" /> <p> Public Repository</p>
+                    
+                      </Button>
+                    ) : (
+                      "No results found."
+                    )}
+                  </CommandEmpty>
+
                   <CommandGroup>
+                  {isValidLink && linkedRepoName && (
+                      <CommandItem
+                        value={linkedRepoName}
+                        onSelect={() => handleRepoSelect(linkedRepoName)}
+                      >
+                        {linkedRepoName}
+                      </CommandItem>
+                    )}
                     {UserRepositorys?.map((value: any) => (
                       <CommandItem
                         key={value.id}
@@ -188,14 +327,24 @@ const Step1: React.FC<Step1Props> = ({
                     ))}
                   </CommandGroup>
                   <CommandSeparator className="my-1" />
+                  <CommandItem
+                    value="public"
+                    onSelect={() => setIsPublicRepoDailog(true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Plus className="size-4" /> Public Repository
+                    </span>
+                  </CommandItem>
+                  <CommandSeparator className="my-1" />
                   <CommandItem>
                     <span
+                      className="flex items-center gap-2"
                       onClick={(e) => {
                         e.preventDefault();
                         openPopup();
                       }}
                     >
-                      + Link new repository
+                      <Plus className="size-4" /> Link new repository
                     </span>
                   </CommandItem>
                 </CommandList>
@@ -325,6 +474,50 @@ const Step1: React.FC<Step1Props> = ({
           </Button>
         </div>
       )}
+      <Dialog open={isPublicRepoDailog} onOpenChange={setIsPublicRepoDailog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Parse Public Repository</DialogTitle>
+            <DialogDescription>
+              Paste the link to your public repository
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="link" className="text-right">
+                Link
+              </Label>
+              <Input
+                id="link"
+                className="col-span-3"
+                value={inputValue}
+                placeholder="https://github.com/username/repo"
+                onChange={(e) => {
+                  handleInputChange(e);
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="submit"
+              onClick={() => {
+                if (isValidLink) {
+                  PublicRepoRefetch();
+                }
+              }}
+              disabled={PublicRepoLoading || !isValidLink}
+            >
+              <span>
+                {PublicRepoLoading && (
+                  <Loader className="mr-2 h-4 w-4 animate-spin " />
+                )}
+              </span>{" "}
+              Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -79,7 +79,7 @@ const NewChat = () => {
             key={index}
             className={`flex items-start mb-4 w-full relative ${chatStep === step.label ? "" : "pointer-events-none"}`}
           >
-            <div className={`absolute left-[18px] top-10 h-full border-l-2 border-gray-300 z-0 ${index === steps.length - 1 ? "hidden" : "top-10"}`}></div>
+            <div className={`absolute left-[15px] top-8 h-full border-l-2 border-gray-300 z-0 ${index === steps.length - 1 ? "hidden" : "top-10"}`}></div>
             <div className={`flex items-center justify-center w-8 h-8 rounded-full z-5 ${step.label === 3 && chatStep === 3 ? "bg-[#00C313] text-white" : step.label <= chatStep ? "bg-white text-border border-2 border-accent" : "bg-border text-white"}`}>
               {step.label}
             </div>
@@ -94,7 +94,3 @@ const NewChat = () => {
 };
 
 export default NewChat;
-function dispatch(arg0: any) {
-  throw new Error("Function not implemented.");
-}
-

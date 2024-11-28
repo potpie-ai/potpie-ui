@@ -26,6 +26,7 @@ import { LucideCheck, LucideGithub } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
+import posthog from "posthog-js";
 
 export default function Signin() {
   const formSchema = z.object({
@@ -41,9 +42,8 @@ export default function Signin() {
   });
 
   const provider = new GithubAuthProvider();
-  provider.addScope('repo');
   provider.addScope('read:org');
-  provider.addScope('user');
+  provider.addScope('user:email');
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     signInWithEmailAndPassword(auth, data.email, data.password)
@@ -96,6 +96,11 @@ export default function Signin() {
             .catch((e: any) => {
               toast.error("Signup call unsuccessful");
             });
+            posthog.identify(
+              result.user.uid,
+              { email: result.user.email, name: result.user?.displayName || "" }
+            );
+          
           toast.success("Logged in successfully");
         }
       })

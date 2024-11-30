@@ -260,12 +260,13 @@ const Step1: React.FC<Step1Props> = ({
     ) {
       setRepoName(decodeURIComponent(defaultRepo));
       if (
-        defaultBranch &&
+        UserBranch &&
+        UserBranch.length > 0 &&
         UserBranch.find(
-          (branch: string) => branch === decodeURIComponent(defaultBranch)
+          (branch: string) => branch === decodeURIComponent(defaultBranch?? "")
         )
       ) {
-        setBranchName(decodeURIComponent(defaultBranch));
+        setBranchName(decodeURIComponent(defaultBranch ?? ""));
       }
     }
   }, [

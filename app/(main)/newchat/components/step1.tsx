@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { useSearchParams } from "next/navigation";
 const repoLinkSchema = z.object({
   repoLink: z
     .string()
@@ -78,6 +79,13 @@ const Step1: React.FC<Step1Props> = ({
   const [linkedRepoName, setLinkedRepoName] = useState<string | null>(null);
   const [isParseDisabled, setIsParseDisabled] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+  const [repoOpen, setRepoOpen] = useState(false);
+  const [branchOpen, setBranchOpen] = useState(false);
+
+  const searchParams = useSearchParams();
+
+  const defaultRepo = searchParams.get("repo");
+  const defaultBranch = searchParams.get("branch");
 
   const githubAppUrl =
     "https://github.com/apps/" +
@@ -147,7 +155,6 @@ const Step1: React.FC<Step1Props> = ({
     enabled: !!repoName && repoName !== "",
   });
 
-
   const {
     data: PublicRepo,
     isLoading: PublicRepoLoading,
@@ -164,18 +171,18 @@ const Step1: React.FC<Step1Props> = ({
         toast.error("Invalid repository URL. Please try again.");
         return "Invalid repository URL.";
       }
-  
+
       const ownerRepo = `${match[1]}/${match[2]}`;
-  
+
       try {
-        if(linkedRepoName === ownerRepo){
-        setIsPublicRepoDailog(false);
-        setIsValidLink(true);
+        if (linkedRepoName === ownerRepo) {
+          setIsPublicRepoDailog(false);
+          setIsValidLink(true);
           return "Repo is public";
         }
         const response =
           await BranchAndRepositoryService.check_public_repo(ownerRepo);
-  
+
         if (response.is_public) {
           setIsValidLink(true);
           setLinkedRepoName(ownerRepo);
@@ -190,18 +197,30 @@ const Step1: React.FC<Step1Props> = ({
       } catch (error: any) {
         setLinkedRepoName(null);
         setIsPublicRepoDailog(false);
-        
+
         openPopup();
-       toast.error("Repo is not public try linking new private repo...")
+        toast.error("Repo is not public try linking new private repo...");
         throw error;
       }
     },
     enabled: false,
     retry: false,
   });
-  
 
   const [showTooltip, setShowTooltip] = useState(false);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+
+    const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+    const match = value.match(regex);
+    if (match) {
+      setIsValidLink(true);
+    } else {
+      setIsValidLink(false);
+    }
+  };
+
   const handleRepoSelect = (repo: string) => {
     setRepoName(repo);
     setInputValue(repo);
@@ -229,19 +248,36 @@ const Step1: React.FC<Step1Props> = ({
   }, []);
 
   useEffect(() => {
-    if(isPublicRepoDailog){
-      const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
-      const match = inputValue.match(regex);
-      if (match) {
-        setIsValidLink(true);
-      } else {
-        setIsValidLink(false);
+    if (
+      !UserRepositorysLoading &&
+      !UserBranchLoading &&
+      defaultRepo &&
+      UserRepositorys.length > 0 &&
+      UserRepositorys.find(
+        (repo: { full_name: string }) =>
+          repo.full_name === decodeURIComponent(defaultRepo)
+      )
+    ) {
+      setRepoName(decodeURIComponent(defaultRepo));
+      if (
+        defaultBranch &&
+        UserBranch.find(
+          (branch: string) => branch === decodeURIComponent(defaultBranch)
+        )
+      ) {
+        setBranchName(decodeURIComponent(defaultBranch));
       }
     }
-  }, [inputValue, isPublicRepoDailog]);
-
-  const [repoOpen, setRepoOpen] = useState(false);
-  const [branchOpen, setBranchOpen] = useState(false);
+  }, [
+    defaultRepo,
+    defaultBranch,
+    setRepoName,
+    setBranchName,
+    UserRepositorysLoading,
+    UserBranchLoading,
+    UserRepositorys,
+    UserBranch,
+  ]);
 
   return (
     <div className="text-muted">
@@ -282,7 +318,7 @@ const Step1: React.FC<Step1Props> = ({
               )}
             </PopoverTrigger>
             <PopoverContent className="w-auto min-w-[220px] max-w-[300px] p-0">
-              <Command>
+              <Command defaultValue={defaultRepo ?? undefined}>
                 <CommandInput
                   value={searchValue}
                   onValueChange={(e) => setSearchValue(e)}
@@ -292,11 +328,10 @@ const Step1: React.FC<Step1Props> = ({
                   <CommandEmpty>
                     {searchValue.startsWith("https://github.com/") ? (
                       <Button
-                        onClick={() => {setIsPublicRepoDailog(true);setInputValue(searchValue)}}
-                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                        onClick={() => setIsPublicRepoDailog(true)}
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2"
                       >
-                          <Plus className="size-4" /> <p> Public Repository</p>
-                    
+                        <Plus className="size-4" /> <p> Public Repository</p>
                       </Button>
                     ) : (
                       "No results found."
@@ -304,7 +339,7 @@ const Step1: React.FC<Step1Props> = ({
                   </CommandEmpty>
 
                   <CommandGroup>
-                  {isValidLink && linkedRepoName && (
+                    {isValidLink && linkedRepoName && (
                       <CommandItem
                         value={linkedRepoName}
                         onSelect={() => handleRepoSelect(linkedRepoName)}
@@ -383,7 +418,7 @@ const Step1: React.FC<Step1Props> = ({
               )}
             </PopoverTrigger>
             <PopoverContent className="w-[200px] p-0">
-              <Command>
+              <Command defaultValue={defaultBranch ?? undefined}>
                 <CommandInput placeholder="Search branch..." />
                 <CommandList>
                   <CommandEmpty>No branch found.</CommandEmpty>
@@ -491,50 +526,8 @@ const Step1: React.FC<Step1Props> = ({
                 className="col-span-3"
                 value={inputValue}
                 placeholder="https://github.com/username/repo"
-                onChange={(e) => setInputValue(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="submit"
-              onClick={() => {
-                if (isValidLink) {
-                  PublicRepoRefetch();
-                }
-              }}
-              disabled={PublicRepoLoading || !isValidLink}
-            >
-              <span>
-                {PublicRepoLoading && (
-                  <Loader className="mr-2 h-4 w-4 animate-spin " />
-                )}
-              </span>{" "}
-              Import
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={isPublicRepoDailog} onOpenChange={setIsPublicRepoDailog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Parse Public Repository</DialogTitle>
-            <DialogDescription>
-              Paste the link to your public repository
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="link" className="text-right">
-                Link
-              </Label>
-              <Input
-                id="link"
-                className="col-span-3"
-                value={inputValue}
-                placeholder="https://github.com/username/repo"
                 onChange={(e) => {
-                  setInputValue(e.target.value);
+                  handleInputChange(e);
                 }}
               />
             </div>

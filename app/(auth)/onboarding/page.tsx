@@ -14,16 +14,27 @@ import {
 } from "@/public";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { db } from "@/configs/Firebase-config";
 
 const Onboarding = () => {
   const searchParams = useSearchParams();
+
+  const createQueryString = useCallback(
+    (name?: string, value?: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (name && value) params.append(name, value);
+
+      return params.toString();
+    },
+    [searchParams]
+  );
+  
   const email = searchParams.get('email');
   const name = searchParams.get('name');
   const [formData, setFormData] = useState({
-    email: email || '',
-    name: name || '',
+    email: decodeURIComponent(email || ''),
+    name: decodeURIComponent(name || ''),
     source: "",
     industry: "",
     jobTitle: "",
@@ -57,7 +68,7 @@ const Onboarding = () => {
       await setDoc(doc(db, "users", uid), userDoc).then(() => {
  // Redirect to home
         console.log("pushing to link github");
-        router.push("/link-github");
+        router.push("/link-github" + "?" + createQueryString());
       });
 
      
@@ -120,7 +131,7 @@ const Onboarding = () => {
               <label className="text-sm font-medium text-black">Email</label>
               <input 
                 type="email"
-                value={email || ''}
+                value={formData.email || ""}
                 className="w-80 p-2 border rounded-md bg-gray-100" 
                 disabled
               />

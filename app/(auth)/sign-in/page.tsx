@@ -27,11 +27,11 @@ import Image from "next/image";
 import React, { useCallback } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function Signin() {
   const searchParams = useSearchParams();
-
+  const router = useRouter();
   const createQueryString = useCallback(
     (name?: string, value?: string) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -114,7 +114,7 @@ export default function Signin() {
             email: result.user.email,
             name: result.user?.displayName || "",
           });
-
+          // router.push(`/newchat` + "?" + createQueryString());
           toast.success("Logged in successfully");
         }
       })

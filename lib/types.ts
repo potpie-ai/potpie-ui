@@ -55,7 +55,6 @@ type AgentType = {
   description: string;
 };
 
-
 interface TaskType {
   description: string;
   tools: string[];
@@ -75,3 +74,8 @@ interface CustomAgentType {
   created_at: string; // ISO date string format
   updated_at: string; // ISO date string format
 }
+
+interface createQueryStringArgs {
+  name?: string;
+  value?: string;
+};

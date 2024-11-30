@@ -16,12 +16,29 @@ import axios from "axios";
 import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
 import { Link, LucideCheck, LucideGithub } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
-import React, { useRef } from "react";
+import React, { useCallback, useRef } from "react";
 import { toast } from "sonner";
 
 const LinkGithub = () => {
+
+  const searchParams = useSearchParams();
+
+  const createQueryString = useCallback(
+    (keysToKeep: string[]) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.forEach((value, key) => {
+        if (!keysToKeep.includes(key)) {
+          params.delete(key);
+        }
+      })
+
+      return params.toString();
+    },
+    [searchParams]
+  );
+
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -67,7 +84,7 @@ const LinkGithub = () => {
         },{headers:headers})
         .then((res: { data: any }) => {
           openPopup();
-          router.push(`/newchat`);
+          router.push(`/newchat` + "?" + createQueryString(["repo","branch"]));
           return res.data;
         })
         .catch((e: any) => {

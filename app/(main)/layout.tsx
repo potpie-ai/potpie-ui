@@ -18,7 +18,7 @@ export default function RootLayout({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   if (user == null) {
-    router.push(`/sign-in?redirect=${encodeURIComponent(pathname + "?" + searchParams.toString())}`);
+    router.push(`/sign-in?redirect=${pathname + "&" + searchParams.toString()}`);
     return null;
   }
   posthog.identify(user.id, { email: user.email, name: user?.name || "" });

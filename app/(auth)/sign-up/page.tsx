@@ -17,11 +17,29 @@ import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
 import { LucideCheck, LucideGithub } from "lucide-react";
 import Image from "next/image";
 import { usePostHog } from "posthog-js/react";
-import React, { useRef } from "react";
+import React, { useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const Signup = () => {
+
+  const searchParams = useSearchParams();
+
+  const createQueryString = useCallback(
+    (createQueryStringArgs: createQueryStringArgs[]) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if(createQueryStringArgs) {
+        createQueryStringArgs.forEach((arg) => {
+          if (arg.name && arg.value) params.append(arg.name, arg.value);
+        });
+      }
+
+      return params.toString();
+    },
+    [searchParams]
+  );
+
+
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -38,7 +56,8 @@ const Signup = () => {
         if (popup.closed) {
           console.log("popup closed");
           clearInterval(timer);
-          router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
+          // router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
+          router.push(`/onboarding?${createQueryString([{name: 'uid', value: result.user.uid}, {name: 'email', value: encodeURIComponent(result.user.email || '')}, {name: 'name', value: encodeURIComponent(result.user.displayName || '')}])}`);
         }
       }, 500);
     }
@@ -52,7 +71,8 @@ const Signup = () => {
   const onGithub = async () => {
     try {
       const result = await signInWithPopup(auth, provider).then((res: any ) => {
-        router.push(`/onboarding?uid=${res.user.uid}&email=${encodeURIComponent(res.user.email || '')}&name=${encodeURIComponent(res.user.displayName || '')}`);
+        // router.push(`/onboarding?uid=${res.user.uid}&email=${encodeURIComponent(res.user.email || '')}&name=${encodeURIComponent(res.user.displayName || '')}`);
+        router.push(`/onboarding?${createQueryString([{name: 'uid', value: res.user.uid}, {name: 'email', value: encodeURIComponent(res.user.email || '')}, {name: 'name', value: encodeURIComponent(res.user.displayName || '')}])}`);
         return res.data;
       })
       .catch((e: any) => {
@@ -81,7 +101,8 @@ const Signup = () => {
         },{headers:headers})
         .then((res: { data: any }) => {
           openPopup(result);
-          router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
+          // router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
+          router.push(`/onboarding?${createQueryString([{name: 'uid', value: result.user.uid}, {name: 'email', value: encodeURIComponent(result.user.email || '')}, {name: 'name', value: encodeURIComponent(result.user.displayName || '')}])}`);
           return res.data;
         })
         .catch((e: any) => {

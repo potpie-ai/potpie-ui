@@ -1,10 +1,12 @@
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import { persistReducer, persistStore } from "redux-persist";
 import chatReducer from "./Reducers/chat";
+import RepoAndBranchReducer from "./Reducers/RepoAndBranch";
 import createWebStorage from "redux-persist/lib/storage/createWebStorage";
 
 const rootReducers = combineReducers({
   chat: chatReducer,
+  RepoAndBranch: RepoAndBranchReducer,
 });
 
 const createNoopStorage = () => {
@@ -19,7 +21,7 @@ const createNoopStorage = () => {
       return Promise.resolve();
     },
   };
-};  
+};
 const storage =
   typeof window === "undefined"
     ? createNoopStorage()
@@ -29,7 +31,7 @@ const persistConfig = {
   key: "root",
   storage,
   version: 1,
-  blacklist: ['chat','branch']
+  blacklist: ["chat", "branch"],
 };
 const persistedReducer = persistReducer(persistConfig, rootReducers);
 

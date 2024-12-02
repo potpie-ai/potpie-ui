@@ -235,11 +235,6 @@ const Step1: React.FC<Step1Props> = ({
   }, [repoName, branchName, parsingStatus, inputValue, isValidLink]);
 
   useEffect(() => {
-     dispatch(setRepoName(""));
-    dispatch(setBranchName(""));
-  }, []);
-
-  useEffect(() => {
     if(isPublicRepoDailog){
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = inputValue.match(regex);

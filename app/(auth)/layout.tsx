@@ -16,7 +16,7 @@ export default function AuthLayout({
   if (user) {
     if (!window.location.pathname.startsWith('/onboarding') && !window.location.pathname.startsWith('/sign-up') && !window.location.pathname.startsWith('/link-github')) {
       console.log("redirecting to", redirectUrl ? decodeURIComponent(redirectUrl) : "/");
-      router.push(redirectUrl ? decodeURIComponent( redirectUrl + "?" + searchParams.toString()) : "/" + searchParams.toString());
+      router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
       return null;
     }
   }

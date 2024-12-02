@@ -27,7 +27,7 @@ export default function RootLayout({
     if(repo && branch) {
       dispatch(setRepoName(repo));
       dispatch(setBranchName(branch));
-      router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}&repo=${repo}&branch=${branch}`);
+      router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
     }
     else{
       router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`);

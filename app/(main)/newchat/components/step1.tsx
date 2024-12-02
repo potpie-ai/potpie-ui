@@ -48,6 +48,11 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { useSearchParams } from "next/navigation";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
+
 const repoLinkSchema = z.object({
   repoLink: z
     .string()
@@ -55,22 +60,22 @@ const repoLinkSchema = z.object({
     .nonempty("Repository link cannot be empty"),
 });
 interface Step1Props {
-  repoName: string;
-  branchName: string;
-  setRepoName: (name: string) => void;
-  setBranchName: (name: string) => void;
   setProjectId: (id: string) => void;
   setChatStep: (step: number) => void;
 }
 
 const Step1: React.FC<Step1Props> = ({
-  repoName,
-  branchName,
-  setRepoName,
-  setBranchName,
   setProjectId,
   setChatStep,
 }) => {
+
+  const { repoName, branchName } = useSelector(
+    (state: RootState) => state.RepoAndBranch
+  );
+
+  const dispatch = useDispatch();
+
+
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [isPublicRepoDailog, setIsPublicRepoDailog] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -78,7 +83,13 @@ const Step1: React.FC<Step1Props> = ({
   const [linkedRepoName, setLinkedRepoName] = useState<string | null>(null);
   const [isParseDisabled, setIsParseDisabled] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+  const [repoOpen, setRepoOpen] = useState(false);
+  const [branchOpen, setBranchOpen] = useState(false);
 
+  const searchParams = useSearchParams();
+
+  const defaultRepo = searchParams.get("repo");
+  const defaultBranch = searchParams.get("branch");
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -179,7 +190,7 @@ const Step1: React.FC<Step1Props> = ({
         if (response.is_public) {
           setIsValidLink(true);
           setLinkedRepoName(ownerRepo);
-          setRepoName(ownerRepo);
+          dispatch(setRepoName(ownerRepo))
         } else {
           setIsValidLink(false);
           setLinkedRepoName(null);
@@ -203,7 +214,7 @@ const Step1: React.FC<Step1Props> = ({
 
   const [showTooltip, setShowTooltip] = useState(false);
   const handleRepoSelect = (repo: string) => {
-    setRepoName(repo);
+     dispatch(setRepoName(repo));
     setInputValue(repo);
     setLinkedRepoName(null);
   };
@@ -224,11 +235,6 @@ const Step1: React.FC<Step1Props> = ({
   }, [repoName, branchName, parsingStatus, inputValue, isValidLink]);
 
   useEffect(() => {
-    setRepoName("");
-    setBranchName("");
-  }, []);
-
-  useEffect(() => {
     if(isPublicRepoDailog){
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = inputValue.match(regex);
@@ -240,8 +246,36 @@ const Step1: React.FC<Step1Props> = ({
     }
   }, [inputValue, isPublicRepoDailog]);
 
-  const [repoOpen, setRepoOpen] = useState(false);
-  const [branchOpen, setBranchOpen] = useState(false);
+  useEffect(() => {
+    if (
+      !UserRepositorysLoading &&
+      !UserBranchLoading &&
+      defaultRepo &&
+      UserRepositorys.length > 0 &&
+      UserRepositorys.find(
+        (repo: { full_name: string }) =>
+          repo.full_name === decodeURIComponent(defaultRepo)
+      )
+    ) {
+       dispatch(setRepoName(decodeURIComponent(defaultRepo)));
+      if (
+        UserBranch &&
+        UserBranch.length > 0 &&
+        UserBranch.find(
+          (branch: string) => branch === decodeURIComponent(defaultBranch?? "")
+        )
+      ) {
+        dispatch(setBranchName(decodeURIComponent(defaultBranch ?? "")));
+      }
+    }
+  }, [
+    defaultRepo,
+    defaultBranch,
+    UserRepositorysLoading,
+    UserBranchLoading,
+    UserRepositorys,
+    UserBranch,
+  ]);
 
   return (
     <div className="text-muted">
@@ -282,7 +316,7 @@ const Step1: React.FC<Step1Props> = ({
               )}
             </PopoverTrigger>
             <PopoverContent className="w-auto min-w-[220px] max-w-[300px] p-0">
-              <Command>
+              <Command defaultValue={defaultRepo ?? undefined}>
                 <CommandInput
                   value={searchValue}
                   onValueChange={(e) => setSearchValue(e)}
@@ -317,7 +351,7 @@ const Step1: React.FC<Step1Props> = ({
                         key={value.id}
                         value={value.full_name}
                         onSelect={(value) => {
-                          setRepoName(value);
+                           dispatch(setRepoName(value));
                           setRepoOpen(false);
                         }}
                       >
@@ -383,7 +417,7 @@ const Step1: React.FC<Step1Props> = ({
               )}
             </PopoverTrigger>
             <PopoverContent className="w-[200px] p-0">
-              <Command>
+            <Command defaultValue={defaultBranch ?? undefined}>
                 <CommandInput placeholder="Search branch..." />
                 <CommandList>
                   <CommandEmpty>No branch found.</CommandEmpty>
@@ -393,7 +427,7 @@ const Step1: React.FC<Step1Props> = ({
                         key={value}
                         value={value}
                         onSelect={(value) => {
-                          setBranchName(value);
+                          dispatch(setBranchName(value));
                           setBranchOpen(false);
                         }}
                       >

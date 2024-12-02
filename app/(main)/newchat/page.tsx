@@ -11,14 +11,16 @@ import { setChat, setPendingMessage } from "@/lib/state/Reducers/chat";
 const NewChat = () => {
   const router = useRouter();
   const [chatStep, setChatStep] = useState(1);
-  const [repoName, setRepoName] = useState<string>("");
-  const [branchName, setBranchName] = useState<string>("");
   const [projectId, setProjectId] = useState<string>("");
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string>();
   const { title } = useSelector(
     (state: RootState) => state.chat
   );
+  const { repoName, branchName } = useSelector(
+    (state: RootState) => state.RepoAndBranch
+  );
+
   const dispatch: AppDispatch = useDispatch();
 
  /*
@@ -39,10 +41,6 @@ const NewChat = () => {
       label: 1,
       content: (
         <Step1
-          repoName={repoName}
-          branchName={branchName}
-          setRepoName={setRepoName}
-          setBranchName={setBranchName}
           setProjectId={setProjectId}
           setChatStep={setChatStep}
         />

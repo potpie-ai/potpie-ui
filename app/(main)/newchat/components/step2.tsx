@@ -11,7 +11,6 @@ import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
 import { toast } from "sonner";
 import { list_system_agents } from "@/lib/utils";
-import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 
 interface AgentType {
   id: string;
@@ -62,8 +61,6 @@ const Step2: React.FC<Step2Props> = ({
       dispatch(setChat({agentId: agentId}))
       setAgentId(agentId);
       setChatStep(3);
-     dispatch(setRepoName(""))
-      dispatch(setBranchName(""))
       setCurrentConversationId(response.conversation_id);
     } catch (err) {
       console.error("Unable to create conversation:", err);

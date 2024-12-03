@@ -7,6 +7,8 @@ import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { setChat, setPendingMessage } from "@/lib/state/Reducers/chat";
+import { setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
+import { setBranchName } from "@/lib/state/Reducers/RepoAndBranch";
 
 const NewChat = () => {
   const router = useRouter();
@@ -32,6 +34,8 @@ const NewChat = () => {
     if(!projectId || !currentConversationId) return;
     dispatch(setPendingMessage(message));
     dispatch(setChat({ chatFlow: "NEW_CHAT", temporaryContext: {branch:branchName, repo: repoName, projectId: projectId}, agentId: agentId }));
+    dispatch(setRepoName(""))
+    dispatch(setBranchName(""))
     router.push(`/chat/${currentConversationId}`);
   };
 

@@ -2,11 +2,13 @@ import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import { persistReducer, persistStore } from "redux-persist";
 import chatReducer from "./Reducers/chat";
 import RepoAndBranchReducer from "./Reducers/RepoAndBranch";
+import KeyManagmentReducer from "./Reducers/keyManagment";
 import createWebStorage from "redux-persist/lib/storage/createWebStorage";
 
 const rootReducers = combineReducers({
   chat: chatReducer,
   RepoAndBranch: RepoAndBranchReducer,
+  KeyManagment: KeyManagmentReducer,
 });
 
 const createNoopStorage = () => {

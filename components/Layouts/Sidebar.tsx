@@ -62,7 +62,7 @@ export function AppSidebar() {
     dispatch(clearChat());
     dispatch(setBranchName(""));
     dispatch(setRepoName(""));
-    router.push("/newchat");
+    window.location.href = "/newchat";
   };
 
   React.useEffect(() => {

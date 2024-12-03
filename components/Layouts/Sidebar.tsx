@@ -33,6 +33,7 @@ import { Skeleton } from "../ui/skeleton";
 import * as Progress from "@radix-ui/react-progress";
 import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
+import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 
 export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);
@@ -59,6 +60,8 @@ export function AppSidebar() {
 
   const redirectToNewChat = () => {
     dispatch(clearChat());
+    dispatch(setBranchName(""));
+    dispatch(setRepoName(""));
     router.push("/newchat");
   };
 

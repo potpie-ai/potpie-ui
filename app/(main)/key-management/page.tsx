@@ -153,7 +153,6 @@ const KeyManagment = () => {
           secretLoading={secretLoading}
           secretError={secretError}
           refetchSecret={refetchSecret}
-          selectedKey={selectedKey}
         />
       )}
 

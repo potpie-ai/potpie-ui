@@ -26,7 +26,6 @@ const UserKeys = ({
   secretLoading,
   secretError,
   refetchSecret,
-  selectedKey,
 }: {
   open: any;
   setOpen: React.Dispatch<React.SetStateAction<any>>;
@@ -35,7 +34,6 @@ const UserKeys = ({
   secretLoading: boolean;
   secretError: boolean;
   refetchSecret: any;
-  selectedKey: string;
 }) => {
   const { AiProvider } = useSelector((state: RootState) => state.KeyManagment);
   const [apiKey, setApiKey] = React.useState("");

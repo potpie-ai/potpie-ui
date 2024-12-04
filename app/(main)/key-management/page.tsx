@@ -79,7 +79,8 @@ const KeyManagment = () => {
     onSuccess: (data, provider) => {
       toast.success(data.message);
       setSavedKeysResponse((prev) =>
-        prev.filter((item) => item.provider !== provider));
+        prev.filter((item) => item.provider !== provider)
+      );
       setSelectedKey("potpieKey");
     },
     onError: () => {
@@ -92,6 +93,34 @@ const KeyManagment = () => {
       refetchSecret();
     }
   }, [AiProvider, openKeyDialog, refetchSecret]);
+
+  useEffect(() => {
+    const providers = ["openai", "anthropic"];
+    const fetchRemainingKey = async () => {
+      const remainingProvider = providers.find(
+        (provider) => provider !== AiProvider
+      );
+
+      if (remainingProvider) {
+        const res =
+          await KeyManagmentService.GetSecreteForProvider(remainingProvider);
+
+        if (res.api_key) {
+          setSavedKeysResponse((prev) => {
+            const updatedResponse = prev.filter(
+              (item) => item.provider !== remainingProvider
+            );
+            return [
+              ...updatedResponse,
+              { provider: remainingProvider, api_key: res.api_key },
+            ];
+          });
+        }
+      }
+    };
+
+    fetchRemainingKey();
+  }, []); // Re-run whenever AiProvider changes
 
   return (
     <div className="flex flex-col gap-10 w-full h-full">

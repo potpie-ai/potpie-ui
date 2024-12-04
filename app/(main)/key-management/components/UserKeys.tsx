@@ -23,10 +23,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import SelectLLM from "./SelectLLM";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import KeyManagmentService from "@/services/KeyManagment";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const UserKeys = ({
   open,
@@ -38,7 +39,7 @@ const UserKeys = ({
   setGlobalAiProvider: any;
 }) => {
   const { AiProvider } = useSelector((state: RootState) => state.KeyManagment);
-
+  const [apiKey, setApiKey] = React.useState("");
   const {
     data: secret,
     isLoading: secretLoading,
@@ -47,6 +48,39 @@ const UserKeys = ({
     queryKey: ["provider-secret", AiProvider],
     queryFn: async () => KeyManagmentService.GetSecreteForProvider(AiProvider),
   });
+
+  const CreateSecret = useMutation({
+    mutationFn: ({
+      api_key,
+      provider,
+    }: {
+      api_key: string;
+      provider: string;
+    }) => KeyManagmentService.CreateSecret({ api_key, provider }),
+    onSuccess(data) {
+      toast.success(data.message);
+    },
+  });
+  const UpdateSecret = useMutation({
+    mutationFn: ({
+      api_key,
+      provider,
+    }: {
+      api_key: string;
+      provider: string;
+    }) => KeyManagmentService.UpdateSecret({ api_key, provider }),
+    onSuccess(data) {
+      toast.success(data.message);
+    },
+  });
+
+  const handleSave = () => {
+    if (!secret) {
+      CreateSecret.mutate({ api_key: apiKey, provider: AiProvider });
+    } else {
+      UpdateSecret.mutate({ api_key: apiKey, provider: AiProvider });
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -63,16 +97,18 @@ const UserKeys = ({
 
         <SelectLLM width="100%" setGlobalAiProvider={setGlobalAiProvider} />
         {secretLoading ? (
-          <Skeleton className="w-full h-8" />
+          <Skeleton className="w-full h-10" />
         ) : (
           <Input
             type="text"
             placeholder="Enter your API Key"
-            defaultValue={secretError ? "" : secret.data}
+            defaultValue={secretError || !secret ? "" : secret || ""}
+            onChange={(e) => setApiKey(e.target.value)}
+            value={apiKey}
           />
         )}
         <DialogFooter>
-          <Button>Save</Button>
+          <Button onClick={handleSave}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

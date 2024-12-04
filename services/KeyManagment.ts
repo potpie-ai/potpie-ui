@@ -74,4 +74,40 @@ export default class KeyManagmentService {
       console.log("Error getting Provider:", error);
     }
   }
+  static async CreateSecret ({api_key, provider}: {api_key: string, provider: string}) {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets`,
+        {
+          api_key,
+          provider
+        },
+        {
+          headers,
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.log("Error getting Provider:", error);
+    }
+  }
+  static async UpdateSecret ({api_key, provider}: {api_key: string, provider: string}) {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.put(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets`,
+        {
+          api_key,
+          provider
+        },
+        {
+          headers,
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.log("Error getting Provider:", error);
+    }
+  }
 }

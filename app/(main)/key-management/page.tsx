@@ -8,27 +8,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-
 import { Checkbox } from "@/components/ui/checkbox";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import KeyManagmentService from "@/services/KeyManagment";
-import { Skeleton } from "@/components/ui/skeleton";
-import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
 import UserKeys from "./components/UserKeys";
 import SelectLLM from "./components/SelectLLM";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 const KeyManagment = () => {
   const [selectedKey, setSelectedKey] = useState("");
@@ -47,7 +34,7 @@ const KeyManagment = () => {
 
   return (
     <div className="flex flex-col gap-10 w-full h-full">
-      <Card className="border-none shadow-none">
+      <Card className="border-none shadow-none bg-background">
         <CardHeader>
           <CardTitle className="text-primary">Set Your Keys</CardTitle>
           <CardDescription>
@@ -71,9 +58,9 @@ const KeyManagment = () => {
                   I want to use potpie&apos;s key
                 </label>
               </div>
-              <SelectLLM
-                setGlobalAiProvider={setGlobalAiProvider}
-              />
+              {selectedKey === "potpieKey" && (
+                <SelectLLM setGlobalAiProvider={setGlobalAiProvider} />
+              )}
             </div>
 
             <div className="flex items-center gap-2 h-10">
@@ -103,6 +90,27 @@ const KeyManagment = () => {
           setGlobalAiProvider={setGlobalAiProvider}
         />
       )}
+
+      <Card className="border-none shadow-none bg-background">
+        <CardHeader>
+          <CardTitle className="text-primary">Manage Your Keys</CardTitle>
+          <div className="pt-7 flex items-center justify-between w-full">
+            <CardTitle className="text-primary">Saved Keys</CardTitle>
+            <Button
+              onClick={() => {
+                setSelectedKey("UserKey");
+                setOpenKeyDialog(true);
+              }}
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" /> Register Key
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          saved 
+        </CardContent>
+      </Card>
     </div>
   );
 };

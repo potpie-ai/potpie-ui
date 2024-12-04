@@ -12,20 +12,23 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import KeyManagmentService from "@/services/KeyManagment";
 import { auth } from "@/configs/Firebase-config";
-import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { setAiProvider } from "@/lib/state/Reducers/keyManagment";
+import { RootState } from "@/lib/state/store";
 const SelectLLM = ({
   width,
   setGlobalAiProvider,
+  setGlobalAiProviderOnChange = true,
 }: {
   width?: string;
   setGlobalAiProvider: any;
+  setGlobalAiProviderOnChange?: boolean;
 }) => {
+  const { AiProvider } = useSelector((state: RootState) => state.KeyManagment);
   const userId = auth.currentUser?.uid || "";
   const dispatch = useDispatch();
   const {
@@ -35,7 +38,6 @@ const SelectLLM = ({
   } = useQuery({
     queryKey: ["list-available-llms"],
     queryFn: async () => KeyManagmentService.ListAvailableLLM(),
-    // enabled: selectedKey === "potpieKey",
   });
   const { data: Prefferredllm, isLoading: PrefferredllmLoading } = useQuery({
     queryKey: ["list-preferred-llms"],
@@ -48,9 +50,11 @@ const SelectLLM = ({
 
   return (
     <Select
-      disabled={setGlobalAiProvider.isPending}
+      disabled={setGlobalAiProvider.isPending} defaultValue={AiProvider}
       onValueChange={(e: string) => {
-        setGlobalAiProvider.mutate(e);
+        if(setGlobalAiProviderOnChange){
+          setGlobalAiProvider.mutate(e);
+        }
         dispatch(setAiProvider(e));
       }}
     >

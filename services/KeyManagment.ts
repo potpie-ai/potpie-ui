@@ -110,4 +110,18 @@ export default class KeyManagmentService {
       console.log("Error getting Provider:", error);
     }
   }
+  static async DeleteSecret (provider: string) {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.delete(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets/${provider}`,
+        {
+          headers,
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.log("Error deleting Provider:", error);
+    }
+  }
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,47 +7,46 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import SelectLLM from "./SelectLLM";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import KeyManagmentService from "@/services/KeyManagment";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 const UserKeys = ({
   open,
   setOpen,
   setGlobalAiProvider,
+  secret,
+  secretLoading,
+  secretError,
+  refetchSecret,
+  selectedKey,
 }: {
   open: any;
   setOpen: React.Dispatch<React.SetStateAction<any>>;
   setGlobalAiProvider: any;
+  secret: any;
+  secretLoading: boolean;
+  secretError: boolean;
+  refetchSecret: any;
+  selectedKey: string;
 }) => {
   const { AiProvider } = useSelector((state: RootState) => state.KeyManagment);
   const [apiKey, setApiKey] = React.useState("");
-  const {
-    data: secret,
-    isLoading: secretLoading,
-    isError: secretError,
-  } = useQuery({
-    queryKey: ["provider-secret", AiProvider],
-    queryFn: async () => KeyManagmentService.GetSecreteForProvider(AiProvider),
-  });
+
+  useEffect(() => {
+    if (secret) {
+      setApiKey(secret.api_key);
+    } else {
+      setApiKey("");
+    }
+  }, [secret,open]);
 
   const CreateSecret = useMutation({
     mutationFn: ({
@@ -57,8 +56,11 @@ const UserKeys = ({
       api_key: string;
       provider: string;
     }) => KeyManagmentService.CreateSecret({ api_key, provider }),
-    onSuccess(data) {
+    onSuccess(data, {provider}) {
+      refetchSecret();
+      setOpen(false);
       toast.success(data.message);
+      setGlobalAiProvider(provider);
     },
   });
   const UpdateSecret = useMutation({
@@ -69,8 +71,11 @@ const UserKeys = ({
       api_key: string;
       provider: string;
     }) => KeyManagmentService.UpdateSecret({ api_key, provider }),
-    onSuccess(data) {
+    onSuccess(data, {provider}) {
+      refetchSecret();
+      setOpen(false);
       toast.success(data.message);
+      setGlobalAiProvider(provider);
     },
   });
 
@@ -95,20 +100,31 @@ const UserKeys = ({
           </DialogDescription>
         </DialogHeader>
 
-        <SelectLLM width="100%" setGlobalAiProvider={setGlobalAiProvider} />
+        <SelectLLM width="100%" setGlobalAiProvider={setGlobalAiProvider} setGlobalAiProviderOnChange={false} />
         {secretLoading ? (
           <Skeleton className="w-full h-10" />
         ) : (
           <Input
             type="text"
             placeholder="Enter your API Key"
-            defaultValue={secretError || !secret ? "" : secret || ""}
+            defaultValue={
+              secretError || !secret.api_key ? "" : secret.api_key || ""
+            }
             onChange={(e) => setApiKey(e.target.value)}
             value={apiKey}
           />
         )}
         <DialogFooter>
-          <Button onClick={handleSave}>Save</Button>
+          <Button
+            onClick={handleSave}
+            disabled={UpdateSecret.isPending || CreateSecret.isPending || !apiKey} className="gap-2"
+          >
+            {(UpdateSecret.isPending ||
+              CreateSecret.isPending) && (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              )}{" "}
+            Save
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

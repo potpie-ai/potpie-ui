@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -9,16 +9,30 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import KeyManagmentService from "@/services/KeyManagment";
 import { toast } from "sonner";
 import UserKeys from "./components/UserKeys";
 import SelectLLM from "./components/SelectLLM";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Loader2, Plus, Trash } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
 
 const KeyManagment = () => {
   const [selectedKey, setSelectedKey] = useState("");
+  const { AiProvider } = useSelector((state: RootState) => state.KeyManagment);
+  const [savedKeysResponse, setSavedKeysResponse] = useState<
+    { provider: string; api_key: any }[]
+  >([]);
   const [openKeyDialog, setOpenKeyDialog] = useState(false);
   const handleCheckboxChange = (key: string) => {
     setSelectedKey((prevKey) => (prevKey === key ? "" : key));
@@ -31,6 +45,53 @@ const KeyManagment = () => {
       toast.success(data.message);
     },
   });
+  const {
+    data: secret,
+    isLoading: secretLoading,
+    refetch: refetchSecret,
+    isError: secretError,
+  } = useQuery({
+    queryKey: ["provider-secret", AiProvider],
+    queryFn: async () => {
+      const res = await KeyManagmentService.GetSecreteForProvider(AiProvider);
+      if (!res) return "";
+      setSavedKeysResponse((prev) => {
+        const existingProvider = prev.find(
+          (item) => item.provider === AiProvider
+        );
+        if (existingProvider) {
+          return prev.map((item) =>
+            item.provider === AiProvider
+              ? { provider: AiProvider, api_key: res.api_key }
+              : item
+          );
+        } else {
+          return [...prev, { provider: AiProvider, api_key: res.api_key }];
+        }
+      });
+      return res;
+    },
+  });
+
+  const { mutate: deleteSecret, isPending: isDeleting } = useMutation({
+    mutationFn: (provider: string) =>
+      KeyManagmentService.DeleteSecret(provider),
+    onSuccess: (data, provider) => {
+      toast.success(data.message);
+      setSavedKeysResponse((prev) =>
+        prev.filter((item) => item.provider !== provider));
+      setSelectedKey("potpieKey");
+    },
+    onError: () => {
+      toast.error("Something went wrong");
+    },
+  });
+
+  useEffect(() => {
+    if (AiProvider && openKeyDialog) {
+      refetchSecret();
+    }
+  }, [AiProvider, openKeyDialog, refetchSecret]);
 
   return (
     <div className="flex flex-col gap-10 w-full h-full">
@@ -88,6 +149,11 @@ const KeyManagment = () => {
           open={openKeyDialog}
           setOpen={setOpenKeyDialog}
           setGlobalAiProvider={setGlobalAiProvider}
+          secret={secret}
+          secretLoading={secretLoading}
+          secretError={secretError}
+          refetchSecret={refetchSecret}
+          selectedKey={selectedKey}
         />
       )}
 
@@ -108,7 +174,42 @@ const KeyManagment = () => {
           </div>
         </CardHeader>
         <CardContent>
-          saved 
+          <div className="mt-4 pr-10">
+            <Table className="">
+              <TableHeader>
+                <TableRow className="border-bottom border-border">
+                  <TableHead className="w-[200px] text-black">
+                    Provider
+                  </TableHead>
+                  <TableHead className="w-[200px] text-black">
+                    Key Value
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              {savedKeysResponse.length != 0 && (
+                <TableBody>
+                  {savedKeysResponse.map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{item.provider}</TableCell>
+                      <TableCell className="">{item.api_key}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          disabled={isDeleting}
+                          onClick={() => deleteSecret(item.provider)}
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="animate-spin h-4 w-4 " />
+                          ) : (
+                            <Trash className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              )}
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

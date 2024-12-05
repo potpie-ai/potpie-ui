@@ -19,6 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDispatch, useSelector } from "react-redux";
 import { setAiProvider } from "@/lib/state/Reducers/keyManagment";
 import { RootState } from "@/lib/state/store";
+import posthog from "posthog-js";
+import { toast } from "sonner";
 const SelectLLM = ({
   width,
   setGlobalAiProvider,
@@ -47,12 +49,15 @@ const SelectLLM = ({
 
   if (llmsLoading && PrefferredllmLoading)
     return <Skeleton className="w-[180px] h-10" />;
-
   return (
     <Select
-      disabled={setGlobalAiProvider.isPending} defaultValue={AiProvider}
+      disabled={setGlobalAiProvider.isPending}
+      defaultValue={AiProvider}
       onValueChange={(e: string) => {
-        if(setGlobalAiProviderOnChange){
+        if (setGlobalAiProviderOnChange) {
+          if (!false && e === "anthropic") {
+            return toast.error("Anthropic is currently disabled");
+          }
           setGlobalAiProvider.mutate(e);
         }
         dispatch(setAiProvider(e));
@@ -67,16 +72,33 @@ const SelectLLM = ({
         className={`overflow-visible ${width ? "w-" + width + "px" : "w-[180px]"}`}
         defaultValue={Prefferredllm?.preferred_llm ?? undefined}
       >
-        {llms?.map((llm, idx) => (
-          <Tooltip key={idx}>
-            <TooltipTrigger asChild>
-              <SelectItem value={llm.id}>{llm.name}</SelectItem>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8} className="w-1/2">
-              <p>{llm.description}</p>
-            </TooltipContent>
-          </Tooltip>
-        ))}
+        {llms?.map(
+          (
+            llm: {
+              id: "anthropic" | "openai" | string;
+              name: string;
+              description: string;
+            },
+            idx
+          ) => (
+            <Tooltip key={idx}>
+              <TooltipTrigger asChild>
+                <SelectItem
+                  value={llm.id}
+                  disabled={
+                    !posthog.isFeatureEnabled("use_anthropic") &&
+                    llm.id === "anthropic"
+                  }
+                >
+                  {llm.name}
+                </SelectItem>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8} className="w-1/2">
+                <p>{llm.description}</p>
+              </TooltipContent>
+            </Tooltip>
+          )
+        )}
       </SelectContent>
     </Select>
   );

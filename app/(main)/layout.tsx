@@ -10,8 +10,6 @@ import { AppSidebar } from "@/components/Layouts/Sidebar";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
-import SurveyTrigger from "@/components/Layouts/minors/SurveyTrigger";
-import FormbricksProvider from "../formbricks";
 
 export default function RootLayout({
   children,
@@ -39,7 +37,6 @@ export default function RootLayout({
 
   return (
     <SidebarProvider>
-      <FormbricksProvider />
       <AppSidebar />
       <SidebarInset>
         <main
@@ -50,7 +47,6 @@ export default function RootLayout({
         >
           {children}
         </main>
-        <SurveyTrigger />
       </SidebarInset>
     </SidebarProvider>
   );

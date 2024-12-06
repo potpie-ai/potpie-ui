@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   Bell,
   ChevronsUpDown,
+  CircleAlert,
   CreditCard,
   LogOut,
   Sparkles,
@@ -29,6 +30,8 @@ import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import posthog from "posthog-js";
+import formbricksApp from "@formbricks/js";
+import { useEffect } from "react";
 
 export function NavUser({
   user,
@@ -40,6 +43,11 @@ export function NavUser({
   };
 }) {
   const router = useRouter();
+  useEffect(() => {
+    formbricksApp.setEmail(user.email);
+    formbricksApp.setAttribute("user_name", user.name);
+    formbricksApp.setAttribute("user_email", user.email);
+  });
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -83,6 +91,13 @@ export function NavUser({
               <DropdownMenuItem onClick={() => router.push("/key-management")}>
                 <CreditCard />
                 Key Management
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                id="report-trigger"
+                onClick={() => formbricksApp.track("report-trigger")}
+              >
+                <CircleAlert />
+                Report
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Link

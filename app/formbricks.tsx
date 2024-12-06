@@ -15,9 +15,9 @@ export default function FormbricksProvider() {
       apiHost: "https://app.formbricks.com",
       userId: user?.uid,
       attributes: {
-        name: user?.displayName || "",
-        email: user?.email || "",
-      },
+        "user_name": user?.displayName || "",
+        "user_email": user?.email || "",
+      },      
     });
   }, []);
 

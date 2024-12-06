@@ -40,6 +40,7 @@ export function NavUser({
   };
 }) {
   const router = useRouter();
+  const userId = auth.currentUser?.uid || "";
 
   return (
     <SidebarMenu>
@@ -87,7 +88,15 @@ export function NavUser({
               </DropdownMenuItem>
               <DropdownMenuItem
                 id="report-trigger"
-                onClick={() => formbricksApp.track("report-trigger")}
+                onClick={() =>
+                  formbricksApp.track("report-trigger", {
+                    email: user.email,
+                    name: user.name,
+                    hiddenFields: {
+                      user_id: userId,
+                    },
+                  })
+                }
               >
                 <CircleAlert />
                 Report

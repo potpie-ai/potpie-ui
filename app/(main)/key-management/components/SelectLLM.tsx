@@ -21,6 +21,7 @@ import { setAiProvider } from "@/lib/state/Reducers/keyManagment";
 import { RootState } from "@/lib/state/store";
 import posthog from "posthog-js";
 import { toast } from "sonner";
+import { usePathname } from "next/navigation";
 const SelectLLM = ({
   width,
   setGlobalAiProvider,
@@ -33,6 +34,11 @@ const SelectLLM = ({
   const { AiProvider } = useSelector((state: RootState) => state.KeyManagment);
   const userId = auth.currentUser?.uid || "";
   const dispatch = useDispatch();
+  const pathname = document.location.hostname;
+  console.log(pathname);
+  const ANTHROPICENABLED = pathname == "app.potpie.ai"
+    ? posthog.isFeatureEnabled("use_anthropic")
+    : posthog.isFeatureEnabled("stage_use_anthropic");
   const {
     data: llms,
     isLoading: llmsLoading,
@@ -55,7 +61,7 @@ const SelectLLM = ({
       defaultValue={AiProvider}
       onValueChange={(e: string) => {
         if (setGlobalAiProviderOnChange) {
-          if (!false && e === "anthropic") {
+          if (e === "anthropic" && !ANTHROPICENABLED) {
             return toast.error("Anthropic is currently disabled");
           }
           setGlobalAiProvider.mutate(e);
@@ -86,8 +92,8 @@ const SelectLLM = ({
                 <SelectItem
                   value={llm.id}
                   disabled={
-                    !posthog.isFeatureEnabled("use_anthropic") &&
-                    llm.id === "anthropic"
+                    llm.id === "anthropic" &&
+                    !posthog.isFeatureEnabled("use_anthropic")
                   }
                 >
                   {llm.name}

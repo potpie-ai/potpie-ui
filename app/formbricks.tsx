@@ -11,8 +11,8 @@ export default function FormbricksProvider() {
   const user = auth.currentUser;
   useEffect(() => {
     formbricks.init({
-      environmentId: "cm4bbt7ge000867dz0fmorrhz",
-      apiHost: "https://app.formbricks.com",
+      environmentId: process.env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID!,
+      apiHost: process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST!,
       userId: user?.uid,
       attributes: {
         user_name: user?.displayName || "",

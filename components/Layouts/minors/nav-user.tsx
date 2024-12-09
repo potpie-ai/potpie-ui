@@ -87,9 +87,9 @@ export function NavUser({
                 Key Management
               </DropdownMenuItem>
               <DropdownMenuItem
-                id="report-trigger"
+                id="report-btn"
                 onClick={() =>
-                  formbricksApp.track("report-trigger", {
+                  formbricksApp.track("report-btn", {
                     email: user.email,
                     name: user.name,
                     hiddenFields: {

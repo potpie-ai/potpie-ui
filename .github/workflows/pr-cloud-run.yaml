@@ -66,7 +66,8 @@ jobs:
         echo "NEXT_PUBLIC_APP_URL=${{ secrets.STAGE_NEXT_PUBLIC_APP_URL }}" >> $GITHUB_ENV
         echo "NEXT_PUBLIC_SUBSCRIPTION_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_SUBSCRIPTION_BASE_URL }}" >> $GITHUB_ENV
         echo "NEXT_PUBLIC_HMAC_SECRET_KEY=${{ secrets.STAGE_NEXT_PUBLIC_HMAC_SECRET_KEY }}" >> $GITHUB_ENV
-
+        echo "NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_FORMBRICKS_API_HOST=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_API_HOST }}" >> $GITHUB_ENV
 
     # Build the Docker image
     - name: Build
@@ -94,6 +95,8 @@ jobs:
           --build-arg NEXT_PUBLIC_APP_URL="${{ env.NEXT_PUBLIC_APP_URL }}" \
           --build-arg NEXT_PUBLIC_SUBSCRIPTION_BASE_URL="${{ env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL }}" \
           --build-arg NEXT_PUBLIC_HMAC_SECRET_KEY="${{ env.NEXT_PUBLIC_HMAC_SECRET_KEY }}" \
+          --build-arg NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID="${{ env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" \
+          --build-arg NEXT_PUBLIC_FORMBRICKS_API_HOST="${{ env.NEXT_PUBLIC_FORMBRICKS_API_HOST }}" \
           -f Dockerfile .
 
     # Push the Docker image to Google Artifact Registry

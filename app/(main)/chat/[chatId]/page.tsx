@@ -20,8 +20,6 @@ import ChatBubble from "../components/ChatBubble";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "../components/Navbar";
-import getHeaders from "@/app/utils/headers.util";
-import axios from "axios";
 import AgentService from "@/services/AgentService";
 import { list_system_agents } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +55,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const { pendingMessage, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
+  const { repoName, branchName } = useSelector(
+    (state: RootState) => state.RepoAndBranch
+  );
   const [Error, setError] = useState({
     isError: false,
     message: "",
@@ -88,29 +89,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     return accumulatedMessage;
   };
 
-  const parseRepo = async (repo_name: string, branch_name: string) => {
-    setParsingStatus("loading");
+  const parseRepo = async () => {
+    setParsingStatus("reparse");
 
     try {
-      const parseResponse = await BranchAndRepositoryService.parseRepo(
-        repo_name,
-        branch_name
-      );
-      const projectId = parseResponse.project_id;
-      const initialStatus = parseResponse.status;
-
-      if (projectId) {
-        setProjectId(projectId);
-      }
-
-      if (initialStatus === "ready") {
-        setParsingStatus("Ready");
-        return;
-      }
-
       await BranchAndRepositoryService.pollParsingStatus(
         projectId,
-        initialStatus,
+        parsingStatus,
         setParsingStatus
       );
     } catch (err) {
@@ -142,7 +127,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     } catch (error) {
       console.error("Error fetching profile picture:", error);
     }
-  }
+  };
 
   const loadMessages = async () => {
     try {
@@ -163,6 +148,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const loadInfoOnce = async () => {
     if (infoLoaded) return;
+    setParsingStatus("loading");
 
     try {
       const info = await ChatService.loadConversationInfo(
@@ -214,11 +200,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
 
-      if(!info.is_creator){
+      if (!info.is_creator) {
         fetchProfilePicture(info.creator_id).then((profilePicture) => {
           setProfilePicUrl(profilePicture);
-        })
+        });
       }
+      const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
+        info.project_ids[0]
+      );
+      setParsingStatus("cloned"); //parsingStatus
     } catch (error) {
       console.error("Error loading conversation info:", error);
       toast.error("Failed to load conversation info");
@@ -254,6 +244,17 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   }, [messagesLoaded, pendingMessage, chatAccess]);
 
+  useEffect(() => {
+    if (
+      parsingStatus !== "ready" &&
+      parsingStatus !== "loading" &&
+      parsingStatus !== "error" &&
+      parsingStatus !== "reparse"
+    ) {
+      parseRepo();
+    }
+  }, [parsingStatus]);
+
   const handleFormSubmit = (message: string) => {
     messageMutation.mutate({
       message,
@@ -261,6 +262,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     });
   };
 
+  console.log(parsingStatus);
   if (Error.isError)
     return (
       <GlobalError title={Error.message} description={Error.description} />
@@ -346,23 +348,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         ) : null}
 
         <div className="h-6 w-full bg-background sticky bottom-0"></div>
-        <Dialog open={parsingStatus === "parsing"}>
+        <Dialog open={parsingStatus !== "ready" && parsingStatus !== "loading"}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Parsing your latest code changes</DialogTitle>
             </DialogHeader>
-            {parsingStatus === "ready" ? (
-              <div className="flex justify-start items-center gap-3 mt-5 ml-5">
-                <CheckCircle className="text-[#00C313] h-4 w-4" />
-                <span className="text-[#00C313]">{parsingStatus}</span>
-              </div>
-            ) : parsingStatus === "parsing" ? (
-              <div className="flex justify-start items-center gap-3 mt-5 ml-5">
-                <Loader className="animate-spin h-4 w-4" />
-                <span>{parsingStatus}</span>
-              </div>
-            ) : null}
-            {parsingStatus === "error" && (
+            {parsingStatus === "Error" ? (
               <div className="flex gap-4 items-center my-3">
                 <div className="flex justify-start items-center gap-3 ">
                   <XCircle className="text-[#E53E3E] h-4 w-4" />
@@ -371,13 +362,22 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() =>
-                    temporaryContext.repo &&
-                    parseRepo(temporaryContext.repo, temporaryContext.branch)
-                  }
+                  // onClick={() =>
+                  //   temporaryContext.repo &&
+                  //   parseRepo(temporaryContext.repo, temporaryContext.branch)
+                  // }
                 >
                   Retry
                 </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {Array.from(Array(5)).map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    className={`h-4 w-[${i === 4 ? "50%" : "100%"}]`}
+                  />
+                ))}
               </div>
             )}
           </DialogContent>

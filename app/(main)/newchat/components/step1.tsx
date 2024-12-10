@@ -272,7 +272,7 @@ const Step1: React.FC<Step1Props> = ({
   return (
     <div className="text-muted">
       <h1 className="text-lg">Select a repository and branch</h1>
-      <Link href={"#"} className="text-accent underline">
+      <Link href="https://docs.potpie.ai/quickstart" className="text-accent underline">
         Need help?
       </Link>
       <div className="flex items-center gap-4 mt-4 ml-5">

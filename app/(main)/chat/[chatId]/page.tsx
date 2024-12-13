@@ -7,13 +7,15 @@ import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
 import { clearPendingMessage, setChat } from "@/lib/state/Reducers/chat";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Loader, XCircle } from "lucide-react";
+import { XCircle } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import ChatBubble from "../components/ChatBubble";
@@ -31,7 +33,6 @@ interface SendMessageArgs {
 }
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
-  const { temporaryContext } = useSelector((state: RootState) => state.chat);
   const [chatAccess, setChatAccess] = useState("loading");
   const dispatch: AppDispatch = useDispatch();
   const [currentConversation, setCurrentConversation] = useState<any>({
@@ -55,9 +56,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const { pendingMessage, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
-  const { repoName, branchName } = useSelector(
-    (state: RootState) => state.RepoAndBranch
-  );
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
   const [Error, setError] = useState({
     isError: false,
     message: "",
@@ -90,7 +90,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   const parseRepo = async () => {
-    setParsingStatus("reparse");
 
     try {
       await BranchAndRepositoryService.pollParsingStatus(
@@ -103,7 +102,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       setParsingStatus("Error");
     }
   };
-
   const messageMutation = useMutation({
     mutationFn: sendMessage,
     onMutate: ({ message }) => {
@@ -208,7 +206,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
         info.project_ids[0]
       );
-      setParsingStatus("cloned"); //parsingStatus
+      setParsingStatus(parsingStatus);
     } catch (error) {
       console.error("Error loading conversation info:", error);
       toast.error("Failed to load conversation info");
@@ -249,8 +247,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       parsingStatus !== "ready" &&
       parsingStatus !== "loading" &&
       parsingStatus !== "error" &&
-      parsingStatus !== "reparse"
+      projectId
     ) {
+      setIsDialogOpen(true);
       parseRepo();
     }
   }, [parsingStatus]);
@@ -334,7 +333,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             <NodeSelectorForm
               projectId={projectId}
               onSubmit={handleFormSubmit}
-              disabled={!!fetchingResponse}
+              disabled={!!fetchingResponse || parsingStatus !== "ready"}
             />
           </>
         ) : chatAccess === "loading" ? (
@@ -348,38 +347,26 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         ) : null}
 
         <div className="h-6 w-full bg-background sticky bottom-0"></div>
-        <Dialog open={parsingStatus !== "ready" && parsingStatus !== "loading"}>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Parsing your latest code changes</DialogTitle>
+              <DialogTitle>
+                {parsingStatus === "Error"
+                  ? "There was an error parsing your repo, please try again after a few minutes"
+                  : "Understanding your latest commit this might take some time"}{" "}
+              </DialogTitle>
             </DialogHeader>
-            {parsingStatus === "Error" ? (
-              <div className="flex gap-4 items-center my-3">
-                <div className="flex justify-start items-center gap-3 ">
-                  <XCircle className="text-[#E53E3E] h-4 w-4" />
-                  <span>{parsingStatus}</span>
-                </div>
+            <DialogFooter>
+              <DialogClose>
                 <Button
-                  variant="destructive"
-                  size="sm"
-                  // onClick={() =>
-                  //   temporaryContext.repo &&
-                  //   parseRepo(temporaryContext.repo, temporaryContext.branch)
-                  // }
+                  variant={
+                    parsingStatus === "Error" ? "destructive" : "default"
+                  }
                 >
-                  Retry
+                  Ok
                 </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {Array.from(Array(5)).map((_, i) => (
-                  <Skeleton
-                    key={i}
-                    className={`h-4 w-[${i === 4 ? "50%" : "100%"}]`}
-                  />
-                ))}
-              </div>
-            )}
+              </DialogClose>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

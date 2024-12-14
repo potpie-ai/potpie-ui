@@ -1,9 +1,15 @@
 import { auth } from "@/configs/Firebase-config";
 import formbricksApp from "@formbricks/js";
-import { BotIcon, CircleAlert, Github, LucideFileText, MessagesSquare } from "lucide-react";
+import {
+  BotIcon,
+  CircleAlert,
+  Github,
+  LucideFileText,
+  MessagesSquare,
+} from "lucide-react";
 import Image from "next/image";
 
-const user = auth.currentUser || "" as any; 
+const user = auth.currentUser || ("" as any);
 
 export enum planTypes {
   FREE = "FREE",
@@ -74,7 +80,8 @@ export const systemAgents = [
     description:
       "An agent specialized in generating code for new features or fixing bugs.",
     status: "SYSTEM",
-    prompt: "Generate complete code to implement redis caching in the @get_user_subscription method with 60 min TTL"
+    prompt:
+      "Generate complete code to implement redis caching in the @get_user_subscription method with 60 min TTL",
   },
 ];
 
@@ -137,16 +144,7 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         icons: <CircleAlert size={20} strokeWidth={1.5} />,
         title: "Report a bug",
         href: "#",
-        onclick: () => {
-          formbricksApp.track("report-btn", {
-            email: user.email,
-            name: user.displayName,
-            hiddenFields: {
-              user_id: user.uid,
-              user_name: user.displayName,
-            },
-          })
-        },
+        handleTrack: true,
         disabled: true,
       },
       {

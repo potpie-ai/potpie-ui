@@ -21,36 +21,32 @@ export default function RootLayout({
   const pathname = usePathname();
   const dispatch: AppDispatch = useDispatch();
   const searchParams = useSearchParams();
-  const repo = searchParams.get('repo');
-  const branch = searchParams.get('branch');
+  const repo = searchParams.get("repo");
+  const branch = searchParams.get("branch");
   if (user == null) {
-    if(repo && branch) {
+    if (repo && branch) {
       dispatch(setRepoName(repo));
       dispatch(setBranchName(branch));
       router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
-    }
-    else{
+    } else {
       router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
     }
     return null;
   }
-  posthog.identify(
-    user.id,
-    { email: user.email, name: user?.name || "" }
-  );
+  posthog.identify(user.id, { email: user.email, name: user?.name || "" });
 
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-      <main
-        className={cn(
-          "flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6",
-          `${GeistSans.variable} ${GeistMono.variable}`
-        )}
-      >
-        {children}
-      </main>
+        <main
+          className={cn(
+            "flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6",
+            `${GeistSans.variable} ${GeistMono.variable}`
+          )}
+        >
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

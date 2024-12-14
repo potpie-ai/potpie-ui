@@ -9,13 +9,14 @@ import { AuthContextProvider } from "@/contexts/AuthContext";
 import posthog from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import FormbricksProvider from "@/app/formbricks";
 
 if (typeof window !== "undefined") {
   posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
     capture_pageview: true,
     loaded: () => {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         posthog.startSessionRecording();
       }
     },
@@ -32,6 +33,7 @@ const LayoutProviders = ({ children }: { children: React.ReactNode }) => {
           disableTransitionOnChange
         >
           <AuthContextProvider>
+            <FormbricksProvider />
             <PersistGate loading={<Loading />} persistor={persistor}>
               <Provider store={store}>
                 <TooltipProvider>{children}</TooltipProvider>

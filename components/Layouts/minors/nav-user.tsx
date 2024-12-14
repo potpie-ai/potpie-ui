@@ -1,12 +1,11 @@
 "use client";
 
 import {
-  BadgeCheck,
   Bell,
   ChevronsUpDown,
+  CircleAlert,
   CreditCard,
   LogOut,
-  Sparkles,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,6 +28,7 @@ import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import posthog from "posthog-js";
+import formbricksApp from "@formbricks/js";
 
 export function NavUser({
   user,
@@ -40,6 +40,8 @@ export function NavUser({
   };
 }) {
   const router = useRouter();
+  const userId = auth.currentUser?.uid || "";
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -83,6 +85,21 @@ export function NavUser({
               <DropdownMenuItem onClick={() => router.push("/key-management")}>
                 <CreditCard />
                 Key Management
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                id="report-btn"
+                onClick={() =>
+                  formbricksApp.track("report-btn", {
+                    email: user.email,
+                    name: user.name,
+                    hiddenFields: {
+                      user_id: userId,
+                    },
+                  })
+                }
+              >
+                <CircleAlert />
+                Report
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Link

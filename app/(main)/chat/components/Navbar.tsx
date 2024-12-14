@@ -253,9 +253,9 @@ const Navbar = ({
     <>
       <header className="sticky top-0 z-50 bg-white flex items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6">
         <div className="bg-[#4479FF] w-full text-center bg-opacity-[0.37] text-muted">
-          Hello beta user! Please refer to this Notion doc to get started.{" "}
+          Hello beta user! Please refer to the documentation to get started.{" "}
           <Link
-            href="https://momentumsh.notion.site/potpie-s-beta-program-10cc13a23aa8801e8e2bd34d8f1488f5?pvs=4"
+            href="https://docs.potpie.ai/quickstart"
             className="text-[#0267FF] underline"
           >
             Click here.

@@ -140,7 +140,20 @@ const Step1: React.FC<Step1Props> = ({
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery(
     {
       queryKey: ["user-repository"],
-      queryFn: () => BranchAndRepositoryService.getUserRepositories(),
+      queryFn: async () => {
+        const repos = await BranchAndRepositoryService.getUserRepositories().then((data) => {
+          if (defaultRepo && data.length > 0 ) {
+            if (defaultRepo && data.length > 0) {
+              const matchingRepo = data.find((repo: { full_name: string }) => 
+                repo.full_name.toLowerCase() === decodeURIComponent(defaultRepo).toLowerCase()
+              );
+              dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
+            }
+          }
+          return data;
+        });
+        return repos;
+      },
     }
   );
 
@@ -153,7 +166,17 @@ const Step1: React.FC<Step1Props> = ({
         const ownerRepo = `${match[1]}/${match[2]}`;
         return BranchAndRepositoryService.getBranchList(ownerRepo);
       }
-      return BranchAndRepositoryService.getBranchList(repoName);
+      return BranchAndRepositoryService.getBranchList(repoName).then((data) => {
+        if (data?.length > 0 && defaultBranch) {
+          if (defaultBranch && data.length > 0) {
+            const matchingBranch = data.find((branch: string) => 
+              branch.toLowerCase() === decodeURIComponent(defaultBranch).toLowerCase()
+            );
+            dispatch(setBranchName(matchingBranch ? decodeURIComponent(defaultBranch) : ""));
+          }
+        }
+        return data;
+      });
     },
     enabled: !!repoName && repoName !== "",
   });
@@ -246,41 +269,10 @@ const Step1: React.FC<Step1Props> = ({
     }
   }, [inputValue, isPublicRepoDailog]);
 
-  useEffect(() => {
-    if (
-      !UserRepositorysLoading &&
-      !UserBranchLoading &&
-      defaultRepo &&
-      UserRepositorys.length > 0 &&
-      UserRepositorys.find(
-        (repo: { full_name: string }) =>
-          repo.full_name === decodeURIComponent(defaultRepo)
-      )
-    ) {
-       dispatch(setRepoName(decodeURIComponent(defaultRepo)));
-      if (
-        UserBranch &&
-        UserBranch.length > 0 &&
-        UserBranch.find(
-          (branch: string) => branch === decodeURIComponent(defaultBranch?? "")
-        )
-      ) {
-        dispatch(setBranchName(decodeURIComponent(defaultBranch ?? "")));
-      }
-    }
-  }, [
-    defaultRepo,
-    defaultBranch,
-    UserRepositorysLoading,
-    UserBranchLoading,
-    UserRepositorys,
-    UserBranch,
-  ]);
-
   return (
     <div className="text-muted">
       <h1 className="text-lg">Select a repository and branch</h1>
-      <Link href={"#"} className="text-accent underline">
+      <Link href="https://docs.potpie.ai/quickstart" className="text-accent underline">
         Need help?
       </Link>
       <div className="flex items-center gap-4 mt-4 ml-5">

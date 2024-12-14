@@ -26,6 +26,7 @@ import AgentService from "@/services/AgentService";
 import { list_system_agents } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import MinorService from "@/services/minorService";
+import { ParsingStatusEnum } from "@/lib/Constants";
 
 interface SendMessageArgs {
   message: string;
@@ -99,7 +100,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       );
     } catch (err) {
       console.error("Error during parsing:", err);
-      setParsingStatus("Error");
+      setParsingStatus(ParsingStatusEnum.ERROR);
     }
   };
   const messageMutation = useMutation({
@@ -244,9 +245,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   useEffect(() => {
     if (
-      parsingStatus !== "ready" &&
+      parsingStatus !== ParsingStatusEnum.READY &&
       parsingStatus !== "loading" &&
-      parsingStatus !== "error" &&
+      parsingStatus !== ParsingStatusEnum.ERROR &&
       projectId
     ) {
       setIsDialogOpen(true);
@@ -261,7 +262,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     });
   };
 
-  console.log(parsingStatus);
   if (Error.isError)
     return (
       <GlobalError title={Error.message} description={Error.description} />
@@ -333,7 +333,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             <NodeSelectorForm
               projectId={projectId}
               onSubmit={handleFormSubmit}
-              disabled={!!fetchingResponse || parsingStatus !== "ready"}
+              disabled={!!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY}
             />
           </>
         ) : chatAccess === "loading" ? (
@@ -351,7 +351,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>
-                {parsingStatus === "Error"
+                {parsingStatus === ParsingStatusEnum.ERROR
                   ? "There was an error parsing your repo, please try again after a few minutes"
                   : "Understanding your latest commit this might take some time"}{" "}
               </DialogTitle>
@@ -360,7 +360,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               <DialogClose>
                 <Button
                   variant={
-                    parsingStatus === "Error" ? "destructive" : "default"
+                    parsingStatus === ParsingStatusEnum.ERROR ? "destructive" : "default"
                   }
                 >
                   Ok

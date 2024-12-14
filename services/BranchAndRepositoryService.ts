@@ -1,5 +1,6 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { ParsingStatusEnum } from "@/lib/Constants";
 
 export default class BranchAndRepositoryService {
 
@@ -100,33 +101,33 @@ export default class BranchAndRepositoryService {
     
         const getStatusMessage = (status: string) => {
           switch (status) {
-            case "submitted":
+            case ParsingStatusEnum.SUBMITTED:
               return "Cloning your repository";
-            case "cloned":
+            case ParsingStatusEnum.CLONED:
               return "Parsing your code";
-            case "parsed":
+            case ParsingStatusEnum.PARSED:
               return "Understanding your codebase";
-            case "error":
+            case ParsingStatusEnum.ERROR:
               return "Error";
             default:
               return status;
           }
         };
     
-        while (parsingStatus !== "ready" && Date.now() - startTime < maxDuration) {
+        while (parsingStatus !== ParsingStatusEnum.READY && Date.now() - startTime < maxDuration) {
           parsingStatus = await BranchAndRepositoryService.getParsingStatus(projectId);
           setParsingStatus(getStatusMessage(parsingStatus));
     
-          if (parsingStatus === "ready") {
+          if (parsingStatus === ParsingStatusEnum.READY) {
             if (setChatStep) {
               setChatStep(2); 
             }
-            setParsingStatus("Ready");
+            setParsingStatus(ParsingStatusEnum.READY);
             return;
           }
     
-          if (parsingStatus === "error") {
-            setParsingStatus("Error");
+          if (parsingStatus === ParsingStatusEnum.ERROR) {
+            setParsingStatus(ParsingStatusEnum.ERROR);
             return;
           }
     
@@ -138,7 +139,7 @@ export default class BranchAndRepositoryService {
         }
     
         if (Date.now() - startTime >= maxDuration) {
-          setParsingStatus("Error");
+          setParsingStatus(ParsingStatusEnum.ERROR);
         }
       }
 }

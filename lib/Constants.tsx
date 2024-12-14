@@ -12,6 +12,15 @@ export enum Visibility {
   PRIVATE = "private",
 }
 
+export enum ParsingStatusEnum {
+  SUBMITTED = "submitted",
+  CLONED = "cloned",
+  PARSED = "parsed",
+  PROCESSING = "processing",
+  READY = "ready",
+  ERROR = "error",
+}
+
 export const systemAgents = [
   {
     id: "codebase_qna_agent",
@@ -70,7 +79,8 @@ export const systemAgents = [
     description:
       "An agent specialized in generating code for new features or fixing bugs.",
     status: "SYSTEM",
-    prompt: "Generate complete code to implement redis caching in the @get_user_subscription method with 60 min TTL"
+    prompt:
+      "Generate complete code to implement redis caching in the @get_user_subscription method with 60 min TTL",
   },
 ];
 

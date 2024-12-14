@@ -1,5 +1,9 @@
-import { BotIcon, Github, LucideFileText, MessagesSquare } from "lucide-react";
+import { auth } from "@/configs/Firebase-config";
+import formbricksApp from "@formbricks/js";
+import { BotIcon, CircleAlert, Github, LucideFileText, MessagesSquare } from "lucide-react";
 import Image from "next/image";
+
+const user = auth.currentUser || "" as any; 
 
 export enum planTypes {
   FREE = "FREE",
@@ -128,6 +132,22 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         title: "Open source",
         href: "https://github.com/potpie-ai/potpie",
         disabled: false,
+      },
+      {
+        icons: <CircleAlert size={20} strokeWidth={1.5} />,
+        title: "Report a bug",
+        href: "#",
+        onclick: () => {
+          formbricksApp.track("report-btn", {
+            email: user.email,
+            name: user.displayName,
+            hiddenFields: {
+              user_id: user.uid,
+              user_name: user.displayName,
+            },
+          })
+        },
+        disabled: true,
       },
       {
         icons: (

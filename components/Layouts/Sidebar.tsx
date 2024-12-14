@@ -109,8 +109,8 @@ export function AppSidebar() {
                 {item.links.map((link) => {
                   const isActive = pathname === link.href.split("/").pop();
                   return (
-                    <SidebarMenuItem key={link.title}>
-                      <SidebarMenuButton asChild isActive={isActive}>
+                    <SidebarMenuItem key={link.title} >
+                      <SidebarMenuButton asChild isActive={isActive} disabled={link.disabled} onClick={link.onclick || undefined}>
                         <Link href={link.href} className="flex gap-2 items-center w-full">
                         <div className="flex gap-2">
                           {link.icons && <span>{link.icons}</span>}

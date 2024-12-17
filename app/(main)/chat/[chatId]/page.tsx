@@ -65,27 +65,65 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     setFetchingResponse(true);
-    const { accumulatedMessage, accumulatedCitation } =
-      await ChatService.sendMessage(
+    
+    try {
+      // Add initial empty message
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        messages: [
+          ...prevConversation.messages,
+          {
+            sender: "agent",
+            text: "",
+            citations: [],
+            isStreaming: true
+          },
+        ],
+      }));
+
+      // Use the service method
+      await ChatService.streamMessage(
         currentConversationId,
         message,
-        selectedNodes
+        selectedNodes,
+        (currentMessage, currentCitations) => {
+          // Update conversation state with latest message
+          setCurrentConversation((prevConversation: any) => ({
+            ...prevConversation,
+            messages: prevConversation.messages.map((msg: any, idx: number) => 
+              idx === prevConversation.messages.length - 1 
+                ? {
+                    ...msg,
+                    text: currentMessage,
+                    citations: currentCitations,
+                    isStreaming: true
+                  }
+                : msg
+            ),
+          }));
+        }
       );
 
-    setCurrentConversation((prevConversation: any) => ({
-      ...prevConversation,
-      messages: [
-        ...prevConversation.messages,
-        {
-          sender: "agent",
-          text: accumulatedMessage,
-          citations: [accumulatedCitation],
-        },
-      ],
-    }));
+      // Final update to mark streaming as complete
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        messages: prevConversation.messages.map((msg: any, idx: number) => 
+          idx === prevConversation.messages.length - 1 
+            ? {
+                ...msg,
+                isStreaming: false
+              }
+            : msg
+        ),
+      }));
 
-    setFetchingResponse(false);
-    return accumulatedMessage;
+      setFetchingResponse(false);
+      
+    } catch (error) {
+      console.error("Error in sendMessage:", error);
+      setFetchingResponse(false);
+      throw error;
+    }
   };
 
   const parseRepo = async (repo_name: string, branch_name: string) => {
@@ -297,6 +335,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                   citations: any;
                   text: string;
                   sender: "user" | "agent";
+                  isStreaming: boolean;
                 },
                 i: number
               ) => (
@@ -311,6 +350,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                   message={message.text}
                   sender={message.sender}
                   isLast={i === currentConversation.messages.length - 1}
+                  isStreaming={message.isStreaming}
                   currentConversationId={currentConversation.conversationId}
                   userImage={profilePicUrl}
                 />

@@ -26,7 +26,7 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
 const ChatBubble: React.FC<ChatBubbleProps> = ({
   message: initialMessage,
   sender,
-  citations: initialCitations = [], // Default to an empty array if undefined
+  citations: initialCitations = [],
   className,
   isLast,
   currentConversationId,
@@ -37,8 +37,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const { user } = useAuthContext();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEmptyResponse, setIsEmptyResponse] = useState(false);
-  const [message, setMessage] = useState(initialMessage); // Store the message in state
-  const [citations, setCitations] = useState(initialCitations); // Store the citations in state
   const { temporaryContext, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
@@ -100,7 +98,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     return sections;
   };
 
-  const parsedSections = parseMessage(message);
+  const parsedSections = parseMessage(initialMessage);
 
   const regenerateMessage = async () => {
     setIsRegenerating(true);
@@ -108,8 +106,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     try {
       const { accumulatedMessage, accumulatedCitation } = await ChatService.regenerateMessage(currentConversationId, selectedNodes);
       
-      setMessage(accumulatedMessage);
-      setCitations(accumulatedCitation);
       setIsEmptyResponse(false);
       setIsRegenerating(false);
     } catch (err) {
@@ -140,15 +136,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           sender === "user"
             ? "bg-[#f7e6e6] text-white ml-2"
             : "bg-[#edecf4] text-muted mr-2",
-          isStreaming && "animate-pulse",
+          isStreaming && !initialMessage && "animate-pulse",
           className
         )}
         {...props}
       >
         {/* Citations Section */}
-        {sender === "agent" && citations && citations.length > 0 && (
+        {sender === "agent" && initialCitations && initialCitations.length > 0 && (
           <div className="mb-2">
-            {citations?.map((citation: string, index: number) => {
+            {initialCitations?.map((citation: string, index: number) => {
               const displayText = citation?.length > 30 ? citation.split("/").pop() : citation; // Display last part if long
 
               return (

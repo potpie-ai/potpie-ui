@@ -3,88 +3,75 @@ import getHeaders from "@/app/utils/headers.util";
 import { Visibility } from "@/lib/Constants";
 
 export default class ChatService {
-    static async sendMessage(conversationId: string, message: string, selectedNodes: any[]) {
-        const headers = await getHeaders();
-        const response = await fetch(
-            `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message/`,
-            {
-                method: "POST",
-                headers: {
-                    ...headers,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ content: message, node_ids: selectedNodes }),
+    
+    static async streamMessage(
+        conversationId: string, 
+        message: string, 
+        selectedNodes: any[],
+        onMessageUpdate: (message: string, citations: string[]) => void
+    ): Promise<{ message: string; citations: string[] }> {
+        try {
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message/`,
+                {
+                    method: "POST",
+                    headers: {
+                        ...(await getHeaders()),
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ content: message, node_ids: selectedNodes }),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        );
 
-        if (!response.ok) {
-            throw new Error("Network response was not ok");
-        }
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            let currentMessage = "";
+            let currentCitations: string[] = [];
 
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let accumulatedMessage = "";
-        let accumulatedCitation = "";
-
-        if (reader) {
-            // Try to read first chunk to check if it's a single response
-            const { value } = await reader.read();
-            if (value) {
-                const chunk = decoder.decode(value);
+            if (reader) {
                 try {
-                    // Attempt to parse as single complete response
-                    const parsedChunk = JSON.parse(chunk);
-                    if (parsedChunk.message && !chunk.includes("}{")) {
-                        // Single complete response
-                        accumulatedMessage = parsedChunk.message;
-                        accumulatedCitation = parsedChunk.citations;
-                        console.log("SINGLE CHUNK RESPONSE")
-                        return { accumulatedMessage, accumulatedCitation };
-                    }
-                } catch (error) {
-                    // Not a complete JSON, treat as start of stream
-                    try {
-                        const parsedChunks = chunk
-                            .split("}")
-                            .filter(Boolean)
-                            .map(c => JSON.parse(c + "}"));
-                        
-                        for (const parsedChunk of parsedChunks) {
-                            accumulatedMessage += parsedChunk.message;
-                            accumulatedCitation = parsedChunk.citations;
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        const chunk = decoder.decode(value);
+                        const jsonObjects = chunk.match(/\{[^}]+\}/g) || [];
+
+                        for (const jsonStr of jsonObjects) {
+                            try {
+                                const data = JSON.parse(jsonStr);
+                                
+                                if (data.message !== undefined) {
+                                    currentMessage += data.message;
+                                    onMessageUpdate(currentMessage, currentCitations);
+                                }
+                                
+                                if (data.citations !== undefined) {
+                                    currentCitations = data.citations;
+                                    onMessageUpdate(currentMessage, currentCitations);
+                                }
+                            } catch (e) {
+                                console.error("Error parsing JSON object:", e);
+                            }
                         }
-                        console.log("MULTIPLE CHUNK RESPONSE")
-                    } catch (streamError) {
-                        console.error("Error parsing stream chunk:", streamError);
                     }
+                } finally {
+                    reader.releaseLock();
                 }
             }
 
-            // Continue reading stream
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value);
-                try {
-                    const parsedChunks = chunk
-                        .split("}")
-                        .filter(Boolean)
-                        .map(c => JSON.parse(c + "}"));
-
-                    for (const parsedChunk of parsedChunks) {
-                        accumulatedMessage += parsedChunk.message;
-                        accumulatedCitation = parsedChunk.citations;
-                    }
-                } catch (error) {
-                    console.error("Error parsing stream chunk:", error);
-                }
-            }
+            return { message: currentMessage, citations: currentCitations };
+            
+        } catch (error) {
+            console.error("Error in streamMessage:", error);
+            throw error;
         }
-
-        return { accumulatedMessage, accumulatedCitation };
     }
-
+    
     static async loadMessages(conversationId: string, start: number, limit: number) {
         const headers = await getHeaders();
         const response = await axios.get(`${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/messages/`, {
@@ -318,4 +305,5 @@ export default class ChatService {
           };
         }
       }
+
 }

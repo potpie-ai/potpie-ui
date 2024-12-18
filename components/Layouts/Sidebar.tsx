@@ -34,6 +34,8 @@ import * as Progress from "@radix-ui/react-progress";
 import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
+import MinorService from "@/services/minorService";
+import dayjs from "dayjs";
 
 export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);
@@ -42,20 +44,22 @@ export function AppSidebar() {
   const dispatch = useDispatch();
   const router = useRouter();
 
-  const fetchUserSubscription = async (userId: string) => {
-    const baseUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
-    const response = await axios.get(
-      `${baseUrl}/subscriptions/info?user_id=${userId}`
-    );
-    return response.data;
-  };
-
   const userId = user?.uid;
   const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["userSubscription", userId],
-    queryFn: () => fetchUserSubscription(userId as string),
+    queryFn: () => MinorService.fetchUserSubscription(userId as string),
     enabled: !!userId,
     retry: false,
+  });
+
+  const { data: userUsage, isLoading: usageLoading } = useQuery({
+    queryKey: ["userUsage", userId],
+    queryFn: () =>
+      MinorService.fetchUserUsage(
+        dayjs(userSubscription.end_date).subtract(30, "day").toISOString(),
+        userSubscription.end_date
+      ),
+    enabled: !!userId && !!userSubscription,
   });
 
   const redirectToNewChat = () => {
@@ -111,14 +115,19 @@ export function AppSidebar() {
                   return (
                     <SidebarMenuItem key={link.title}>
                       <SidebarMenuButton asChild isActive={isActive}>
-                        <Link href={link.href} className="flex gap-2 items-center w-full">
-                        <div className="flex gap-2">
-                          {link.icons && <span>{link.icons}</span>}
-                          <span>{link.title}</span>
-                        </div>
-                        {link.description && <span className="border border-white group-hover/menu-item:border-sidebar  group-hover/menu-item:bg-white group-hover/menu-item:text-foreground text-white rounded-full px-2 text-[0.6rem]">
-                          {link.description}
-                        </span>}
+                        <Link
+                          href={link.href}
+                          className="flex gap-2 items-center w-full"
+                        >
+                          <div className="flex gap-2">
+                            {link.icons && <span>{link.icons}</span>}
+                            <span>{link.title}</span>
+                          </div>
+                          {link.description && (
+                            <span className="border border-white group-hover/menu-item:border-sidebar  group-hover/menu-item:bg-white group-hover/menu-item:text-foreground text-white rounded-full px-2 text-[0.6rem]">
+                              {link.description}
+                            </span>
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -167,30 +176,11 @@ export function AppSidebar() {
                 <CardDescription className="flex flex-row justify-between text-tertiary">
                   <span>Credits used</span>
                   <span>
-                    {(() => {
-                      const now = new Date();
-                      const subscriptionEndDate = new Date(
-                        userSubscription?.end_date || 0
-                      );
-                      if (
-                        !userSubscription ||
-                        userSubscription.plan_type === "free"
-                      ) {
-                        return "0/50";
-                      } else if (
-                        userSubscription.plan_type === "startup" &&
-                        subscriptionEndDate > now
-                      ) {
-                        return "0/50";
-                      } else if (
-                        userSubscription.plan_type === "pro" &&
-                        subscriptionEndDate > now
-                      ) {
-                        return "0/500";
-                      } else {
-                        return "0/0";
-                      }
-                    })()}
+                    {usageLoading ? (
+                      <Skeleton className="w-10 h-5" />
+                    ) : (
+                      `${userUsage || 0} / ${userSubscription?.plan_type === "pro" ? 500 : 50}`
+                    )}
                   </span>
                 </CardDescription>
               </CardHeader>

@@ -91,7 +91,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   };
 
   const parseRepo = async () => {
-
     try {
       await BranchAndRepositoryService.pollParsingStatus(
         projectId,
@@ -245,15 +244,20 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   useEffect(() => {
     if (
-      parsingStatus !== ParsingStatusEnum.READY &&
-      parsingStatus !== "loading" &&
-      parsingStatus !== ParsingStatusEnum.ERROR &&
-      projectId
+      parsingStatus === ParsingStatusEnum.ERROR ||
+      (parsingStatus !== ParsingStatusEnum.READY &&
+        parsingStatus !== "loading" &&
+        projectId)
     ) {
       setIsDialogOpen(true);
-      parseRepo();
+      if (parsingStatus !== ParsingStatusEnum.ERROR) {
+        parseRepo();
+      }
+    } else if (parsingStatus === ParsingStatusEnum.READY) {
+      setIsDialogOpen(false);
     }
-  }, [parsingStatus]);
+  }, [parsingStatus, projectId]);
+  
 
   const handleFormSubmit = (message: string) => {
     messageMutation.mutate({
@@ -333,7 +337,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             <NodeSelectorForm
               projectId={projectId}
               onSubmit={handleFormSubmit}
-              disabled={!!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY}
+              disabled={
+                !!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY
+              }
             />
           </>
         ) : chatAccess === "loading" ? (
@@ -360,7 +366,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               <DialogClose>
                 <Button
                   variant={
-                    parsingStatus === ParsingStatusEnum.ERROR ? "destructive" : "default"
+                    parsingStatus === ParsingStatusEnum.ERROR
+                      ? "destructive"
+                      : "default"
                   }
                 >
                   Ok

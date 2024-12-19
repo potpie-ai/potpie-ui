@@ -57,6 +57,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const { pendingMessage, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
+  const { planType, total_human_messages } = useSelector(
+    (state: RootState) => state.UserInfo
+  );
   const [Error, setError] = useState({
     isError: false,
     message: "",
@@ -142,7 +145,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     } catch (error) {
       console.error("Error fetching profile picture:", error);
     }
-  }
+  };
 
   const loadMessages = async () => {
     try {
@@ -214,10 +217,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
 
-      if(!info.is_creator){
+      if (!info.is_creator) {
         fetchProfilePicture(info.creator_id).then((profilePicture) => {
           setProfilePicUrl(profilePicture);
-        })
+        });
       }
     } catch (error) {
       console.error("Error loading conversation info:", error);
@@ -332,7 +335,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             <NodeSelectorForm
               projectId={projectId}
               onSubmit={handleFormSubmit}
-              disabled={!!fetchingResponse}
+              disabled={
+                !!fetchingResponse ||
+                total_human_messages >= (planType === "pro" ? 500 : 50)
+              }
             />
           </>
         ) : chatAccess === "loading" ? (

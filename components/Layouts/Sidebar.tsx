@@ -15,7 +15,7 @@ import { SidebarItems } from "@/lib/Constants";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "../ui/button";
-import React from "react";
+import React, { useEffect } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
@@ -36,13 +36,14 @@ import { NavUser } from "./minors/nav-user";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import MinorService from "@/services/minorService";
 import dayjs from "dayjs";
+import { AppDispatch } from "@/lib/state/store";
+import { setTotalHumanMessages, setUserPlanType } from "@/lib/state/Reducers/User";
 
 export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
-  const dispatch = useDispatch();
-  const router = useRouter();
+  const dispatch: AppDispatch = useDispatch();
 
   const userId = user?.uid;
   const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
@@ -61,6 +62,18 @@ export function AppSidebar() {
       ),
     enabled: !!userId && !!userSubscription,
   });
+
+  useEffect(() => {
+    if (!usageLoading) {
+      dispatch(setTotalHumanMessages(userUsage));
+    }
+  }, [usageLoading]);  
+
+  useEffect(() => {
+    if (!subscriptionLoading) {
+      dispatch(setUserPlanType(userSubscription.plan_type));
+    }
+  }, [subscriptionLoading]);
 
   const redirectToNewChat = () => {
     dispatch(clearChat());

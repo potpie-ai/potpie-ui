@@ -46,7 +46,11 @@ export default class ChatService {
                                 const data = JSON.parse(jsonStr);
                                 
                                 if (data.message !== undefined) {
-                                    currentMessage += data.message;
+                                    // Handle emojis by using String.fromCodePoint for any emoji unicode sequences
+                                    const messageWithEmojis = data.message.replace(/\\u[\dA-F]{4}/gi, (match: string) => {
+                                        return String.fromCodePoint(parseInt(match.replace(/\\u/g, ''), 16));
+                                    });
+                                    currentMessage += messageWithEmojis;
                                     onMessageUpdate(currentMessage, currentCitations);
                                 }
                                 

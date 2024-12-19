@@ -20,8 +20,6 @@ import ChatBubble from "../components/ChatBubble";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "../components/Navbar";
-import getHeaders from "@/app/utils/headers.util";
-import axios from "axios";
 import AgentService from "@/services/AgentService";
 import { list_system_agents } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,6 +60,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     message: "",
     description: "",
   });
+  let isStreaming: boolean = false;
 
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
     setFetchingResponse(true);
@@ -88,6 +87,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         selectedNodes,
         (currentMessage, currentCitations) => {
           // Update conversation state with latest message
+          isStreaming = true;
           setCurrentConversation((prevConversation: any) => ({
             ...prevConversation,
             messages: prevConversation.messages.map((msg: any, idx: number) => 
@@ -357,7 +357,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               )
             )}
 
-          {fetchingResponse && (
+          {fetchingResponse && isStreaming && (
             <div className="flex items-center space-x-1 mr-auto">
               <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
               <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>

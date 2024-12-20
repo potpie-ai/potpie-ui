@@ -43,7 +43,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     (state: RootState) => state.chat
   );
 
-  const agentImage = "/images/logo.svg";
+  const agentImage = "/images/potpie-blue.svg";
 
   const parseMessage = (message: string) => {
     if (message == undefined) {
@@ -128,7 +128,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         <img
           src={agentImage}
           alt="Agent"
-          className="w-9 h-9 rounded-full object-contain bg-background mr-2"
+          className="w-9 h-9 rounded-full object-cover bg-background mr-2"
         />
       )}
 

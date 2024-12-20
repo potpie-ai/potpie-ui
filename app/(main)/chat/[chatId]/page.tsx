@@ -362,6 +362,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   };
 
+  useEffect(() => {
+    if (bottomOfPanel.current) {
+      bottomOfPanel.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [currentConversation.messages]);
+
   if (Error.isError)
     return (
       <GlobalError title={Error.message} description={Error.description} />

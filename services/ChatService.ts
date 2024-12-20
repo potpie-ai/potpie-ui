@@ -31,33 +31,49 @@ export default class ChatService {
             const decoder = new TextDecoder();
             let currentMessage = "";
             let currentCitations: string[] = [];
+            let buffer = '';
 
             if (reader) {
                 try {
-                    let buffer = "";
-                    
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
 
-                        // Append new chunk to buffer
-                        buffer += decoder.decode(value, { stream: true });
-                        
-                        // Process complete JSON objects
-                        let startIdx = 0;
-                        let endIdx = buffer.indexOf("}{");
-                        
-                        while (endIdx !== -1) {
-                            // Process the complete JSON object
-                            const jsonStr = buffer.substring(startIdx, endIdx + 1);
+                        const chunk = decoder.decode(value);
+                        buffer += chunk;
+
+                        while (true) {
+                            const openBraceIndex = buffer.indexOf('{');
+                            if (openBraceIndex === -1) break;
+
+                            let depth = 0;
+                            let jsonEndIndex = -1;
+
+                            for (let i = openBraceIndex; i < buffer.length; i++) {
+                                if (buffer[i] === '{') depth++;
+                                if (buffer[i] === '}') depth--;
+                                if (depth === 0) {
+                                    jsonEndIndex = i + 1;
+                                    break;
+                                }
+                            }
+
+                            if (jsonEndIndex === -1) break;
+
+                            const jsonStr = buffer.substring(openBraceIndex, jsonEndIndex);
+                            buffer = buffer.substring(jsonEndIndex);
+
                             try {
                                 const data = JSON.parse(jsonStr);
                                 if (data.message !== undefined) {
-                                    const messageWithEmojis = data.message.replace(/\\u[\dA-F]{4}/gi, (match: string) => {
-                                        return String.fromCodePoint(parseInt(match.replace(/\\u/g, ''), 16));
-                                    });
-                                    currentMessage += messageWithEmojis;
-                                    onMessageUpdate(currentMessage, currentCitations);
+                                    const messageWithEmojis = data.message.replace(/\\u[\dA-F]{4}/gi, 
+                                        (match: string) => String.fromCodePoint(parseInt(match.replace(/\\u/g, ''), 16))
+                                    );
+                                    for (const char of messageWithEmojis) {
+                                        currentMessage += char;
+                                        onMessageUpdate(currentMessage, currentCitations);
+                                        await new Promise(resolve => setTimeout(resolve, 10));
+                                    }
                                 }
                                 
                                 if (data.citations !== undefined) {
@@ -67,34 +83,6 @@ export default class ChatService {
                             } catch (e) {
                                 console.error("Error parsing JSON object:", e);
                             }
-
-                            // Move to next JSON object
-                            startIdx = endIdx + 1;
-                            endIdx = buffer.indexOf("}{", startIdx);
-                        }
-
-                        // Keep the remaining incomplete JSON object in the buffer
-                        buffer = buffer.substring(startIdx);
-                    }
-
-                    // Process the final buffer content
-                    if (buffer) {
-                        try {
-                            const data = JSON.parse(buffer);
-                            if (data.message !== undefined) {
-                                const messageWithEmojis = data.message.replace(/\\u[\dA-F]{4}/gi, (match: string) => {
-                                    return String.fromCodePoint(parseInt(match.replace(/\\u/g, ''), 16));
-                                });
-                                currentMessage += messageWithEmojis;
-                                onMessageUpdate(currentMessage, currentCitations);
-                            }
-                            
-                            if (data.citations !== undefined) {
-                                currentCitations = data.citations;
-                                onMessageUpdate(currentMessage, currentCitations);
-                            }
-                        } catch (e) {
-                            console.error("Error parsing final JSON:", e);
                         }
                     }
                 } finally {

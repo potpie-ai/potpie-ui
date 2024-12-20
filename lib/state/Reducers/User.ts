@@ -22,9 +22,14 @@ const UserSlice = createSlice({
         console.log(action.payload);
         state.total_human_messages = action.payload;
       }
-    }
+    },
+    increaseTotalHumanMessages: (state, action) => {
+      if (action.payload) {
+        state.total_human_messages += action.payload;
+      }
+    },
   },
 });
 
 export default UserSlice.reducer;
-export const { setUserPlanType, setTotalHumanMessages } = UserSlice.actions;
+export const { setUserPlanType, setTotalHumanMessages, increaseTotalHumanMessages } = UserSlice.actions;

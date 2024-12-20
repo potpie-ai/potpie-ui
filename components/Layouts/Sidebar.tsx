@@ -18,7 +18,7 @@ import { Button } from "../ui/button";
 import React, { useEffect } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { clearChat } from "@/lib/state/Reducers/chat";
@@ -36,8 +36,11 @@ import { NavUser } from "./minors/nav-user";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import MinorService from "@/services/minorService";
 import dayjs from "dayjs";
-import { AppDispatch } from "@/lib/state/store";
-import { setTotalHumanMessages, setUserPlanType } from "@/lib/state/Reducers/User";
+import { AppDispatch, RootState } from "@/lib/state/store";
+import {
+  setTotalHumanMessages,
+  setUserPlanType,
+} from "@/lib/state/Reducers/User";
 
 export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);
@@ -46,6 +49,9 @@ export function AppSidebar() {
   const dispatch: AppDispatch = useDispatch();
 
   const userId = user?.uid;
+  const { total_human_messages } = useSelector(
+    (state: RootState) => state.UserInfo
+  );
   const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["userSubscription", userId],
     queryFn: () => MinorService.fetchUserSubscription(userId as string),
@@ -67,7 +73,7 @@ export function AppSidebar() {
     if (!usageLoading) {
       dispatch(setTotalHumanMessages(userUsage));
     }
-  }, [usageLoading]);  
+  }, [usageLoading]);
 
   useEffect(() => {
     if (!subscriptionLoading) {
@@ -84,19 +90,17 @@ export function AppSidebar() {
 
   useEffect(() => {
     if (!usageLoading && !subscriptionLoading && userSubscription) {
-      const maxCredits =
-        userSubscription.plan_type === "pro" ? 500 : 50;
-      const usedCredits = userUsage || 0;
-  
+      const maxCredits = userSubscription.plan_type === "pro" ? 500 : 50;
+      const usedCredits = total_human_messages || 0;
+
       const calculatedProgress = Math.min(
         (usedCredits / maxCredits) * 100,
         100
       );
-  
+
       setProgress(calculatedProgress);
     }
-  }, [usageLoading, subscriptionLoading, userUsage, userSubscription]);
-  
+  }, [usageLoading, subscriptionLoading, total_human_messages, userSubscription]);
 
   return (
     <Sidebar>
@@ -203,7 +207,7 @@ export function AppSidebar() {
                     {usageLoading ? (
                       <Skeleton className="w-10 h-5" />
                     ) : (
-                      `${userUsage || 0} / ${userSubscription?.plan_type === "pro" ? 500 : 50}`
+                      `${total_human_messages || 0} / ${userSubscription?.plan_type === "pro" ? 500 : 50}`
                     )}
                   </span>
                 </CardDescription>

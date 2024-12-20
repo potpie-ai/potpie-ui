@@ -26,6 +26,7 @@ import AgentService from "@/services/AgentService";
 import { list_system_agents } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import MinorService from "@/services/minorService";
+import { increaseTotalHumanMessages } from "@/lib/state/Reducers/User";
 
 interface SendMessageArgs {
   message: string;
@@ -136,6 +137,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         ],
       }));
     },
+    onSuccess: () => {
+      dispatch(increaseTotalHumanMessages(1))
+    }
   });
 
   const fetchProfilePicture = async (userId: string) => {

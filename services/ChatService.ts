@@ -143,55 +143,97 @@ export default class ChatService {
             }
         }
     }
-
-    static async regenerateMessage(conversationId: string, selectedNodes: any[]) {
-        const headers = await getHeaders();
-
+    static async regenerateMessage(
+        conversationId: string,
+        selectedNodes: any[],
+        onMessageUpdate: (message: string, citations: string[]) => void
+    ): Promise<{ message: string; citations: string[] }> {
         try {
             const response = await fetch(
                 `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/regenerate/`,
                 {
                     method: "POST",
                     headers: {
-                        ...headers,
+                        ...(await getHeaders()),
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ node_ids: selectedNodes }), // Only send node_ids
+                    body: JSON.stringify({ node_ids: selectedNodes }),
                 }
             );
 
             if (!response.ok) {
-                throw new Error("Network response was not ok");
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const reader = response.body?.getReader();
             const decoder = new TextDecoder();
-            let accumulatedMessage = "";
-            let accumulatedCitation = "";
+            let currentMessage = "";
+            let currentCitations: string[] = [];
 
-            while (true) {
-                const { done, value } = (await reader?.read()) || { done: true, value: undefined };
-                if (done) break;
-
-                const chunk = decoder.decode(value);
+            let buffer = '';
+            if (reader) {
                 try {
-                    const parsedChunks = chunk
-                        .split("}")
-                        .filter(Boolean)
-                        .map((c) => JSON.parse(c + "}"));
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
 
-                    for (const parsedChunk of parsedChunks) {
-                        accumulatedMessage += parsedChunk.message;
-                        accumulatedCitation = parsedChunk.citations;
+                        const chunk = decoder.decode(value);
+                        buffer += chunk;
+
+                        // Try to extract complete JSON objects from the buffer
+                        while (true) {
+                            const openBraceIndex = buffer.indexOf('{');
+                            if (openBraceIndex === -1) break;
+
+                            let depth = 0;
+                            let jsonEndIndex = -1;
+
+                            // Find the matching closing brace
+                            for (let i = openBraceIndex; i < buffer.length; i++) {
+                                if (buffer[i] === '{') depth++;
+                                if (buffer[i] === '}') depth--;
+                                if (depth === 0) {
+                                    jsonEndIndex = i + 1;
+                                    break;
+                                }
+                            }
+
+                            // If we didn't find a complete JSON object, break and wait for more data
+                            if (jsonEndIndex === -1) break;
+
+                            const jsonStr = buffer.substring(openBraceIndex, jsonEndIndex);
+                            buffer = buffer.substring(jsonEndIndex);
+
+                            try {
+                                const data = JSON.parse(jsonStr);
+                                
+                                if (data.message !== undefined) {
+                                    const messageWithEmojis = data.message.replace(/\\u[\dA-F]{4}/gi, 
+                                        (match: string) => String.fromCodePoint(parseInt(match.replace(/\\u/g, ''), 16))
+                                    );
+                                    currentMessage += messageWithEmojis;
+                                    onMessageUpdate(currentMessage, currentCitations);
+                                }
+                                
+                                if (data.citations !== undefined) {
+                                    currentCitations = data.citations;
+                                    onMessageUpdate(currentMessage, currentCitations);
+                                }
+                            } catch (e) {
+                                console.error("Error parsing JSON object:", e);
+                            }
+                        }
                     }
-                } catch (error) {
-                    // Handle parsing error
+                } finally {
+                    reader.releaseLock();
                 }
             }
 
-            return { accumulatedMessage, accumulatedCitation };
-        } catch (err) {
-            throw new Error("Unable to regenerate message");
+            return { message: currentMessage, citations: currentCitations };
+            
+        } catch (error) {
+            console.error("Error in regenerateMessage:", error);
+            throw error;
         }
     }
 

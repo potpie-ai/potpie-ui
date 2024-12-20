@@ -21,6 +21,7 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   isStreaming?: boolean;
   userImage?: string | null;
   agentImage?: string;
+  onRegenerate?: (newMessage?: string) => void;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
@@ -32,11 +33,12 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   currentConversationId,
   isStreaming,
   userImage,
+  onRegenerate,
   ...props
 }) => {
   const { user } = useAuthContext();
-  const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEmptyResponse, setIsEmptyResponse] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const { temporaryContext, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
@@ -101,18 +103,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const parsedSections = parseMessage(initialMessage);
 
   const regenerateMessage = async () => {
-    setIsRegenerating(true);
-
     try {
-      const { accumulatedMessage, accumulatedCitation } = await ChatService.regenerateMessage(currentConversationId, selectedNodes);
-      
+      setIsRegenerating(true);
       setIsEmptyResponse(false);
-      setIsRegenerating(false);
+
+      // Call the parent's onRegenerate with the new message
+      onRegenerate?.(initialMessage);
+      
     } catch (err) {
       console.error(err);
       toast.error("Unable to regenerate response");
-      setIsRegenerating(false);
       setIsEmptyResponse(true);
+    } finally {
+      setIsRegenerating(false);
     }
   };
 

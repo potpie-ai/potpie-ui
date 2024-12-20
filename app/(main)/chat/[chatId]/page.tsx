@@ -299,6 +299,69 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     });
   };
 
+  const handleRegenerate = async (newMessage: string) => {
+    setFetchingResponse(true);
+    
+    try {
+      // Update the last message to prepare for streaming
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        messages: prevConversation.messages.map((msg: any, idx: number) => 
+          idx === prevConversation.messages.length - 1 
+            ? {
+                ...msg,
+                text: "",
+                citations: [],
+                isStreaming: true
+              }
+            : msg
+        ),
+      }));
+
+      // Use the service method to stream the regenerated response
+      await ChatService.regenerateMessage(
+        currentConversationId,
+        selectedNodes,
+        (currentMessage, currentCitations) => {
+          isStreaming = true;
+          setCurrentConversation((prevConversation: any) => ({
+            ...prevConversation,
+            messages: prevConversation.messages.map((msg: any, idx: number) => 
+              idx === prevConversation.messages.length - 1 
+                ? {
+                    ...msg,
+                    text: currentMessage,
+                    citations: currentCitations,
+                    isStreaming: true
+                  }
+                : msg
+            ),
+          }));
+        }
+      );
+
+      // Final update to mark streaming as complete
+      setCurrentConversation((prevConversation: any) => ({
+        ...prevConversation,
+        messages: prevConversation.messages.map((msg: any, idx: number) => 
+          idx === prevConversation.messages.length - 1 
+            ? {
+                ...msg,
+                isStreaming: false
+              }
+            : msg
+        ),
+      }));
+
+      setFetchingResponse(false);
+      
+    } catch (error) {
+      console.error("Error in handleRegenerate:", error);
+      setFetchingResponse(false);
+      throw error;
+    }
+  };
+
   if (Error.isError)
     return (
       <GlobalError title={Error.message} description={Error.description} />
@@ -353,6 +416,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                   isStreaming={message.isStreaming}
                   currentConversationId={currentConversation.conversationId}
                   userImage={profilePicUrl}
+                  onRegenerate={() => handleRegenerate(message.text)}
                 />
               )
             )}

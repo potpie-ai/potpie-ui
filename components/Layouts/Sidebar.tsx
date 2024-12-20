@@ -34,6 +34,7 @@ import * as Progress from "@radix-ui/react-progress";
 import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
+import formbricksApp from "@formbricks/js";
 
 export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);
@@ -69,6 +70,17 @@ export function AppSidebar() {
     const timer = setTimeout(() => setProgress(0), 500);
     return () => clearTimeout(timer);
   }, []);
+
+  const handleTrack = () => {
+    formbricksApp.track("report-btn", {
+      email: user.email,
+      name: user.displayName,
+      hiddenFields: {
+        user_id: user.uid,
+        user_name: user.displayName,
+      },
+    });
+  };
 
   return (
     <Sidebar>
@@ -110,15 +122,25 @@ export function AppSidebar() {
                   const isActive = pathname === link.href.split("/").pop();
                   return (
                     <SidebarMenuItem key={link.title}>
-                      <SidebarMenuButton asChild isActive={isActive}>
-                        <Link href={link.href} className="flex gap-2 items-center w-full">
-                        <div className="flex gap-2">
-                          {link.icons && <span>{link.icons}</span>}
-                          <span>{link.title}</span>
-                        </div>
-                        {link.description && <span className="border border-white group-hover/menu-item:border-sidebar  group-hover/menu-item:bg-white group-hover/menu-item:text-foreground text-white rounded-full px-2 text-[0.6rem]">
-                          {link.description}
-                        </span>}
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        disabled={link.disabled}
+                        onClick={link.handleTrack ? handleTrack : undefined}
+                      >
+                        <Link
+                          href={link.href}
+                          className="flex gap-2 items-center w-full"
+                        >
+                          <div className="flex gap-2">
+                            {link.icons && <span>{link.icons}</span>}
+                            <span>{link.title}</span>
+                          </div>
+                          {link.description && (
+                            <span className="border border-white group-hover/menu-item:border-sidebar  group-hover/menu-item:bg-white group-hover/menu-item:text-foreground text-white rounded-full px-2 text-[0.6rem]">
+                              {link.description}
+                            </span>
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

@@ -52,6 +52,7 @@ import { useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
+import { ParsingStatusEnum } from "@/lib/Constants";
 
 const repoLinkSchema = z.object({
   repoLink: z
@@ -119,8 +120,8 @@ const Step1: React.FC<Step1Props> = ({
         setProjectId(projectId);
       }
 
-      if (initialStatus === "ready") {
-        setParsingStatus("Ready");
+      if (initialStatus === ParsingStatusEnum.READY) {
+        setParsingStatus(ParsingStatusEnum.READY);
         setChatStep(2);
         return;
       }
@@ -133,7 +134,7 @@ const Step1: React.FC<Step1Props> = ({
       );
     } catch (err) {
       console.error("Error during parsing:", err);
-      setParsingStatus("Error");
+      setParsingStatus(ParsingStatusEnum.ERROR);
     }
   };
 
@@ -434,7 +435,7 @@ const Step1: React.FC<Step1Props> = ({
         )}
 
         <div className="flex items-center">
-          {parsingStatus !== "Ready" && (
+          {parsingStatus !== ParsingStatusEnum.READY && (
             <>
               <Button
                 className="w-24 flex items-center justify-center mr-2"
@@ -471,24 +472,24 @@ const Step1: React.FC<Step1Props> = ({
           )}
         </div>
       </div>
-      {parsingStatus !== "Error" && parsingStatus === "Ready" ? (
+      {parsingStatus !== ParsingStatusEnum.ERROR && parsingStatus === ParsingStatusEnum.READY ? (
         <div className="flex justify-start items-center gap-3 mt-5 ml-5">
           <CheckCircle className="text-[#00C313] h-4 w-4" />{" "}
-          <span className="text-[#00C313]">{parsingStatus}</span>
+          <span className="text-[#00C313]">{parsingStatus.charAt(0).toLocaleUpperCase() + parsingStatus.slice(1)}</span>
         </div>
-      ) : parsingStatus !== "Error" && parsingStatus !== "" ? (
+      ) : parsingStatus !== ParsingStatusEnum.ERROR && parsingStatus !== "" ? (
         <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
           <Loader
             className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
           />{" "}
-          <span>{parsingStatus}</span>
+          <span>{parsingStatus.charAt(0).toLocaleUpperCase() + parsingStatus.slice(1)}</span>
         </div>
       ) : null}
-      {parsingStatus === "Error" && (
+      {parsingStatus === ParsingStatusEnum.ERROR && (
         <div className="flex gap-4 items-center my-3">
           <div className="flex justify-start items-center gap-3 ">
             <XCircle className="text-[#E53E3E] h-4 w-4" />{" "}
-            <span>{parsingStatus}</span>
+            <span>{parsingStatus.charAt(0).toLocaleUpperCase() + parsingStatus.slice(1)}</span>
           </div>
           <Button
             variant="destructive"

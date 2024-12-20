@@ -22,6 +22,15 @@ export enum Visibility {
   PRIVATE = "private",
 }
 
+export enum ParsingStatusEnum {
+  SUBMITTED = "submitted",
+  CLONED = "cloned",
+  PARSED = "parsed",
+  PROCESSING = "processing",
+  READY = "ready",
+  ERROR = "error",
+}
+
 export const systemAgents = [
   {
     id: "codebase_qna_agent",

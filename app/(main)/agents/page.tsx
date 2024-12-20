@@ -38,6 +38,7 @@ import posthog from 'posthog-js';
 import { generateHmacSignature } from "@/app/utils/hmac.util";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
+import { planTypesEnum } from "@/lib/Constants";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
@@ -266,7 +267,7 @@ const CustomAgent: React.FC = () => {
     if (customAgentsFlag === undefined) {
       return;
     }
-    if (customAgentsFlag === false || planType !== "pro") {
+    if (customAgentsFlag === false || !( planType === planTypesEnum.PRO || planType === planTypesEnum.ENTERPRISE)) {
       router.push("/");
       setTimeout(() => {
         window.open("https://potpie.ai/pricing", "_blank");

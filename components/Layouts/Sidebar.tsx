@@ -11,7 +11,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { SidebarItems } from "@/lib/Constants";
+import { planTypesEnum, SidebarItems } from "@/lib/Constants";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "../ui/button";
@@ -90,7 +90,7 @@ export function AppSidebar() {
 
   useEffect(() => {
     if (!usageLoading && !subscriptionLoading && userSubscription) {
-      const maxCredits = userSubscription.plan_type === "pro" ? 500 : 50;
+      const maxCredits = userSubscription.plan_type === planTypesEnum.PRO ? 500 : 50;
       const usedCredits = total_human_messages || 0;
 
       const calculatedProgress = Math.min(
@@ -183,16 +183,16 @@ export function AppSidebar() {
                       return <Skeleton className="w-28 h-6" />;
                     if (
                       !userSubscription ||
-                      userSubscription.plan_type === "free"
+                      userSubscription.plan_type === planTypesEnum.FREE
                     ) {
                       return "Free Plan";
                     } else if (
-                      userSubscription.plan_type === "startup" &&
+                      userSubscription.plan_type === planTypesEnum.STARTUP &&
                       subscriptionEndDate > now
                     ) {
                       return "Early-Stage";
                     } else if (
-                      userSubscription.plan_type === "pro" &&
+                      userSubscription.plan_type === planTypesEnum.PRO &&
                       subscriptionEndDate > now
                     ) {
                       return "Individual - Pro";
@@ -207,7 +207,7 @@ export function AppSidebar() {
                     {usageLoading ? (
                       <Skeleton className="w-10 h-5" />
                     ) : (
-                      `${total_human_messages || 0} / ${userSubscription?.plan_type === "pro" ? 500 : 50}`
+                      `${total_human_messages || 0} / ${userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50}`
                     )}
                   </span>
                 </CardDescription>

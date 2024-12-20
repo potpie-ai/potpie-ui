@@ -1,10 +1,11 @@
 import { BotIcon, Github, LucideFileText, MessagesSquare } from "lucide-react";
 import Image from "next/image";
 
-export enum planTypes {
-  FREE = "FREE",
-  PRO = "PRO",
-  ENTERPRISE = "ENTERPRISE",
+export enum planTypesEnum {
+  FREE = "free",
+  PRO = "pro",
+  ENTERPRISE = "enterprise",
+  STARTUP = "startup",
 }
 
 export enum Visibility {

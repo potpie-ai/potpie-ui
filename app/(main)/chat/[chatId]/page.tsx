@@ -27,6 +27,7 @@ import { list_system_agents } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import MinorService from "@/services/minorService";
 import { increaseTotalHumanMessages } from "@/lib/state/Reducers/User";
+import { planTypesEnum } from "@/lib/Constants";
 
 interface SendMessageArgs {
   message: string;
@@ -341,7 +342,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               onSubmit={handleFormSubmit}
               disabled={
                 !!fetchingResponse ||
-                total_human_messages >= (planType === "pro" ? 500 : 50)
+                total_human_messages >= (planType === planTypesEnum.PRO? 500 : 50)
               }
             />
           </>

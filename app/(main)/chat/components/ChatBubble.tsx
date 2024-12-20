@@ -3,13 +3,14 @@ import MyCodeBlock from "@/components/codeBlock";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LucideRepeat2, RotateCw, Github } from "lucide-react"; 
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { RootState } from "@/lib/state/store";
+import { AppDispatch, RootState } from "@/lib/state/store";
 import Link from "next/link";
 import ChatService from "@/services/ChatService";
+import { increaseTotalHumanMessages } from "@/lib/state/Reducers/User";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string;
@@ -42,6 +43,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const { temporaryContext, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
+  const dispatch: AppDispatch = useDispatch();
 
   const agentImage = "/images/logo.svg";
 
@@ -112,6 +114,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       setCitations(accumulatedCitation);
       setIsEmptyResponse(false);
       setIsRegenerating(false);
+      dispatch(increaseTotalHumanMessages(1))
     } catch (err) {
       console.error(err);
       toast.error("Unable to regenerate response");

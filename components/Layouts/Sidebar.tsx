@@ -82,10 +82,21 @@ export function AppSidebar() {
     window.location.href = "/newchat";
   };
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => setProgress(0), 500);
-    return () => clearTimeout(timer);
-  }, []);
+  useEffect(() => {
+    if (!usageLoading && !subscriptionLoading && userSubscription) {
+      const maxCredits =
+        userSubscription.plan_type === "pro" ? 500 : 50;
+      const usedCredits = userUsage || 0;
+  
+      const calculatedProgress = Math.min(
+        (usedCredits / maxCredits) * 100,
+        100
+      );
+  
+      setProgress(calculatedProgress);
+    }
+  }, [usageLoading, subscriptionLoading, userUsage, userSubscription]);
+  
 
   return (
     <Sidebar>

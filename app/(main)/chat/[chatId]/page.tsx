@@ -63,8 +63,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   let isStreaming: boolean = false;
 
   const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
-    setFetchingResponse(true);
-    
     try {
       // Add initial empty message
       setCurrentConversation((prevConversation: any) => ({
@@ -80,6 +78,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         ],
       }));
 
+      setFetchingResponse(true);
+
       // Use the service method
       await ChatService.streamMessage(
         currentConversationId,
@@ -88,6 +88,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         (currentMessage, currentCitations) => {
           // Update conversation state with latest message
           isStreaming = true;
+          setFetchingResponse(false);
           setCurrentConversation((prevConversation: any) => ({
             ...prevConversation,
             messages: prevConversation.messages.map((msg: any, idx: number) => 
@@ -116,8 +117,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             : msg
         ),
       }));
-
-      setFetchingResponse(false);
       
     } catch (error) {
       console.error("Error in sendMessage:", error);
@@ -405,6 +404,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                   text: string;
                   sender: "user" | "agent";
                   isStreaming: boolean;
+                  fetchingResponse: boolean | undefined;
                 },
                 i: number
               ) => (
@@ -420,20 +420,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                   sender={message.sender}
                   isLast={i === currentConversation.messages.length - 1}
                   isStreaming={message.isStreaming}
+                  fetchingResponse={fetchingResponse && i === currentConversation.messages.length - 1}
                   currentConversationId={currentConversation.conversationId}
                   userImage={profilePicUrl}
                   onRegenerate={() => handleRegenerate(message.text)}
                 />
               )
             )}
-
-          {fetchingResponse && isStreaming && (
-            <div className="flex items-center space-x-1 mr-auto">
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
-            </div>
-          )}
 
           <div ref={bottomOfPanel} />
         </div>

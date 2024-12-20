@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { RootState } from "@/lib/state/store";
 import Link from "next/link";
-import ChatService from "@/services/ChatService";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   message: string;
@@ -22,6 +21,7 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   userImage?: string | null;
   agentImage?: string;
   onRegenerate?: (newMessage?: string) => void;
+  fetchingResponse?: boolean;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
@@ -33,6 +33,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   currentConversationId,
   isStreaming,
   userImage,
+  fetchingResponse,
   onRegenerate,
   ...props
 }) => {
@@ -181,6 +182,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </div>
         )}
 
+        {/* Message Content */}
         {parsedSections?.map((section, index) => (
           <div key={index}>
             {section.type === "text" && (
@@ -208,12 +210,23 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </div>
         ))}
 
+        {/* Loader */}
+        {fetchingResponse && sender === "agent" && (
+          <div className="flex items-center space-x-1 mt-2">
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+          </div>
+        )}
+
+        {/* Empty Response Error */}
         {isEmptyResponse && (
           <div className="text-red-500 mt-2">
             The response was empty. Please try regenerating the response.
           </div>
         )}
 
+        {/* Regenerate Button */}
         {sender === "agent" && isLast && !isStreaming && (
           <div className="flex justify-end items-center mt-2">
             <Button
@@ -221,7 +234,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
               variant="secondary"
               size="sm"
               onClick={regenerateMessage}
-              disabled={isRegenerating}
+              disabled={isRegenerating || fetchingResponse}
             >
               {isRegenerating ? (
                 <>

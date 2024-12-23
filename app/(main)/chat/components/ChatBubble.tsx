@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import Link from "next/link";
-import ChatService from "@/services/ChatService";
 import { increaseTotalHumanMessages } from "@/lib/state/Reducers/User";
 
 interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -22,30 +21,32 @@ interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
   isStreaming?: boolean;
   userImage?: string | null;
   agentImage?: string;
+  onRegenerate?: (newMessage?: string) => void;
+  fetchingResponse?: boolean;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
   message: initialMessage,
   sender,
-  citations: initialCitations = [], // Default to an empty array if undefined
+  citations: initialCitations = [],
   className,
   isLast,
   currentConversationId,
   isStreaming,
   userImage,
+  fetchingResponse,
+  onRegenerate,
   ...props
 }) => {
   const { user } = useAuthContext();
-  const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEmptyResponse, setIsEmptyResponse] = useState(false);
-  const [message, setMessage] = useState(initialMessage); // Store the message in state
-  const [citations, setCitations] = useState(initialCitations); // Store the citations in state
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const { temporaryContext, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
   const dispatch: AppDispatch = useDispatch();
 
-  const agentImage = "/images/logo.svg";
+  const agentImage = "/images/potpie-blue.svg";
 
   const parseMessage = (message: string) => {
     if (message == undefined) {
@@ -102,24 +103,23 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     return sections;
   };
 
-  const parsedSections = parseMessage(message);
+  const parsedSections = parseMessage(initialMessage);
 
   const regenerateMessage = async () => {
-    setIsRegenerating(true);
-
     try {
-      const { accumulatedMessage, accumulatedCitation } = await ChatService.regenerateMessage(currentConversationId, selectedNodes);
-      
-      setMessage(accumulatedMessage);
-      setCitations(accumulatedCitation);
+      setIsRegenerating(true);
       setIsEmptyResponse(false);
-      setIsRegenerating(false);
+
+      // Call the parent's onRegenerate with the new message
+      onRegenerate?.(initialMessage);
+      
       dispatch(increaseTotalHumanMessages(1))
     } catch (err) {
       console.error(err);
       toast.error("Unable to regenerate response");
-      setIsRegenerating(false);
       setIsEmptyResponse(true);
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -132,7 +132,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         <img
           src={agentImage}
           alt="Agent"
-          className="w-9 h-9 rounded-full object-contain bg-background mr-2"
+          className="w-9 h-9 rounded-full object-cover bg-background mr-2"
         />
       )}
 
@@ -143,15 +143,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           sender === "user"
             ? "bg-[#f7e6e6] text-white ml-2"
             : "bg-[#edecf4] text-muted mr-2",
-          isStreaming && "animate-pulse",
+          isStreaming && !initialMessage && "animate-pulse",
           className
         )}
         {...props}
       >
         {/* Citations Section */}
-        {sender === "agent" && citations && citations.length > 0 && (
+        {sender === "agent" && initialCitations && initialCitations.length > 0 && (
           <div className="mb-2">
-            {citations?.map((citation: string, index: number) => {
+            {initialCitations?.map((citation: string, index: number) => {
               const displayText = citation?.length > 30 ? citation.split("/").pop() : citation; // Display last part if long
 
               return (
@@ -185,6 +185,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </div>
         )}
 
+        {/* Message Content */}
         {parsedSections?.map((section, index) => (
           <div key={index}>
             {section.type === "text" && (
@@ -212,12 +213,23 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </div>
         ))}
 
+        {/* Loader */}
+        {fetchingResponse && sender === "agent" && (
+          <div className="flex items-center space-x-1 mt-2">
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+          </div>
+        )}
+
+        {/* Empty Response Error */}
         {isEmptyResponse && (
           <div className="text-red-500 mt-2">
             The response was empty. Please try regenerating the response.
           </div>
         )}
 
+        {/* Regenerate Button */}
         {sender === "agent" && isLast && !isStreaming && (
           <div className="flex justify-end items-center mt-2">
             <Button
@@ -225,7 +237,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
               variant="secondary"
               size="sm"
               onClick={regenerateMessage}
-              disabled={isRegenerating}
+              disabled={isRegenerating || fetchingResponse}
             >
               {isRegenerating ? (
                 <>

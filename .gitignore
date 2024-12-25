@@ -42,3 +42,4 @@ certificates
 package-lock.json
 
 .next
+serviceAccount.json

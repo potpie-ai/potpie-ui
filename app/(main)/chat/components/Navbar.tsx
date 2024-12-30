@@ -67,6 +67,7 @@ const Navbar = ({
   const showTitle = pathname.split("/").pop() !== "newchat";
   const [shareWithLink, setShareWithLink] = useState(false);
   const [accessList, setAccessList] = useState<string[]>([]);
+  const [shared, setShared] = useState(false);
 
   useEffect(() => {
     if (chatTitle) {
@@ -170,6 +171,7 @@ const Navbar = ({
         emails.forEach((email) => emailSchema.parse(email));
         await refetchChatShare();
       }
+      setShared(true);
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -414,6 +416,7 @@ const Navbar = ({
                     <Button
                       type="button"
                       className="gap-2 bg-[#4479FF] text-white hover:bg-blue-600"
+                      disabled={!shared}
                     >
                       <ClipboardCheck /> <span>Copy Link</span>
                     </Button>

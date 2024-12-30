@@ -316,11 +316,11 @@ const Navbar = ({
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger hidden={!showShare}>
-                <Button size="icon" variant="outline">
+                <Button size="icon" variant="outline" data-test-sharebtn="active">
                   <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
+              <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6" data-test="share-dialog">
                 <DialogHeader>
                   <DialogTitle className="text-center font-semibold text-xl">
                     Share Chat with Others
@@ -332,7 +332,7 @@ const Navbar = ({
                     defaultValue={shareWithLink ? "link" : "email"}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Share with" />
+                      <SelectValue placeholder="Share with" data-test="share-with-trigger" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="email">With Email</SelectItem>

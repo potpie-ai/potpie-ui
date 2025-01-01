@@ -328,9 +328,6 @@ const Navbar = ({
                     {!shareWithLink && (
                       <div>
                         <EmailSelect emails={emails} setEmails={setEmails} />
-                        {emailError && (
-                          <p className="text-red-500 text-sm">{emailError}</p>
-                        )}
                       </div>
                     )}
                     {!shareWithLink && !isPeopleWithAccessVisible() && (

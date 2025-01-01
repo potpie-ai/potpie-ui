@@ -35,6 +35,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@radix-ui/react-scroll-area";
 import { Visibility } from "@/lib/Constants";
+import { EmailSelect } from "@/app/(main)/chat/components/multiSelect";
 
 const emailSchema = z
   .string()
@@ -60,8 +61,7 @@ const Navbar = ({
   const dispatch = useDispatch();
   const [displayTitle, setDisplayTitle] = useState<string>("Untitled");
   const [inputValue, setInputValue] = useState<string>("");
-  const [emailValue, setEmailValue] = useState<string>("");
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emails, setEmails] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
   const showTitle = pathname.split("/").pop() !== "newchat";
@@ -80,11 +80,6 @@ const Navbar = ({
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(event.target.value);
-  };
-
-  const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setEmailValue(event.target.value);
-    setEmailError(null);
   };
 
   const currentConversationId = usePathname()?.split("/").pop();
@@ -127,15 +122,11 @@ const Navbar = ({
   const { refetch: refetchChatShare } = useQuery({
     queryKey: ["chat-share", currentConversationId],
     queryFn: async () => {
-      const recipientEmails = emailValue
-        .split(",")
-        .map((email: string) => email.trim());
-
       if (!currentConversationId) return;
 
       const res = await ChatService.shareConversation(
         currentConversationId,
-        recipientEmails,
+        emails,
         shareWithLink ? Visibility.PUBLIC : Visibility.PRIVATE
       );
 
@@ -166,24 +157,19 @@ const Navbar = ({
         const res = await refetchChatShare();
         if (res.data.type === "error") return;
       } else {
-        const emails = emailValue.split(",").map((email) => email.trim());
         emails.forEach((email) => emailSchema.parse(email));
         await refetchChatShare();
       }
       setIsDialogOpen(false);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        setEmailError(error.errors[0].message);
-      } else {
-        setEmailError("An error occurred while sharing the chat.");
-      }
+      console.error(error);
+      toast.error("An error occurred while sharing the chat.");
     }
-  };
+  }; 
 
   const isShareDisabled = () => {
     if (disableShare) return true;
     if (shareWithLink) return false;
-    const emails = emailValue.split(",").map((email) => email.trim());
     return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
   };
 
@@ -221,8 +207,7 @@ const Navbar = ({
   const handleSelectChange = (value: string) => {
     setShareWithLink(value === "link");
     if (value === "email") {
-      setEmailValue(""); // Reset email value when switching
-      setEmailError(null); // Clear email error if switching to link
+      setEmails([]); // Reset email value when switching
       refetchAccessList(); // Fetch access list again for email option
     }
   };
@@ -248,7 +233,7 @@ const Navbar = ({
   };
 
   if (hidden) return null;
-
+  
   return (
     <>
       <header className="sticky top-0 z-50 bg-white flex items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6">
@@ -342,13 +327,7 @@ const Navbar = ({
 
                     {!shareWithLink && (
                       <div>
-                        <Input
-                          id="email"
-                          placeholder="Enter Email"
-                          value={emailValue}
-                          onChange={handleEmailChange}
-                          className="border rounded-md p-2"
-                        />
+                        <EmailSelect emails={emails} setEmails={setEmails} />
                         {emailError && (
                           <p className="text-red-500 text-sm">{emailError}</p>
                         )}
@@ -414,6 +393,7 @@ const Navbar = ({
                     <Button
                       type="button"
                       className="gap-2 bg-[#4479FF] text-white hover:bg-blue-600"
+                      disabled={ !((accessList.length > 0) || shareWithLink) }
                     >
                       <ClipboardCheck /> <span>Copy Link</span>
                     </Button>

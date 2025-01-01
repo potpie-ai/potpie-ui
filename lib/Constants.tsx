@@ -111,7 +111,7 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         icons: <BotIcon size={20} strokeWidth={1.5} />,
         title: "Custom Agents",
         altHref: "https://potpie.ai/pricing",
-        href: "/custom-agents",
+        href: "/all-agents",
         disabled: false,
         description: "Upgrade",
       },

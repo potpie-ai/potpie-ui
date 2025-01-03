@@ -107,6 +107,7 @@ const Footer: React.FC<{
               onClick={prevStep}
               size="sm"
               variant="secondary"
+              data-test="agent-prev-btn"
             >
               Prev
             </Button>
@@ -115,6 +116,7 @@ const Footer: React.FC<{
               type="button"
               onClick={handleNextStep}
               disabled={primaryBtnLoading || (isLastStep && statusLoading)}
+              data-test="agent-primary-btn"
             >
               {primaryBtnLoading || (isLastStep && statusLoading) ? (
                 <div className="flex items-center gap-2">

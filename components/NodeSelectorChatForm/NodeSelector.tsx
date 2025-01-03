@@ -212,7 +212,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
           bottom: formRect ? window.innerHeight - formRect.top + 10 : "0px",
         }}
       >
-        <ul>
+        <ul data-test="node-list" >
           {nodeOptions.map((node, index) => (
             <li
               key={node.node_id}
@@ -221,6 +221,9 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
                 e.stopPropagation();
                 handleNodeSelect(node);
               }}
+              data-test="node-list-item"
+              data-test-node-index={index}
+              data-selected={index === selectedNodeIndex}
             >
               <div className="font-semibold">{node.name}</div>
               <div className="text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
@@ -263,6 +266,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
       <div className="flex items-center p-2 pl-4">
         {selectedNodes.map((node) => (
           <div
+          data-test-selected-node={node.node_id}
             key={node.node_id}
             className="flex items-center space-x-2 bg-[#f7e6e6] p-1 rounded-lg mr-2"
           >
@@ -272,6 +276,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
               size="icon"
               className="h-4 w-4 hover:bg-white"
               onClick={() => handleNodeRemove(node)}
+              data-test-remove-node={node.node_id}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -287,6 +292,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
         placeholder={placeholder}
         className="min-h-12 text-base resize-none border-0 p-3 px-7"
         onKeyDown={handleKeyPress}
+        data-test-disabled={disabled? "disabled":"active"}
       />
         {renderNodeList()}
         <div className="flex items-center p-3 pt-0 ">

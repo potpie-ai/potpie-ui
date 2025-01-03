@@ -348,22 +348,22 @@ const CustomAgent: React.FC = () => {
               </Card>
             )}
             {index === 2 && (
-              <Card className="h-[calc(100vh-21.5rem)] overflow-auto border-none bg-background">
+              <Card  className="h-[calc(100vh-21.5rem)] overflow-auto border-none bg-background">
                 <CardContent className="p-6">
                   <Form {...form}>
-                    <form
+                    <form data-test="task-list"
                       onSubmit={form.handleSubmit(onSubmit)}
                       className="space-y-8"
                     >
                       {fields.map((task, idx) => (
-                        <Card
+                        <Card data-test-task-no={`task-${idx}`} data-test="task-card"
                           key={task.id}
                           className="relative p-4 mb-4 flex flex-col gap-4 border-black/10 shadow-md"
                         >
                           {fields.length > 1 && (
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="ghost" data-test="remove-task"
                               onClick={() => remove(idx)}
                               className="absolute top-2 right-2 p-1 text-red-500 hover:text-red-300 rounded-full"
                             >
@@ -423,7 +423,8 @@ const CustomAgent: React.FC = () => {
                                 ) : (
                                   <Skeleton className="w-full h-10" />
                                 )}
-                                <FormMessage />
+                                <FormMessage >
+                                </FormMessage>
                               </FormItem>
                             )}
                           />

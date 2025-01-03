@@ -448,7 +448,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             />
           </>
         ) : chatAccess === "loading" ? (
-          <Skeleton className="sticky bottom-6 overflow-hidden rounded-lg border-[#edecf4] shadow-md h-28" />
+          <Skeleton data-test="chat-Loading" className="sticky bottom-6 overflow-hidden rounded-lg border-[#edecf4] shadow-md h-28" />
         ) : chatAccess === "not_running" ? (
           <div className="sticky bottom-6 flex flex-col items-center">
             <p className="text-sm text-gray-500">

@@ -1,0 +1,12 @@
+[
+    {
+      "id": "1",
+      "name": "Tool 1",
+      "description": "First tool description"
+    },
+    {
+      "id": "2",
+      "name": "Tool 2",
+      "description": "Second tool description"
+    }
+  ]

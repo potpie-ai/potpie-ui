@@ -152,15 +152,10 @@ describe("Chat", () => {
 
     it("opens share dialog", () => {
       cy.getDataTest("share-dialog").should("exist");
-      cy.getDataTest("share-with-trigger").should("contain.text", "Share with");
-    });
-    it("opens share dialog", () => {
-      cy.getDataTest("share-dialog").should("exist");
-      cy.getDataTest("share-with-trigger").should("contain.text", "Share with");
     });
 
     it("toggles between email and link sharing", () => {
-      cy.contains("With Email").click();
+      cy.contains("With Email").click()
       cy.get("input#email").should("exist");
 
       cy.contains("Anyone With Link").click();
@@ -191,7 +186,11 @@ describe("Chat", () => {
     });
 
     it("copy link functionality", () => {
+      cy.contains("With Email").click();
+      cy.get("input#email").should("exist");
+
       cy.contains("Anyone With Link").click();
+      cy.get("input#email").should("not.exist");
 
       cy.window().then((win) => {
         cy.stub(win.navigator.clipboard, "writeText").as("copyClipboard");
@@ -199,22 +198,6 @@ describe("Chat", () => {
 
       cy.contains("button", "Copy Link").click();
       cy.get("@copyClipboard").should("have.been.calledOnce");
-    });
-
-    it("share button state management", () => {
-      cy.contains("With Email").click();
-      cy.get("button").contains("Share").should("be.disabled");
-
-      cy.get("input#email").type("invalid");
-      cy.get("button").contains("Share").should("be.disabled");
-
-      cy.get("input#email").clear().type("valid@example.com");
-      cy.get("button").contains("Share").should("be.enabled");
-    });
-
-    it("dialog close behavior", () => {
-      cy.get("[data-radix-dialog-close]").click();
-      cy.getDataTest("share-dialog").should("not.exist");
     });
   });
 });

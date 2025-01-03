@@ -15,7 +15,7 @@ module.exports = defineConfig({
   },
   e2e: {
     baseUrl: process.env.BASE_URL,
-    setupNodeEvents(on, config) {
+    setupNodeEvents(on: any, config: any) {
       return cypressFirebasePlugin(on, config, admin, {
         projectId: process.env.PROJECT_ID,
       });

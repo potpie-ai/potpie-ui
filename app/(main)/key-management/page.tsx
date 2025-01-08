@@ -13,11 +13,13 @@ import axios from "axios";
 import { Trash } from "lucide-react";
 import React, { useEffect } from "react";
 import { toast } from "sonner";
+import getHeaders from "@/app/utils/headers.util";
 
 interface KeySecrets {
     api_key: string;
     provider: string;
 }
+
 
 //Refactor later when we have multiple providers, currently api return single provider */
 const KeyManagement = () => {
@@ -32,17 +34,23 @@ const KeyManagement = () => {
         isLoading,
     } = useQuery<KeySecrets>({
         queryKey: ["secrets"],
-        queryFn: () =>
-            axios
-                .get<KeySecrets>(`${process.env.NEXT_PUBLIC_BASE_URL}/secrets/openai`)
-                .then((res) => res.data)
+        queryFn: async () => {
+            const headers = await getHeaders();
+            const response = await axios.get<KeySecrets>(
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets/openai`,
+                { headers }
+            );
+            return response.data;
+        }
     });
 
     const { mutate: saveSecret, isPending: isSaving } = useMutation({
-        mutationFn: (data: any) => {
+        mutationFn: async (data: any) => {
+            const headers = await getHeaders();
             return axios.post(
-                `${process.env.NEXT_PUBLIC_BASE_URL}/secrets`,
-                data
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets`,
+                data,
+                { headers }
             );
         },
         onSuccess: () => {
@@ -56,9 +64,11 @@ const KeyManagement = () => {
     });
 
     const { mutate: deleteSecret, isPending: isDeleting } = useMutation({
-        mutationFn: () => {
+        mutationFn: async () => {
+            const headers = await getHeaders();
             return axios.delete(
-                `${process.env.NEXT_PUBLIC_BASE_URL}/secrets/openai`
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets/openai`,
+                { headers }
             );
         },
         onSuccess: () => {

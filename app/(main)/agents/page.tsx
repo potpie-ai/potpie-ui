@@ -36,12 +36,17 @@ import { useFeatureFlagEnabled } from "posthog-js/react";
 import AgentService from "@/services/AgentService";
 import posthog from 'posthog-js';
 import { generateHmacSignature } from "@/app/utils/hmac.util";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import { planTypesEnum } from "@/lib/Constants";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
   const agentIdParam = searchParams.get("edit");
   const userId = auth.currentUser?.uid || "";
-
+  const { planType } = useSelector(
+    (state: RootState) => state.UserInfo
+  );
   const { data: agentDetails, isLoading: agentDetailsLoading } = useQuery({
     queryKey: ["agents", agentIdParam],
     queryFn: async () => {
@@ -262,13 +267,13 @@ const CustomAgent: React.FC = () => {
     if (customAgentsFlag === undefined) {
       return;
     }
-    if (customAgentsFlag === false) {
+    if (customAgentsFlag === false || !( planType === planTypesEnum.PRO || planType === planTypesEnum.ENTERPRISE)) {
       router.push("/");
       setTimeout(() => {
         window.open("https://potpie.ai/pricing", "_blank");
       }, 500);
     }
-  }, [router, customAgentsFlag]);
+  }, [router, customAgentsFlag, planType]);
 
 
 

@@ -11,10 +11,11 @@ import Image from "next/image";
 
 const user = auth.currentUser || ("" as any);
 
-export enum planTypes {
-  FREE = "FREE",
-  PRO = "PRO",
-  ENTERPRISE = "ENTERPRISE",
+export enum planTypesEnum {
+  FREE = "free",
+  PRO = "pro",
+  ENTERPRISE = "enterprise",
+  STARTUP = "startup",
 }
 
 export enum Visibility {
@@ -109,7 +110,8 @@ export const SidebarItems: { title: string; links: any[] }[] = [
       {
         icons: <BotIcon size={20} strokeWidth={1.5} />,
         title: "Custom Agents",
-        href: "https://potpie.ai/pricing",
+        altHref: "https://potpie.ai/pricing",
+        href: "/all-agents",
         disabled: false,
         description: "Upgrade",
       },

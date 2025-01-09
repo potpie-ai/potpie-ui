@@ -27,6 +27,8 @@ import { list_system_agents } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import MinorService from "@/services/minorService";
 import { ParsingStatusEnum } from "@/lib/Constants";
+import { increaseTotalHumanMessages } from "@/lib/state/Reducers/User";
+import { planTypesEnum } from "@/lib/Constants";
 
 interface SendMessageArgs {
   message: string;
@@ -59,6 +61,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+  const { planType, total_human_messages } = useSelector(
+    (state: RootState) => state.UserInfo
+  );
   const [Error, setError] = useState({
     isError: false,
     message: "",
@@ -155,6 +160,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         ],
       }));
     },
+    onSuccess: () => {
+      dispatch(increaseTotalHumanMessages(1))
+    }
   });
 
   const fetchProfilePicture = async (userId: string) => {
@@ -443,7 +451,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               projectId={projectId}
               onSubmit={handleFormSubmit}
               disabled={
+                
                 !!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY
+               ||
+                total_human_messages >= (planType === planTypesEnum.PRO? 500 : 50)
               }
             />
           </>

@@ -11,14 +11,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { SidebarItems } from "@/lib/Constants";
+import { planTypesEnum, SidebarItems } from "@/lib/Constants";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "../ui/button";
-import React from "react";
+import React, { useEffect } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { clearChat } from "@/lib/state/Reducers/chat";
@@ -35,29 +35,52 @@ import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import formbricksApp from "@formbricks/js";
+import MinorService from "@/services/minorService";
+import dayjs from "dayjs";
+import { AppDispatch, RootState } from "@/lib/state/store";
+import {
+  setTotalHumanMessages,
+  setUserPlanType,
+} from "@/lib/state/Reducers/User";
 
 export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
-  const dispatch = useDispatch();
-  const router = useRouter();
-
-  const fetchUserSubscription = async (userId: string) => {
-    const baseUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
-    const response = await axios.get(
-      `${baseUrl}/subscriptions/info?user_id=${userId}`
-    );
-    return response.data;
-  };
+  const dispatch: AppDispatch = useDispatch();
 
   const userId = user?.uid;
+  const { total_human_messages } = useSelector(
+    (state: RootState) => state.UserInfo
+  );
   const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["userSubscription", userId],
-    queryFn: () => fetchUserSubscription(userId as string),
+    queryFn: () => MinorService.fetchUserSubscription(userId as string),
     enabled: !!userId,
     retry: false,
   });
+
+  const { data: userUsage, isLoading: usageLoading } = useQuery({
+    queryKey: ["userUsage", userId],
+    queryFn: () =>
+      MinorService.fetchUserUsage(
+        dayjs(userSubscription.end_date).subtract(30, "day").toISOString(),
+        userSubscription.end_date
+      ),
+    enabled: !!userId && !!userSubscription,
+  });
+
+  useEffect(() => {
+    if (!usageLoading) {
+      dispatch(setTotalHumanMessages(userUsage));
+    }
+  }, [usageLoading]);
+
+  useEffect(() => {
+    if (!subscriptionLoading) {
+      dispatch(setUserPlanType(userSubscription.plan_type));
+    }
+  }, [subscriptionLoading]);
 
   const redirectToNewChat = () => {
     dispatch(clearChat());
@@ -66,10 +89,19 @@ export function AppSidebar() {
     window.location.href = "/newchat";
   };
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => setProgress(0), 500);
-    return () => clearTimeout(timer);
-  }, []);
+  useEffect(() => {
+    if (!usageLoading && !subscriptionLoading && userSubscription) {
+      const maxCredits = userSubscription.plan_type === planTypesEnum.PRO ? 500 : 50;
+      const usedCredits = total_human_messages || 0;
+
+      const calculatedProgress = Math.min(
+        (usedCredits / maxCredits) * 100,
+        100
+      );
+
+      setProgress(calculatedProgress);
+    }
+  }, [usageLoading, subscriptionLoading, total_human_messages, userSubscription]);
 
   const handleTrack = () => {
     formbricksApp.track("report-btn", {
@@ -129,7 +161,7 @@ export function AppSidebar() {
                         onClick={link.handleTrack ? handleTrack : undefined}
                       >
                         <Link
-                          href={link.href}
+                          href={userSubscription?.plan_type === "pro" ? link.href : (link.altHref || link.href)}
                           className="flex gap-2 items-center w-full"
                         >
                           <div className="flex gap-2">
@@ -137,7 +169,7 @@ export function AppSidebar() {
                             <span>{link.title}</span>
                           </div>
                           {link.description && (
-                            <span className="border border-white group-hover/menu-item:border-sidebar  group-hover/menu-item:bg-white group-hover/menu-item:text-foreground text-white rounded-full px-2 text-[0.6rem]">
+                            <span className="border border-white group-hover/menu-item:border-sidebar group-hover/menu-item:bg-white group-hover/menu-item:text-foreground text-white rounded-full px-2 text-[0.6rem]">
                               {link.description}
                             </span>
                           )}
@@ -168,16 +200,16 @@ export function AppSidebar() {
                       return <Skeleton className="w-28 h-6" />;
                     if (
                       !userSubscription ||
-                      userSubscription.plan_type === "free"
+                      userSubscription.plan_type === planTypesEnum.FREE
                     ) {
                       return "Free Plan";
                     } else if (
-                      userSubscription.plan_type === "startup" &&
+                      userSubscription.plan_type === planTypesEnum.STARTUP &&
                       subscriptionEndDate > now
                     ) {
                       return "Early-Stage";
                     } else if (
-                      userSubscription.plan_type === "pro" &&
+                      userSubscription.plan_type === planTypesEnum.PRO &&
                       subscriptionEndDate > now
                     ) {
                       return "Individual - Pro";
@@ -189,30 +221,11 @@ export function AppSidebar() {
                 <CardDescription className="flex flex-row justify-between text-tertiary">
                   <span>Credits used</span>
                   <span>
-                    {(() => {
-                      const now = new Date();
-                      const subscriptionEndDate = new Date(
-                        userSubscription?.end_date || 0
-                      );
-                      if (
-                        !userSubscription ||
-                        userSubscription.plan_type === "free"
-                      ) {
-                        return "0/50";
-                      } else if (
-                        userSubscription.plan_type === "startup" &&
-                        subscriptionEndDate > now
-                      ) {
-                        return "0/50";
-                      } else if (
-                        userSubscription.plan_type === "pro" &&
-                        subscriptionEndDate > now
-                      ) {
-                        return "0/500";
-                      } else {
-                        return "0/0";
-                      }
-                    })()}
+                    {usageLoading ? (
+                      <Skeleton className="w-10 h-5" />
+                    ) : (
+                      `${total_human_messages || 0} / ${userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50}`
+                    )}
                   </span>
                 </CardDescription>
               </CardHeader>

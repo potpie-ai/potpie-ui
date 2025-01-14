@@ -229,7 +229,7 @@ const KeyManagement = () => {
                         <DialogTitle className="text-lg text-start text-primary">Register new key</DialogTitle>
                         <DialogDescription>
                             <p className="text-base text-start text-black mt-2">Select the LLM you want to use</p>
-                            <p className="text-xs text-start text-black mt-1">Note: We only integrate with Open AI&apos;s GPT-4o and GPT-3.5-Turbo. Support for integrating other LLMs will be available soon.</p>
+                            <p className="text-xs text-start text-black mt-1">Note: We only integrate with Open AI&apos;s GPT-4o and GPT-4o-mini. Support for integrating other LLMs will be available soon.</p>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col">

@@ -26,7 +26,6 @@ interface ApiKeyState extends KeySecrets {
 
 const KeyManagement = () => {
     const [inputKeyValue, setInputKeyValue] = React.useState("");
-    const [savedKeysResponse, setSavedKeysResponse] = React.useState<any>([]);
     const [keyType, setKeyType] = React.useState("momentumKey");
     const [createNewKeyDialogOpen, setCreateNewKeyDialogOpen] = React.useState(false);
     const [deleteKeyDialogOpen, setDeleteKeyDialogOpen] = React.useState(false);
@@ -49,6 +48,14 @@ const KeyManagement = () => {
         }
     });
 
+    React.useEffect(() => {
+        if (KeySecrets?.api_key) {
+            setKeyType("userKey");
+        } else {
+            setKeyType("momentumKey");
+        }
+    }, [KeySecrets]);
+
     const { mutate: saveSecret, isPending: isSaving } = useMutation({
         mutationFn: async (data: any) => {
             const headers = await getHeaders();
@@ -58,10 +65,13 @@ const KeyManagement = () => {
                 { headers }
             );
         },
-        onSuccess: () => {
+        onSuccess: (response) => {
             toast.success("Key Saved successfully", {});
             setCreateNewKeyDialogOpen(false);
-            setKeyType("userKey")
+            setKeyType("userKey");
+            queryClient.setQueryData(["secrets"], response.data);
+            queryClient.invalidateQueries({ queryKey: ["secrets"] });
+            setInputKeyValue("");
         },
         onError: () => {
             toast.error("Something went wrong");
@@ -79,8 +89,9 @@ const KeyManagement = () => {
         onSuccess: () => {
             toast.success("Key Deleted successfully", {});
             setDeleteKeyDialogOpen(false);
-            setSavedKeysResponse([])
-            setKeyType("momentumKey")
+            setKeyType("momentumKey");
+            queryClient.invalidateQueries({ queryKey: ["secrets"] });
+            queryClient.setQueryData(["secrets"], null);
         },
         onError: () => {
             toast.error("Something went wrong");
@@ -160,16 +171,6 @@ const KeyManagement = () => {
         return `${visibleStart}${"•".repeat(32)}${visibleEnd}`;
     };
 
-    useEffect(() => {
-        if (!KeySecrets || isLoading) return;
-        {
-            setSavedKeysResponse(KeySecrets);
-            if (KeySecrets.api_key != null) {
-                setKeyType("userKey")
-            }
-        }
-    }, [KeySecrets, isLoading]);
-
     return (
         <div className="ml-8 mt-4 flex flex-col text-start h-full">
             <div className="flex flex-col pb-8">
@@ -217,7 +218,7 @@ const KeyManagement = () => {
                 )}
             </div>
             <Separator className="pr-20 mt-4"></Separator>
-            <h2 className="text-2xl font-semibold mb-4 text-start text-primary mt-4">Manage Your Keys</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-start text-primary mt-4">Manage Your LLM Keys</h2>
             <div className="flex">
                 <h3 className="text-lg text-start text-primary">Saved Keys</h3>
                 <Button onClick={() => setCreateNewKeyDialogOpen(true)} className="text-right w-40 ml-auto pr-6">+ Register Key</Button>
@@ -260,21 +261,23 @@ const KeyManagement = () => {
             </Dialog>
 
             <div className="mt-4 pr-10">
-                {(savedKeysResponse.length != 0) && (
+                {KeySecrets?.api_key && (
                     <Table className="">
                         <TableHeader>
                             <TableRow className="border-bottom border-border">
                                 <TableHead className="w-[200px] text-black">Provider</TableHead>
-                                <TableHead className="w-[200px] text-black text-right">Key Value</TableHead>
+                                <TableHead className="w-[400px] text-black">Key Value</TableHead>
+                                <TableHead className="w-[100px] text-black">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <TableRow key={savedKeysResponse.api_key}>
+                            <TableRow key={KeySecrets.api_key}>
                                 <TableCell>Open AI</TableCell>
-                                <TableCell className="text-right">{savedKeysResponse.api_key}</TableCell>
-                                <TableCell className="text-right">
+                                <TableCell className="font-mono">{maskKey(KeySecrets.api_key)}</TableCell>
+                                <TableCell className="text-right space-x-2">
                                     <Button
-                                        className="delete"
+                                        variant="ghost"
+                                        size="icon"
                                         onClick={() => deleteSecret()}
                                     >
                                         <Trash className="h-4 w-4" />

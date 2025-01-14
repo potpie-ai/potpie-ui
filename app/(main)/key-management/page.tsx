@@ -81,7 +81,7 @@ const KeyManagement = () => {
     const { mutate: deleteSecret, isPending: isDeleting } = useMutation({
         mutationFn: async () => {
             const headers = await getHeaders();
-            return axios.delete(
+            await axios.delete(
                 `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets/openai`,
                 { headers }
             );
@@ -89,9 +89,8 @@ const KeyManagement = () => {
         onSuccess: () => {
             toast.success("Key Deleted successfully", {});
             setDeleteKeyDialogOpen(false);
-            setKeyType("momentumKey");
-            queryClient.invalidateQueries({ queryKey: ["secrets"] });
             queryClient.setQueryData(["secrets"], null);
+            queryClient.invalidateQueries({ queryKey: ["secrets"] });
         },
         onError: () => {
             toast.error("Something went wrong");

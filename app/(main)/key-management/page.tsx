@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@radix-ui/react-label";
 import { Separator } from "@radix-ui/react-select";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import axios from "axios";
-import { Trash } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import axios, { AxiosResponse } from "axios";
+import { Eye, EyeOff, Trash } from "lucide-react";
 import React, { useEffect } from "react";
 import { toast } from "sonner";
 import getHeaders from "@/app/utils/headers.util";
@@ -20,14 +20,19 @@ interface KeySecrets {
     provider: string;
 }
 
+interface ApiKeyState extends KeySecrets {
+    isVisible: boolean;
+}
 
-//Refactor later when we have multiple providers, currently api return single provider */
 const KeyManagement = () => {
     const [inputKeyValue, setInputKeyValue] = React.useState("");
     const [savedKeysResponse, setSavedKeysResponse] = React.useState<any>([]);
     const [keyType, setKeyType] = React.useState("momentumKey");
     const [createNewKeyDialogOpen, setCreateNewKeyDialogOpen] = React.useState(false);
     const [deleteKeyDialogOpen, setDeleteKeyDialogOpen] = React.useState(false);
+    const [generateKeyDialogOpen, setGenerateKeyDialogOpen] = React.useState(false);
+    const [selectedProvider, setSelectedProvider] = React.useState("openai");
+    const queryClient = useQueryClient();
 
     const {
         data: KeySecrets,
@@ -82,6 +87,79 @@ const KeyManagement = () => {
         },
     });
 
+    // New API Key Management Section
+    const {
+        data: apiKey,
+        isLoading: isLoadingKey,
+        refetch: refetchKey
+    } = useQuery<ApiKeyState>({
+        queryKey: ["api-key"],
+        queryFn: async () => {
+            const headers = await getHeaders();
+            const response = await axios.get<KeySecrets>(
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/api-keys`,
+                { headers }
+            );
+            return {
+                ...response.data,
+                isVisible: false
+            };
+        }
+    });
+
+    const { mutate: generateApiKey, isPending: isGenerating } = useMutation({
+        mutationFn: async () => {
+            const headers = await getHeaders();
+            return axios.post(
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/api-keys`,
+                {},
+                { headers }
+            );
+        },
+        onSuccess: () => {
+            toast.success("API Key generated successfully");
+            refetchKey();
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || "Failed to generate API key");
+        },
+    });
+
+    const { mutate: revokeApiKey, isPending: isRevoking } = useMutation({
+        mutationFn: async () => {
+            const headers = await getHeaders();
+            return axios.delete(
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/api-keys`,
+                { headers }
+            );
+        },
+        onSuccess: () => {
+            toast.success("API Key revoked successfully");
+            queryClient.setQueryData(["api-key"], null);
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || "Failed to revoke API key");
+        },
+    });
+
+    const toggleKeyVisibility = () => {
+        if (!apiKey) return;
+        queryClient.setQueryData(["api-key"], (oldData: ApiKeyState | undefined) => {
+            if (!oldData) return oldData;
+            return {
+                ...oldData,
+                isVisible: !oldData.isVisible
+            };
+        });
+    };
+
+    const maskKey = (key: string) => {
+        if (!key) return "";
+        const visibleStart = key.slice(0, 4);
+        const visibleEnd = key.slice(-4);
+        return `${visibleStart}${"•".repeat(32)}${visibleEnd}`;
+    };
+
     useEffect(() => {
         if (!KeySecrets || isLoading) return;
         {
@@ -113,7 +191,8 @@ const KeyManagement = () => {
                             <DialogTitle className="text-lg text-start text-primary">Are you sure you want to switch?</DialogTitle>
                             <DialogDescription>
                                 <p className="text-base text-start text-black mt-2">
-                                    We dont keep unused keys. If you switch to Momentums key, we will delete your saved OpenAI key, requiring you to re-register it next time. Are you sure you want to proceed?                </p>
+                                    We don&apos;t keep unused keys. If you switch to Potpie&apos;s key, we will delete your saved OpenAI key, requiring you to re-register it next time. Are you sure you want to proceed?
+                                </p>
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
@@ -149,7 +228,7 @@ const KeyManagement = () => {
                         <DialogTitle className="text-lg text-start text-primary">Register new key</DialogTitle>
                         <DialogDescription>
                             <p className="text-base text-start text-black mt-2">Select the LLM you want to use</p>
-                            <p className="text-xs text-start text-black mt-1">Note: We only integrate with Open AI’s GPT-4o and GPT-3.5-Turbo. Support for integrating other LLMs will be available soon.</p>
+                            <p className="text-xs text-start text-black mt-1">Note: We only integrate with Open AI&apos;s GPT-4o and GPT-3.5-Turbo. Support for integrating other LLMs will be available soon.</p>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col">
@@ -207,7 +286,67 @@ const KeyManagement = () => {
                 )}
             </div>
 
-        </div >
+            <Separator className="pr-20 mt-8"></Separator>
+            <h2 className="text-2xl font-semibold mb-4 text-start text-primary mt-4">API Key Management</h2>
+            <div className="flex">
+                <h3 className="text-lg text-start text-primary">Your API Key</h3>
+                {!isLoadingKey && !apiKey && (
+                    <Button 
+                        onClick={() => generateApiKey()} 
+                        className="text-right w-40 ml-auto pr-6" 
+                        disabled={isGenerating}
+                    >
+                        {isGenerating ? "Generating..." : "Generate API Key"}
+                    </Button>
+                )}
+            </div>
+
+            <div className="mt-4 pr-10">
+                {isLoadingKey ? (
+                    <div className="text-center py-4 text-gray-500">Loading API key...</div>
+                ) : apiKey?.api_key ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="border-bottom border-border">
+                                <TableHead className="w-[400px] text-black">API Key</TableHead>
+                                <TableHead className="w-[100px] text-black text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            <TableRow>
+                                <TableCell className="font-mono">
+                                    {apiKey.isVisible ? apiKey.api_key : maskKey(apiKey.api_key)}
+                                </TableCell>
+                                <TableCell className="text-right space-x-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={toggleKeyVisibility}
+                                        disabled={isRevoking}
+                                    >
+                                        {apiKey.isVisible ? (
+                                            <EyeOff className="h-4 w-4" />
+                                        ) : (
+                                            <Eye className="h-4 w-4" />
+                                        )}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => revokeApiKey()}
+                                        disabled={isRevoking}
+                                    >
+                                        <Trash className="h-4 w-4" />
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <div className="text-center py-4 text-gray-500">No API key found. Generate one to get started.</div>
+                )}
+            </div>
+        </div>
     );
 };
 

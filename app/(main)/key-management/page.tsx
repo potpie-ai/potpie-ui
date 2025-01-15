@@ -178,7 +178,7 @@ const KeyManagement = () => {
                 <RadioGroup>
                     <div className="flex items-center">
                         <RadioGroupItem value="momentumKey" className="text-black" checked={keyType == "momentumKey"} onClick={() => setDeleteKeyDialogOpen(true)}></RadioGroupItem>
-                        <Label className="pl-2">I want to use Momentums key</Label>
+                        <Label className="pl-2">I want to use Potpie&apos;s key</Label>
                     </div>
                     <div className="flex items-center">
                         <RadioGroupItem value="userKey" className="text-black" checked={keyType == "userKey"} onClick={() => setCreateNewKeyDialogOpen(true)}></RadioGroupItem>

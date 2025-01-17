@@ -76,11 +76,11 @@ export function AppSidebar() {
     }
   }, [usageLoading]);
 
-  useEffect(() => {
-    if (!subscriptionLoading) {
-      dispatch(setUserPlanType(userSubscription.plan_type));
-    }
-  }, [subscriptionLoading]);
+  // useEffect(() => {
+  //   if (!subscriptionLoading) {
+  //     dispatch(setUserPlanType(userSubscription.plan_type));
+  //   }
+  // }, [subscriptionLoading]);
 
   const redirectToNewChat = () => {
     dispatch(clearChat());

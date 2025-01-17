@@ -27,8 +27,12 @@ import Image from "next/image";
 import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
+import { useSearchParams } from "next/navigation";
 
 export default function Signin() {
+  const searchParams = useSearchParams();
+  const source = searchParams.get("source");
+  
   const formSchema = z.object({
     email: z.string().email(),
     password: z.string().min(6, { message: "Password is required" }),
@@ -45,15 +49,27 @@ export default function Signin() {
   provider.addScope('read:org');
   provider.addScope('user:email');
 
+  const handleExternalRedirect = async (token: string) => {
+    if (source === "vscode") {
+      window.location.href = `http://localhost:54333/auth/callback?token=${token}`;
+    }
+  };
+
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         const user = userCredential.user;
         const headers = await getHeaders();
-        const userSignup = axios
-          .post(`${baseUrl}/api/v1/signup`, user,{headers:headers})
-          .then((res) => res.data)
+        const userSignup = await axios
+          .post(`${baseUrl}/api/v1/signup`, user, {headers:headers})
+          .then((res) => {
+            if (source === "vscode") {
+              console.log("res.data", res.data);
+              handleExternalRedirect(res.data.token);
+            }
+            return res.data;
+          })
           .catch((e) => {
             toast.error("Signup call unsuccessful");
           });
@@ -69,13 +85,10 @@ export default function Signin() {
   const onGithub = async () => {
     signInWithPopup(auth, provider)
       .then((result) => {
-        // alert(JSON.stringify(result));
-        // alert(result.user);
-        // alert(JSON.stringify({ ...result.user, providerUsername: result._tokenResponse.screenName }));
         const credential = GithubAuthProvider.credentialFromResult(result);
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         if (credential) {
-          const userSignup = axios
+          axios
             .post(`${baseUrl}/api/v1/signup`, {
               uid: result.user.uid,
               email: result.user.email,
@@ -92,14 +105,20 @@ export default function Signin() {
               accessToken: credential.accessToken,
               providerUsername: (result as any)._tokenResponse.screenName,
             })
-            .then((res: { data: any }) => res.data)
+            .then((res: { data: any }) => {
+              if (source === "vscode") {
+                handleExternalRedirect(res.data.token);
+              }
+              return res.data;
+            })
             .catch((e: any) => {
               toast.error("Signup call unsuccessful");
             });
-            posthog.identify(
-              result.user.uid,
-              { email: result.user.email, name: result.user?.displayName || "" }
-            );
+            
+          posthog.identify(
+            result.user.uid,
+            { email: result.user.email, name: result.user?.displayName || "" }
+          );
           
           toast.success("Logged in successfully");
         }

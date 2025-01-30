@@ -17,7 +17,7 @@ import getHeaders from "@/app/utils/headers.util";
 
 interface KeySecrets {
     api_key: string;
-    provider: string;
+    provider?: string;
 }
 
 interface ApiKeyState extends KeySecrets {
@@ -31,6 +31,7 @@ const KeyManagement = () => {
     const [deleteKeyDialogOpen, setDeleteKeyDialogOpen] = React.useState(false);
     const [generateKeyDialogOpen, setGenerateKeyDialogOpen] = React.useState(false);
     const [selectedProvider, setSelectedProvider] = React.useState("openai");
+    const [globalProvider, setGlobalProvider] = React.useState("");
     const queryClient = useQueryClient();
 
     const {
@@ -41,12 +42,32 @@ const KeyManagement = () => {
         queryFn: async () => {
             const headers = await getHeaders();
             const response = await axios.get<KeySecrets>(
-                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets/openai`,
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets/all`,
+                { headers }
+            );
+            console.log("API Response:", response.data);
+            return response.data;
+        }
+    });
+
+    const { data: globalAIProvider, isLoading: isLoadingGlobalProvider } = useQuery<{ provider: string }>({
+        queryKey: ["global-provider"],
+        queryFn: async () => {
+            const headers = await getHeaders();
+            const response = await axios.get(
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/get-global-ai-provider/`,
                 { headers }
             );
             return response.data;
         }
     });
+
+    React.useEffect(() => {
+        if (globalAIProvider?.provider) {
+            setGlobalProvider(globalAIProvider.provider);
+            setSelectedProvider(globalAIProvider.provider);
+        }
+    }, [globalAIProvider]);
 
     React.useEffect(() => {
         if (KeySecrets?.api_key) {
@@ -57,21 +78,23 @@ const KeyManagement = () => {
     }, [KeySecrets]);
 
     const { mutate: saveSecret, isPending: isSaving } = useMutation({
-        mutationFn: async (data: any) => {
+        mutationFn: async (data: { provider: string; api_key: string }) => {
             const headers = await getHeaders();
-            return axios.post(
+            const response = await axios.post(
                 `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets`,
                 data,
                 { headers }
             );
+            return response.data;
         },
-        onSuccess: (response) => {
-            toast.success("Key Saved successfully", {});
+        onSuccess: (data) => {
+            toast.success("Key Saved successfully");
             setCreateNewKeyDialogOpen(false);
             setKeyType("userKey");
-            queryClient.setQueryData(["secrets"], response.data);
+            queryClient.setQueryData(["secrets"], data);
             queryClient.invalidateQueries({ queryKey: ["secrets"] });
             setInputKeyValue("");
+            setSelectedProvider("openai");
         },
         onError: () => {
             toast.error("Something went wrong");
@@ -79,18 +102,18 @@ const KeyManagement = () => {
     });
 
     const { mutate: deleteSecret, isPending: isDeleting } = useMutation({
-        mutationFn: async () => {
+        mutationFn: async (provider: string) => {
             const headers = await getHeaders();
             await axios.delete(
-                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets/openai`,
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/secrets/${provider}`,
                 { headers }
             );
         },
         onSuccess: () => {
             toast.success("Key Deleted successfully", {});
             setDeleteKeyDialogOpen(false);
-            queryClient.setQueryData(["secrets"], null);
             queryClient.invalidateQueries({ queryKey: ["secrets"] });
+            setKeyType("momentumKey");
         },
         onError: () => {
             toast.error("Something went wrong");
@@ -170,8 +193,56 @@ const KeyManagement = () => {
         return `${visibleStart}${"•".repeat(32)}${visibleEnd}`;
     };
 
+    const { mutate: setGlobalAIProvider, isPending: isSettingGlobal } = useMutation({
+        mutationFn: async (provider: string) => {
+            const headers = await getHeaders();
+            const response = await axios.post(
+                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/set-global-ai-provider/`,
+                { provider },
+                { headers }
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            toast.success("Global AI provider set successfully");
+            queryClient.invalidateQueries({ queryKey: ["global-provider"] });
+            setGlobalProvider(selectedProvider);
+        },
+        onError: () => {
+            toast.error("Failed to set global AI provider");
+        },
+    });
+
     return (
         <div className="ml-8 mt-4 flex flex-col text-start h-full">
+            <div className="flex flex-col pb-8">
+                <h2 className="text-2xl font-semibold mb-4 text-start text-primary mt-4">Set Global AI Provider</h2>
+                <div className="flex items-center gap-4">
+                    <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                        <SelectTrigger className="w-[280px] rounded-sm">
+                            <SelectValue placeholder="Select a provider" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-muted">
+                            <SelectItem className="pl-8" value="openai">
+                                OpenAI
+                            </SelectItem>
+                            <SelectItem className="pl-8" value="anthropic">
+                                Anthropic
+                            </SelectItem>
+                            <SelectItem className="pl-8" value="deepseek">
+                                Deepseek (through OpenRouter)
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Button 
+                        onClick={() => setGlobalAIProvider(selectedProvider)}
+                        disabled={isSettingGlobal || selectedProvider === globalProvider}
+                    >
+                        Set as Global
+                    </Button>
+                </div>
+            </div>
+            <Separator className="pr-20 mt-4"></Separator>
             <div className="flex flex-col pb-8">
                 <h2 className="text-2xl font-semibold mb-4 text-start text-primary mt-4">Set the Key</h2>
                 <h2 className="text-base text-start text-black pb-4">Select the key you want to use for generating tests</h2>
@@ -191,25 +262,31 @@ const KeyManagement = () => {
                             <DialogTitle className="text-lg text-start text-primary">Are you sure you want to switch?</DialogTitle>
                             <DialogDescription>
                                 <p className="text-base text-start text-black mt-2">
-                                    We don&apos;t keep unused keys. If you switch to Potpie&apos;s key, we will delete your saved OpenAI key, requiring you to re-register it next time. Are you sure you want to proceed?
+                                    We don&apos;t keep unused keys. If you switch to Potpie&apos;s key, we will delete all your saved keys, requiring you to re-register them next time. Are you sure you want to proceed?
                                 </p>
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
-                            <Button onClick={() => deleteSecret()}>Delete</Button>
+                            <Button onClick={() => deleteSecret('all')} disabled={isDeleting}>Delete All Keys</Button>
                             <Button variant="outline" onClick={() => setDeleteKeyDialogOpen(false)}>Cancel</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
                 {keyType === 'userKey' && (
                     <div className="flex mt-2">
-                        <Select defaultValue="Open AI">
+                        <Select value={selectedProvider} onValueChange={setSelectedProvider}>
                             <SelectTrigger className="w-[280px] rounded-sm">
-                                <SelectValue placeholder="Select a model" defaultValue="Open AI" />
+                                <SelectValue placeholder="Select a provider" />
                             </SelectTrigger>
                             <SelectContent className="bg-muted">
-                                <SelectItem className="pl-8" key={"Open AI"} value={"Open AI"}>
-                                    Open AI
+                                <SelectItem className="pl-8" value="openai">
+                                    OpenAI
+                                </SelectItem>
+                                <SelectItem className="pl-8" value="anthropic">
+                                    Anthropic
+                                </SelectItem>
+                                <SelectItem className="pl-8" value="deepseek">
+                                    Deepseek (through OpenRouter)
                                 </SelectItem>
                             </SelectContent>
                         </Select>
@@ -228,18 +305,20 @@ const KeyManagement = () => {
                         <DialogTitle className="text-lg text-start text-primary">Register new key</DialogTitle>
                         <DialogDescription>
                             <p className="text-base text-start text-black mt-2">Select the LLM you want to use</p>
-                            <p className="text-xs text-start text-black mt-1">Note: We only integrate with Open AI&apos;s GPT-4o and GPT-4o-mini. Support for integrating other LLMs will be available soon.</p>
+                            <p className="text-xs text-start text-black mt-1">Note: We only integrate with OpenAI (4o and 4-o-mini), Anthropic (Claude 3.5 Sonnet and Haiku), and Deepseek ( V3 and R1 through OpenRouter API key). Support for integrating other LLMs will be available soon.</p>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col">
                         <div className="flex mt-2">
-                            <Select>
+                            <Select value={selectedProvider} onValueChange={setSelectedProvider}>
                                 <SelectTrigger className="w-xl rounded-sm">
-                                    <SelectValue placeholder="Select a model" defaultValue="Open AI"/>
+                                    <SelectValue placeholder="Select a provider" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-background">
                                     <SelectGroup>
-                                        <SelectItem value="master">Open AI</SelectItem>
+                                        <SelectItem value="openai">OpenAI</SelectItem>
+                                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                                        <SelectItem value="deepseek">Deepseek (through OpenRouter)</SelectItem>
                                     </SelectGroup>
                                 </SelectContent>
                             </Select>
@@ -254,7 +333,7 @@ const KeyManagement = () => {
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button onClick={() => saveSecret({ provider: "openai", api_key: inputKeyValue })}>Save</Button>
+                        <Button onClick={() => saveSecret({ provider: selectedProvider, api_key: inputKeyValue })}>Save</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -271,13 +350,20 @@ const KeyManagement = () => {
                         </TableHeader>
                         <TableBody>
                             <TableRow key={KeySecrets.api_key}>
-                                <TableCell>Open AI</TableCell>
+                                <TableCell>
+                                    {KeySecrets?.provider ? (
+                                        KeySecrets.provider === 'deepseek' ? 
+                                            'Deepseek (through OpenRouter)' : 
+                                            KeySecrets.provider.charAt(0).toUpperCase() + KeySecrets.provider.slice(1)
+                                    ) : 'Unknown Provider'}
+                                </TableCell>
                                 <TableCell className="font-mono">{maskKey(KeySecrets.api_key)}</TableCell>
                                 <TableCell className="text-right space-x-2">
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => deleteSecret()}
+                                        onClick={() => deleteSecret(KeySecrets?.provider || 'all')}
+                                        disabled={isDeleting}
                                     >
                                         <Trash className="h-4 w-4" />
                                     </Button>

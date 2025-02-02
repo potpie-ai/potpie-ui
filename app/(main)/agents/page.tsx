@@ -32,13 +32,11 @@ import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { auth } from "@/configs/Firebase-config";
-import { useFeatureFlagEnabled } from "posthog-js/react";
-import AgentService from "@/services/AgentService";
-import posthog from 'posthog-js';
-import { generateHmacSignature } from "@/app/utils/hmac.util";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { planTypesEnum } from "@/lib/Constants";
+import AgentService from "@/services/AgentService";
+import { generateHmacSignature } from "@/app/utils/hmac.util";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
@@ -47,29 +45,29 @@ const CustomAgent: React.FC = () => {
   const { planType } = useSelector(
     (state: RootState) => state.UserInfo
   );
+  console.log("Edit Agent Screen - agentIdParam:", agentIdParam);
   const { data: agentDetails, isLoading: agentDetailsLoading } = useQuery({
     queryKey: ["agents", agentIdParam],
     queryFn: async () => {
-      const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      const endpoint = `/custom-agents/agents/${agentIdParam}`;
-      const hmacSignature = generateHmacSignature(userId);
-      
-      const response = await axios.get(
-        `${baseUrl}${endpoint}`,
-        {
-          headers: {
-            ...header,
-            'X-Hmac-Signature': hmacSignature
-          },
-          params: {
-            user_id: userId,
-          },
-        }
-      );
-      return response.data as CustomAgentType;
+      if (!agentIdParam || !userId) {
+        console.error("Missing required parameters:", { agentIdParam, userId });
+        return null;
+      }
+
+      console.log("Fetching agent details for ID:", agentIdParam);
+      try {
+        const data = await AgentService.getAgentDetails(agentIdParam, userId);
+        console.log("Successfully fetched agent details:", data);
+        return data as CustomAgentType;
+      } catch (error) {
+        console.error("Error fetching agent details:", error);
+        toast.error("Failed to fetch agent details. Please try again.");
+        throw error;
+      }
     },
-    enabled: !!agentIdParam,
+    enabled: !!agentIdParam && !!userId,
+    retry: 2,
+    staleTime: 30000,
   });
 
   const router = useRouter();
@@ -153,21 +151,44 @@ const CustomAgent: React.FC = () => {
   );
 
   useEffect(() => {
-    if (agentDetails && !agentDetailsLoading) {
-      form.reset({
-        system_prompt: agentDetails.system_prompt || "",
-        role: agentDetails.role || "",
-        goal: agentDetails.goal || "",
-        backstory: agentDetails.backstory || "",
-        tasks: (agentDetails.tasks as any) || [
-          { description: "", tools: [""], expected_output: { output: "" } },
-        ],
-      });
-      if (agentDetails.tasks.length > 0) {
-        setSelectedTools(agentDetails.tasks.map((task) => task.tools));
+    if (agentIdParam) {
+      console.log("Agent ID from URL:", agentIdParam);
+    }
+  }, [agentIdParam]);
+
+  useEffect(() => {
+    if (agentDetails) {
+      console.log("Setting form with agent details:", agentDetails);
+      
+      try {
+        form.reset({
+          system_prompt: agentDetails.system_prompt || "",
+          role: agentDetails.role || "",
+          goal: agentDetails.goal || "",
+          backstory: agentDetails.backstory || "",
+          tasks: Array.isArray(agentDetails.tasks)
+            ? agentDetails.tasks.map((task: any) => ({
+                description: task.description || "",
+                tools: Array.isArray(task.tools) ? task.tools : [],
+                expected_output: typeof task.expected_output === 'string' 
+                  ? { output: task.expected_output }
+                  : task.expected_output || { output: "" },
+              }))
+            : [{ description: "", tools: [""], expected_output: { output: "" } }],
+        });
+
+        setSelectedTools(
+          Array.isArray(agentDetails.tasks)
+            ? agentDetails.tasks.map((task: any) => Array.isArray(task.tools) ? task.tools : [])
+            : [[]]
+        );
+        console.log("Form reset complete");
+      } catch (error) {
+        console.error("Error setting form data:", error);
+        toast.error("Error loading agent details into form");
       }
     }
-  }, [agentDetails, agentDetailsLoading, form]);
+  }, [agentDetails, form]);
 
   const handleToolChange = (taskIndex: number, tools: string[]) => {
     const updatedTools = [...selectedTools];
@@ -219,7 +240,7 @@ const CustomAgent: React.FC = () => {
       toast.error("Failed to redeploy agent. Please try again.");
     },
   });
-
+  console.log("Edit Agent Screen - agentIdParam:", agentIdParam);
   const { data: agentStatus, isLoading: agentStatusLoading } = useQuery({
     queryKey: ["agent-status", agentIdParam],
     queryFn: async () => {
@@ -254,30 +275,15 @@ const CustomAgent: React.FC = () => {
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
 
-  const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
+  if (!agentIdParam && planType !== planTypesEnum.PRO) {
+    router.push("/");
+    setTimeout(() => {
+      window.open("https://potpie.ai/pricing", "_blank");
+    }, 500);
+    return null;
+  }
 
-
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (user?.uid) {
-      posthog.identify(user.uid);
-      posthog.people.set({ id: user.uid });
-      posthog.reloadFeatureFlags();
-    }
-    if (customAgentsFlag === undefined) {
-      return;
-    }
-    if (customAgentsFlag === false || !( planType === planTypesEnum.PRO || planType === planTypesEnum.ENTERPRISE)) {
-      router.push("/");
-      setTimeout(() => {
-        window.open("https://potpie.ai/pricing", "_blank");
-      }, 500);
-    }
-  }, [router, customAgentsFlag, planType]);
-
-
-
-  if (customAgentsFlag === undefined) {
+  if (agentDetailsLoading || toolsLoading) {
     return <Skeleton className="h-[calc(100vh-5rem)]" />;
   }
 
@@ -346,6 +352,7 @@ const CustomAgent: React.FC = () => {
                         placeholder="What will be the backstory of the agent?"
                         form={form}
                         tooltip="Provides context to the agent's role and goal."
+                        InputClassName="min-h-[calc(100vh-45rem)]"
                       />
                     </form>
                   </Form>
@@ -380,7 +387,7 @@ const CustomAgent: React.FC = () => {
                             name={`tasks.${idx}.description`}
                             label="Description"
                             placeholder="Task description"
-                            InputClassName="min-h-[calc(100vh-55rem)]"
+                            InputClassName="min-h-[calc(100vh-45rem)]"
                             form={form}
                             tooltip="A clear, concise statement of what the task entails."
                           />

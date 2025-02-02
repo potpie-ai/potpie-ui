@@ -1,6 +1,7 @@
 import axios, { AxiosResponse } from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { CustomAgentsFormValues } from "@/lib/Schema";
+import { generateHmacSignature } from "@/app/utils/hmac.util";
 
 export default class AgentService {
   static async getAgentTypes() {
@@ -83,6 +84,7 @@ export default class AgentService {
       throw new Error("Error creating agent");
     }
   }
+
   static async redeployAgent(
     agentId: string,
   ) {
@@ -102,6 +104,46 @@ export default class AgentService {
       >;
     } catch (error) {
       throw new Error("Error redeploying agent");
+    }
+  }
+
+  static async createAgentFromPrompt(prompt: string) {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+    try {
+      const response = await axios.post(
+        `${baseUrl}/custom-agents/agents/auto/`,
+        { prompt },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error("Error creating agent from prompt");
+    }
+  }
+
+  static async getAgentDetails(agentId: string, userId: string) {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+    const hmacSignature = generateHmacSignature(userId);
+    
+    try {
+      const response = await axios.get(
+        `${baseUrl}/custom-agents/agents/${agentId}`,
+        {
+          headers: {
+            ...headers,
+            'X-Hmac-Signature': hmacSignature
+          },
+          params: {
+            user_id: userId,
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching agent details:", error);
+      throw new Error("Error fetching agent details");
     }
   }
 }

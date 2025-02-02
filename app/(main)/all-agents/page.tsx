@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import React, { useState, useEffect, useLayoutEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import debounce from "debounce";
 import getHeaders from "@/app/utils/headers.util";
@@ -28,7 +28,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import AgentService from "@/services/AgentService";
-import { useFeatureFlagEnabled } from "posthog-js/react";
 import {
   Dialog,
   DialogClose,
@@ -37,9 +36,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { auth } from "@/configs/Firebase-config";
-import posthog from 'posthog-js';
+import { queryClient } from "../../utils/queryClient";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import ReactMarkdown from 'react-markdown';
 
 const AllAgents = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -47,6 +54,11 @@ const AllAgents = () => {
   const [statuses, setStatuses] = useState<{ [id: string]: string }>({});
   const [filteredData, setFilteredData] = useState<any>([]);
   const [deleteDailogOpen, setDeleteDialogOpen] = useState(false);
+  const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [agentPrompt, setAgentPrompt] = useState("");
+  const [generatedAgent, setGeneratedAgent] = useState<any>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const router = useRouter();
 
@@ -76,6 +88,16 @@ const AllAgents = () => {
       setStatuses(newStatuses);
     }
   }, [data, isLoading]);
+
+  useEffect(() => {
+    const handler = debounce((value) => {
+      setDebouncedSearchTerm(value);
+    }, 500);
+    handler(searchTerm);
+    return () => {
+      handler.clear();
+    };
+  }, [searchTerm]);
 
   const deleteCustomAgentForm = useMutation({
     mutationFn: async (agentId: string) => {
@@ -144,38 +166,36 @@ const AllAgents = () => {
     },
   });
 
-  useEffect(() => {
-    const handler = debounce((value) => {
-      setDebouncedSearchTerm(value);
-    }, 500);
-    handler(searchTerm);
-    return () => {
-      handler.clear();
-    };
-  }, [searchTerm]);
+  const createAgentMutation = useMutation({
+    mutationFn: async (prompt: string) => {
+      setIsCreating(true);
+      try {
+        const response = await AgentService.createAgentFromPrompt(prompt);
+        setGeneratedAgent(response);
+        return response;
+      } finally {
+        setIsCreating(false);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Agent created successfully!");
+      queryClient.invalidateQueries({ queryKey: ["agentList"] });
+    },
+    onError: (error) => {
+      toast.error("Failed to create agent. Please try again.");
+    },
+  });
 
-  const customAgentsFlag = useFeatureFlagEnabled("custom_agents");
-
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (user?.uid) {
-      posthog.identify(user.uid);
-      posthog.people.set({ id: user.uid });
-      posthog.reloadFeatureFlags();
-    }
-    if (customAgentsFlag === undefined) {
+  const handleCreateAgent = async () => {
+    if (!agentPrompt.trim()) {
+      toast.error("Please provide a detailed description for your agent.");
       return;
     }
-    if (customAgentsFlag === false) {
-      router.push("/");
-      setTimeout(() => {
-        window.open("https://potpie.ai/pricing", "_blank");
-      }, 500);
-    }
-  }, [router, customAgentsFlag]);
+    await createAgentMutation.mutateAsync(agentPrompt);
+  };
 
   return (
-    <div className="m-10">
+    <div className="container mx-auto py-10">
       <div className="flex w-full mx-auto items-center space-x-2 mb-5">
         <Input
           type="text"
@@ -183,12 +203,216 @@ const AllAgents = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Button className="gap-2" onClick={() => router.push("/agents")}>
-          <Plus /> Create New Agent
-        </Button>
+        <Dialog open={promptModalOpen} onOpenChange={setPromptModalOpen}>
+          <DialogTrigger asChild>
+            <Button className="ml-auto">
+              <Plus className="mr-2 h-4 w-4" /> Create New Agent
+            </Button>
+          </DialogTrigger>
+          <DialogContent className={!generatedAgent ? 
+            "sm:max-w-[600px] h-[80vh] p-6" : 
+            "sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-6"
+          }>
+            <DialogHeader>
+              <DialogTitle>Create New Agent</DialogTitle>
+            </DialogHeader>
+            {!generatedAgent ? (
+              <div className="flex flex-col h-full">
+                <div className="flex-1 py-4">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Describe the purpose and functionality of your agent in detail. Include any specific tasks, behaviors, or algorithms you want it to implement.
+                    </p>
+                    <textarea
+                      className="w-full h-[calc(80vh-250px)] p-4 rounded-md border resize-none"
+                      placeholder="Example: I need an agent that can help software developers with code reviews. It should analyze pull requests, identify potential bugs, suggest improvements for code quality, and ensure best practices are followed..."
+                      value={agentPrompt}
+                      onChange={(e) => setAgentPrompt(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter className="pt-6 pb-2">
+                  <Button
+                    type="submit"
+                    onClick={handleCreateAgent}
+                    disabled={isCreating}
+                  >
+                    {isCreating ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create Agent"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </div>
+            ) : (
+              <div className="flex flex-col h-full">
+                <DialogHeader className="px-1">
+                  <DialogTitle>Review Generated Agent</DialogTitle>
+                  <DialogDescription>
+                    Review the generated agent configuration across different sections.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-hidden mt-4">
+                  <Tabs defaultValue="system" className="h-full flex flex-col">
+                    <TabsList className="w-full grid grid-cols-3 p-1 bg-background border rounded-lg mb-4">
+                      <TabsTrigger 
+                        value="system" 
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                      >
+                        System Configuration
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="identity"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                      >
+                        Agent Identity
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="tasks"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                      >
+                        Tasks
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <div className="flex-1 overflow-hidden">
+                      <TabsContent value="system" className="h-full mt-0 data-[state=active]:flex flex-col">
+                        <div className="space-y-4 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
+                          <div>
+                            <h3 className="text-lg font-semibold mb-2 text-foreground">System Prompt</h3>
+                            <div className="bg-background rounded-lg p-6 border shadow-sm">
+                              <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+                                {generatedAgent.system_prompt}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="identity" className="h-full mt-0 data-[state=active]:flex flex-col">
+                        <div className="space-y-6 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
+                          <div>
+                            <h3 className="text-lg font-semibold mb-2 text-foreground">Role</h3>
+                            <div className="bg-background rounded-lg p-6 border shadow-sm">
+                              <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+                                {generatedAgent.role}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h3 className="text-lg font-semibold mb-2 text-foreground">Goal</h3>
+                            <div className="bg-background rounded-lg p-6 border shadow-sm">
+                              <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+                                {generatedAgent.goal}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h3 className="text-lg font-semibold mb-2 text-foreground">Backstory</h3>
+                            <div className="bg-background rounded-lg p-6 border shadow-sm">
+                              <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+                                {generatedAgent.backstory}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="tasks" className="h-full mt-0 data-[state=active]:flex flex-col">
+                        <div className="grid grid-cols-1 gap-6 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
+                          {generatedAgent.tasks?.map((task: any, index: number) => (
+                            <div key={index} className="bg-background rounded-lg p-6 border shadow-sm">
+                              <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-foreground">
+                                  Task {index + 1}
+                                </h3>
+                                <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                                  {task.type || 'Custom Task'}
+                                </span>
+                              </div>
+                              
+                              <div className="space-y-6">
+                                <div>
+                                  <h4 className="text-sm font-medium mb-2 text-foreground">Description</h4>
+                                  <div className="bg-muted/30 rounded-lg p-4">
+                                    <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+                                      {task.description}
+                                    </ReactMarkdown>
+                                  </div>
+                                </div>
+
+                                {task.tools && task.tools.length > 0 && (
+                                  <div>
+                                    <h4 className="text-sm font-medium mb-2 text-foreground">Tools</h4>
+                                    <div className="bg-muted/30 rounded-lg p-4">
+                                      <div className="flex flex-wrap gap-2">
+                                        {task.tools.map((tool: string, toolIndex: number) => (
+                                          <span
+                                            key={toolIndex}
+                                            className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full text-xs font-medium"
+                                          >
+                                            {tool}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {task.expected_output && (
+                                  <div>
+                                    <h4 className="text-sm font-medium mb-2 text-foreground">Expected Output</h4>
+                                    <div className="bg-muted/30 rounded-lg p-4">
+                                      <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+                                        {task.expected_output.output}
+                                      </ReactMarkdown>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </TabsContent>
+                    </div>
+                  </Tabs>
+                </div>
+
+                <DialogFooter className="mt-6 pb-2 px-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      router.push(`/agents?edit=${generatedAgent.id}`);
+                      setPromptModalOpen(false);
+                    }}
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Agent
+                  </Button>
+                  <DialogClose asChild>
+                    <Button onClick={() => {
+                      setGeneratedAgent(null);
+                      setAgentPrompt("");
+                      setPromptModalOpen(false);
+                    }}>
+                      Close
+                    </Button>
+                  </DialogClose>
+                </DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
       <div className={`flex flex-wrap gap-16 items-center h-full w-full`}>
-        {isLoading || customAgentsFlag !== true ? (
+        {isLoading ? (
           Array.from({ length: 10 }).map((_, index) => (
             <Skeleton className="w-64 h-44" key={index} />
           ))
@@ -264,13 +488,17 @@ const AllAgents = () => {
                     </Button>
                     <Dialog
                       open={deleteDailogOpen}
-                      onOpenChange={setDeleteDialogOpen}
+                      onOpenChange={(open) => {
+                        setDeleteDialogOpen(open);
+                        if (!open) setAgentToDelete(null);
+                      }}
                     >
-                      <DialogTrigger>
+                      <DialogTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="hover:text-primary"
+                          onClick={() => setAgentToDelete(content.id)}
                         >
                           <Trash className="size-5" />
                         </Button>
@@ -280,7 +508,7 @@ const AllAgents = () => {
                           <DialogTitle className="truncate max-w-[400px] flex items-center">
                             Are you sure you want to delete&nbsp;
                             <span className="font-semibold inline-block max-w-[200px] truncate">
-                              {content.name}
+                              {data?.find((agent: { id: string; name: string }) => agent.id === agentToDelete)?.name}
                             </span>&nbsp;
                             ?
                           </DialogTitle>
@@ -291,9 +519,7 @@ const AllAgents = () => {
                           </DialogClose>
                           <Button
                             variant="destructive"
-                            onClick={() =>
-                              deleteCustomAgentForm.mutate(content.id)
-                            }
+                            onClick={() => agentToDelete && deleteCustomAgentForm.mutate(agentToDelete)}
                             className="gap-2"
                           >
                             {deleteCustomAgentForm.isPending ? (

@@ -462,30 +462,6 @@ const AllAgents = () => {
                   </CardContent>
 
                   <CardFooter className="flex items-center justify-end space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="hover:text-primary"
-                      onClick={() =>
-                        deploymentStatus === "RUNNING"
-                          ? stopAgent.mutate(content.id)
-                          : deployAgent.mutate(content.id)
-                      }
-                    >
-                      {deploymentStatus === "ERRORED" ? (
-                        <AlertCircle className="size-5 text-red-600" />
-                      ) : !deploymentStatus ? (
-                        <Loader className="size-5 animate-spin" />
-                      ) : deploymentStatus === "RUNNING" ? (
-                        <Pause className="size-5" />
-                      ) : deploymentStatus === "IN_PROGRESS" ? (
-                        <Loader className="size-5 animate-spin" />
-                      ) : deploymentStatus === "STOPPED" ? (
-                        <Play className="size-5" />
-                      ) : (
-                        <AlertCircle className="size-5 text-red-600" />
-                      )}
-                    </Button>
                     <Dialog
                       open={deleteDailogOpen}
                       onOpenChange={(open) => {

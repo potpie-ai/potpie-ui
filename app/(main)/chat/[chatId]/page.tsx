@@ -221,11 +221,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
       if (!list_system_agents.includes(info.agent_ids[0])) {
         AgentService.getAgentStatus(info.agent_ids[0]).then((agentStatus) => {
-          if (agentStatus !== "RUNNING") {
-            setChatAccess("not_running");
-          } else {
-            setChatAccess(info.access_type);
-          }
+          setChatAccess(info.access_type);
         });
       } else {
         setChatAccess(info.is_creator ? "write" : info.access_type);
@@ -268,21 +264,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     if (!messagesLoaded) {
       loadMessages().then(() => {
         if (pendingMessage && !pendingMessageSent.current) {
-          if (chatAccess !== "not_running") {
-            try {
-              messageMutation.mutate({
-                message: pendingMessage,
-                selectedNodes: selectedNodes,
-              });
-              pendingMessageSent.current = true;
-              dispatch(clearPendingMessage());
-            } catch (error) {
-              console.error("Error sending pending message:", error);
-            }
-          } else {
-            console.warn(
-              "Agent is not running; pending message will not be sent."
-            );
+          try {
+            messageMutation.mutate({
+              message: pendingMessage,
+              selectedNodes: selectedNodes,
+            });
+            pendingMessageSent.current = true;
+            dispatch(clearPendingMessage());
+          } catch (error) {
+            console.error("Error sending pending message:", error);
           }
         }
       });
@@ -451,7 +441,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               projectId={projectId}
               onSubmit={handleFormSubmit}
               disabled={
-                
                 !!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY
                ||
                 total_human_messages >= (planType === planTypesEnum.PRO? 500 : 50)
@@ -460,12 +449,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           </>
         ) : chatAccess === "loading" ? (
           <Skeleton className="sticky bottom-6 overflow-hidden rounded-lg border-[#edecf4] shadow-md h-28" />
-        ) : chatAccess === "not_running" ? (
-          <div className="sticky bottom-6 flex flex-col items-center">
-            <p className="text-sm text-gray-500">
-              Please start the agent to continue the conversation.
-            </p>
-          </div>
         ) : null}
 
         <div className="h-6 w-full bg-background sticky bottom-0"></div>

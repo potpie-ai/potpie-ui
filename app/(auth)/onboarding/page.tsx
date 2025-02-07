@@ -16,11 +16,13 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useRef, useState } from "react";
 import { db } from "@/configs/Firebase-config";
+import axios from "axios";
 
 const Onboarding = () => {
   const searchParams = useSearchParams();
   const email = searchParams.get('email');
   const name = searchParams.get('name');
+  const plan = searchParams.get('plan');
   const [formData, setFormData] = useState({
     email: email || '',
     name: name || '',
@@ -34,9 +36,26 @@ const Onboarding = () => {
 
   const router = useRouter();
 
+  const handleCheckoutRedirect = async (uid: string) => {
+    try {
+      const subUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
+      const response = await axios.get(
+        `${subUrl}/create-checkout-session?user_id=${uid}&plan_type=${plan}`,
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      
+      if (response.data.url) {
+        window.location.href = response.data.url;
+      } else {
+        throw new Error('No checkout URL received');
+      }
+    } catch (error) {
+      console.error('Error getting checkout URL:', error);
+    }
+  };
+
   const submitOnboarding = async () => {
     try {
-      //Validate UID
       if (!uid) {
         throw new Error("User ID is missing");
       }
@@ -46,21 +65,21 @@ const Onboarding = () => {
         throw new Error("Please fill out all required fields.");
       }
 
-      // Prepare user document
       const userDoc = {
         uid,
         ...formData,
         signedUpAt: new Date().toISOString(),
       };
 
-      // Save user to Firestore
-      await setDoc(doc(db, "users", uid), userDoc).then(() => {
- // Redirect to home
-        console.log("pushing to link github");
-        router.push("/link-github");
-      });
+      await setDoc(doc(db, "users", uid), userDoc);
 
-     
+      if (plan) {
+        // If plan parameter exists, redirect to stripe checkout
+        await handleCheckoutRedirect(uid);
+      } else {
+        // Otherwise continue to normal flow
+        router.push("/link-github");
+      }
     } catch (error) {
       console.error("Error saving onboarding data:", error);
       alert("Error saving onboarding data. Please try again.");

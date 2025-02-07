@@ -19,7 +19,7 @@ import Image from "next/image";
 import { usePostHog } from "posthog-js/react";
 import React, { useRef } from "react";
 import { toast } from "sonner";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 const Signup = () => {
   const githubAppUrl =
@@ -51,50 +51,54 @@ const Signup = () => {
   
   const onGithub = async () => {
     try {
-      const result = await signInWithPopup(auth, provider).then((res: any ) => {
-        router.push(`/onboarding?uid=${res.user.uid}&email=${encodeURIComponent(res.user.email || '')}&name=${encodeURIComponent(res.user.displayName || '')}`);
-        return res.data;
-      })
-      .catch((e: any) => {
-        toast.error("Signup call unsuccessful");
-      });;
-
+      const result = await signInWithPopup(auth, provider);
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
 
-      const userSignup = axios
-        .post(`${baseUrl}/api/v1/signup`, {
-          uid: result.user.uid,
-          email: result.user.email,
-          displayName: result.user.displayName || result.user.email?.split("@")[0],
-          emailVerified: result.user.emailVerified,
-          createdAt: result.user.metadata?.creationTime
-            ? new Date(result.user.metadata.creationTime).toISOString()
-            : "",
-          lastLoginAt: result.user.metadata?.lastSignInTime
-            ? new Date(result.user.metadata.lastSignInTime).toISOString()
-            : "",
+      try {
+        const userSignup = await axios.post(
+          `${baseUrl}/api/v1/signup`,
+          {
+            uid: result.user.uid,
+            email: result.user.email,
+            displayName: result.user.displayName || result.user.email?.split("@")[0],
+            emailVerified: result.user.emailVerified,
+            createdAt: result.user.metadata?.creationTime
+              ? new Date(result.user.metadata.creationTime).toISOString()
+              : "",
+            lastLoginAt: result.user.metadata?.lastSignInTime
+              ? new Date(result.user.metadata.lastSignInTime).toISOString()
+              : "",
+            providerData: result.user.providerData,
+            accessToken: (result as any)._tokenResponse.oauthAccessToken,
+            providerUsername: (result as any)._tokenResponse.screenName,
+          },
+          { headers: headers }
+        );
 
-          providerData: result.user.providerData,
-          accessToken: (result as any)._tokenResponse.oauthAccessToken,
-          providerUsername: (result as any)._tokenResponse.screenName,
-        },{headers:headers})
-        .then((res: { data: any }) => {
-          openPopup(result);
-          router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}`);
-          return res.data;
-        })
-        .catch((e: any) => {
-          toast.error("Signup call unsuccessful");
-        });
         posthog.identify(
           result.user.uid,
           { email: result.user.email, name: result.user?.displayName || "" }
         );
-      
-      toast.success(
-        "Account created successfully as  " + result.user.displayName
-      );
+
+        const searchParams = new URLSearchParams(window.location.search);
+        const plan = (searchParams.get('plan') || searchParams.get('PLAN') || '').toLowerCase();
+
+        openPopup(result);
+        router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}&plan=${plan || ''}`);
+        
+        toast.success(
+          "Account created successfully as " + result.user.displayName
+        );
+      } catch (e: any) {
+        if (e.response?.status === 409) {
+          // User already exists, redirect to signin
+          router.push('/sign-in');
+          toast.info("Account already exists. Please sign in.");
+        } else {
+          toast.error("Signup call unsuccessful");
+        }
+      }
     } catch (e) {
       toast.error("Failed to create account");
     }

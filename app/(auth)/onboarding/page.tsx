@@ -38,7 +38,7 @@ const Onboarding = () => {
 
   const handleCheckoutRedirect = async (uid: string) => {
     try {
-      const subUrl = process.env.NEXT_PUBLIC_SUB_URL;
+      const subUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
       const response = await axios.get(
         `${subUrl}/create-checkout-session?user_id=${uid}&plan_type=${plan}`,
         { headers: { 'Content-Type': 'application/json' } }

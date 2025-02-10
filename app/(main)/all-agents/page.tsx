@@ -47,10 +47,26 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import ReactMarkdown from "react-markdown";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import MinorService from "@/services/minorService";
+import { planTypesEnum } from "@/lib/Constants";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 const AllAgents = () => {
-  // Dummy flag – replace this with your actual logic to determine if the user is on a free plan
-  const isFreeUser = true;
+  const { user } = useAuthContext();
+  const userId = user?.uid;
+
+  // Get subscription info
+  const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
+    queryKey: ["userSubscription", userId],
+    queryFn: () => MinorService.fetchUserSubscription(userId as string),
+    enabled: !!userId,
+    retry: false,
+  });
+
+  // Check if user is on free plan
+  const isFreeUser = !subscriptionLoading && (!userSubscription || userSubscription.plan_type === planTypesEnum.FREE);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
@@ -219,6 +235,13 @@ const AllAgents = () => {
       toast.error("Please provide a detailed description for your agent.");
       return;
     }
+
+    // Ensure limit applies only to free users
+    if (isFreeUser && data?.length >= 3) {
+      setIsUpgradeMode(true);
+      return;
+    }
+
     await createAgentMutation.mutateAsync(agentPrompt);
   };
 
@@ -311,8 +334,8 @@ const AllAgents = () => {
                   <Button
                     type="submit"
                     onClick={() => {
-                      // Check agent limit before creating
-                      if (isFreeUser && data && data.length >= 3) {
+                      // Ensure limit applies only to free users
+                      if (isFreeUser && data?.length >= 3) {
                         setIsUpgradeMode(true);
                       } else {
                         handleCreateAgent();

@@ -47,7 +47,7 @@ export const systemAgents = [
     description: "An agent specialized in debugging using knowledge graphs.",
     status: "SYSTEM",
     prompt:
-      " I’m getting a 401 unauthorized error from @update_document API , help me debug this error : <stacktrace>",
+      " I'm getting a 401 unauthorized error from @update_document API , help me debug this error : <stacktrace>",
   },
   {
     id: "unit_test_agent",
@@ -110,10 +110,8 @@ export const SidebarItems: { title: string; links: any[] }[] = [
       {
         icons: <BotIcon size={20} strokeWidth={1.5} />,
         title: "Custom Agents",
-        altHref: "https://potpie.ai/pricing",
         href: "/all-agents",
-        disabled: false,
-        description: "Upgrade",
+        disabled: false
       },
     ],
   },

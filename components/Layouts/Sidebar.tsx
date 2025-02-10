@@ -161,7 +161,7 @@ export function AppSidebar() {
                         onClick={link.handleTrack ? handleTrack : undefined}
                       >
                         <Link
-                          href={userSubscription?.plan_type === "pro" ? link.href : (link.altHref || link.href)}
+                          href={link.href}
                           className="flex gap-2 items-center w-full"
                         >
                           <div className="flex gap-2">
@@ -247,6 +247,9 @@ export function AppSidebar() {
                   href={"https://potpie.ai/pricing"}
                   target="_blank"
                   className="w-full inset-0"
+                  style={{ 
+                    display: userSubscription?.plan_type === planTypesEnum.PRO ? 'none' : 'block' 
+                  }}
                 >
                   <Button
                     size="sm"

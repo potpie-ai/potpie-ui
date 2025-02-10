@@ -83,9 +83,10 @@ const Signup = () => {
 
         const searchParams = new URLSearchParams(window.location.search);
         const plan = (searchParams.get('plan') || searchParams.get('PLAN') || '').toLowerCase();
+        const prompt = searchParams.get('prompt') || '';
 
         openPopup(result);
-        router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}&plan=${plan || ''}`);
+        router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}&plan=${plan || ''}&prompt=${encodeURIComponent(prompt)}`);
         
         toast.success(
           "Account created successfully as " + result.user.displayName

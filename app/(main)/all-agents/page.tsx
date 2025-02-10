@@ -62,6 +62,22 @@ const AllAgents = () => {
 
   const router = useRouter();
 
+  // Handle URL parameters for auto-opening create modal
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const shouldCreateAgent = searchParams.get('createAgent') === 'true';
+    const initialPrompt = searchParams.get('prompt');
+    
+    if (shouldCreateAgent) {
+      setPromptModalOpen(true);
+      if (initialPrompt) {
+        setAgentPrompt(decodeURIComponent(initialPrompt));
+      }
+      // Clean up URL parameters
+      router.replace('/all-agents');
+    }
+  }, [router]);
+
   const { data, isLoading } = useQuery({
     queryKey: ["all-agents"],
     queryFn: async () => {
@@ -420,7 +436,7 @@ const AllAgents = () => {
           <Card className="p-6 w-full text-center shadow-md rounded-2xl">
             <CardContent>
               <p className="text-lg text-muted">No agents available.</p>
-              <Button className="mt-4" onClick={() => router.push("/agents")}>
+              <Button className="mt-4" onClick={() => setPromptModalOpen(true)}>
                 <Plus /> Create New Agent
               </Button>
             </CardContent>

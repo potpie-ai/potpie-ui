@@ -275,7 +275,7 @@ const CustomAgent: React.FC = () => {
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
 
-  if (!agentIdParam && planType !== planTypesEnum.PRO) {
+  if (!agentIdParam && planType === planTypesEnum.FREE) {
     router.push("/");
     setTimeout(() => {
       window.open("https://potpie.ai/pricing", "_blank");

@@ -105,7 +105,7 @@ const AllAgents = () => {
     }
   }, [router]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ["all-agents"],
     queryFn: async () => {
       const response: any = await AgentService.getAgentList();
@@ -222,8 +222,9 @@ const AllAgents = () => {
     },
     onSuccess: () => {
       toast.success("Agent created successfully!");
-      // Invalidate using the same query key to refresh the list
+      // Invalidate and refetch
       queryClient.invalidateQueries({ queryKey: ["all-agents"] });
+      queryClient.refetchQueries({ queryKey: ["all-agents"] });
     },
     onError: (error) => {
       toast.error("Failed to create agent. Please try again.");
@@ -243,6 +244,15 @@ const AllAgents = () => {
     }
 
     await createAgentMutation.mutateAsync(agentPrompt);
+  };
+
+  // Update dialog close handler
+  const handleDialogClose = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["all-agents"] });
+    await refetch();
+    setGeneratedAgent(null);
+    setAgentPrompt("");
+    setPromptModalOpen(false);
   };
 
   return (
@@ -527,13 +537,7 @@ const AllAgents = () => {
                     Edit Agent
                   </Button>
                   <DialogClose asChild>
-                    <Button
-                      onClick={() => {
-                        setGeneratedAgent(null);
-                        setAgentPrompt("");
-                        setPromptModalOpen(false);
-                      }}
-                    >
+                    <Button onClick={handleDialogClose}>
                       Close
                     </Button>
                   </DialogClose>

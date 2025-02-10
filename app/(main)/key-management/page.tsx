@@ -226,12 +226,6 @@ const KeyManagement = () => {
                             <SelectItem className="pl-8" value="openai">
                                 OpenAI
                             </SelectItem>
-                            <SelectItem className="pl-8" value="anthropic">
-                                Anthropic
-                            </SelectItem>
-                            <SelectItem className="pl-8" value="deepseek">
-                                Deepseek (through OpenRouter)
-                            </SelectItem>
                         </SelectContent>
                     </Select>
                     <Button 
@@ -282,12 +276,6 @@ const KeyManagement = () => {
                                 <SelectItem className="pl-8" value="openai">
                                     OpenAI
                                 </SelectItem>
-                                <SelectItem className="pl-8" value="anthropic">
-                                    Anthropic
-                                </SelectItem>
-                                <SelectItem className="pl-8" value="deepseek">
-                                    Deepseek (through OpenRouter)
-                                </SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -305,7 +293,7 @@ const KeyManagement = () => {
                         <DialogTitle className="text-lg text-start text-primary">Register new key</DialogTitle>
                         <DialogDescription>
                             <p className="text-base text-start text-black mt-2">Select the LLM you want to use</p>
-                            <p className="text-xs text-start text-black mt-1">Note: We only integrate with OpenAI (4o and 4-o-mini), Anthropic (Claude 3.5 Sonnet and Haiku), and Deepseek ( V3 and R1 through OpenRouter API key). Support for integrating other LLMs will be available soon.</p>
+                            <p className="text-xs text-start text-black mt-1">Note: We only integrate with OpenAI (4o and 4-o-mini). Support for integrating other LLMs will be available soon.</p>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col">
@@ -317,8 +305,6 @@ const KeyManagement = () => {
                                 <SelectContent className="bg-background">
                                     <SelectGroup>
                                         <SelectItem value="openai">OpenAI</SelectItem>
-                                        <SelectItem value="anthropic">Anthropic</SelectItem>
-                                        <SelectItem value="deepseek">Deepseek (through OpenRouter)</SelectItem>
                                     </SelectGroup>
                                 </SelectContent>
                             </Select>
@@ -352,9 +338,7 @@ const KeyManagement = () => {
                             <TableRow key={KeySecrets.api_key}>
                                 <TableCell>
                                     {KeySecrets?.provider ? (
-                                        KeySecrets.provider === 'deepseek' ? 
-                                            'Deepseek (through OpenRouter)' : 
-                                            KeySecrets.provider.charAt(0).toUpperCase() + KeySecrets.provider.slice(1)
+                                        KeySecrets.provider.charAt(0).toUpperCase() + KeySecrets.provider.slice(1)
                                     ) : 'Unknown Provider'}
                                 </TableCell>
                                 <TableCell className="font-mono">{maskKey(KeySecrets.api_key)}</TableCell>

@@ -275,14 +275,6 @@ const CustomAgent: React.FC = () => {
     { id: "2", label: "Tasks", description: "Assign tasks to the agent" },
   ];
 
-  if (!agentIdParam && planType !== planTypesEnum.PRO) {
-    router.push("/");
-    setTimeout(() => {
-      window.open("https://potpie.ai/pricing", "_blank");
-    }, 500);
-    return null;
-  }
-
   if (agentDetailsLoading || toolsLoading) {
     return <Skeleton className="h-[calc(100vh-5rem)]" />;
   }

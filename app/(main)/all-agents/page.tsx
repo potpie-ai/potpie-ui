@@ -46,9 +46,28 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown from "react-markdown";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import MinorService from "@/services/minorService";
+import { planTypesEnum } from "@/lib/Constants";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 const AllAgents = () => {
+  const { user } = useAuthContext();
+  const userId = user?.uid;
+
+  // Get subscription info
+  const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
+    queryKey: ["userSubscription", userId],
+    queryFn: () => MinorService.fetchUserSubscription(userId as string),
+    enabled: !!userId,
+    retry: false,
+  });
+
+  // Check if user is on free plan
+  const isFreeUser = !subscriptionLoading && (!userSubscription || userSubscription.plan_type === planTypesEnum.FREE);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [statuses, setStatuses] = useState<{ [id: string]: string }>({});
@@ -56,16 +75,41 @@ const AllAgents = () => {
   const [deleteDailogOpen, setDeleteDialogOpen] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<string | null>(null);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
+  // New state to determine if we should show the upgrade message
+  const [isUpgradeMode, setIsUpgradeMode] = useState(false);
   const [agentPrompt, setAgentPrompt] = useState("");
   const [generatedAgent, setGeneratedAgent] = useState<any>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   const router = useRouter();
 
+  // Handle URL parameters for auto-opening create modal
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const shouldCreateAgent = searchParams.get("createAgent") === "true";
+    const initialPrompt = searchParams.get("prompt");
+
+    if (shouldCreateAgent) {
+      // Check agent limit before opening the modal
+      if (isFreeUser && data && data.length >= 3) {
+        setIsUpgradeMode(true);
+      } else {
+        setIsUpgradeMode(false);
+      }
+      setPromptModalOpen(true);
+      if (initialPrompt) {
+        setAgentPrompt(decodeURIComponent(initialPrompt));
+      }
+      // Clean up URL parameters
+      router.replace("/all-agents");
+    }
+  }, [router]);
+
   const { data, isLoading } = useQuery({
     queryKey: ["all-agents"],
     queryFn: async () => {
       const response: any = await AgentService.getAgentList();
+      // Filter based on search term and update state
       setFilteredData(
         response?.filter((agent: { name: string }) =>
           agent.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
@@ -84,7 +128,6 @@ const AllAgents = () => {
         },
         {}
       );
-
       setStatuses(newStatuses);
     }
   }, [data, isLoading]);
@@ -105,7 +148,7 @@ const AllAgents = () => {
       const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
       return (await axios.delete(`${baseUrl}/custom-agents/agents/${agentId}`, {
         headers: header,
-      })) as AxiosResponse<CustomAgentType, any>;
+      })) as AxiosResponse<any, any>;
     },
     onSuccess: (data, agentId) => {
       router.refresh();
@@ -179,7 +222,8 @@ const AllAgents = () => {
     },
     onSuccess: () => {
       toast.success("Agent created successfully!");
-      queryClient.invalidateQueries({ queryKey: ["agentList"] });
+      // Invalidate using the same query key to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["all-agents"] });
     },
     onError: (error) => {
       toast.error("Failed to create agent. Please try again.");
@@ -191,6 +235,13 @@ const AllAgents = () => {
       toast.error("Please provide a detailed description for your agent.");
       return;
     }
+
+    // Ensure limit applies only to free users
+    if (isFreeUser && data?.length >= 3) {
+      setIsUpgradeMode(true);
+      return;
+    }
+
     await createAgentMutation.mutateAsync(agentPrompt);
   };
 
@@ -203,25 +254,73 @@ const AllAgents = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Dialog open={promptModalOpen} onOpenChange={setPromptModalOpen}>
+        <Dialog
+          open={promptModalOpen}
+          onOpenChange={(open) => {
+            setPromptModalOpen(open);
+            if (!open) setIsUpgradeMode(false);
+          }}
+        >
           <DialogTrigger asChild>
-            <Button className="ml-auto">
+            <Button
+              // When the button is clicked, check the free plan limit.
+              onClick={() => {
+                if (isFreeUser && data && data.length >= 3) {
+                  setIsUpgradeMode(true);
+                } else {
+                  setIsUpgradeMode(false);
+                }
+              }}
+              className="ml-auto"
+            >
               <Plus className="mr-2 h-4 w-4" /> Create New Agent
             </Button>
           </DialogTrigger>
-          <DialogContent className={!generatedAgent ? 
-            "sm:max-w-[600px] h-[80vh] p-6" : 
-            "sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-6"
-          }>
-            <DialogHeader>
-              <DialogTitle>Create New Agent</DialogTitle>
-            </DialogHeader>
-            {!generatedAgent ? (
+          <DialogContent
+            className={
+              isUpgradeMode
+                ? "sm:max-w-[600px] p-6"
+                : !generatedAgent
+                ? "sm:max-w-[600px] h-[80vh] p-6"
+                : "sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-6"
+            }
+          >
+            {isUpgradeMode ? (
+              // Upgrade message content when agent limit is reached.
+              <div className="flex flex-col h-full justify-center items-center">
+                <DialogHeader>
+                  <DialogTitle>Agent Limit Reached</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Free users are limited to 3 agents. You already have {data?.length} agent
+                    {data?.length > 1 ? "s" : ""}. Upgrade to create more agents and unlock additional
+                    features.
+                  </p>
+                </div>
+                <DialogFooter className="pt-6 pb-2">
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      window.open("https://potpie.ai/pricing", "_blank")
+                    }
+                  >
+                    Upgrade
+                  </Button>
+                  <DialogClose asChild>
+                    <Button className="ml-2">Close</Button>
+                  </DialogClose>
+                </DialogFooter>
+              </div>
+            ) : !generatedAgent ? (
+              // Existing agent creation modal content
               <div className="flex flex-col h-full">
                 <div className="flex-1 py-4">
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
-                      Describe the purpose and functionality of your agent in detail. Include any specific tasks, behaviors, or algorithms you want it to implement.
+                      Describe the purpose and functionality of your agent in detail.
+                      Include any specific tasks, behaviors, or algorithms you want it to
+                      implement.
                     </p>
                     <textarea
                       className="w-full h-[calc(80vh-250px)] p-4 rounded-md border resize-none"
@@ -234,7 +333,14 @@ const AllAgents = () => {
                 <DialogFooter className="pt-6 pb-2">
                   <Button
                     type="submit"
-                    onClick={handleCreateAgent}
+                    onClick={() => {
+                      // Ensure limit applies only to free users
+                      if (isFreeUser && data?.length >= 3) {
+                        setIsUpgradeMode(true);
+                      } else {
+                        handleCreateAgent();
+                      }
+                    }}
                     disabled={isCreating}
                   >
                     {isCreating ? (
@@ -249,6 +355,7 @@ const AllAgents = () => {
                 </DialogFooter>
               </div>
             ) : (
+              // Generated agent review modal content (unchanged)
               <div className="flex flex-col h-full">
                 <DialogHeader className="px-1">
                   <DialogTitle>Review Generated Agent</DialogTitle>
@@ -260,19 +367,19 @@ const AllAgents = () => {
                 <div className="flex-1 overflow-hidden mt-4">
                   <Tabs defaultValue="system" className="h-full flex flex-col">
                     <TabsList className="w-full grid grid-cols-3 p-1 bg-background border rounded-lg mb-4">
-                      <TabsTrigger 
-                        value="system" 
+                      <TabsTrigger
+                        value="system"
                         className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                       >
                         System Configuration
                       </TabsTrigger>
-                      <TabsTrigger 
+                      <TabsTrigger
                         value="identity"
                         className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                       >
                         Agent Identity
                       </TabsTrigger>
-                      <TabsTrigger 
+                      <TabsTrigger
                         value="tasks"
                         className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                       >
@@ -281,10 +388,15 @@ const AllAgents = () => {
                     </TabsList>
 
                     <div className="flex-1 overflow-hidden">
-                      <TabsContent value="system" className="h-full mt-0 data-[state=active]:flex flex-col">
+                      <TabsContent
+                        value="system"
+                        className="h-full mt-0 data-[state=active]:flex flex-col"
+                      >
                         <div className="space-y-4 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
                           <div>
-                            <h3 className="text-lg font-semibold mb-2 text-foreground">System Prompt</h3>
+                            <h3 className="text-lg font-semibold mb-2 text-foreground">
+                              System Prompt
+                            </h3>
                             <div className="bg-background rounded-lg p-6 border shadow-sm">
                               <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
                                 {generatedAgent.system_prompt}
@@ -294,10 +406,15 @@ const AllAgents = () => {
                         </div>
                       </TabsContent>
 
-                      <TabsContent value="identity" className="h-full mt-0 data-[state=active]:flex flex-col">
+                      <TabsContent
+                        value="identity"
+                        className="h-full mt-0 data-[state=active]:flex flex-col"
+                      >
                         <div className="space-y-6 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
                           <div>
-                            <h3 className="text-lg font-semibold mb-2 text-foreground">Role</h3>
+                            <h3 className="text-lg font-semibold mb-2 text-foreground">
+                              Role
+                            </h3>
                             <div className="bg-background rounded-lg p-6 border shadow-sm">
                               <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
                                 {generatedAgent.role}
@@ -306,7 +423,9 @@ const AllAgents = () => {
                           </div>
 
                           <div>
-                            <h3 className="text-lg font-semibold mb-2 text-foreground">Goal</h3>
+                            <h3 className="text-lg font-semibold mb-2 text-foreground">
+                              Goal
+                            </h3>
                             <div className="bg-background rounded-lg p-6 border shadow-sm">
                               <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
                                 {generatedAgent.goal}
@@ -315,7 +434,9 @@ const AllAgents = () => {
                           </div>
 
                           <div>
-                            <h3 className="text-lg font-semibold mb-2 text-foreground">Backstory</h3>
+                            <h3 className="text-lg font-semibold mb-2 text-foreground">
+                              Backstory
+                            </h3>
                             <div className="bg-background rounded-lg p-6 border shadow-sm">
                               <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
                                 {generatedAgent.backstory}
@@ -325,7 +446,10 @@ const AllAgents = () => {
                         </div>
                       </TabsContent>
 
-                      <TabsContent value="tasks" className="h-full mt-0 data-[state=active]:flex flex-col">
+                      <TabsContent
+                        value="tasks"
+                        className="h-full mt-0 data-[state=active]:flex flex-col"
+                      >
                         <div className="grid grid-cols-1 gap-6 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
                           {generatedAgent.tasks?.map((task: any, index: number) => (
                             <div key={index} className="bg-background rounded-lg p-6 border shadow-sm">
@@ -334,13 +458,15 @@ const AllAgents = () => {
                                   Task {index + 1}
                                 </h3>
                                 <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                                  {task.type || 'Custom Task'}
+                                  {task.type || "Custom Task"}
                                 </span>
                               </div>
-                              
+
                               <div className="space-y-6">
                                 <div>
-                                  <h4 className="text-sm font-medium mb-2 text-foreground">Description</h4>
+                                  <h4 className="text-sm font-medium mb-2 text-foreground">
+                                    Description
+                                  </h4>
                                   <div className="bg-muted/30 rounded-lg p-4">
                                     <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
                                       {task.description}
@@ -350,7 +476,9 @@ const AllAgents = () => {
 
                                 {task.tools && task.tools.length > 0 && (
                                   <div>
-                                    <h4 className="text-sm font-medium mb-2 text-foreground">Tools</h4>
+                                    <h4 className="text-sm font-medium mb-2 text-foreground">
+                                      Tools
+                                    </h4>
                                     <div className="bg-muted/30 rounded-lg p-4">
                                       <div className="flex flex-wrap gap-2">
                                         {task.tools.map((tool: string, toolIndex: number) => (
@@ -368,7 +496,9 @@ const AllAgents = () => {
 
                                 {task.expected_output && (
                                   <div>
-                                    <h4 className="text-sm font-medium mb-2 text-foreground">Expected Output</h4>
+                                    <h4 className="text-sm font-medium mb-2 text-foreground">
+                                      Expected Output
+                                    </h4>
                                     <div className="bg-muted/30 rounded-lg p-4">
                                       <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
                                         {task.expected_output.output}
@@ -397,11 +527,13 @@ const AllAgents = () => {
                     Edit Agent
                   </Button>
                   <DialogClose asChild>
-                    <Button onClick={() => {
-                      setGeneratedAgent(null);
-                      setAgentPrompt("");
-                      setPromptModalOpen(false);
-                    }}>
+                    <Button
+                      onClick={() => {
+                        setGeneratedAgent(null);
+                        setAgentPrompt("");
+                        setPromptModalOpen(false);
+                      }}
+                    >
                       Close
                     </Button>
                   </DialogClose>
@@ -420,7 +552,7 @@ const AllAgents = () => {
           <Card className="p-6 w-full text-center shadow-md rounded-2xl">
             <CardContent>
               <p className="text-lg text-muted">No agents available.</p>
-              <Button className="mt-4" onClick={() => router.push("/agents")}>
+              <Button className="mt-4" onClick={() => setPromptModalOpen(true)}>
                 <Plus /> Create New Agent
               </Button>
             </CardContent>
@@ -484,8 +616,11 @@ const AllAgents = () => {
                           <DialogTitle className="truncate max-w-[400px] flex items-center">
                             Are you sure you want to delete&nbsp;
                             <span className="font-semibold inline-block max-w-[200px] truncate">
-                              {data?.find((agent: { id: string; name: string }) => agent.id === agentToDelete)?.name}
-                            </span>&nbsp;
+                              {data?.find(
+                                (agent: { id: string; name: string }) =>
+                                  agent.id === agentToDelete
+                              )?.name}
+                            </span>
                             ?
                           </DialogTitle>
                         </DialogHeader>
@@ -495,7 +630,10 @@ const AllAgents = () => {
                           </DialogClose>
                           <Button
                             variant="destructive"
-                            onClick={() => agentToDelete && deleteCustomAgentForm.mutate(agentToDelete)}
+                            onClick={() =>
+                              agentToDelete &&
+                              deleteCustomAgentForm.mutate(agentToDelete)
+                            }
                             className="gap-2"
                           >
                             {deleteCustomAgentForm.isPending ? (

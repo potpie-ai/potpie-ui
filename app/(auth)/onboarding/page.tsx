@@ -17,12 +17,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import React, { useRef, useState } from "react";
 import { db } from "@/configs/Firebase-config";
 import axios from "axios";
+import { toast } from "sonner";
 
 const Onboarding = () => {
   const searchParams = useSearchParams();
   const email = searchParams.get('email');
   const name = searchParams.get('name');
   const plan = searchParams.get('plan');
+  const prompt = searchParams.get('prompt');
   const [formData, setFormData] = useState({
     email: email || '',
     name: name || '',
@@ -71,18 +73,29 @@ const Onboarding = () => {
         signedUpAt: new Date().toISOString(),
       };
 
-      await setDoc(doc(db, "users", uid), userDoc);
+      try {
+        await setDoc(doc(db, "users", uid), userDoc);
+      } catch (firebaseError: any) {
+        console.error("Firebase Error:", firebaseError);
+        if (firebaseError.code === 'permission-denied') {
+          throw new Error("Unable to save user data. Please try signing out and signing in again.");
+        }
+        throw new Error("Error saving user data to database. Please try again.");
+      }
 
       if (plan) {
         // If plan parameter exists, redirect to stripe checkout
         await handleCheckoutRedirect(uid);
+      } else if (prompt) {
+        // If prompt parameter exists, redirect to all-agents with create modal
+        router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
       } else {
         // Otherwise continue to normal flow
         router.push("/link-github");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving onboarding data:", error);
-      alert("Error saving onboarding data. Please try again.");
+      toast.error(error.message || "Error saving onboarding data. Please try again.");
     }
   };
 

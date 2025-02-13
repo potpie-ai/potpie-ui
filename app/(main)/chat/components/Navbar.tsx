@@ -67,6 +67,7 @@ const Navbar = ({
   const showTitle = pathname.split("/").pop() !== "newchat";
   const [shareWithLink, setShareWithLink] = useState(false);
   const [accessList, setAccessList] = useState<string[]>([]);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
 
   useEffect(() => {
     if (chatTitle) {
@@ -85,6 +86,7 @@ const Navbar = ({
   const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setEmailValue(event.target.value);
     setEmailError(null);
+    setHasPendingChanges(true);
   };
 
   const currentConversationId = usePathname()?.split("/").pop();
@@ -162,14 +164,18 @@ const Navbar = ({
   const handleEmailSave = async () => {
     try {
       if (disableShare) throw new Error("Unable to share the chat");
+      
       if (shareWithLink) {
         const res = await refetchChatShare();
         if (res.data.type === "error") return;
       } else {
         const emails = emailValue.split(",").map((email) => email.trim());
         emails.forEach((email) => emailSchema.parse(email));
-        await refetchChatShare();
+        const res = await refetchChatShare();
+        if (res.data.type === "error") return;
       }
+      
+      setHasPendingChanges(false);
       setIsDialogOpen(false);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -178,6 +184,17 @@ const Navbar = ({
         setEmailError("An error occurred while sharing the chat.");
       }
     }
+  };
+
+  const handleCopyLink = () => {
+    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`;
+    navigator.clipboard.writeText(shareUrl);
+    toast.message(
+      <div className="flex flex-col gap-1">
+        <p className="text-primary font-semibold">URL copied to clipboard</p>
+        <p className="text-sm text-muted">{shareUrl}</p>
+      </div>
+    );
   };
 
   const isShareDisabled = () => {
@@ -220,6 +237,7 @@ const Navbar = ({
 
   const handleSelectChange = (value: string) => {
     setShareWithLink(value === "link");
+    setHasPendingChanges(true);
     if (value === "email") {
       setEmailValue(""); // Reset email value when switching
       setEmailError(null); // Clear email error if switching to link
@@ -246,6 +264,13 @@ const Navbar = ({
       toast.error(`Failed to remove access for ${email}.`);
     }
   };
+
+  // Reset pending changes when dialog opens/closes
+  useEffect(() => {
+    if (!isDialogOpen) {
+      setHasPendingChanges(false);
+    }
+  }, [isDialogOpen]);
 
   if (hidden) return null;
 
@@ -402,22 +427,15 @@ const Navbar = ({
                   </div>
 
                 <DialogFooter className="!justify-between">
-                  <DialogClose
-                    asChild
-                    onClick={() => {
-                      navigator.clipboard.writeText(
-                        `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`
-                      );
-                      toast.success("Link copied to clipboard");
-                    }}
+                  <Button
+                    type="button"
+                    className="gap-2"
+                    variant="outline"
+                    onClick={handleCopyLink}
+                    disabled={hasPendingChanges || disableShare}
                   >
-                    <Button
-                      type="button"
-                      className="gap-2 bg-[#4479FF] text-white hover:bg-blue-600"
-                    >
-                      <ClipboardCheck /> <span>Copy Link</span>
-                    </Button>
-                  </DialogClose>
+                    <ClipboardCheck className="w-4 h-4" /> Copy Link
+                  </Button>
                   <Button
                     type="button"
                     onClick={handleEmailSave}

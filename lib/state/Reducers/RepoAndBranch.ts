@@ -11,6 +11,7 @@ const RepoAndBranchSlice = createSlice({
     reducers: {
         setRepoName: (state, action) => {
             state.repoName = action.payload;
+            state.branchName = ""
         },
         setBranchName: (state, action) => {
             state.branchName = action.payload;

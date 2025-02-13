@@ -176,6 +176,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const loadMessages = async () => {
     try {
+      if (messagesLoaded) return;
+      
       const messages = await ChatService.loadMessages(
         currentConversationId,
         0,
@@ -261,7 +263,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   }, [currentConversationId]);
 
   useEffect(() => {
-    if (!messagesLoaded) {
+    if (!messagesLoaded && chatAccess !== "loading") {
       loadMessages().then(() => {
         if (pendingMessage && !pendingMessageSent.current) {
           try {
@@ -277,7 +279,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         }
       });
     }
-  }, [messagesLoaded, pendingMessage, chatAccess]);
+  }, [chatAccess]);
 
   useEffect(() => {
     if (

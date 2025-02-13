@@ -181,7 +181,7 @@ const Onboarding = () => {
                 <option value="Twitter">Twitter</option>
                 <option value="LinkedIn">LinkedIn</option>
                 <option value="HackerNews">HackerNews</option>
-                <option value="HackerNews">Other</option>
+                <option value="Other">Other</option>
               </select>
             </div>
 

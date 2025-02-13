@@ -273,19 +273,9 @@ const Navbar = ({
   }, [isDialogOpen]);
 
   if (hidden) return null;
-
   return (
     <>
       <header className="sticky top-0 z-50 bg-white flex items-center border-b border-[#E3E3E3] flex-col justify-between text-secondary -m-4 lg:-m-6">
-        <div className="bg-[#4479FF] w-full text-center bg-opacity-[0.37] text-muted">
-          Hello beta user! Please refer to the documentation to get started.{" "}
-          <Link
-            href="https://docs.potpie.ai/quickstart"
-            className="text-[#0267FF] underline"
-          >
-            Click here.
-          </Link>
-        </div>
         {showTitle && (
         <div className="flex w-full justify-between items-center">
           <div className="flex items-center justify-between w-full px-6 pt-1 pb-1 gap-5 border-0">

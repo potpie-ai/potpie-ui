@@ -146,7 +146,7 @@ const AllAgents = () => {
     mutationFn: async (agentId: string) => {
       const header = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      return (await axios.delete(`${baseUrl}/custom-agents/agents/${agentId}`, {
+      return (await axios.delete(`${baseUrl}/api/v1/custom-agents/agents/${agentId}`, {
         headers: header,
       })) as AxiosResponse<any, any>;
     },

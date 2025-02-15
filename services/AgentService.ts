@@ -58,7 +58,7 @@ export default class AgentService {
     const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
     try {
       const response = await axios.put(
-        `${baseUrl}/custom-agents/agents/${agentId}`,
+        `${baseUrl}/api/v1/custom-agents/agents/${agentId}`,
         customAgentData,
         { headers }
       );
@@ -73,7 +73,7 @@ export default class AgentService {
     const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
     try {
       const response = await axios.post(
-        `${baseUrl}/custom-agents/agents/`,
+        `${baseUrl}/api/v1/custom-agents/agents/`,
         customAgentData,
         {
           headers,
@@ -112,7 +112,7 @@ export default class AgentService {
     const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
     try {
       const response = await axios.post(
-        `${baseUrl}/custom-agents/agents/auto/`,
+        `${baseUrl}/api/v1/custom-agents/agents/auto/`,
         { prompt },
         { headers }
       );
@@ -129,7 +129,7 @@ export default class AgentService {
     
     try {
       const response = await axios.get(
-        `${baseUrl}/custom-agents/agents/${agentId}`,
+        `${baseUrl}/api/v1/custom-agents/agents/${agentId}`,
         {
           headers: {
             ...headers,

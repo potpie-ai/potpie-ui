@@ -145,8 +145,8 @@ const AllAgents = () => {
   const deleteCustomAgentForm = useMutation({
     mutationFn: async (agentId: string) => {
       const header = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
-      return (await axios.delete(`${baseUrl}/custom-agents/agents/${agentId}`, {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      return (await axios.delete(`${baseUrl}/api/v1/custom-agents/agents/${agentId}`, {
         headers: header,
       })) as AxiosResponse<any, any>;
     },
@@ -166,7 +166,7 @@ const AllAgents = () => {
   const deployAgent = useMutation({
     mutationFn: async (agentId: string) => {
       const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       return axios.post(
         `${baseUrl}/deployment/agents/${agentId}/deploy`,
         {},
@@ -189,7 +189,7 @@ const AllAgents = () => {
   const stopAgent = useMutation({
     mutationFn: async (agentId: string) => {
       const headers = await getHeaders();
-      const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       return axios.post(
         `${baseUrl}/deployment/agents/${agentId}/stop`,
         {},
@@ -510,9 +510,9 @@ const AllAgents = () => {
                                       Expected Output
                                     </h4>
                                     <div className="bg-muted/30 rounded-lg p-4">
-                                      <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
-                                        {task.expected_output.output}
-                                      </ReactMarkdown>
+                                      <pre className="text-sm whitespace-pre-wrap overflow-x-auto">
+                                        {JSON.stringify(task.expected_output, null, 2)}
+                                      </pre>
                                     </div>
                                   </div>
                                 )}

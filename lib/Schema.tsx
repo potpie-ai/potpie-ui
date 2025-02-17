@@ -29,24 +29,18 @@ export const DbMockFormSchema = z.object({
   port: z.string().optional(),
 });
 
-export const CustomAgentsExpectedOutputSchema = z.object({
-  output: z
-    .string()
-    .min(1, { message: "Expected output is required" })
-    .refine(
-      (value) => {
-        try {
-          JSON.parse(value);
-          return true;
-        } catch {
-          return false;
-        } finally {
-          return true;
-        }
-      },
-      { message: "Expected output must be valid JSON." }
-    ),
-});
+export const CustomAgentsExpectedOutputSchema = z.string().min(1, { message: "Expected output is required" })
+  .refine(
+    (value) => {
+      try {
+        JSON.parse(value);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: "Expected output must be valid JSON" }
+  );
 
 export const CustomAgentsTaskSchema = z.object({
   description: z.string().min(1, { message: "Description is required" }),

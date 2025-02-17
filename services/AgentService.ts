@@ -22,7 +22,7 @@ export default class AgentService {
 
   static async getAgentStatus(agentId: string) {
     const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       const response = await axios.get(
         `${baseUrl}/deployment/agents/${agentId}/status`,
@@ -55,7 +55,7 @@ export default class AgentService {
     customAgentData: CustomAgentsFormValues
   ) {
     const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       const response = await axios.put(
         `${baseUrl}/api/v1/custom-agents/agents/${agentId}`,
@@ -70,7 +70,7 @@ export default class AgentService {
 
   static async createAgent(customAgentData: CustomAgentsFormValues) {
     const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       const response = await axios.post(
         `${baseUrl}/api/v1/custom-agents/agents/`,
@@ -89,7 +89,7 @@ export default class AgentService {
     agentId: string,
   ) {
     const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       const response = await axios.post(
         `${baseUrl}/deployment/agents/${agentId}/redeploy`,{},{
@@ -109,7 +109,7 @@ export default class AgentService {
 
   static async createAgentFromPrompt(prompt: string) {
     const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       const response = await axios.post(
         `${baseUrl}/api/v1/custom-agents/agents/auto/`,
@@ -124,7 +124,7 @@ export default class AgentService {
 
   static async getAgentDetails(agentId: string, userId: string) {
     const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_POTPIE_PLUS_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     const hmacSignature = generateHmacSignature(userId);
     
     try {

@@ -45,7 +45,6 @@ const CustomAgent: React.FC = () => {
   const { planType } = useSelector(
     (state: RootState) => state.UserInfo
   );
-  console.log("Edit Agent Screen - agentIdParam:", agentIdParam);
   const { data: agentDetails, isLoading: agentDetailsLoading } = useQuery({
     queryKey: ["agents", agentIdParam],
     queryFn: async () => {
@@ -79,7 +78,11 @@ const CustomAgent: React.FC = () => {
       goal: "",
       backstory: "",
       tasks: [
-        { description: "", tools: [""], expected_output: { output: "" } },
+        { 
+          description: "", 
+          tools: [""], 
+          expected_output: "" 
+        },
       ],
     },
   });
@@ -170,11 +173,9 @@ const CustomAgent: React.FC = () => {
             ? agentDetails.tasks.map((task: any) => ({
                 description: task.description || "",
                 tools: Array.isArray(task.tools) ? task.tools : [],
-                expected_output: typeof task.expected_output === 'string' 
-                  ? { output: task.expected_output }
-                  : task.expected_output || { output: "" },
+                expected_output: JSON.stringify(task.expected_output, null, 2)
               }))
-            : [{ description: "", tools: [""], expected_output: { output: "" } }],
+            : [{ description: "", tools: [""], expected_output: "" }],
         });
 
         setSelectedTools(
@@ -218,6 +219,7 @@ const CustomAgent: React.FC = () => {
     },
     onSuccess: () => {
       toast.success("Agent updated successfully");
+      router.push("/all-agents");
     },
     onError: (error) => {
       console.error("Update error:", error);
@@ -225,39 +227,38 @@ const CustomAgent: React.FC = () => {
     },
   });
 
-  const redeployCustomAgentForm = useMutation({
-    mutationFn: async () => {
-      if (!agentIdParam) {
-        throw new Error("Agent ID parameter is missing");
-      }
-      return await AgentService.redeployAgent(agentIdParam);
-    },
-    onSuccess: () => {
-      toast.success("Agent redeployed successfully");
-    },
-    onError: (error) => {
-      console.error("Redeploy error:", error);
-      toast.error("Failed to redeploy agent. Please try again.");
-    },
-  });
-  console.log("Edit Agent Screen - agentIdParam:", agentIdParam);
-  const { data: agentStatus, isLoading: agentStatusLoading } = useQuery({
-    queryKey: ["agent-status", agentIdParam],
-    queryFn: async () => {
-      return await AgentService.getAgentStatus(agentIdParam || "");
-    },
-    enabled: !!agentIdParam,
-  });
-
   const onSubmit: SubmitHandler<CustomAgentsFormValues> = async (values) => {
-    if (agentIdParam) {
-      await updateCustomAgentForm.mutateAsync(values);
-      if (agentStatus === "RUNNING") {
-        await redeployCustomAgentForm.mutateAsync();
+    try {
+      // Process the form values to parse JSON strings into objects
+      const processedValues = {
+        ...values,
+        tasks: values.tasks.map(task => {
+          let parsedOutput;
+          try {
+            parsedOutput = task.expected_output ? JSON.parse(task.expected_output) : {};
+            console.log('Parsed output:', parsedOutput); // Debug log
+          } catch (e) {
+            console.error('JSON parse error:', e);
+            toast.error('Invalid JSON format in expected output');
+            throw new Error('Invalid JSON format in expected output');
+          }
+          return {
+            ...task,
+            expected_output: parsedOutput
+          };
+        })
+      };
+
+      console.log('Submitting values:', processedValues); // Debug log
+
+      if (agentIdParam) {
+        await updateCustomAgentForm.mutateAsync(processedValues);
+      } else {
+        await submitCustomAgentForm.mutateAsync(processedValues);
       }
-      router.push("/all-agents");
-    } else {
-      await submitCustomAgentForm.mutateAsync(values);
+    } catch (error) {
+      console.error('Form submission error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to submit form');
     }
   };
 
@@ -433,7 +434,7 @@ const CustomAgent: React.FC = () => {
                           />
                           <FormField
                             control={form.control}
-                            name={`tasks.${idx}.expected_output.output`}
+                            name={`tasks.${idx}.expected_output`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="flex items-center gap-3">
@@ -444,8 +445,7 @@ const CustomAgent: React.FC = () => {
                                     </TooltipTrigger>
                                     <TooltipContent>
                                       <p>
-                                        The functions or capabilities the agent
-                                        can utilize to perform the task.
+                                        The expected output format for this task.
                                       </p>
                                     </TooltipContent>
                                   </Tooltip>
@@ -472,7 +472,7 @@ const CustomAgent: React.FC = () => {
                               append({
                                 description: "",
                                 tools: [""],
-                                expected_output: { output: "" },
+                                expected_output: ""
                               })
                             }
                           >
@@ -493,11 +493,8 @@ const CustomAgent: React.FC = () => {
           update={!!agentIdParam}
           primaryBtnLoading={
             updateCustomAgentForm.isPending ||
-            submitCustomAgentForm.isPending ||
-            redeployCustomAgentForm.isPending 
+            submitCustomAgentForm.isPending
           }
-          redeploy={agentStatus === "RUNNING"}
-          statusLoading={agentIdParam !== "" && agentStatusLoading}
         />
       </Stepper>
     </>

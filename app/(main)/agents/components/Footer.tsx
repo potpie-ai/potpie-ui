@@ -8,15 +8,11 @@ const Footer: React.FC<{
   form: any;
   update: boolean;
   primaryBtnLoading?: boolean;
-  redeploy?: boolean;
-  statusLoading: boolean;
 }> = ({
   submitForm,
   form,
   update,
   primaryBtnLoading = false,
-  redeploy = false,
-  statusLoading,
 }) => {
   const {
     nextStep,
@@ -50,22 +46,20 @@ const Footer: React.FC<{
       isValid = (await form.trigger("tasks")) && taskCount > 0;
 
       const tasks = form.getValues("tasks");
-      let jsonValid = true;
-      tasks.forEach(
-        (task: { expected_output: { output: string } }, index: any) => {
-          if (!isValidJSON(task.expected_output.output)) {
-            jsonValid = false;
-            form.setError(`tasks.${index}.expected_output.output`, {
-              type: "manual",
-              message: "Expected output must be valid JSON",
-            });
-          } else {
-            form.clearErrors(`tasks.${index}.expected_output.output`);
-          }
+      let fieldsValid = true;
+      tasks.forEach((task: any, index: number) => {
+        if (task.expected_output && !isValidJSON(task.expected_output)) {
+          fieldsValid = false;
+          form.setError(`tasks.${index}.expected_output`, {
+            type: "manual",
+            message: "Invalid JSON format",
+          });
+        } else {
+          form.clearErrors(`tasks.${index}.expected_output`);
         }
-      );
+      });
 
-      isValid = isValid && jsonValid;
+      isValid = isValid && fieldsValid;
     } else {
       isValid = true;
     }
@@ -114,31 +108,15 @@ const Footer: React.FC<{
               size="sm"
               type="button"
               onClick={handleNextStep}
-              disabled={primaryBtnLoading || (isLastStep && statusLoading)}
+              disabled={primaryBtnLoading}
             >
-              {primaryBtnLoading || (isLastStep && statusLoading) ? (
+              {primaryBtnLoading ? (
                 <div className="flex items-center gap-2">
                   <Loader className="w-4 h-4 animate-spin" />
-                  {isLastStep
-                    ? redeploy
-                      ? "Update and Redeploy"
-                      : update
-                      ? "Update"
-                      : "Create"
-                    : isOptionalStep
-                    ? "Skip"
-                    : "Next"}
+                  {isLastStep ? (update ? "Update" : "Create") : "Next"}
                 </div>
-              ) : isLastStep ? (
-                redeploy
-                  ? "Update and Redeploy"
-                  : update
-                  ? "Update"
-                  : "Create"
-              ) : isOptionalStep ? (
-                "Skip"
               ) : (
-                "Next"
+                isLastStep ? (update ? "Update" : "Create") : "Next"
               )}
             </Button>
           </>

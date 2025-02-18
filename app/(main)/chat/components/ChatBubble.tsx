@@ -139,10 +139,11 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {/* Chat Bubble */}
       <div
         className={cn(
-          "rounded-lg px-4 py-2 max-w-[75%] break-words text-sm",
+          "rounded-lg px-4 py-2 break-words text-sm overflow-hidden",
+          "whitespace-pre-wrap break-all",
           sender === "user"
-            ? "bg-[#f7e6e6] text-white ml-2"
-            : "bg-[#edecf4] text-muted mr-2",
+            ? "bg-[#f7e6e6] text-white ml-2 max-w-[85%]"
+            : "bg-[#edecf4] text-muted mr-2 max-w-[85%]",
           isStreaming && !initialMessage && "animate-pulse",
           className
         )}

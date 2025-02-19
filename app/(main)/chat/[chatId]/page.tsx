@@ -394,92 +394,93 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   }
 
   return (
-    <>
+    <div className="flex flex-col h-screen">
       <Navbar
         disableShare={!isCreator}
         showShare
         hidden={!showNavbar || Error.isError}
       />
-      <div className="flex h-full min-h-[50vh] flex-col rounded-xl px-4 lg:col-span-2 -mb-6">
-        <div className="relative w-full h-full flex flex-col items-center mb-5 mt-5 gap-3">
-          <div ref={upPanelRef} className="w-full"></div>
-          {currentConversation &&
-            currentConversation.messages.map(
-              (
-                message: {
-                  citations: any;
-                  text: string;
-                  sender: "user" | "agent";
-                  isStreaming: boolean;
-                  fetchingResponse: boolean | undefined;
-                },
-                i: number
-              ) => (
-                <ChatBubble
-                  key={`${currentConversation.conversationId}-${i}`}
-                  citations={
-                    Array.isArray(message.citations) &&
-                    Array.isArray(message.citations[0])
-                      ? message.citations.flat()
-                      : message.citations || []
-                  }
-                  message={message.text}
-                  sender={message.sender}
-                  isLast={i === currentConversation.messages.length - 1}
-                  isStreaming={message.isStreaming}
-                  fetchingResponse={fetchingResponse && i === currentConversation.messages.length - 1}
-                  currentConversationId={currentConversation.conversationId}
-                  userImage={profilePicUrl}
-                  onRegenerate={() => handleRegenerate(message.text)}
-                />
-              )
-            )}
-
-          <div ref={bottomOfPanel} />
+      <main className="flex-1 relative">
+        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden px-4 lg:px-6">
+          <div className="flex flex-col">
+            <div className="w-full flex flex-col items-center py-6 gap-2">
+              <div ref={upPanelRef} className="w-full"></div>
+              {currentConversation &&
+                currentConversation.messages.map(
+                  (message: {
+                    citations: any;
+                    text: string;
+                    sender: "user" | "agent";
+                    isStreaming: boolean;
+                    fetchingResponse: boolean | undefined;
+                  },
+                  i: number
+                ) => (
+                  <div key={`${currentConversation.conversationId}-${i}`} className="w-full">
+                    <ChatBubble
+                      citations={
+                        Array.isArray(message.citations) &&
+                        Array.isArray(message.citations[0])
+                          ? message.citations.flat()
+                          : message.citations || []
+                      }
+                      message={message.text}
+                      sender={message.sender}
+                      isLast={i === currentConversation.messages.length - 1}
+                      isStreaming={message.isStreaming}
+                      fetchingResponse={fetchingResponse && i === currentConversation.messages.length - 1}
+                      currentConversationId={currentConversation.conversationId}
+                      userImage={profilePicUrl}
+                      onRegenerate={() => handleRegenerate(message.text)}
+                    />
+                  </div>
+                ))}
+              <div ref={bottomOfPanel} />
+            </div>
+          </div>
         </div>
-        {chatAccess === "write" ? (
-          <>
-            <NodeSelectorForm
-              projectId={projectId}
-              onSubmit={handleFormSubmit}
-              disabled={
-                !!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY
-               ||
-                total_human_messages >= (planType === planTypesEnum.PRO? 500 : 50)
-              }
-            />
-          </>
-        ) : chatAccess === "loading" ? (
-          <Skeleton className="sticky bottom-6 overflow-hidden rounded-lg border-[#edecf4] shadow-md h-28" />
-        ) : null}
+      </main>
+      {chatAccess === "write" ? (
+        <div className="sticky bottom-0 bg-background z-40">
+          <NodeSelectorForm
+            projectId={projectId}
+            onSubmit={handleFormSubmit}
+            disabled={
+              !!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY ||
+              total_human_messages >= (planType === planTypesEnum.PRO ? 500 : 50)
+            }
+          />
+          <div className="h-2 w-full"></div>
+        </div>
+      ) : chatAccess === "loading" ? (
+        <Skeleton className="sticky bottom-2 overflow-hidden rounded-lg border-[#edecf4] shadow-md h-28" />
+      ) : null}
 
-        <div className="h-6 w-full bg-background sticky bottom-0"></div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>
-                {parsingStatus === ParsingStatusEnum.ERROR
-                  ? "There was an error parsing your repo, please try again after a few minutes"
-                  : "Understanding your latest commit this might take some time"}{" "}
-              </DialogTitle>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose>
-                <Button
-                  variant={
-                    parsingStatus === ParsingStatusEnum.ERROR
-                      ? "destructive"
-                      : "default"
-                  }
-                >
-                  Ok
-                </Button>
-              </DialogClose>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {parsingStatus === ParsingStatusEnum.ERROR
+                ? "There was an error parsing your repo, please try again after a few minutes"
+                : "Understanding your latest commit this might take some time"}{" "}
+            </DialogTitle>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose>
+              <Button
+                variant={
+                  parsingStatus === ParsingStatusEnum.ERROR
+                    ? "destructive"
+                    : "default"
+                }
+              >
+                Ok
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 

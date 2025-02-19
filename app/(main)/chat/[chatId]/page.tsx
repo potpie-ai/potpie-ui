@@ -399,12 +399,11 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         disableShare={!isCreator}
         showShare
         hidden={!showNavbar || Error.isError}
-        className="sticky top-0 z-50"
       />
       <main className="flex-1 relative">
-        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden">
+        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden px-4 lg:px-6">
           <div className="flex flex-col">
-            <div className="w-full flex flex-col items-center py-2 gap-2">
+            <div className="w-full flex flex-col items-center py-6 gap-2">
               <div ref={upPanelRef} className="w-full"></div>
               {currentConversation &&
                 currentConversation.messages.map(
@@ -417,7 +416,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                   },
                   i: number
                 ) => (
-                  <div key={`${currentConversation.conversationId}-${i}`} className="w-full px-2 lg:px-4">
+                  <div key={`${currentConversation.conversationId}-${i}`} className="w-full">
                     <ChatBubble
                       citations={
                         Array.isArray(message.citations) &&

@@ -24,6 +24,14 @@ export default class MinorService {
     return response.data;
   };
 
+  static async cancelUserSubscription (userId: string) {
+    const baseUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
+    const response = await axios.post(
+      `${baseUrl}/cancel-subscription?user_id=${userId}`
+    );
+    return response.data;
+  };
+
   static async fetchUserUsage (start_date: string, end_date: string) {
     try {
       const headers = await getHeaders();

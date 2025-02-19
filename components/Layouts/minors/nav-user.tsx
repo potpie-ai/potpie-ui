@@ -5,6 +5,8 @@ import {
   ChevronsUpDown,
   CreditCard,
   LogOut,
+  Receipt,
+  SubscriptIcon,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -82,6 +84,10 @@ export function NavUser({
               <DropdownMenuItem onClick={() => router.push("/key-management")}>
                 <CreditCard />
                 Key Management
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/user-subscription")}>
+                <Receipt />
+                Manage Subscription
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Link

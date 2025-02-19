@@ -83,7 +83,8 @@ const PricingPage = () => {
   const [subscription, setSubscription] = useState({
     plan: 'Unknown Plan',
     endDate: 'No end date',
-    isActive: false
+    isActive: false,
+    isCancelled: false
   });
 
   useEffect(() => {
@@ -99,7 +100,8 @@ const PricingPage = () => {
                 month: 'long',
                 day: 'numeric'
               }),
-              isActive: new Date(data.end_date).getTime() > new Date().getTime()
+              isActive: new Date(data.end_date).getTime() > new Date().getTime(),
+              isCancelled: data.is_cancelled
             });
           }
         } catch (error) {
@@ -118,7 +120,7 @@ const PricingPage = () => {
         return 'Individual - Pro';
       case 'free':
         return 'Individual - Free';
-      case 'early':
+      case 'startup':
         return 'Early-Stage';
       case 'enterprise':
         return 'Enterprise';
@@ -130,17 +132,29 @@ const PricingPage = () => {
   const handleCancelSubscription = async () => {
     try {
       const data = await MinorService.cancelUserSubscription(userId);
-      if (data.plan_type && data.end_date) {
-        setSubscription({
-          plan: getPlanDisplayName(data.plan_type),
-          endDate: new Date(data.end_date).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          }),
-          isActive: new Date(data.end_date).getTime() > new Date().getTime()
-        });
-      }
+      const fetchSubscriptionDetails = async () => {
+        if (userId) {
+          try {
+            const data = await MinorService.fetchUserSubscription(userId);
+            if (data.plan_type && data.end_date) {
+              setSubscription({
+                plan: getPlanDisplayName(data.plan_type),
+                endDate: new Date(data.end_date).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                }),
+                isActive: new Date(data.end_date).getTime() > new Date().getTime(),
+                isCancelled: data.is_cancelled
+              });
+            }
+          } catch (error) {
+            console.error('Error fetching subscription:', error);
+          }
+        }
+      };
+      
+      await fetchSubscriptionDetails();
     } catch (error) {
       console.error('Error canceling subscription:', error);
     }
@@ -182,7 +196,7 @@ const PricingPage = () => {
     switch(planName) {
       case 'Individual - Pro': return 'pro';
       case 'Individual - Free': return 'free';
-      case 'Early-Stage': return 'early';
+      case 'Early-Stage': return 'startup';
       case 'Enterprise': return 'enterprise';
       default: return 'free';
     }
@@ -198,7 +212,7 @@ const PricingPage = () => {
             <span className={`inline-block px-3 py-1 rounded-full text-sm ${
               subscription.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
             }`}>
-              {subscription.isActive ? 'ACTIVE' : 'EXPIRED'}
+              {subscription.isActive ? 'ACTIVE' : 'INACTIVE'}
             </span>
           </h2>
           <div className="flex justify-between items-center">
@@ -206,7 +220,7 @@ const PricingPage = () => {
               <p className="text-lg">Plan: {subscription.plan}</p>
               <p className="text-gray-600">Expires: {subscription.endDate}</p>
             </div>
-            {subscription.isActive && (
+            {!subscription.isCancelled && subscription.plan !== 'Individual - Free' && (
               <button
                 onClick={handleCancelSubscription}
                 className="bg-white text-red-600 border border-red-600 px-4 py-2 rounded hover:bg-red-50"

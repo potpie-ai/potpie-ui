@@ -159,6 +159,7 @@ const PricingPage = () => {
   };
 
   const handleCheckoutRedirect = async (planType: string) => {
+    console.log("planType", planType);
     try {
       const subUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
       const response = await axios.get(
@@ -231,8 +232,12 @@ const PricingPage = () => {
                 {plan.description}
               </p>
               <div className="mb-6">
-                <span className="text-4xl font-bold">${plan.price}</span>
-                <span className={subscription.plan === plan.name ? 'text-gray-300' : 'text-gray-600'}> /month</span>
+                {getButtonText(plan.name) !== 'Contact Us' && (
+                  <>
+                    <span className="text-4xl font-bold">${plan.price}</span>
+                    <span className={subscription.plan === plan.name ? 'text-gray-300' : 'text-gray-600'}> /month</span>
+                  </>
+                )}
               </div>
               <Link
                 href={plan.name === 'Enterprise' ? '#' : ''}

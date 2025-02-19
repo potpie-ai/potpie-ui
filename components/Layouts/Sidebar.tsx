@@ -187,79 +187,80 @@ export function AppSidebar() {
         <Separator />
         <SidebarMenu>
           <SidebarMenuItem>
-            <Card className="bg-transparent border-none text-white">
-              <CardHeader className="p-2 pt-0 md:p-4">
-                <CardTitle className="text-lg">
-                  {(() => {
-                    const now = new Date();
-                    const subscriptionEndDate = new Date(
-                      userSubscription?.end_date || 0
-                    );
+            <Link href={`/user-subscription?end_date=${userSubscription?.end_date ? new Date(userSubscription.end_date).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : ''}&plan_type=${userSubscription?.plan_type}`} className="w-full">
+              <Card className="bg-transparent border-none text-white">
+                <CardHeader className="p-2 pt-0 md:p-4">
+                  <CardTitle className="text-lg">
+                    {(() => {
+                      const now = new Date();
+                      const subscriptionEndDate = new Date(
+                        userSubscription?.end_date || 0
+                      );
 
-                    if (subscriptionLoading)
-                      return <Skeleton className="w-28 h-6" />;
-                    if (
-                      !userSubscription ||
-                      userSubscription.plan_type === planTypesEnum.FREE
-                    ) {
-                      return "Free Plan";
-                    } else if (
-                      userSubscription.plan_type === planTypesEnum.STARTUP &&
-                      subscriptionEndDate > now
-                    ) {
-                      return "Early-Stage";
-                    } else if (
-                      userSubscription.plan_type === planTypesEnum.PRO &&
-                      subscriptionEndDate > now
-                    ) {
-                      return "Individual - Pro";
-                    } else {
-                      return "Expired Plan";
-                    }
-                  })()}
-                </CardTitle>
-                <CardDescription className="flex flex-row justify-between text-tertiary">
-                  <span>Credits used</span>
-                  <span>
-                    {usageLoading ? (
-                      <Skeleton className="w-10 h-5" />
-                    ) : (
-                      `${total_human_messages || 0} / ${userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50}`
-                    )}
-                  </span>
-                </CardDescription>
-              </CardHeader>
+                      if (subscriptionLoading)
+                        return <Skeleton className="w-28 h-6" />;
+                      if (
+                        !userSubscription ||
+                        userSubscription.plan_type === planTypesEnum.FREE
+                      ) {
+                        return "Free Plan";
+                      } else if (
+                        userSubscription.plan_type === planTypesEnum.STARTUP &&
+                        subscriptionEndDate > now
+                      ) {
+                        return "Early-Stage";
+                      } else if (
+                        userSubscription.plan_type === planTypesEnum.PRO &&
+                        subscriptionEndDate > now
+                      ) {
+                        return "Individual - Pro";
+                      } else {
+                        return "Expired Plan";
+                      }
+                    })()}
+                  </CardTitle>
+                  <CardDescription className="flex flex-row justify-between text-tertiary">
+                    <span>Credits used</span>
+                    <span>
+                      {usageLoading ? (
+                        <Skeleton className="w-10 h-5" />
+                      ) : (
+                        `${total_human_messages || 0} / ${userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50}`
+                      )}
+                    </span>
+                  </CardDescription>
+                </CardHeader>
 
-              <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex">
-                <Progress.Root
-                  className="relative overflow-hidden bg-[#7F7F7F] rounded-full w-full h-[5px]"
-                  style={{
-                    transform: "translateZ(0)",
-                  }}
-                  value={progress}
-                >
-                  <Progress.Indicator
-                    className="bg-primary w-full h-full transition-transform transition-duration-[660ms] ease-[cubic-bezier(0.65, 0, 0.35, 1)]"
-                    style={{ transform: `translateX(-${100 - progress}%)` }}
-                  />
-                </Progress.Root>
-                <Link
-                  href={"https://potpie.ai/pricing"}
-                  target="_blank"
-                  className="w-full inset-0"
-                  style={{ 
-                    display: userSubscription?.plan_type === planTypesEnum.PRO ? 'none' : 'block' 
-                  }}
-                >
-                  <Button
-                    size="sm"
-                    className="w-full bg-white hover:text-white text-foreground !border-none"
+                <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex">
+                  <Progress.Root
+                    className="relative overflow-hidden bg-[#7F7F7F] rounded-full w-full h-[5px]"
+                    style={{
+                      transform: "translateZ(0)",
+                    }}
+                    value={progress}
                   >
-                    ✨ Upgrade
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+                    <Progress.Indicator
+                      className="bg-primary w-full h-full transition-transform transition-duration-[660ms] ease-[cubic-bezier(0.65, 0, 0.35, 1)]"
+                      style={{ transform: `translateX(-${100 - progress}%)` }}
+                    />
+                  </Progress.Root>
+                  <Link
+                    href={"/pricing"}
+                    className="w-full inset-0"
+                    style={{ 
+                      display: userSubscription?.plan_type === planTypesEnum.PRO ? 'none' : 'block' 
+                    }}
+                  >
+                    <Button
+                      size="sm"
+                      className="w-full bg-white hover:text-white text-foreground !border-none"
+                    >
+                      ✨ Upgrade
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </Link>
           </SidebarMenuItem>
         </SidebarMenu>
         <Separator />

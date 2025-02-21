@@ -139,7 +139,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {/* Chat Bubble */}
       <div
         className={cn(
-          "rounded-lg px-4 py-2 break-words text-sm overflow-hidden whitespace-pre-wrap break-all",
+          "rounded-lg px-4 py-2 break-words text-sm overflow-hidden",
           sender === "user"
             ? "bg-[#f7e6e6] text-white ml-2 max-w-[75%]"
             : "bg-[#edecf4] text-muted mr-2 max-w-[75%]",
@@ -190,7 +190,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           <div key={index}>
             {section.type === "text" && (
               <ReactMarkdown
-                className="markdown-content"
+                className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
                 components={{
                   code: ({ children }) => (
                     <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5 text-sm font-bold">

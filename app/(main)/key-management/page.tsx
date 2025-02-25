@@ -57,7 +57,7 @@ const KeyManagement = () => {
   const queryClient = useQueryClient();
 
   const getKeyPromptMessage = (provider: string) => {
-    const openrouterProviders = ['deepseek', 'meta-llama', 'mistralai'];
+    const openrouterProviders = ['deepseek', 'meta-llama', 'mistralai', 'gemini'];
     if (openrouterProviders.includes(provider)) {
       return "Please enter your OpenRouter API key. This provider is accessed through OpenRouter's API.";
     }

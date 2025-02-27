@@ -96,7 +96,6 @@ export default class BranchAndRepositoryService {
       ) {
         let parsingStatus = initialStatus;
         let baseDelay = 5000; // Start with 5 seconds
-        let maxDelay = 60000; // Max delay of 1 minute
         const startTime = Date.now();
     
         const getStatusMessage = (status: string) => {
@@ -132,10 +131,7 @@ export default class BranchAndRepositoryService {
           }
     
           // Exponential backoff with jitter
-          const jitter = Math.random() * 1000;
-          const delay = Math.min(baseDelay + jitter, maxDelay);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          baseDelay = Math.min(baseDelay * 2, maxDelay);
+          await new Promise((resolve) => setTimeout(resolve, baseDelay));
         }
     
         if (Date.now() - startTime >= maxDuration) {

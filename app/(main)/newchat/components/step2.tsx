@@ -11,12 +11,13 @@ import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
 import { toast } from "sonner";
 import { list_system_agents } from "@/lib/utils";
+import router from "next/router";
 
 interface AgentType {
   id: string;
   name: string;
   description: string;
-  status	: string
+  status: string;
 }
 
 interface Step2Props {
@@ -25,6 +26,7 @@ interface Step2Props {
   setChatStep: (step: number) => void;
   setCurrentConversationId: (id: string) => void;
   setAgentId: (id: string) => void;
+  gotoChat: (conversation_id: string) => void;
 }
 
 const Step2: React.FC<Step2Props> = ({
@@ -33,6 +35,7 @@ const Step2: React.FC<Step2Props> = ({
   setChatStep,
   setCurrentConversationId,
   setAgentId,
+  gotoChat,
 }) => {
   const userId = auth.currentUser?.uid || "";
   const dispatch: AppDispatch = useDispatch();
@@ -58,10 +61,11 @@ const Step2: React.FC<Step2Props> = ({
         projectId,
         agentId
       );
-      dispatch(setChat({agentId: agentId}))
+      dispatch(setChat({ agentId: agentId }));
       setAgentId(agentId);
       setChatStep(3);
       setCurrentConversationId(response.conversation_id);
+      gotoChat(response.conversation_id);
     } catch (err) {
       console.error("Unable to create conversation:", err);
       setChatStep(2);

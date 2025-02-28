@@ -85,7 +85,9 @@ export function NavUser({
                 <CreditCard />
                 Key Management
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/user-subscription")}>
+              <DropdownMenuItem
+                onClick={() => router.push("/user-subscription")}
+              >
                 <Receipt />
                 Manage Subscription
               </DropdownMenuItem>

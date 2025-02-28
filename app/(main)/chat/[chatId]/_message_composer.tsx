@@ -1,0 +1,271 @@
+import getHeaders from "@/app/utils/headers.util";
+import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { Button } from "@/components/ui/button";
+
+import { Skeleton } from "@/components/ui/skeleton";
+import { setChat } from "@/lib/state/Reducers/chat";
+import { AppDispatch } from "@/lib/state/store";
+import { ComposerPrimitive, ThreadPrimitive } from "@assistant-ui/react";
+import axios from "axios";
+import { SendHorizontalIcon, CircleStopIcon, X } from "lucide-react";
+import { FC, useRef, useState, KeyboardEvent } from "react";
+import { useDispatch } from "react-redux";
+
+interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
+  projectId: string;
+}
+
+interface NodeOption {
+  content: string;
+  file_path: string;
+  match_type: string;
+  name: string;
+  node_id: string;
+  relevance: number;
+}
+
+const MessageComposer = ({ projectId }: ChatBubbleProps) => {
+  const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
+  const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>([]);
+  const [message, setMessage] = useState("");
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
+    null
+  );
+  const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
+  const [placeholder, setPlaceholder] = useState(
+    "Type @ followed by file or function name"
+  );
+  const [isSearchingNode, setIsSearchingNode] = useState(false);
+
+  const dispatch: AppDispatch = useDispatch();
+
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+
+  const fetchNodes = async (query: string) => {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    setIsSearchingNode(true);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const response = await axios.post(
+        `${baseUrl}/api/v1/search`,
+        { project_id: projectId, query },
+        { headers }
+      );
+      if (response.data.results && response.data.results.length > 0) {
+        setNodeOptions(response.data.results);
+        console.log(nodeOptions);
+      } else {
+        setNodeOptions([]);
+      }
+      setSelectedNodeIndex(0);
+    } catch (error) {
+      console.error("Error fetching nodes:", error);
+      setNodeOptions([]);
+    }
+    setIsSearchingNode(false);
+  };
+
+  const handleNodeSelect = (node: NodeOption) => {
+    const cursorPosition = messageRef.current?.selectionStart || 0;
+    const messageBeforeCursor = message.slice(0, cursorPosition);
+    const messageAfterCursor = message.slice(cursorPosition);
+
+    if (selectedNodes.find((n) => n.node_id === node.node_id)) {
+      return;
+    }
+
+    const lastAtPosition = messageBeforeCursor.lastIndexOf("@");
+    if (lastAtPosition !== -1) {
+      const textBeforeAt = messageBeforeCursor.slice(0, lastAtPosition);
+      const textAfterAt = messageBeforeCursor.slice(lastAtPosition + 1);
+
+      const spaceAfterAt = Math.min(
+        textAfterAt.indexOf(" "),
+        textAfterAt.indexOf("\n")
+      );
+      const rest =
+        spaceAfterAt !== -1 ? textAfterAt.slice(0, spaceAfterAt) : textAfterAt;
+
+      const nodeText = `@${node.name} `;
+
+      const newMessage = `${textBeforeAt}${nodeText}${messageAfterCursor}`;
+      setMessage(newMessage);
+    }
+
+    setSelectedNodes((curr) => [...curr, node]);
+    dispatch(setChat({ selectedNodes: selectedNodes }));
+
+    setNodeOptions([]);
+  };
+
+  const handleNodeDeselect = (node: NodeOption) => {
+    setSelectedNodes((curr) => curr.filter((n) => n.node_id != node.node_id));
+    dispatch(setChat({ selectedNodes: selectedNodes }));
+  };
+
+  const handleMessageChange = (e: any) => {
+    const value = e.target.value;
+    setMessage(value);
+
+    const cursorPosition = e.target.selectionStart;
+    const lastAtPosition = value.lastIndexOf("@", cursorPosition);
+
+    if (
+      lastAtPosition !== -1 &&
+      cursorPosition > lastAtPosition &&
+      !message.slice(lastAtPosition, cursorPosition + 1).includes(" ")
+    ) {
+      const query = value.substring(lastAtPosition + 1, cursorPosition);
+      if (query.trim().length > 0 && !query.includes(" ")) {
+        if (searchTimeout) clearTimeout(searchTimeout);
+
+        setIsSearchingNode(true);
+        const timeoutId = setTimeout(() => {
+          fetchNodes(query);
+          setIsSearchingNode(false);
+        }, 300);
+        setSearchTimeout(timeoutId);
+      }
+    } else {
+      setNodeOptions([]);
+    }
+  };
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && nodeOptions.length > 0) {
+      if (selectedNodeIndex >= 0) {
+        e.preventDefault();
+        handleNodeSelect(nodeOptions[selectedNodeIndex]);
+      } else {
+        // handleSubmit(e as unknown as FormEvent);
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedNodeIndex((prevIndex) =>
+        Math.min(prevIndex + 1, nodeOptions.length - 1)
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedNodeIndex((prevIndex) => Math.max(prevIndex - 1, 0));
+    }
+  };
+
+  const NodeSelection = () => {
+    return (
+      <div className="max-h-40 overflow-scroll m-2 p-2 mx-0 border-2 rounded-sm border-gray-400/40">
+        {
+          <ul>
+            {isSearchingNode ? (
+              <Skeleton className="w-full h-20" />
+            ) : (
+              nodeOptions
+                ?.sort((a, b) => b.relevance - a.relevance)
+                .map((node, index) => (
+                  <li
+                    key={node.node_id}
+                    className={`flex m-1 flex-row cursor-pointer rounded-sm text-s p1 px-2 hover:translate-x-3 transition ease-out ${index === selectedNodeIndex ? "bg-gray-200" : "hover:bg-gray-200"}`}
+                    onClick={() => handleNodeSelect(node)}
+                  >
+                    <div className="font-semibold min-w-40">{node.name}</div>
+                    <div className="ml-10 text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
+                      {truncateFilePath(node.file_path)}
+                    </div>
+                  </li>
+                ))
+            )}
+          </ul>
+        }
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col w-full">
+      {nodeOptions?.length > 0 && <NodeSelection />}
+      <div className="flex flex-row">
+        {/* display selected nodes */}
+        {selectedNodes.map((node) => (
+          <div
+            key={node.name}
+            className="flex flex-row items-center justify-center p-1 px-2 m-1 rounded-full bg-[#f7e6e6] shadow-sm"
+          >
+            <span>{node.name}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-2 h-4 w-4 hover:bg-red-400/50 hover:scale-105 hover:shadow-md transition ease-out"
+              onClick={() => handleNodeDeselect(node)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <div className="flex w-full">
+        <ComposerPrimitive.Input
+          ref={messageRef}
+          value={message}
+          rows={1}
+          autoFocus
+          placeholder={placeholder}
+          onChange={handleMessageChange}
+          onKeyDown={handleKeyPress}
+          className="placeholder:text-muted-foreground max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+        />
+        <ComposerAction />
+      </div>
+    </div>
+  );
+};
+
+const ComposerAction: FC = () => {
+  return (
+    <>
+      <ThreadPrimitive.If running={false}>
+        <ComposerPrimitive.Send>
+          <TooltipIconButton
+            tooltip="Send"
+            variant="default"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in"
+          >
+            <SendHorizontalIcon />
+          </TooltipIconButton>
+        </ComposerPrimitive.Send>
+      </ThreadPrimitive.If>
+      <ThreadPrimitive.If running>
+        <ComposerPrimitive.Cancel asChild>
+          <TooltipIconButton
+            tooltip="Cancel"
+            variant="default"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in"
+          >
+            <CircleStopIcon />
+          </TooltipIconButton>
+        </ComposerPrimitive.Cancel>
+      </ThreadPrimitive.If>
+    </>
+  );
+};
+
+export default MessageComposer;
+
+const truncateFilePath = (filePath: string) => {
+  if (!filePath) {
+    return;
+  }
+  const maxLength = 100;
+  if (filePath.length <= maxLength) {
+    return filePath;
+  }
+
+  const fileNameIndex = filePath.lastIndexOf("/");
+  const fileName = filePath.slice(fileNameIndex + 1);
+
+  const truncatedPath =
+    filePath.length > maxLength
+      ? "..." + filePath.slice(-maxLength + fileName.length + 3)
+      : filePath;
+
+  return truncatedPath;
+};

@@ -15,7 +15,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { XCircle } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import ChatBubble from "../components/ChatBubble";
@@ -29,6 +28,9 @@ import MinorService from "@/services/minorService";
 import { ParsingStatusEnum } from "@/lib/Constants";
 import { increaseTotalHumanMessages } from "@/lib/state/Reducers/User";
 import { planTypesEnum } from "@/lib/Constants";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "./_thread";
+import { PotpieRuntime } from "./_runtime";
 
 interface SendMessageArgs {
   message: string;
@@ -82,7 +84,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
             sender: "agent",
             text: "",
             citations: [],
-            isStreaming: true
+            isStreaming: true,
           },
         ],
       }));
@@ -100,13 +102,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           setFetchingResponse(false);
           setCurrentConversation((prevConversation: any) => ({
             ...prevConversation,
-            messages: prevConversation.messages.map((msg: any, idx: number) => 
-              idx === prevConversation.messages.length - 1 
+            messages: prevConversation.messages.map((msg: any, idx: number) =>
+              idx === prevConversation.messages.length - 1
                 ? {
                     ...msg,
                     text: currentMessage,
                     citations: currentCitations,
-                    isStreaming: true
+                    isStreaming: true,
                   }
                 : msg
             ),
@@ -117,16 +119,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       // Final update to mark streaming as complete
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
-        messages: prevConversation.messages.map((msg: any, idx: number) => 
-          idx === prevConversation.messages.length - 1 
+        messages: prevConversation.messages.map((msg: any, idx: number) =>
+          idx === prevConversation.messages.length - 1
             ? {
                 ...msg,
-                isStreaming: false
+                isStreaming: false,
               }
             : msg
         ),
       }));
-      
     } catch (error) {
       console.error("Error in sendMessage:", error);
       setFetchingResponse(false);
@@ -161,8 +162,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       }));
     },
     onSuccess: () => {
-      dispatch(increaseTotalHumanMessages(1))
-    }
+      dispatch(increaseTotalHumanMessages(1));
+    },
   });
 
   const fetchProfilePicture = async (userId: string) => {
@@ -177,7 +178,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const loadMessages = async () => {
     try {
       if (messagesLoaded) return;
-      
+
       const messages = await ChatService.loadMessages(
         currentConversationId,
         0,
@@ -296,7 +297,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       setIsDialogOpen(false);
     }
   }, [parsingStatus, projectId]);
-  
 
   const handleFormSubmit = (message: string) => {
     messageMutation.mutate({
@@ -307,18 +307,18 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
   const handleRegenerate = async (newMessage: string) => {
     setFetchingResponse(true);
-    
+
     try {
       // Update the last message to prepare for streaming
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
-        messages: prevConversation.messages.map((msg: any, idx: number) => 
-          idx === prevConversation.messages.length - 1 
+        messages: prevConversation.messages.map((msg: any, idx: number) =>
+          idx === prevConversation.messages.length - 1
             ? {
                 ...msg,
                 text: "",
                 citations: [],
-                isStreaming: true
+                isStreaming: true,
               }
             : msg
         ),
@@ -332,13 +332,13 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
           isStreaming = true;
           setCurrentConversation((prevConversation: any) => ({
             ...prevConversation,
-            messages: prevConversation.messages.map((msg: any, idx: number) => 
-              idx === prevConversation.messages.length - 1 
+            messages: prevConversation.messages.map((msg: any, idx: number) =>
+              idx === prevConversation.messages.length - 1
                 ? {
                     ...msg,
                     text: currentMessage,
                     citations: currentCitations,
-                    isStreaming: true
+                    isStreaming: true,
                   }
                 : msg
             ),
@@ -349,18 +349,17 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       // Final update to mark streaming as complete
       setCurrentConversation((prevConversation: any) => ({
         ...prevConversation,
-        messages: prevConversation.messages.map((msg: any, idx: number) => 
-          idx === prevConversation.messages.length - 1 
+        messages: prevConversation.messages.map((msg: any, idx: number) =>
+          idx === prevConversation.messages.length - 1
             ? {
                 ...msg,
-                isStreaming: false
+                isStreaming: false,
               }
             : msg
         ),
       }));
 
       setFetchingResponse(false);
-      
     } catch (error) {
       console.error("Error in handleRegenerate:", error);
       setFetchingResponse(false);
@@ -393,6 +392,8 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     );
   }
 
+  const runtime = PotpieRuntime(params.chatId);
+
   return (
     <div className="flex flex-col h-screen">
       <Navbar
@@ -400,61 +401,28 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         showShare
         hidden={!showNavbar || Error.isError}
       />
-      <main className="flex-1 relative">
-        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden px-4 lg:px-6">
-          <div className="flex flex-col">
-            <div className="w-full flex flex-col items-center py-6 gap-2">
-              <div ref={upPanelRef} className="w-full"></div>
-              {currentConversation &&
-                currentConversation.messages.map(
-                  (message: {
-                    citations: any;
-                    text: string;
-                    sender: "user" | "agent";
-                    isStreaming: boolean;
-                    fetchingResponse: boolean | undefined;
-                  },
-                  i: number
-                ) => (
-                  <div key={`${currentConversation.conversationId}-${i}`} className="w-full">
-                    <ChatBubble
-                      citations={
-                        Array.isArray(message.citations) &&
-                        Array.isArray(message.citations[0])
-                          ? message.citations.flat()
-                          : message.citations || []
-                      }
-                      message={message.text}
-                      sender={message.sender}
-                      isLast={i === currentConversation.messages.length - 1}
-                      isStreaming={message.isStreaming}
-                      fetchingResponse={fetchingResponse && i === currentConversation.messages.length - 1}
-                      currentConversationId={currentConversation.conversationId}
-                      userImage={profilePicUrl}
-                      onRegenerate={() => handleRegenerate(message.text)}
-                    />
-                  </div>
-                ))}
-              <div ref={bottomOfPanel} />
-            </div>
-          </div>
-        </div>
-      </main>
-      {chatAccess === "write" ? (
+      <div className="h-[calc(100%-50px)]">
+        <AssistantRuntimeProvider runtime={runtime}>
+          <Thread projectId={projectId} disabled={false} />
+        </AssistantRuntimeProvider>
+      </div>
+      {/* {chatAccess === "write" ? (
         <div className="sticky bottom-0 bg-background z-40">
           <NodeSelectorForm
             projectId={projectId}
             onSubmit={handleFormSubmit}
             disabled={
-              !!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY ||
-              total_human_messages >= (planType === planTypesEnum.PRO ? 500 : 50)
+              !!fetchingResponse ||
+              parsingStatus !== ParsingStatusEnum.READY ||
+              total_human_messages >=
+                (planType === planTypesEnum.PRO ? 500 : 50)
             }
           />
           <div className="h-2 w-full"></div>
         </div>
       ) : chatAccess === "loading" ? (
         <Skeleton className="sticky bottom-2 overflow-hidden rounded-lg border-[#edecf4] shadow-md h-28" />
-      ) : null}
+      ) : null} */}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">

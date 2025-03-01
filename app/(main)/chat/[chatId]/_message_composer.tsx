@@ -3,16 +3,16 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { Button } from "@/components/ui/button";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { setChat } from "@/lib/state/Reducers/chat";
-import { AppDispatch } from "@/lib/state/store";
 import { ComposerPrimitive, ThreadPrimitive } from "@assistant-ui/react";
 import axios from "axios";
 import { SendHorizontalIcon, CircleStopIcon, X } from "lucide-react";
-import { FC, useRef, useState, KeyboardEvent } from "react";
-import { useDispatch } from "react-redux";
+import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
 
-interface ChatBubbleProps extends React.HTMLAttributes<HTMLDivElement> {
+interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
+  input: string;
+  nodes: NodeOption[];
+  setSelectedNodesInConfig: (selectedNodes: any[]) => void;
 }
 
 interface NodeOption {
@@ -24,20 +24,25 @@ interface NodeOption {
   relevance: number;
 }
 
-const MessageComposer = ({ projectId }: ChatBubbleProps) => {
+const MessageComposer = ({
+  projectId,
+  input,
+  nodes,
+  setSelectedNodesInConfig,
+}: MessageComposerProps) => {
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
-  const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>([]);
-  const [message, setMessage] = useState("");
+
+  const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>(nodes);
+  useEffect(() => {
+    setSelectedNodesInConfig(selectedNodes);
+  }, [selectedNodes, setSelectedNodesInConfig]);
+
+  const [message, setMessage] = useState(input);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
     null
   );
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
-  const [placeholder, setPlaceholder] = useState(
-    "Type @ followed by file or function name"
-  );
   const [isSearchingNode, setIsSearchingNode] = useState(false);
-
-  const dispatch: AppDispatch = useDispatch();
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
 
@@ -45,7 +50,7 @@ const MessageComposer = ({ projectId }: ChatBubbleProps) => {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     setIsSearchingNode(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     try {
       const response = await axios.post(
         `${baseUrl}/api/v1/search`,
@@ -54,7 +59,6 @@ const MessageComposer = ({ projectId }: ChatBubbleProps) => {
       );
       if (response.data.results && response.data.results.length > 0) {
         setNodeOptions(response.data.results);
-        console.log(nodeOptions);
       } else {
         setNodeOptions([]);
       }
@@ -94,14 +98,12 @@ const MessageComposer = ({ projectId }: ChatBubbleProps) => {
     }
 
     setSelectedNodes((curr) => [...curr, node]);
-    dispatch(setChat({ selectedNodes: selectedNodes }));
 
     setNodeOptions([]);
   };
 
   const handleNodeDeselect = (node: NodeOption) => {
     setSelectedNodes((curr) => curr.filter((n) => n.node_id != node.node_id));
-    dispatch(setChat({ selectedNodes: selectedNodes }));
   };
 
   const handleMessageChange = (e: any) => {
@@ -153,7 +155,7 @@ const MessageComposer = ({ projectId }: ChatBubbleProps) => {
 
   const NodeSelection = () => {
     return (
-      <div className="max-h-40 overflow-scroll m-2 p-2 mx-0 border-2 rounded-sm border-gray-400/40">
+      <div className="max-h-40 overflow-scroll border-2 rounded-sm border-gray-400/40">
         {
           <ul>
             {isSearchingNode ? (
@@ -181,14 +183,14 @@ const MessageComposer = ({ projectId }: ChatBubbleProps) => {
   };
 
   return (
-    <div className="flex flex-col w-full">
+    <div className="flex flex-col w-full p-2">
       {nodeOptions?.length > 0 && <NodeSelection />}
       <div className="flex flex-row">
         {/* display selected nodes */}
         {selectedNodes.map((node) => (
           <div
             key={node.name}
-            className="flex flex-row items-center justify-center p-1 px-2 m-1 rounded-full bg-[#f7e6e6] shadow-sm"
+            className="flex flex-row items-center justify-center p-2 m-2 rounded-full bg-[#f7e6e6] shadow-sm"
           >
             <span>{node.name}</span>
             <Button
@@ -208,7 +210,7 @@ const MessageComposer = ({ projectId }: ChatBubbleProps) => {
           value={message}
           rows={1}
           autoFocus
-          placeholder={placeholder}
+          placeholder={"Type @ followed by file or function name"}
           onChange={handleMessageChange}
           onKeyDown={handleKeyPress}
           className="placeholder:text-muted-foreground max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"

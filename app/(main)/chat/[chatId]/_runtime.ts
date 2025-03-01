@@ -6,7 +6,6 @@ import {
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
 
 const convertMessage = (message: ThreadMessageLike) => {
   return message;
@@ -55,13 +54,6 @@ export function PotpieRuntime(chatId: string) {
     }
   }, [messagesLoaded]);
 
-  const { selectedNodes } = useSelector((state: RootState) => state.chat);
-
-  const getSelectedNodes = () => {
-    console.log("selected Nodes:", selectedNodes);
-    return selectedNodes || [];
-  };
-
   const onNew = async (message: AppendMessage) => {
     if (message.content.length !== 1 || message.content[0]?.type !== "text")
       throw new Error("Only text content is supported");
@@ -86,12 +78,12 @@ export function PotpieRuntime(chatId: string) {
     setMessages((currentMessages) => {
       return [...currentMessages, assistantMessage];
     });
-    const selectedNodes = getSelectedNodes();
+
     setIsRunning(true);
     await ChatService.streamMessage(
       chatId,
       message.content[0].text,
-      selectedNodes,
+      message.runConfig?.custom.selectedNodes || [],
       (message: string) => {
         assistantMessage.content[0].text = message;
 

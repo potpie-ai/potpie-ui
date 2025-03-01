@@ -17,20 +17,18 @@ import {
 import { Button } from "@/components/ui/button";
 import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
-import ChatBubble from "../components/ChatBubble";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "../components/Navbar";
 import AgentService from "@/services/AgentService";
 import { list_system_agents } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
 import MinorService from "@/services/minorService";
-import { ParsingStatusEnum } from "@/lib/Constants";
+import { ParsingStatusEnum, planTypesEnum } from "@/lib/Constants";
 import { increaseTotalHumanMessages } from "@/lib/state/Reducers/User";
-import { planTypesEnum } from "@/lib/Constants";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "./_thread";
 import { PotpieRuntime } from "./_runtime";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SendMessageArgs {
   message: string;
@@ -46,18 +44,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     totalMessages: 0,
     start: 0,
   });
-  const [fetchingResponse, setFetchingResponse] = useState<Boolean>(false);
   const [projectId, setProjectId] = useState<string>("");
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [infoLoaded, setInfoLoaded] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const currentConversationId = params.chatId;
   const bottomOfPanel = useRef<HTMLDivElement>(null);
-  const upPanelRef = useRef<HTMLDivElement>(null);
   const pendingMessageSent = useRef(false);
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
-  const [profilePicUrl, setProfilePicUrl] = useState(null);
   const { pendingMessage, selectedNodes } = useSelector(
     (state: RootState) => state.chat
   );
@@ -244,11 +239,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
 
-      if (!info.is_creator) {
-        fetchProfilePicture(info.creator_id).then((profilePicture) => {
-          setProfilePicUrl(profilePicture);
-        });
-      }
       const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
         info.project_ids[0]
       );
@@ -298,75 +288,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     }
   }, [parsingStatus, projectId]);
 
-  const handleFormSubmit = (message: string) => {
-    messageMutation.mutate({
-      message,
-      selectedNodes: selectedNodes,
-    });
-  };
-
-  const handleRegenerate = async (newMessage: string) => {
-    setFetchingResponse(true);
-
-    try {
-      // Update the last message to prepare for streaming
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        messages: prevConversation.messages.map((msg: any, idx: number) =>
-          idx === prevConversation.messages.length - 1
-            ? {
-                ...msg,
-                text: "",
-                citations: [],
-                isStreaming: true,
-              }
-            : msg
-        ),
-      }));
-
-      // Use the service method to stream the regenerated response
-      await ChatService.regenerateMessage(
-        currentConversationId,
-        selectedNodes,
-        (currentMessage, currentCitations) => {
-          isStreaming = true;
-          setCurrentConversation((prevConversation: any) => ({
-            ...prevConversation,
-            messages: prevConversation.messages.map((msg: any, idx: number) =>
-              idx === prevConversation.messages.length - 1
-                ? {
-                    ...msg,
-                    text: currentMessage,
-                    citations: currentCitations,
-                    isStreaming: true,
-                  }
-                : msg
-            ),
-          }));
-        }
-      );
-
-      // Final update to mark streaming as complete
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        messages: prevConversation.messages.map((msg: any, idx: number) =>
-          idx === prevConversation.messages.length - 1
-            ? {
-                ...msg,
-                isStreaming: false,
-              }
-            : msg
-        ),
-      }));
-
-      setFetchingResponse(false);
-    } catch (error) {
-      console.error("Error in handleRegenerate:", error);
-      setFetchingResponse(false);
-      throw error;
-    }
-  };
-
   useEffect(() => {
     if (bottomOfPanel.current) {
       bottomOfPanel.current.scrollIntoView({ behavior: "smooth" });
@@ -403,26 +324,17 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       />
       <div className="h-[calc(100%-50px)]">
         <AssistantRuntimeProvider runtime={runtime}>
-          <Thread projectId={projectId} disabled={false} />
-        </AssistantRuntimeProvider>
-      </div>
-      {/* {chatAccess === "write" ? (
-        <div className="sticky bottom-0 bg-background z-40">
-          <NodeSelectorForm
+          <Thread
             projectId={projectId}
-            onSubmit={handleFormSubmit}
-            disabled={
-              !!fetchingResponse ||
+            writeDisabled={
+              chatAccess !== "write" ||
               parsingStatus !== ParsingStatusEnum.READY ||
               total_human_messages >=
                 (planType === planTypesEnum.PRO ? 500 : 50)
             }
           />
-          <div className="h-2 w-full"></div>
-        </div>
-      ) : chatAccess === "loading" ? (
-        <Skeleton className="sticky bottom-2 overflow-hidden rounded-lg border-[#edecf4] shadow-md h-28" />
-      ) : null} */}
+        </AssistantRuntimeProvider>
+      </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">

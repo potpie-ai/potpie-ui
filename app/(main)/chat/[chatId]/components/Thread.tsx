@@ -53,11 +53,7 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
 
         <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
           <ThreadScrollToBottom />
-          {!writeDisabled && (
-            <AutoAnimate>
-              <Composer projectId={projectId} />
-            </AutoAnimate>
-          )}
+          {!writeDisabled && <Composer projectId={projectId} />}
         </div>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>

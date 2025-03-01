@@ -1,10 +1,8 @@
 "use client";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
-import { useMutation } from "@tanstack/react-query";
-import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
-import { clearPendingMessage, setChat } from "@/lib/state/Reducers/chat";
+import { setChat } from "@/lib/state/Reducers/chat";
 import {
   Dialog,
   DialogClose,
@@ -19,26 +17,18 @@ import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
-import Navbar from "../components/Navbar";
+import Navbar from "./components/Navbar";
 import AgentService from "@/services/AgentService";
 import { list_system_agents } from "@/lib/utils";
-import MinorService from "@/services/minorService";
 import { ParsingStatusEnum, planTypesEnum } from "@/lib/Constants";
-import { increaseTotalHumanMessages } from "@/lib/state/Reducers/User";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "./_thread";
-import { PotpieRuntime } from "./_runtime";
-import { Skeleton } from "@/components/ui/skeleton";
-
-interface SendMessageArgs {
-  message: string;
-  selectedNodes: any[];
-}
+import { Thread } from "./components/Thread";
+import { PotpieRuntime } from "./runtime";
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const [chatAccess, setChatAccess] = useState("loading");
   const dispatch: AppDispatch = useDispatch();
-  const [currentConversation, setCurrentConversation] = useState<any>({
+  const [_currentConversation, setCurrentConversation] = useState<any>({
     conversationId: params.chatId,
     messages: [],
     totalMessages: 0,
@@ -47,15 +37,10 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const [projectId, setProjectId] = useState<string>("");
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [infoLoaded, setInfoLoaded] = useState(false);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
   const currentConversationId = params.chatId;
-  const bottomOfPanel = useRef<HTMLDivElement>(null);
-  const pendingMessageSent = useRef(false);
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
-  const { pendingMessage, selectedNodes } = useSelector(
-    (state: RootState) => state.chat
-  );
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const { planType, total_human_messages } = useSelector(
@@ -66,69 +51,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     message: "",
     description: "",
   });
-  let isStreaming: boolean = false;
-
-  const sendMessage = async ({ message, selectedNodes }: SendMessageArgs) => {
-    try {
-      // Add initial empty message
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        messages: [
-          ...prevConversation.messages,
-          {
-            sender: "agent",
-            text: "",
-            citations: [],
-            isStreaming: true,
-          },
-        ],
-      }));
-
-      setFetchingResponse(true);
-
-      // Use the service method
-      await ChatService.streamMessage(
-        currentConversationId,
-        message,
-        selectedNodes,
-        (currentMessage, currentCitations) => {
-          // Update conversation state with latest message
-          isStreaming = true;
-          setFetchingResponse(false);
-          setCurrentConversation((prevConversation: any) => ({
-            ...prevConversation,
-            messages: prevConversation.messages.map((msg: any, idx: number) =>
-              idx === prevConversation.messages.length - 1
-                ? {
-                    ...msg,
-                    text: currentMessage,
-                    citations: currentCitations,
-                    isStreaming: true,
-                  }
-                : msg
-            ),
-          }));
-        }
-      );
-
-      // Final update to mark streaming as complete
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        messages: prevConversation.messages.map((msg: any, idx: number) =>
-          idx === prevConversation.messages.length - 1
-            ? {
-                ...msg,
-                isStreaming: false,
-              }
-            : msg
-        ),
-      }));
-    } catch (error) {
-      console.error("Error in sendMessage:", error);
-      setFetchingResponse(false);
-      throw error;
-    }
-  };
 
   const parseRepo = async () => {
     try {
@@ -140,52 +62,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     } catch (err) {
       console.error("Error during parsing:", err);
       setParsingStatus(ParsingStatusEnum.ERROR);
-    }
-  };
-  const messageMutation = useMutation({
-    mutationFn: sendMessage,
-    onMutate: ({ message }) => {
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        messages: [
-          ...prevConversation.messages,
-          {
-            sender: "user",
-            text: message,
-          },
-        ],
-      }));
-    },
-    onSuccess: () => {
-      dispatch(increaseTotalHumanMessages(1));
-    },
-  });
-
-  const fetchProfilePicture = async (userId: string) => {
-    try {
-      const profilePicture = await MinorService.getProfilePicture(userId);
-      return profilePicture;
-    } catch (error) {
-      console.error("Error fetching profile picture:", error);
-    }
-  };
-
-  const loadMessages = async () => {
-    try {
-      if (messagesLoaded) return;
-
-      const messages = await ChatService.loadMessages(
-        currentConversationId,
-        0,
-        50
-      );
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        messages,
-      }));
-      setMessagesLoaded(true);
-    } catch (error) {
-      console.error("Error fetching conversations:", error);
     }
   };
 
@@ -254,25 +130,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   }, [currentConversationId]);
 
   useEffect(() => {
-    if (!messagesLoaded && chatAccess !== "loading") {
-      loadMessages().then(() => {
-        if (pendingMessage && !pendingMessageSent.current) {
-          try {
-            messageMutation.mutate({
-              message: pendingMessage,
-              selectedNodes: selectedNodes,
-            });
-            pendingMessageSent.current = true;
-            dispatch(clearPendingMessage());
-          } catch (error) {
-            console.error("Error sending pending message:", error);
-          }
-        }
-      });
-    }
-  }, [chatAccess]);
-
-  useEffect(() => {
     if (
       parsingStatus === ParsingStatusEnum.ERROR ||
       (parsingStatus !== ParsingStatusEnum.READY &&
@@ -287,12 +144,6 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       setIsDialogOpen(false);
     }
   }, [parsingStatus, projectId]);
-
-  useEffect(() => {
-    if (bottomOfPanel.current) {
-      bottomOfPanel.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [currentConversation.messages]);
 
   if (Error.isError)
     return (

@@ -1,4 +1,3 @@
-import { RootState } from "@/lib/state/store";
 import ChatService from "@/services/ChatService";
 import {
   AppendMessage,

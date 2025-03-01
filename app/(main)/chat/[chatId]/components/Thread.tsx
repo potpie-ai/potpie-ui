@@ -22,7 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
-import MessageComposer from "./_message_composer";
+import MessageComposer from "./MessageComposer";
 
 interface ThreadProps {
   projectId: string;
@@ -53,7 +53,11 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
 
         <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
           <ThreadScrollToBottom />
-          {!writeDisabled && <Composer projectId={projectId} />}
+          {!writeDisabled && (
+            <AutoAnimate>
+              <Composer projectId={projectId} />
+            </AutoAnimate>
+          )}
         </div>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>

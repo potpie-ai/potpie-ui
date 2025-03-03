@@ -4,7 +4,7 @@ import {
   ThreadMessageLike,
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 const convertMessage = (message: ThreadMessageLike) => {
   return message;
@@ -24,20 +24,25 @@ const convertToThreadMessage = (message: any): ThreadMessageLike => {
 };
 
 export function PotpieRuntime(chatId: string) {
-  const [messages, setMessages] = useState<readonly ThreadMessageLike[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
-  const [isDisabled, setIsDisabled] = useState(true);
+  const [extras, setExtras] = useState({ loading: true });
+
+  const initarray: ThreadMessageLike[] = [];
+  const [messages, setMessages] = useState(initarray);
 
   const loadMessages = async () => {
     try {
       if (messagesLoaded) return;
+
+      setExtras({ loading: true });
 
       const res = await ChatService.loadMessages(chatId, 0, 50);
 
       setMessages(res.map((msg: any) => convertToThreadMessage(msg)));
 
       setMessagesLoaded(true);
+      setExtras({ loading: false });
     } catch (error) {
       console.error("Error fetching conversations:", error);
     }
@@ -47,22 +52,15 @@ export function PotpieRuntime(chatId: string) {
     loadMessages();
   }, []);
 
-  useEffect(() => {
-    if (messagesLoaded) {
-      setIsDisabled(false);
-    }
-  }, [messagesLoaded]);
-
   const onNew = async (message: AppendMessage) => {
     if (message.content.length !== 1 || message.content[0]?.type !== "text")
       throw new Error("Only text content is supported");
-
-    console.log("config:", message.runConfig?.custom);
 
     const userMessage: ThreadMessageLike = {
       role: "user",
       content: [{ type: "text", text: message.content[0].text }],
     };
+    setIsRunning(true);
     setMessages((currentMessages) => [...currentMessages, userMessage]);
 
     const assistantMessage: ThreadMessageLike = {
@@ -77,22 +75,19 @@ export function PotpieRuntime(chatId: string) {
     setMessages((currentMessages) => {
       return [...currentMessages, assistantMessage];
     });
-
-    setIsRunning(true);
     await ChatService.streamMessage(
       chatId,
       message.content[0].text,
-      message.runConfig?.custom.selectedNodes || [],
+      message.runConfig?.custom?.selectedNodes || [],
       (message: string) => {
-        assistantMessage.content[0].text = message;
-
+        setIsRunning(false);
+        const lastMessage = assistantMessage;
+        lastMessage.content[0].text = message;
         setMessages((currentMessages) => {
-          return [...currentMessages.slice(0, -1), assistantMessage];
+          return [...currentMessages.slice(0, -1), lastMessage];
         });
       }
     );
-
-    setIsRunning(false);
   };
 
   const onReload = async (parentId: string | null) => {
@@ -108,6 +103,7 @@ export function PotpieRuntime(chatId: string) {
     setIsRunning(true);
     await ChatService.regenerateMessage(chatId, [], (message: string) => {
       setMessages((currentMessages) => {
+        setIsRunning(false);
         assistantMessage.content[0].text = message;
         return [
           ...currentMessages.slice(0, currentMessages.length - 1),
@@ -115,13 +111,12 @@ export function PotpieRuntime(chatId: string) {
         ];
       });
     });
-    setIsRunning(false);
   };
 
   return useExternalStoreRuntime<ThreadMessageLike>({
-    isDisabled,
     isRunning,
     messages,
+    extras,
     setMessages,
     onNew,
     onReload,

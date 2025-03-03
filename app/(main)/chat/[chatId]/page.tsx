@@ -173,7 +173,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
         showShare
         hidden={!showNavbar || Error.isError}
       />
-      <div className="h-[calc(100%-50px)]">
+      <div className="h-[calc(90vh)]">
         <AssistantRuntimeProvider runtime={runtime}>
           <Thread
             projectId={projectId}

@@ -166,7 +166,7 @@ const Navbar = ({
   const handleEmailSave = async () => {
     try {
       if (disableShare) throw new Error("Unable to share the chat");
-      
+
       if (shareWithLink) {
         const res = await refetchChatShare();
         if (res.data.type === "error") return;
@@ -176,7 +176,7 @@ const Navbar = ({
         const res = await refetchChatShare();
         if (res.data.type === "error") return;
       }
-      
+
       setHasPendingChanges(false);
       setIsDialogOpen(false);
     } catch (error) {
@@ -276,7 +276,7 @@ const Navbar = ({
 
   if (hidden) return null;
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-[#E3E3E3] -m-4 lg:-m-6">
+    <header className="sticky top-0 z-50 bg-white border-b border-[#E3E3E3]">
       {showTitle && (
         <div className="flex h-[52px] w-full">
           <div className="flex items-center justify-between w-full px-4 lg:px-6">
@@ -358,66 +358,66 @@ const Navbar = ({
                       </SelectContent>
                     </Select>
 
-                      {!shareWithLink && (
-                        <div>
-                          <Input
-                            id="email"
-                            placeholder="Enter Email"
-                            value={emailValue}
-                            onChange={handleEmailChange}
-                            className="border rounded-md p-2"
-                          />
-                          {emailError && (
-                            <p className="text-red-500 text-sm">{emailError}</p>
-                          )}
-                        </div>
-                      )}
-                      {!shareWithLink && !isPeopleWithAccessVisible() && (
-                        <>
-                          <h3 className="mt-4 text-lg font-semibold">
-                            People with access
-                          </h3>
-                          <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-3">
-                            <Card className="border-gray-300 w-[95%] mx-auto">
-                              <CardContent className="flex justify-between p-4">
-                                <div className="flex flex-col">
-                                  <p>{user?.displayName} (You)</p>
-                                  <p className="text-sm text-muted">
-                                    {user?.email}
-                                  </p>
-                                </div>
-                                <div className="text-muted text-sm">Owner</div>
+                    {!shareWithLink && (
+                      <div>
+                        <Input
+                          id="email"
+                          placeholder="Enter Email"
+                          value={emailValue}
+                          onChange={handleEmailChange}
+                          className="border rounded-md p-2"
+                        />
+                        {emailError && (
+                          <p className="text-red-500 text-sm">{emailError}</p>
+                        )}
+                      </div>
+                    )}
+                    {!shareWithLink && !isPeopleWithAccessVisible() && (
+                      <>
+                        <h3 className="mt-4 text-lg font-semibold">
+                          People with access
+                        </h3>
+                        <ScrollArea className="max-h-40 overflow-y-scroll px-2 mt-2 space-y-3">
+                          <Card className="border-gray-300 w-[95%] mx-auto">
+                            <CardContent className="flex justify-between p-4">
+                              <div className="flex flex-col">
+                                <p>{user?.displayName} (You)</p>
+                                <p className="text-sm text-muted">
+                                  {user?.email}
+                                </p>
+                              </div>
+                              <div className="text-muted text-sm">Owner</div>
+                            </CardContent>
+                          </Card>
+
+                          {accessList.map((email) => (
+                            <Card
+                              key={email}
+                              className="relative border border-gray-300 w-[95%] mx-auto my-2 shadow-sm rounded-lg"
+                            >
+                              {email !== user?.email && (
+                                <Button
+                                  onClick={() => handleDelete(email)}
+                                  className="absolute -top-3 -right-3 bg-white rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
+                                  aria-label="Delete viewer"
+                                >
+                                  <X size={14} />
+                                </Button>
+                              )}
+                              <CardContent className="p-4 flex items-center justify-between">
+                                <p className="text-sm font-medium text-gray-800">
+                                  {email}
+                                </p>
+                                <p className="text-gray-500 text-sm">
+                                  {email === user?.email ? "Owner" : "Viewer"}
+                                </p>
                               </CardContent>
                             </Card>
-
-                            {accessList.map((email) => (
-                              <Card
-                                key={email}
-                                className="relative border border-gray-300 w-[95%] mx-auto my-2 shadow-sm rounded-lg"
-                              >
-                                {email !== user?.email && (
-                                  <Button
-                                    onClick={() => handleDelete(email)}
-                                    className="absolute -top-3 -right-3 bg-white rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
-                                    aria-label="Delete viewer"
-                                  >
-                                    <X size={14} />
-                                  </Button>
-                                )}
-                                <CardContent className="p-4 flex items-center justify-between">
-                                  <p className="text-sm font-medium text-gray-800">
-                                    {email}
-                                  </p>
-                                  <p className="text-gray-500 text-sm">
-                                    {email === user?.email ? "Owner" : "Viewer"}
-                                  </p>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </ScrollArea>
-                        </>
-                      )}
-                    </div>
+                          ))}
+                        </ScrollArea>
+                      </>
+                    )}
+                  </div>
 
                   <DialogFooter className="!justify-between">
                     <Button
@@ -444,10 +444,10 @@ const Navbar = ({
                   <span className="w-2 h-2 rounded-full bg-green-500 animate-ping flex-shrink-0"></span>
                   <span className="text-gray-700 truncate max-w-[200px]">
                     {allAgents.find((agent) => agent.id === agentId)?.name ||
-                      agentId.replace(/_/g, " ").replace(
-                        /([a-z])([A-Z])/g,
-                        "$1 $2"
-                      ).replace(/\b\w/g, (char) => char.toUpperCase())}
+                      agentId
+                        .replace(/_/g, " ")
+                        .replace(/([a-z])([A-Z])/g, "$1 $2")
+                        .replace(/\b\w/g, (char) => char.toUpperCase())}
                   </span>
                 </div>
               )}

@@ -183,7 +183,7 @@ const MessageComposer = ({
   };
 
   return (
-    <div className="flex flex-col w-full p-2">
+    <div className="flex flex-col w-full p-2 ">
       {nodeOptions?.length > 0 && <NodeSelection />}
       <div className="flex flex-row">
         {/* display selected nodes */}
@@ -204,7 +204,7 @@ const MessageComposer = ({
           </div>
         ))}
       </div>
-      <div className="flex w-full">
+      <div className="flex w-full items-end gap-4">
         <ComposerPrimitive.Input
           ref={messageRef}
           value={message}
@@ -223,7 +223,7 @@ const MessageComposer = ({
 
 const ComposerAction: FC = () => {
   return (
-    <>
+    <div>
       <ThreadPrimitive.If running={false}>
         <ComposerPrimitive.Send>
           <TooltipIconButton
@@ -246,7 +246,7 @@ const ComposerAction: FC = () => {
           </TooltipIconButton>
         </ComposerPrimitive.Cancel>
       </ThreadPrimitive.If>
-    </>
+    </div>
   );
 };
 

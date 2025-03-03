@@ -7,8 +7,9 @@ import {
   useAssistantRuntime,
   useComposerRuntime,
   useMessage,
+  useMessageRuntime,
 } from "@assistant-ui/react";
-import { useState, type FC } from "react";
+import { useCallback, useEffect, useRef, useState, type FC } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -30,32 +31,51 @@ interface ThreadProps {
 }
 
 export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
+  const runtime = useAssistantRuntime();
+  const state = runtime.thread.getState();
+  const isLoading = state.extras?.loading === true || false;
+  const messagesCount = state.messages.length;
+
   return (
     <ThreadPrimitive.Root
-      className="bg-background box-border h-full text-sm"
+      className="bg-background box-border h-full text-sm flex justify-center items-center"
       style={{
-        ["--thread-max-width" as string]: "70rem",
+        ["--thread-max-width" as string]: "75rem",
       }}
     >
-      <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8">
-        <ThreadWelcome />
+      <div className="h-full w-full bg-background">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full space-x-1 mt-2">
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+          </div>
+        ) : (
+          <div className="bg-background h-full w-full">
+            {messagesCount == 0 ? (
+              <div className="w-full h-full flex justify-center items-center">
+                <ThreadWelcome />
+              </div>
+            ) : (
+              <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
+                <div className="pb-16 bg-inherit min-w-96">
+                  <ThreadPrimitive.Messages
+                    components={{
+                      UserMessage: UserMessage,
+                      AssistantMessage: AssistantMessage,
+                    }}
+                  />
+                </div>
+              </ThreadPrimitive.Viewport>
+            )}
 
-        <ThreadPrimitive.Messages
-          components={{
-            UserMessage: UserMessage,
-            AssistantMessage: AssistantMessage,
-          }}
-        />
-
-        <ThreadPrimitive.If empty={false}>
-          <div className="min-h-8 flex-grow" />
-        </ThreadPrimitive.If>
-
-        <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
-          <ThreadScrollToBottom />
-          {!writeDisabled && <Composer projectId={projectId} />}
-        </div>
-      </ThreadPrimitive.Viewport>
+            <div className="absolute bottom-8 w-full h-fit flex flex-col items-center justify-center">
+              <ThreadScrollToBottom />
+              {!writeDisabled && <Composer projectId={projectId} />}
+            </div>
+          </div>
+        )}
+      </div>
     </ThreadPrimitive.Root>
   );
 };
@@ -116,12 +136,11 @@ const parseMessage = (message: string) => {
 };
 
 const MarkdownComponent = (content: any) => {
-  const parsedSections = parseMessage(content.text);
-
+  const parsedSections = parseMessage(content.content.text);
   return (
-    <div>
+    <ul>
       {parsedSections?.map((section, index) => (
-        <div key={index}>
+        <li key={index}>
           {section.type === "text" && (
             <ReactMarkdown
               className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
@@ -144,9 +163,9 @@ const MarkdownComponent = (content: any) => {
               />
             </div>
           )}
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 };
 const ThreadScrollToBottom: FC = () => {
@@ -155,7 +174,7 @@ const ThreadScrollToBottom: FC = () => {
       <TooltipIconButton
         tooltip="Scroll to bottom"
         variant="outline"
-        className="absolute -top-8 rounded-full disabled:invisible"
+        className="h-8 w-8 z-20 mb-16 rounded-full hover:scale-105 shadow-md hover:shadow-lg disabled:invisible transition ease-out"
       >
         <ArrowDownIcon />
       </TooltipIconButton>
@@ -166,15 +185,17 @@ const ThreadScrollToBottom: FC = () => {
 const ThreadWelcome: FC = () => {
   return (
     <ThreadPrimitive.Empty>
-      <div className="flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
+      <div className="flex w-full h-full max-w-[var(--thread-max-width)] flex-grow flex-col">
         <div className="flex w-full flex-grow flex-col items-center justify-center">
           <Avatar className="rounded-none">
             <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
             <AvatarFallback className="bg-transparent">P</AvatarFallback>
           </Avatar>
           <p className="mt-4 font-medium">How can I help you today?</p>
+          {/* <div className="mt-16">
+            <ThreadWelcomeSuggestions />
+          </div> */}
         </div>
-        <ThreadWelcomeSuggestions />
       </div>
     </ThreadPrimitive.Empty>
   );
@@ -182,7 +203,7 @@ const ThreadWelcome: FC = () => {
 
 const ThreadWelcomeSuggestions: FC = () => {
   return (
-    <div className="mt-3 flex w-full items-stretch justify-center gap-4">
+    <div className="mt-3 flex flex-col w-full items-stretch justify-center gap-4">
       <ThreadPrimitive.Suggestion
         className="hover:bg-slate-300/20 flex max-w-sm min-w-fit basis-0 flex-col items-center justify-center rounded-full border border-neutral-400/20 p-3 transition-colors ease-in"
         prompt="What does this repo do?"
@@ -223,7 +244,6 @@ const Composer: FC<{ projectId: string }> = ({ projectId }) => {
   const setSelectedNodesInConfig = (selectedNodes: any[]) => {
     composer.setRunConfig({
       custom: {
-        test: true,
         selectedNodes: selectedNodes,
       },
     });
@@ -233,7 +253,7 @@ const Composer: FC<{ projectId: string }> = ({ projectId }) => {
 
   return (
     <ComposerPrimitive.Root
-      className="focus-within:border-ring/20 flex w-full flex-wrap items-end rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
+      className="bg-white z-10 w-2/4 focus-within:w-2/3 focus-within:-translate-y-5 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-2xl transition-all ease-in-out"
       onSubmit={() => {
         setKey(key + 1); // Current this is used to rerender MessageComposer (so that message and nodes are reset)
       }}
@@ -251,7 +271,7 @@ const Composer: FC<{ projectId: string }> = ({ projectId }) => {
 
 const UserMessage: FC = () => {
   return (
-    <MessagePrimitive.Root className="grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
+    <MessagePrimitive.Root className="pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
       <div className="bg-[#f7e6e6] text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
         <MessagePrimitive.Content />
       </div>
@@ -263,15 +283,45 @@ const UserMessage: FC = () => {
 
 const AssistantMessage: FC = () => {
   const message = useMessage();
+  const runtime = useMessageRuntime();
+  const [text, setText] = useState(message.content[0]?.text || "");
+
+  const intervalRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Callback to run during each iteration
+  const runIteration = useCallback(() => {
+    // Functional state update to ensure correct value
+    setText(runtime.getState().content[0]?.text || "");
+
+    if (message.status?.type === "running") {
+      // Schedule the next iteration
+      intervalRef.current = setTimeout(runIteration, 500);
+    }
+  }, []);
+
+  // Manage the loop
+  useEffect(() => {
+    // Start the loop
+    intervalRef.current = setTimeout(runIteration, 1000);
+
+    // Cleanup to stop the loop on unmount
+    return () => {
+      clearTimeout(intervalRef.current);
+    };
+  }, []);
+
   return (
-    <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-4">
+    <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-11/12 max-w-[var(--thread-max-width)] py-4">
       <Avatar className="mr-4 rounded-none bg-transparent">
         <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
         <AvatarFallback>P</AvatarFallback>
       </Avatar>
       {message.status?.type === "complete" ? (
-        <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
-          <MessagePrimitive.Content components={{ Text: MarkdownComponent }} />
+        <div>
+          <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
+            <MarkdownComponent content={{ text: text }} />
+            <AssistantActionBar />
+          </div>
         </div>
       ) : (
         <div className="flex items-center space-x-1 mt-2">
@@ -280,9 +330,7 @@ const AssistantMessage: FC = () => {
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
         </div>
       )}
-
-      <AssistantActionBar />
-      <BranchPicker className="col-start-2 row-start-2 -ml-2 mr-2" />
+      <BranchPicker />
     </MessagePrimitive.Root>
   );
 };

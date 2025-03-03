@@ -10,17 +10,21 @@ import { setChat } from "@/lib/state/Reducers/chat";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { useDispatch, useSelector } from "react-redux";
 import { systemAgents } from "@/lib/Constants";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import ChatService from "@/services/ChatService";
 
 interface NodeSelectorFormProps {
   projectId: string;
   disabled: boolean;
   onSubmit: (message: string) => void;
+  conversation_id: string | null;
 }
 
 const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
   projectId,
   disabled,
   onSubmit,
+  conversation_id,
 }) => {
   const [isNodeListVisible, setIsNodeListVisible] = useState(false);
   const [nodeOptions, setNodeOptions] = useState<any[]>([]);
@@ -244,6 +248,16 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
     return truncatedPath;
   };
 
+  const handleEnhancePrompt = async () => {
+    console.log('Enhance Prompt button clicked');
+    try {
+      const enhancedMessage = await ChatService.enhancePrompt(conversation_id, message);
+      setMessage(enhancedMessage);
+    } catch (error) {
+      console.error("Error enhancing prompt:", error);
+    }
+  };
+
   return (
     <form
       className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col"
@@ -279,11 +293,26 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
         onKeyDown={handleKeyPress}
       />
         {renderNodeList()}
-        <div className="flex items-center p-3 pt-0 ">
-        <Button type="submit" size="sm" className="ml-auto !bg-transparent mb-1 fill-primary" disabled={disabled}>
-          <Image src={"/images/sendmsg.svg"} alt="logo" width={20} height={20} />
-        </Button>
-      </div>
+        <div className="flex items-center justify-end p-3 pt-0 ">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleEnhancePrompt}
+                className="bg-white text-white border border-gray-300 hover:bg-primary/90"
+              >
+                <span className="text-lg">✨</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Enhance Prompt</p>
+            </TooltipContent>
+          </Tooltip>
+          <Button type="submit" size="sm" className="!bg-transparent mb-1 fill-primary" disabled={disabled}>
+            <Image src={"/images/sendmsg.svg"} alt="logo" width={20} height={20} />
+          </Button>
+        </div>
     </form>
   );
 };

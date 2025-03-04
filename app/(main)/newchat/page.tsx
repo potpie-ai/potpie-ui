@@ -3,27 +3,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Step1 from "./components/step1";
 import Step2 from "./components/step2";
-import NodeSelectorForm from "@/components/NodeSelectorChatForm/NodeSelector";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "@/lib/state/store";
-import { setChat, setPendingMessage } from "@/lib/state/Reducers/chat";
-import { setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
-import { setBranchName } from "@/lib/state/Reducers/RepoAndBranch";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
 
 const NewChat = () => {
   const router = useRouter();
   const [chatStep, setChatStep] = useState(1);
   const [projectId, setProjectId] = useState<string>("");
-  const [currentConversationId, setCurrentConversationId] = useState<
-    string | null
-  >(null);
-  const [agentId, setAgentId] = useState<string>();
   const { title } = useSelector((state: RootState) => state.chat);
-  const { repoName, branchName } = useSelector(
-    (state: RootState) => state.RepoAndBranch
-  );
-
-  const dispatch: AppDispatch = useDispatch();
 
   const gotoChat = (conversation_id: string) => {
     router.push(`/chat/${conversation_id}`);
@@ -42,8 +29,6 @@ const NewChat = () => {
           projectId={projectId}
           title={title}
           setChatStep={setChatStep}
-          setCurrentConversationId={setCurrentConversationId}
-          setAgentId={setAgentId}
           gotoChat={gotoChat}
         />
       ),

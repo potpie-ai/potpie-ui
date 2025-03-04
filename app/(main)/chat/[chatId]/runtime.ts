@@ -4,7 +4,7 @@ import {
   ThreadMessageLike,
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 const convertMessage = (message: ThreadMessageLike) => {
   return message;
@@ -75,7 +75,7 @@ export function PotpieRuntime(chatId: string) {
     setMessages((currentMessages) => {
       return [...currentMessages, assistantMessage];
     });
-    await ChatService.streamMessage(
+    ChatService.streamMessage(
       chatId,
       message.content[0].text,
       message.runConfig?.custom?.selectedNodes || [],
@@ -101,7 +101,7 @@ export function PotpieRuntime(chatId: string) {
       ],
     };
     setIsRunning(true);
-    await ChatService.regenerateMessage(chatId, [], (message: string) => {
+    ChatService.regenerateMessage(chatId, [], (message: string) => {
       setMessages((currentMessages) => {
         setIsRunning(false);
         assistantMessage.content[0].text = message;

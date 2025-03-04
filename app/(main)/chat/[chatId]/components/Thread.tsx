@@ -8,6 +8,7 @@ import {
   useComposerRuntime,
   useMessage,
   useMessageRuntime,
+  useThreadRuntime,
 } from "@assistant-ui/react";
 import { useCallback, useEffect, useRef, useState, type FC } from "react";
 import {
@@ -24,6 +25,7 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
+import remarkGfm from "remark-gfm";
 
 interface ThreadProps {
   projectId: string;
@@ -31,10 +33,13 @@ interface ThreadProps {
 }
 
 export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
-  const runtime = useAssistantRuntime();
-  const state = runtime.thread.getState();
+  const runtime = useThreadRuntime();
+  const state = runtime.getState();
   const isLoading = state.extras?.loading === true || false;
-  const messagesCount = state.messages.length;
+
+  useEffect(() => {
+    console.log("len msgs = ", state.messages.length);
+  }, [state.messages]);
 
   return (
     <ThreadPrimitive.Root
@@ -51,13 +56,14 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
             <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
           </div>
         ) : (
-          <div className="bg-background h-full w-full">
-            {messagesCount == 0 ? (
+          <ThreadPrimitive.Viewport className="bg-background h-full w-full">
+            <ThreadPrimitive.If empty>
               <div className="w-full h-full flex justify-center items-center">
                 <ThreadWelcome />
               </div>
-            ) : (
-              <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
+            </ThreadPrimitive.If>
+            <ThreadPrimitive.If empty={false}>
+              <div className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
                 <div className="pb-16 bg-inherit min-w-96">
                   <ThreadPrimitive.Messages
                     components={{
@@ -66,14 +72,14 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
                     }}
                   />
                 </div>
-              </ThreadPrimitive.Viewport>
-            )}
+              </div>
+            </ThreadPrimitive.If>
 
             <div className="absolute bottom-8 w-full h-fit flex flex-col items-center justify-center">
               <ThreadScrollToBottom />
               {!writeDisabled && <Composer projectId={projectId} />}
             </div>
-          </div>
+          </ThreadPrimitive.Viewport>
         )}
       </div>
     </ThreadPrimitive.Root>
@@ -137,34 +143,38 @@ const parseMessage = (message: string) => {
 
 const MarkdownComponent = (content: any) => {
   const parsedSections = parseMessage(content.content.text);
+
   return (
     <ul>
-      {parsedSections?.map((section, index) => (
-        <li key={index}>
-          {section.type === "text" && (
-            <ReactMarkdown
-              className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
-              components={{
-                code: ({ children }) => (
-                  <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5 text-sm font-bold">
-                    {children}
-                  </code>
-                ),
-              }}
-            >
-              {section.content}
-            </ReactMarkdown>
-          )}
-          {section.type === "code" && (
-            <div className="pb-4 text-xs">
-              <MyCodeBlock
-                code={section.content}
-                language={section.language || "json"}
-              />
-            </div>
-          )}
-        </li>
-      ))}
+      {parsedSections?.map((section, index) => {
+        return (
+          <li key={index}>
+            {section.type === "text" && (
+              <ReactMarkdown
+                className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
+                components={{
+                  code: ({ children }) => (
+                    <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5 text-sm font-bold">
+                      {children}
+                    </code>
+                  ),
+                }}
+                remarkPlugins={[remarkGfm]}
+              >
+                {section.content}
+              </ReactMarkdown>
+            )}
+            {section.type === "code" && (
+              <div className="pb-4 text-xs">
+                <MyCodeBlock
+                  code={section.content}
+                  language={section.language || "json"}
+                />
+              </div>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 };
@@ -271,7 +281,7 @@ const Composer: FC<{ projectId: string }> = ({ projectId }) => {
 
 const UserMessage: FC = () => {
   return (
-    <MessagePrimitive.Root className="pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
+    <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
       <div className="bg-[#f7e6e6] text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
         <MessagePrimitive.Content />
       </div>
@@ -311,7 +321,7 @@ const AssistantMessage: FC = () => {
   }, []);
 
   return (
-    <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-11/12 max-w-[var(--thread-max-width)] py-4">
+    <MessagePrimitive.Root className="w-[calc(var(--thread-max-width)-200px)] grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative max-w-[var(--thread-max-width)] py-4">
       <Avatar className="mr-4 rounded-none bg-transparent">
         <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
         <AvatarFallback>P</AvatarFallback>
@@ -320,8 +330,8 @@ const AssistantMessage: FC = () => {
         <div>
           <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
             <MarkdownComponent content={{ text: text }} />
-            <AssistantActionBar />
           </div>
+          <AssistantActionBar />
         </div>
       ) : (
         <div className="flex items-center space-x-1 mt-2">
@@ -330,7 +340,6 @@ const AssistantMessage: FC = () => {
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
         </div>
       )}
-      <BranchPicker />
     </MessagePrimitive.Root>
   );
 };

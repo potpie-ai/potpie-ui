@@ -40,6 +40,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
   const { selectedNodes, agentId } = useSelector(
     (state: RootState) => state.chat
   );
+  const [isTextareaDisabled, setIsTextareaDisabled] = useState(false);
 
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
@@ -249,12 +250,15 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
   };
 
   const handleEnhancePrompt = async () => {
-    console.log('Enhance Prompt button clicked');
     try {
+      setIsTextareaDisabled(true);
+      setMessage("Enhancing...");
       const enhancedMessage = await ChatService.enhancePrompt(conversation_id, message);
       setMessage(enhancedMessage);
     } catch (error) {
       console.error("Error enhancing prompt:", error);
+    } finally {
+      setIsTextareaDisabled(false);
     }
   };
 
@@ -287,7 +291,7 @@ const NodeSelectorForm: React.FC<NodeSelectorFormProps> = ({
         value={message}
         onChange={handleMessageChange}
         id="message"
-        disabled={disabled}
+        disabled={disabled || isTextareaDisabled}
         placeholder={placeholder}
         className="min-h-12 text-base resize-none border-0 p-3 px-7"
         onKeyDown={handleKeyPress}

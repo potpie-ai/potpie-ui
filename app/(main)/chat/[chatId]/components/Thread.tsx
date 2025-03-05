@@ -318,7 +318,6 @@ const AssistantMessage: FC = () => {
   const [text, setText] = useState((message.content[0] as any)?.text || "");
 
   if (message.isLast) {
-    console.log("inside");
     runtime.subscribe(() => {
       setText((runtime.getState().content[0] as any)?.text || "");
       setStatus(runtime.getState().status?.type || "running");
@@ -346,7 +345,6 @@ const AssistantMessage: FC = () => {
         </div>
       ) : status == "running" ? (
         <div className="flex items-center space-x-1 mt-2">
-          {text}
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>

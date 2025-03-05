@@ -26,7 +26,10 @@ const convertToThreadMessage = (message: any): ThreadMessageLike => {
 export function PotpieRuntime(chatId: string) {
   const [isRunning, setIsRunning] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
-  const [extras, setExtras] = useState({ loading: true });
+  const [extras, setExtras] = useState({
+    loading: true,
+    streaming: true,
+  });
 
   const initarray: ThreadMessageLike[] = [];
   const [messages, setMessages] = useState(initarray);
@@ -35,14 +38,14 @@ export function PotpieRuntime(chatId: string) {
     try {
       if (messagesLoaded) return;
 
-      setExtras({ loading: true });
+      setExtras({ loading: true, streaming: false });
 
       const res = await ChatService.loadMessages(chatId, 0, 50);
 
       setMessages(res.map((msg: any) => convertToThreadMessage(msg)));
 
       setMessagesLoaded(true);
-      setExtras({ loading: false });
+      setExtras({ loading: false, streaming: false });
     } catch (error) {
       console.error("Error fetching conversations:", error);
     }
@@ -75,12 +78,14 @@ export function PotpieRuntime(chatId: string) {
     setMessages((currentMessages) => {
       return [...currentMessages, assistantMessage];
     });
-    ChatService.streamMessage(
+    await ChatService.streamMessage(
       chatId,
       message.content[0].text,
       message.runConfig?.custom?.selectedNodes || [],
       (message: string) => {
         setIsRunning(false);
+        setExtras({ loading: false, streaming: true });
+
         const lastMessage = assistantMessage;
         lastMessage.content[0].text = message;
         setMessages((currentMessages) => {
@@ -88,6 +93,8 @@ export function PotpieRuntime(chatId: string) {
         });
       }
     );
+    setIsRunning(false);
+    setExtras({ loading: false, streaming: false });
   };
 
   const onReload = async (parentId: string | null) => {
@@ -101,9 +108,10 @@ export function PotpieRuntime(chatId: string) {
       ],
     };
     setIsRunning(true);
-    ChatService.regenerateMessage(chatId, [], (message: string) => {
+    await ChatService.regenerateMessage(chatId, [], (message: string) => {
+      setIsRunning(false);
+      setExtras({ loading: false, streaming: true });
       setMessages((currentMessages) => {
-        setIsRunning(false);
         assistantMessage.content[0].text = message;
         return [
           ...currentMessages.slice(0, currentMessages.length - 1),
@@ -111,6 +119,8 @@ export function PotpieRuntime(chatId: string) {
         ];
       });
     });
+    setIsRunning(false);
+    setExtras({ loading: false, streaming: false });
   };
 
   return useExternalStoreRuntime<ThreadMessageLike>({

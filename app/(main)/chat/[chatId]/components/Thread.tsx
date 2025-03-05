@@ -26,6 +26,7 @@ import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
+import { crc32 } from "crc";
 
 interface ThreadProps {
   projectId: string;
@@ -56,15 +57,15 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
             <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
           </div>
         ) : (
-          <ThreadPrimitive.Viewport className="bg-background h-full w-full">
+          <div className="bg-background h-full w-full">
             <ThreadPrimitive.If empty>
               <div className="w-full h-full flex justify-center items-center">
                 <ThreadWelcome />
               </div>
             </ThreadPrimitive.If>
             <ThreadPrimitive.If empty={false}>
-              <div className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
-                <div className="pb-16 bg-inherit min-w-96">
+              <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
+                <div className="pb-24 bg-inherit min-w-96">
                   <ThreadPrimitive.Messages
                     components={{
                       UserMessage: UserMessage,
@@ -72,14 +73,14 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
                     }}
                   />
                 </div>
-              </div>
+              </ThreadPrimitive.Viewport>
             </ThreadPrimitive.If>
 
             <div className="absolute bottom-8 w-full h-fit flex flex-col items-center justify-center">
               <ThreadScrollToBottom />
               {!writeDisabled && <Composer projectId={projectId} />}
             </div>
-          </ThreadPrimitive.Viewport>
+          </div>
         )}
       </div>
     </ThreadPrimitive.Root>
@@ -141,6 +142,26 @@ const parseMessage = (message: string) => {
   return sections;
 };
 
+const CustomMarkdown = ({ content }: { content: string }) => {
+  const markdownContent = content;
+
+  return (
+    <ReactMarkdown
+      className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
+      components={{
+        code: ({ children }) => (
+          <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5 text-sm font-bold">
+            {children}
+          </code>
+        ),
+      }}
+      remarkPlugins={[remarkGfm]}
+    >
+      {markdownContent}
+    </ReactMarkdown>
+  );
+};
+
 const MarkdownComponent = (content: any) => {
   const parsedSections = parseMessage(content.content.text);
 
@@ -150,19 +171,7 @@ const MarkdownComponent = (content: any) => {
         return (
           <li key={index}>
             {section.type === "text" && (
-              <ReactMarkdown
-                className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
-                components={{
-                  code: ({ children }) => (
-                    <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5 text-sm font-bold">
-                      {children}
-                    </code>
-                  ),
-                }}
-                remarkPlugins={[remarkGfm]}
-              >
-                {section.content}
-              </ReactMarkdown>
+              <CustomMarkdown content={section.content} />
             )}
             {section.type === "code" && (
               <div className="pb-4 text-xs">
@@ -294,25 +303,31 @@ const UserMessage: FC = () => {
 const AssistantMessage: FC = () => {
   const message = useMessage();
   const runtime = useMessageRuntime();
+  const threadRuntime = useThreadRuntime();
   const [text, setText] = useState(message.content[0]?.text || "");
 
   const intervalRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Callback to run during each iteration
   const runIteration = useCallback(() => {
-    // Functional state update to ensure correct value
-    setText(runtime.getState().content[0]?.text || "");
-
-    if (message.status?.type === "running") {
+    console.log("status", runtime.getState().status?.type);
+    console.log("content ", runtime.getState().content[0]?.text);
+    if (threadRuntime.getState().extras?.streaming) {
+      // Schedule the next iteration --> when streaming make the iteration duration less
+      intervalRef.current = setTimeout(runIteration, 10);
+    } else if (runtime.getState().status?.type === "running") {
       // Schedule the next iteration
       intervalRef.current = setTimeout(runIteration, 500);
     }
-  }, []);
+
+    // Functional state update to ensure correct value
+    setText(runtime.getState().content[0]?.text || "");
+  }, [runtime]);
 
   // Manage the loop
   useEffect(() => {
     // Start the loop
-    intervalRef.current = setTimeout(runIteration, 1000);
+    intervalRef.current = setTimeout(runIteration, 500);
 
     // Cleanup to stop the loop on unmount
     return () => {

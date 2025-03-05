@@ -56,7 +56,7 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
 
             <ThreadPrimitive.If empty={false}>
               <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
-                <div className="pb-24 bg-inherit min-w-96">
+                <div className="pb-24 bg-inherit min-w-96 w-full">
                   <ThreadPrimitive.Messages
                     components={{
                       UserMessage: UserMessage,
@@ -67,7 +67,7 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
               </ThreadPrimitive.Viewport>
             </ThreadPrimitive.If>
 
-            <div className="absolute bottom-8 w-full h-fit flex flex-col items-center justify-center">
+            <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center justify-center">
               <ThreadScrollToBottom />
               {<Composer projectId={projectId} disabled={writeDisabled} />}
             </div>
@@ -141,7 +141,7 @@ const CustomMarkdown = ({ content }: { content: string }) => {
       className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
       components={{
         code: ({ children }) => (
-          <code className="bg-gray-100 text-red-500 rounded px-1 py-0.5 text-sm font-bold">
+          <code className="bg-gray-100 text-red-500 overflow-x-scroll rounded px-1 py-0.5 text-sm font-bold">
             {children}
           </code>
         ),

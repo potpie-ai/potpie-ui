@@ -17,6 +17,7 @@ import {
   Bot,
   AlertCircle,
   Trash,
+  Copy,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -253,6 +254,12 @@ const AllAgents = () => {
     setGeneratedAgent(null);
     setAgentPrompt("");
     setPromptModalOpen(false);
+  };
+
+  // Add function to copy agent ID to clipboard
+  const copyAgentId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    toast.success("Agent ID copied to clipboard");
   };
 
   return (
@@ -598,6 +605,19 @@ const AllAgents = () => {
                   </CardContent>
 
                   <CardFooter className="flex items-center justify-end space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hover:text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyAgentId(content.id);
+                      }}
+                      title="Copy Agent ID"
+                    >
+                      <Copy className="size-5" />
+                    </Button>
+                    
                     <Dialog
                       open={deleteDailogOpen}
                       onOpenChange={(open) => {

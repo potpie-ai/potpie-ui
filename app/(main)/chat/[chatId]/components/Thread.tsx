@@ -55,9 +55,10 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
           <div className="bg-background h-full w-full">
             <ThreadPrimitive.If empty>
               <div className="w-full h-full flex justify-center items-center">
-                <ThreadWelcome />
+                <ThreadWelcome showSuggestions={!writeDisabled} />
               </div>
             </ThreadPrimitive.If>
+
             <ThreadPrimitive.If empty={false}>
               <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
                 <div className="pb-24 bg-inherit min-w-96">
@@ -73,7 +74,7 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
 
             <div className="absolute bottom-8 w-full h-fit flex flex-col items-center justify-center">
               <ThreadScrollToBottom />
-              {!writeDisabled && <Composer projectId={projectId} />}
+              {<Composer projectId={projectId} disabled={writeDisabled} />}
             </div>
           </div>
         )}
@@ -196,7 +197,9 @@ const ThreadScrollToBottom: FC = () => {
   );
 };
 
-const ThreadWelcome: FC = () => {
+const ThreadWelcome: FC<{ showSuggestions: boolean }> = ({
+  showSuggestions,
+}) => {
   return (
     <ThreadPrimitive.Empty>
       <div className="flex w-full h-full max-w-[var(--thread-max-width)] flex-grow flex-col">
@@ -206,9 +209,11 @@ const ThreadWelcome: FC = () => {
             <AvatarFallback className="bg-transparent">P</AvatarFallback>
           </Avatar>
           <p className="mt-4 font-medium">How can I help you today?</p>
-          {/* <div className="mt-16">
-            <ThreadWelcomeSuggestions />
-          </div> */}
+          {showSuggestions && (
+            <div className="mt-16">
+              <ThreadWelcomeSuggestions />
+            </div>
+          )}
         </div>
       </div>
     </ThreadPrimitive.Empty>
@@ -217,7 +222,7 @@ const ThreadWelcome: FC = () => {
 
 const ThreadWelcomeSuggestions: FC = () => {
   return (
-    <div className="mt-3 flex flex-col w-full items-stretch justify-center gap-4">
+    <div className="mt-3 flex w-full items-stretch justify-center gap-4">
       <ThreadPrimitive.Suggestion
         className="hover:bg-slate-300/20 flex max-w-sm min-w-fit basis-0 flex-col items-center justify-center rounded-full border border-neutral-400/20 p-3 transition-colors ease-in"
         prompt="What does this repo do?"
@@ -252,7 +257,10 @@ const ThreadWelcomeSuggestions: FC = () => {
   );
 };
 
-const Composer: FC<{ projectId: string }> = ({ projectId }) => {
+const Composer: FC<{ projectId: string; disabled: boolean }> = ({
+  projectId,
+  disabled,
+}) => {
   const composer = useComposerRuntime();
 
   const setSelectedNodesInConfig = (selectedNodes: any[]) => {
@@ -265,6 +273,8 @@ const Composer: FC<{ projectId: string }> = ({ projectId }) => {
 
   const [key, setKey] = useState(0);
 
+  const threadRuntime = useThreadRuntime();
+
   return (
     <ComposerPrimitive.Root
       className="bg-white z-10 w-2/4 focus-within:w-2/3 focus-within:-translate-y-5 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-2xl transition-all ease-in-out"
@@ -275,6 +285,10 @@ const Composer: FC<{ projectId: string }> = ({ projectId }) => {
       <MessageComposer
         projectId={projectId}
         setSelectedNodesInConfig={setSelectedNodesInConfig}
+        disabled={
+          (threadRuntime.getState().extras as any)?.streaming === true ||
+          disabled
+        }
         key={key}
         input={""}
         nodes={[]}
@@ -344,26 +358,27 @@ const AssistantMessage: FC = () => {
           <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
             <MarkdownComponent content={{ text: text }} />
           </div>
-          {!isStreaming && <AssistantActionBar />}
+          <AssistantActionBar streaming={isStreaming} />
         </div>
-      ) : (
+      ) : message.status?.type === "running" ? (
         <div className="flex items-center space-x-1 mt-2">
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
         </div>
+      ) : (
+        <></>
       )}
     </MessagePrimitive.Root>
   );
 };
 
-const AssistantActionBar: FC = () => {
+const AssistantActionBar: FC<{ streaming: boolean }> = ({ streaming }) => {
   const current_message = useMessage();
   const assistant = useAssistantRuntime();
 
   return (
     <ActionBarPrimitive.Root
-      hideWhenRunning
       autohide="not-last"
       autohideFloat="single-branch"
       className="text-muted-foreground flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
@@ -379,13 +394,14 @@ const AssistantActionBar: FC = () => {
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
       {assistant.thread.getState().messages.at(-1)?.id ===
-        current_message?.id && (
-        <ActionBarPrimitive.Reload asChild>
-          <TooltipIconButton tooltip="Refresh">
-            <RefreshCwIcon />
-          </TooltipIconButton>
-        </ActionBarPrimitive.Reload>
-      )}
+        current_message?.id &&
+        !streaming && (
+          <ActionBarPrimitive.Reload asChild>
+            <TooltipIconButton tooltip="Refresh">
+              <RefreshCwIcon />
+            </TooltipIconButton>
+          </ActionBarPrimitive.Reload>
+        )}
     </ActionBarPrimitive.Root>
   );
 };

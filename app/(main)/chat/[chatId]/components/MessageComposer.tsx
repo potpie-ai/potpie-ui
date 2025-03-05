@@ -16,6 +16,7 @@ interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
   input: string;
   nodes: NodeOption[];
+  disabled: boolean;
   setSelectedNodesInConfig: (selectedNodes: any[]) => void;
 }
 
@@ -32,6 +33,7 @@ const MessageComposer = ({
   projectId,
   input,
   nodes,
+  disabled,
   setSelectedNodesInConfig,
 }: MessageComposerProps) => {
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
@@ -206,6 +208,64 @@ const MessageComposer = ({
     );
   };
 
+  const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
+    return (
+      <div>
+        {/* enable below code with prompt enhancer feature */}
+        {/* <div className="flex items-center justify-end">
+          <TooltipIconButton
+            tooltip="Enhance Prompt"
+            variant="default"
+            className="size-8 p-2 transition ease-in bg-white hover:bg-orange-200"
+            onClick={handleEnhancePrompt}
+          >
+            <span className="text-lg">✨</span>
+          </TooltipIconButton>
+        </div> */}
+        <ThreadPrimitive.If running={false}>
+          <ComposerPrimitive.Send disabled={disabled}>
+            <TooltipIconButton
+              disabled={disabled}
+              tooltip="Send"
+              variant="default"
+              className="my-2.5 size-8 p-2 transition-opacity ease-in"
+            >
+              <SendHorizontalIcon />
+            </TooltipIconButton>
+          </ComposerPrimitive.Send>
+        </ThreadPrimitive.If>
+        <ThreadPrimitive.If running>
+          <ComposerPrimitive.Cancel asChild>
+            <TooltipIconButton
+              disabled={disabled}
+              tooltip="Cancel"
+              variant="default"
+              className="my-2.5 size-8 p-2 transition-opacity ease-in"
+            >
+              <CircleStopIcon />
+            </TooltipIconButton>
+          </ComposerPrimitive.Cancel>
+        </ThreadPrimitive.If>
+      </div>
+    );
+  };
+
+  const handleEnhancePrompt = async () => {
+    // try {
+    //   setIsTextareaDisabled(true);
+    //   setMessage("Enhancing...");
+    //   const enhancedMessage = await ChatService.enhancePrompt(
+    //     conversation_id,
+    //     message
+    //   );
+    //   setMessage(enhancedMessage);
+    // } catch (error) {
+    //   console.error("Error enhancing prompt:", error);
+    // } finally {
+    //   setIsTextareaDisabled(false);
+    // }
+  };
+
   return (
     <div className="flex flex-col w-full p-2 ">
       {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
@@ -228,8 +288,9 @@ const MessageComposer = ({
           </div>
         ))}
       </div>
-      <div className="flex w-full items-end gap-4">
+      <div className="flex w-full items-start gap-4">
         <ComposerPrimitive.Input
+          submitOnEnter={!disabled}
           ref={messageRef}
           value={message}
           rows={1}
@@ -239,37 +300,8 @@ const MessageComposer = ({
           onKeyDown={handleKeyPress}
           className="placeholder:text-muted-foreground max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
         />
-        <ComposerAction />
+        <ComposerAction disabled={disabled} />
       </div>
-    </div>
-  );
-};
-
-const ComposerAction: FC = () => {
-  return (
-    <div>
-      <ThreadPrimitive.If running={false}>
-        <ComposerPrimitive.Send>
-          <TooltipIconButton
-            tooltip="Send"
-            variant="default"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in"
-          >
-            <SendHorizontalIcon />
-          </TooltipIconButton>
-        </ComposerPrimitive.Send>
-      </ThreadPrimitive.If>
-      <ThreadPrimitive.If running>
-        <ComposerPrimitive.Cancel asChild>
-          <TooltipIconButton
-            tooltip="Cancel"
-            variant="default"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in"
-          >
-            <CircleStopIcon />
-          </TooltipIconButton>
-        </ComposerPrimitive.Cancel>
-      </ThreadPrimitive.If>
     </div>
   );
 };

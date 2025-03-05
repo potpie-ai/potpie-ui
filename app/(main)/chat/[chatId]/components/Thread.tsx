@@ -38,12 +38,7 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
   const isLoading = (state.extras as any)?.loading === true || false;
 
   return (
-    <ThreadPrimitive.Root
-      className="bg-background box-border h-full text-sm flex justify-center items-center"
-      style={{
-        ["--thread-max-width" as string]: "75rem",
-      }}
-    >
+    <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">
       <div className="h-full w-full bg-background">
         {isLoading ? (
           <div className="flex items-center justify-center h-full space-x-1 mt-2">
@@ -277,7 +272,7 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
 
   return (
     <ComposerPrimitive.Root
-      className="bg-white z-10 w-2/4 focus-within:w-2/3 focus-within:-translate-y-5 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-2xl transition-all ease-in-out"
+      className="bg-white z-10 w-3/4 focus-within:-translate-y-4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out"
       onSubmit={() => {
         setKey(key + 1); // Current this is used to rerender MessageComposer (so that message and nodes are reset)
       }}
@@ -348,7 +343,7 @@ const AssistantMessage: FC = () => {
   }, []);
 
   return (
-    <MessagePrimitive.Root className="w-[calc(var(--thread-max-width)-200px)] grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative max-w-[var(--thread-max-width)] py-4">
+    <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
       <Avatar className="mr-4 rounded-none bg-transparent">
         <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
         <AvatarFallback>P</AvatarFallback>

@@ -44,7 +44,7 @@ const NewChat = () => {
   ];
 
   return (
-    <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-2 lg:col-span-2">
+    <div className="px-10 relative flex h-full min-h-[50vh] flex-col rounded-xl p-2 lg:col-span-2">
       {/* Step Logic */}
       <div className="relative w-[97%] h-full flex flex-col items-center -mb-6 mt-3">
         {steps.map((step, index) => (

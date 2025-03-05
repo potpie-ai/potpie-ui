@@ -184,7 +184,7 @@ const ThreadScrollToBottom: FC = () => {
       <TooltipIconButton
         tooltip="Scroll to bottom"
         variant="outline"
-        className="h-8 w-8 z-20 mb-16 rounded-full hover:scale-105 shadow-md hover:shadow-lg disabled:invisible transition ease-out"
+        className="h-8 w-8 z-20 mb-8 rounded-full hover:scale-105 shadow-md hover:shadow-lg disabled:invisible transition ease-out"
       >
         <ArrowDownIcon />
       </TooltipIconButton>
@@ -281,8 +281,7 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
         projectId={projectId}
         setSelectedNodesInConfig={setSelectedNodesInConfig}
         disabled={
-          (threadRuntime.getState().extras as any)?.streaming === true ||
-          disabled
+          (threadRuntime.getState().extras as any)?.streaming || disabled
         }
         key={key}
         input={""}

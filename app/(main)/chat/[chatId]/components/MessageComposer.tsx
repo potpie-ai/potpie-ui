@@ -180,7 +180,7 @@ const MessageComposer = ({
         {
           <ul>
             {isSearchingNode ? (
-              <Skeleton className="w-full h-20" />
+              <Skeleton className="w-full h-20 m-4" />
             ) : (
               nodeOptions
                 ?.sort((a, b) => b.relevance - a.relevance)

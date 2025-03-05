@@ -3,7 +3,11 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { Button } from "@/components/ui/button";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ComposerPrimitive, ThreadPrimitive } from "@assistant-ui/react";
+import {
+  ComposerPrimitive,
+  ThreadPrimitive,
+  useComposerRuntime,
+} from "@assistant-ui/react";
 import axios from "axios";
 import { SendHorizontalIcon, CircleStopIcon, X } from "lucide-react";
 import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
@@ -69,6 +73,8 @@ const MessageComposer = ({
     setIsSearchingNode(false);
   };
 
+  const composer = useComposerRuntime();
+
   const handleNodeSelect = (node: NodeOption) => {
     const cursorPosition = messageRef.current?.selectionStart || 0;
     const messageBeforeCursor = message.slice(0, cursorPosition);
@@ -94,6 +100,7 @@ const MessageComposer = ({
 
       const newMessage = `${textBeforeAt}${nodeText}${messageAfterCursor}`;
       setMessage(newMessage);
+      composer.setText(newMessage);
     }
 
     setSelectedNodes((curr) => [...curr, node]);
@@ -106,16 +113,16 @@ const MessageComposer = ({
   };
 
   const handleMessageChange = (e: any) => {
-    const value = e.target.value;
+    const value: string = e.target.value;
     setMessage(value);
 
     const cursorPosition = e.target.selectionStart;
-    const lastAtPosition = value.lastIndexOf("@", cursorPosition);
+    const lastAtPosition = value.lastIndexOf("@");
 
     if (
       lastAtPosition !== -1 &&
       cursorPosition > lastAtPosition &&
-      !message.slice(lastAtPosition, cursorPosition + 1).includes(" ")
+      !value.slice(lastAtPosition, cursorPosition + 1).includes(" ")
     ) {
       const query = value.substring(lastAtPosition + 1, cursorPosition);
       if (query.trim().length > 0 && !query.includes(" ")) {
@@ -150,11 +157,20 @@ const MessageComposer = ({
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedNodeIndex((prevIndex) => Math.max(prevIndex - 1, 0));
-      } else {
-        handleMessageChange(e);
       }
     }
+    if (e.key != "Enter" && e.key != "ArrowDown" && e.key != "ArrowUp")
+      handleMessageChange(e);
   };
+
+  const selectedNodeRef = useRef<HTMLLIElement>(null);
+
+  // Scroll to the target element when targetIndex changes
+  useEffect(() => {
+    if (selectedNodeRef.current && selectedNodeIndex > 4) {
+      selectedNodeRef.current.scrollIntoView({ behavior: "auto" });
+    }
+  }, [selectedNodeIndex]);
 
   const NodeSelection = () => {
     return (
@@ -169,7 +185,12 @@ const MessageComposer = ({
                 .map((node, index) => (
                   <li
                     key={node.node_id}
-                    className={`flex m-1 flex-row cursor-pointer rounded-sm text-s p1 px-2 hover:translate-x-3 transition ease-out ${index === selectedNodeIndex ? "bg-gray-200" : "hover:bg-gray-200"}`}
+                    ref={(el) => {
+                      if (index === selectedNodeIndex) {
+                        selectedNodeRef.current = el;
+                      }
+                    }}
+                    className={`flex m-1 flex-row cursor-pointer rounded-sm text-s p1 px-2 transition ease-out ${index === selectedNodeIndex ? "bg-gray-200" : "hover:bg-gray-200"}`}
                     onClick={() => handleNodeSelect(node)}
                   >
                     <div className="font-semibold min-w-40">{node.name}</div>

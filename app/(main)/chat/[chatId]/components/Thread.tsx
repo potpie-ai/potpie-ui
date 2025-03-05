@@ -37,10 +37,6 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
   const state = runtime.getState();
   const isLoading = state.extras?.loading === true || false;
 
-  useEffect(() => {
-    console.log("len msgs = ", state.messages.length);
-  }, [state.messages]);
-
   return (
     <ThreadPrimitive.Root
       className="bg-background box-border h-full text-sm flex justify-center items-center"
@@ -302,6 +298,8 @@ const UserMessage: FC = () => {
 const AssistantMessage: FC = () => {
   const message = useMessage();
   const runtime = useMessageRuntime();
+  const [isStreaming, setIsStreaming] = useState(false);
+
   const threadRuntime = useThreadRuntime();
   const [text, setText] = useState(message.content[0]?.text || "");
 
@@ -309,14 +307,15 @@ const AssistantMessage: FC = () => {
 
   // Callback to run during each iteration
   const runIteration = useCallback(() => {
-    console.log("status", runtime.getState().status?.type);
-    console.log("content ", runtime.getState().content[0]?.text);
     if (threadRuntime.getState().extras?.streaming) {
       // Schedule the next iteration --> when streaming make the iteration duration less
+      setIsStreaming(true);
       intervalRef.current = setTimeout(runIteration, 10);
     } else if (runtime.getState().status?.type === "running") {
       // Schedule the next iteration
       intervalRef.current = setTimeout(runIteration, 500);
+    } else {
+      setIsStreaming(false);
     }
 
     // Functional state update to ensure correct value
@@ -345,7 +344,7 @@ const AssistantMessage: FC = () => {
           <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
             <MarkdownComponent content={{ text: text }} />
           </div>
-          <AssistantActionBar />
+          {!isStreaming && <AssistantActionBar />}
         </div>
       ) : (
         <div className="flex items-center space-x-1 mt-2">

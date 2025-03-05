@@ -83,7 +83,7 @@ export function PotpieRuntime(chatId: string) {
     setMessages((currentMessages) => [...currentMessages, userMessage]);
 
     setMessages((currentMessages) => {
-      return [...currentMessages, getMessageFromText("", "")];
+      return [...currentMessages, getMessageFromText(undefined, "")];
     });
     await ChatService.streamMessage(
       chatId,

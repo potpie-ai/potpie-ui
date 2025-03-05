@@ -10,7 +10,7 @@ import {
   useMessageRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import { useCallback, useEffect, useRef, useState, type FC } from "react";
+import { useState, type FC } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -34,8 +34,11 @@ interface ThreadProps {
 
 export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
   const runtime = useThreadRuntime();
-  const state = runtime.getState();
-  const isLoading = (state.extras as any)?.loading === true || false;
+  const [isLoading, setIsLoading] = useState(true);
+
+  runtime.subscribe(() => {
+    setIsLoading((runtime.getState().extras as any)?.loading === true || false);
+  });
 
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">
@@ -268,7 +271,13 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
 
   const [key, setKey] = useState(0);
 
-  const threadRuntime = useThreadRuntime();
+  const runtime = useThreadRuntime();
+  const [isStreaming, setIsStreaming] = useState(false);
+  runtime.subscribe(() => {
+    setIsStreaming(
+      (runtime.getState().extras as any)?.streaming === true || false
+    );
+  });
 
   return (
     <ComposerPrimitive.Root
@@ -280,9 +289,7 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
       <MessageComposer
         projectId={projectId}
         setSelectedNodesInConfig={setSelectedNodesInConfig}
-        disabled={
-          (threadRuntime.getState().extras as any)?.streaming || disabled
-        }
+        disabled={isStreaming || disabled}
         key={key}
         input={""}
         nodes={[]}
@@ -297,8 +304,6 @@ const UserMessage: FC = () => {
       <div className="bg-[#f7e6e6] text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
         <MessagePrimitive.Content />
       </div>
-
-      <BranchPicker className="col-span-full col-start-1 row-start-3 -mr-1 justify-end" />
     </MessagePrimitive.Root>
   );
 };
@@ -306,40 +311,25 @@ const UserMessage: FC = () => {
 const AssistantMessage: FC = () => {
   const message = useMessage();
   const runtime = useMessageRuntime();
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [status, setStatus] = useState("running");
 
   const threadRuntime = useThreadRuntime();
+  const [isStreaming, setIsStreaming] = useState(false);
   const [text, setText] = useState((message.content[0] as any)?.text || "");
 
-  const intervalRef = useRef<ReturnType<typeof setTimeout>>();
+  if (message.isLast) {
+    console.log("inside");
+    runtime.subscribe(() => {
+      setText((runtime.getState().content[0] as any)?.text || "");
+      setStatus(runtime.getState().status?.type || "running");
+    });
 
-  // Callback to run during each iteration
-  const runIteration = useCallback(() => {
-    if ((threadRuntime.getState().extras as any)?.streaming) {
-      // Schedule the next iteration --> when streaming make the iteration duration less
-      setIsStreaming(true);
-      intervalRef.current = setTimeout(runIteration, 10);
-    } else if (runtime.getState().status?.type === "running") {
-      // Schedule the next iteration
-      intervalRef.current = setTimeout(runIteration, 500);
-    } else {
-      setIsStreaming(false);
-    }
-
-    // Functional state update to ensure correct value
-    setText((runtime.getState().content[0] as any)?.text || "");
-  }, [runtime]);
-
-  // Manage the loop
-  useEffect(() => {
-    // Start the loop
-    intervalRef.current = setTimeout(runIteration, 500);
-
-    // Cleanup to stop the loop on unmount
-    return () => {
-      clearTimeout(intervalRef.current);
-    };
-  }, []);
+    threadRuntime.subscribe(() => {
+      setIsStreaming(
+        (threadRuntime.getState().extras as any).streaming || false
+      );
+    });
+  }
 
   return (
     <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
@@ -347,15 +337,16 @@ const AssistantMessage: FC = () => {
         <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
         <AvatarFallback>P</AvatarFallback>
       </Avatar>
-      {message.status?.type === "complete" ? (
+      {status == "complete" ? (
         <div>
           <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
             <MarkdownComponent content={{ text: text }} />
           </div>
           <AssistantActionBar streaming={isStreaming} />
         </div>
-      ) : message.status?.type === "running" ? (
+      ) : status == "running" ? (
         <div className="flex items-center space-x-1 mt-2">
+          {text}
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
@@ -369,7 +360,6 @@ const AssistantMessage: FC = () => {
 
 const AssistantActionBar: FC<{ streaming: boolean }> = ({ streaming }) => {
   const current_message = useMessage();
-  const assistant = useAssistantRuntime();
 
   return (
     <ActionBarPrimitive.Root
@@ -387,15 +377,13 @@ const AssistantActionBar: FC<{ streaming: boolean }> = ({ streaming }) => {
           </MessagePrimitive.If>
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
-      {assistant.thread.getState().messages.at(-1)?.id ===
-        current_message?.id &&
-        !streaming && (
-          <ActionBarPrimitive.Reload asChild>
-            <TooltipIconButton tooltip="Refresh">
-              <RefreshCwIcon />
-            </TooltipIconButton>
-          </ActionBarPrimitive.Reload>
-        )}
+      {current_message.isLast && !streaming && (
+        <ActionBarPrimitive.Reload asChild>
+          <TooltipIconButton tooltip="Refresh">
+            <RefreshCwIcon />
+          </TooltipIconButton>
+        </ActionBarPrimitive.Reload>
+      )}
     </ActionBarPrimitive.Root>
   );
 };

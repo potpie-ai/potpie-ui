@@ -50,7 +50,6 @@ const MessageComposer = ({
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     setIsSearchingNode(true);
-    await new Promise((resolve) => setTimeout(resolve, 3000));
     try {
       const response = await axios.post(
         `${baseUrl}/api/v1/search`,
@@ -135,21 +134,25 @@ const MessageComposer = ({
   };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && nodeOptions.length > 0) {
-      if (selectedNodeIndex >= 0) {
+    if (nodeOptions.length > 0) {
+      if (e.key === "Enter" && !e.shiftKey && nodeOptions.length > 0) {
+        if (selectedNodeIndex >= 0) {
+          e.preventDefault();
+          handleNodeSelect(nodeOptions[selectedNodeIndex]);
+        } else {
+          // handleSubmit(e as unknown as FormEvent);
+        }
+      } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        handleNodeSelect(nodeOptions[selectedNodeIndex]);
+        setSelectedNodeIndex((prevIndex) =>
+          Math.min(prevIndex + 1, nodeOptions.length - 1)
+        );
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedNodeIndex((prevIndex) => Math.max(prevIndex - 1, 0));
       } else {
-        // handleSubmit(e as unknown as FormEvent);
+        handleMessageChange(e);
       }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setSelectedNodeIndex((prevIndex) =>
-        Math.min(prevIndex + 1, nodeOptions.length - 1)
-      );
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelectedNodeIndex((prevIndex) => Math.max(prevIndex - 1, 0));
     }
   };
 
@@ -184,7 +187,7 @@ const MessageComposer = ({
 
   return (
     <div className="flex flex-col w-full p-2 ">
-      {nodeOptions?.length > 0 && <NodeSelection />}
+      {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
       <div className="flex flex-row">
         {/* display selected nodes */}
         {selectedNodes.map((node) => (

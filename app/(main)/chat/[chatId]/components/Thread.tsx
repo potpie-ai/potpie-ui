@@ -26,7 +26,6 @@ import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
-import { crc32 } from "crc";
 
 interface ThreadProps {
   projectId: string;

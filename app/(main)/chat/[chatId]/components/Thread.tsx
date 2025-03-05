@@ -35,7 +35,7 @@ interface ThreadProps {
 export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
   const runtime = useThreadRuntime();
   const state = runtime.getState();
-  const isLoading = state.extras?.loading === true || false;
+  const isLoading = (state.extras as any)?.loading === true || false;
 
   return (
     <ThreadPrimitive.Root
@@ -301,13 +301,13 @@ const AssistantMessage: FC = () => {
   const [isStreaming, setIsStreaming] = useState(false);
 
   const threadRuntime = useThreadRuntime();
-  const [text, setText] = useState(message.content[0]?.text || "");
+  const [text, setText] = useState((message.content[0] as any)?.text || "");
 
   const intervalRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Callback to run during each iteration
   const runIteration = useCallback(() => {
-    if (threadRuntime.getState().extras?.streaming) {
+    if ((threadRuntime.getState().extras as any)?.streaming) {
       // Schedule the next iteration --> when streaming make the iteration duration less
       setIsStreaming(true);
       intervalRef.current = setTimeout(runIteration, 10);
@@ -319,7 +319,7 @@ const AssistantMessage: FC = () => {
     }
 
     // Functional state update to ensure correct value
-    setText(runtime.getState().content[0]?.text || "");
+    setText((runtime.getState().content[0] as any)?.text || "");
   }, [runtime]);
 
   // Manage the loop
@@ -360,8 +360,6 @@ const AssistantMessage: FC = () => {
 const AssistantActionBar: FC = () => {
   const current_message = useMessage();
   const assistant = useAssistantRuntime();
-  const last_message_id =
-    assistant.thread.getState().messages.at(-1)?.id || "-1";
 
   return (
     <ActionBarPrimitive.Root
@@ -380,7 +378,8 @@ const AssistantActionBar: FC = () => {
           </MessagePrimitive.If>
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
-      {current_message.id === last_message_id && (
+      {assistant.thread.getState().messages.at(-1)?.id ===
+        current_message?.id && (
         <ActionBarPrimitive.Reload asChild>
           <TooltipIconButton tooltip="Refresh">
             <RefreshCwIcon />

@@ -55,6 +55,22 @@ export function PotpieRuntime(chatId: string) {
     loadMessages();
   }, []);
 
+  const getMessageFromText = (
+    id: string | undefined,
+    text: string
+  ): ThreadMessageLike => {
+    return {
+      role: "assistant",
+      id: id,
+      content: [
+        {
+          type: "text",
+          text: text,
+        },
+      ],
+    };
+  };
+
   const onNew = async (message: AppendMessage) => {
     if (message.content.length !== 1 || message.content[0]?.type !== "text")
       throw new Error("Only text content is supported");
@@ -66,30 +82,22 @@ export function PotpieRuntime(chatId: string) {
     setIsRunning(true);
     setMessages((currentMessages) => [...currentMessages, userMessage]);
 
-    const assistantMessage: ThreadMessageLike = {
-      role: "assistant",
-      content: [
-        {
-          type: "text",
-          text: "",
-        },
-      ],
-    };
     setMessages((currentMessages) => {
-      return [...currentMessages, assistantMessage];
+      return [...currentMessages, getMessageFromText("", "")];
     });
     await ChatService.streamMessage(
       chatId,
       message.content[0].text,
-      message.runConfig?.custom?.selectedNodes || [],
+      (message.runConfig?.custom?.selectedNodes as any[]) || [], // @ts-ignore
       (message: string) => {
         setIsRunning(false);
         setExtras({ loading: false, streaming: true });
 
-        const lastMessage = assistantMessage;
-        lastMessage.content[0].text = message;
         setMessages((currentMessages) => {
-          return [...currentMessages.slice(0, -1), lastMessage];
+          return [
+            ...currentMessages.slice(0, -1),
+            getMessageFromText(currentMessages.at(-1)?.id, message),
+          ];
         });
       }
     );
@@ -98,24 +106,14 @@ export function PotpieRuntime(chatId: string) {
   };
 
   const onReload = async (parentId: string | null) => {
-    const assistantMessage: ThreadMessageLike = {
-      role: "assistant",
-      content: [
-        {
-          type: "text",
-          text: "",
-        },
-      ],
-    };
     setIsRunning(true);
     await ChatService.regenerateMessage(chatId, [], (message: string) => {
       setIsRunning(false);
       setExtras({ loading: false, streaming: true });
       setMessages((currentMessages) => {
-        assistantMessage.content[0].text = message;
         return [
-          ...currentMessages.slice(0, currentMessages.length - 1),
-          assistantMessage,
+          ...currentMessages.slice(0, -1),
+          getMessageFromText(currentMessages.at(-1)?.id, message),
         ];
       });
     });

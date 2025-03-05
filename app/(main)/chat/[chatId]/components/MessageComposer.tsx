@@ -163,7 +163,7 @@ const MessageComposer = ({
       handleMessageChange(e);
   };
 
-  const selectedNodeRef = useRef<HTMLLIElement>(null);
+  const selectedNodeRef = useRef<HTMLLIElement | null>(null);
 
   // Scroll to the target element when targetIndex changes
   useEffect(() => {
@@ -186,7 +186,7 @@ const MessageComposer = ({
                   <li
                     key={node.node_id}
                     ref={(el) => {
-                      if (index === selectedNodeIndex) {
+                      if (index === selectedNodeIndex && el) {
                         selectedNodeRef.current = el;
                       }
                     }}

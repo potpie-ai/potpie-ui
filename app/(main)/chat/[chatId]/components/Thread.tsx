@@ -150,9 +150,11 @@ const CustomMarkdown = ({ content }: { content: string }) => {
       className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
       components={{
         code: ({ children }) => (
-          <code className="bg-gray-100 text-red-500 overflow-x-scroll rounded px-1 py-0.5 text-sm font-bold">
-            {children}
-          </code>
+          <span className="whitespace-pre-wrap">
+            <code className="bg-gray-100 text-red-500 overflow-x-scroll rounded px-1 py-0.5 text-sm font-bold">
+              {children}
+            </code>
+          </span>
         ),
       }}
       remarkPlugins={[remarkGfm]}

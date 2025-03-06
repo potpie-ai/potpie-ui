@@ -374,4 +374,22 @@ export default class ChatService {
         }
       }
 
+    static async enhancePrompt(conversationId: string | null, prompt: string) {
+        const headers = await getHeaders();
+        try {
+            const response = await axios.post(
+                `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/prompts/enhancer`, 
+                {
+                    'conversation_id': conversationId,
+                    'prompt': prompt
+                },
+                { headers }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error enhancing prompt:", error);
+            throw error;
+        }
+    }
+
 }

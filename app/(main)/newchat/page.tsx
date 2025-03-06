@@ -90,7 +90,7 @@ const NewChat = () => {
         ))}
       </div>
 
-      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} disabled={chatStep !== 3} />
+      <NodeSelectorForm projectId={projectId} onSubmit={handleFormSubmit} disabled={chatStep !== 3} conversation_id = {currentConversationId}/>
     </div>
   );
 };

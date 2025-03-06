@@ -449,6 +449,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               !!fetchingResponse || parsingStatus !== ParsingStatusEnum.READY ||
               total_human_messages >= (planType === planTypesEnum.PRO ? 500 : 50)
             }
+            conversation_id={currentConversationId}
           />
           <div className="h-2 w-full"></div>
         </div>

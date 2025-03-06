@@ -245,7 +245,7 @@ export function AppSidebar() {
                     />
                   </Progress.Root>
                   <Link
-                    href={"/pricing"}
+                    href={"/user-subscription"}
                     className="w-full inset-0"
                     style={{ 
                       display: userSubscription?.plan_type === planTypesEnum.PRO ? 'none' : 'block' 

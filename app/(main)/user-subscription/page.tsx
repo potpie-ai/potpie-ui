@@ -28,7 +28,7 @@ const PricingPage = () => {
     },
     {
       name: 'Early-Stage',
-      price: '1',
+      price: '20',
       description: 'For startups that have raised less than 100K USD and are pre-revenue',
       features: [
         'Ready-to-use agents',
@@ -46,7 +46,7 @@ const PricingPage = () => {
     },
     {
       name: 'Individual - Pro',
-      price: '20',
+      price: '39',
       description: 'For developers who want to use agents extensively in their workflow',
       features: [
         'Everything in the Free plan, plus:',

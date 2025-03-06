@@ -311,7 +311,6 @@ const UserMessage: FC = () => {
 const AssistantMessage: FC = () => {
   const message = useMessage();
   const runtime = useMessageRuntime();
-  const [status, setStatus] = useState("running");
 
   const threadRuntime = useThreadRuntime();
   const [isStreaming, setIsStreaming] = useState(false);
@@ -320,7 +319,6 @@ const AssistantMessage: FC = () => {
   if (message.isLast) {
     runtime.subscribe(() => {
       setText((runtime.getState().content[0] as any)?.text || "");
-      setStatus(runtime.getState().status?.type || "running");
     });
 
     threadRuntime.subscribe(() => {
@@ -336,21 +334,19 @@ const AssistantMessage: FC = () => {
         <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
         <AvatarFallback>P</AvatarFallback>
       </Avatar>
-      {status == "complete" ? (
+      {text ? (
         <div>
           <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
             <MarkdownComponent content={{ text: text }} />
           </div>
           <AssistantActionBar streaming={isStreaming} />
         </div>
-      ) : status == "running" ? (
+      ) : (
         <div className="flex items-center space-x-1 mt-2">
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
           <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
         </div>
-      ) : (
-        <></>
       )}
     </MessagePrimitive.Root>
   );

@@ -4,6 +4,38 @@ import { Visibility } from "@/lib/Constants";
 
 export default class ChatService {
     
+    // Method for creating a chat with a shared agent
+    static async createChat(params: { agent_id: string; repo_id: number; branch_id: string | number }) {
+        const headers = await getHeaders();
+        const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
+        try {
+            console.log("Creating chat with params:", params);
+            
+            // Prepare the request body
+            const requestBody: any = {
+                agent_id: params.agent_id,
+                repo_id: params.repo_id
+            };
+            
+            // Add branch_id if it's a number, otherwise use branch_name
+            if (typeof params.branch_id === 'number') {
+                requestBody.branch_id = params.branch_id;
+            } else {
+                requestBody.branch_name = params.branch_id;
+            }
+            
+            const response = await axios.post(
+                `${baseUrl}/api/v1/conversations/`,
+                requestBody,
+                { headers }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error creating chat:", error);
+            throw new Error("Failed to create chat with the shared agent");
+        }
+    }
+    
     static async streamMessage(
         conversationId: string, 
         message: string, 

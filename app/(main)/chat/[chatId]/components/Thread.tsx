@@ -68,9 +68,7 @@ export const Thread: FC<ThreadProps> = ({
                 <div className="pb-24 bg-inherit min-w-96 w-full">
                   <ThreadPrimitive.Messages
                     components={{
-                      UserMessage: UserMessageWithURL({
-                        url: userImageURL,
-                      }),
+                      UserMessage: UserMessage,
                       AssistantMessage: AssistantMessage,
                     }}
                   />
@@ -306,14 +304,7 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
   );
 };
 
-const UserMessageWithURL = ({ url }: { url: string }): FC => {
-  const res: FC = () => {
-    return <UserMessage url={url} />;
-  };
-  return res;
-};
-
-const UserMessage: FC<{ url: string }> = ({ url }) => {
+const UserMessage: FC = () => {
   const { user } = useAuthContext();
   return (
     <div className="flex items-center justify-end w-full">
@@ -323,7 +314,7 @@ const UserMessage: FC<{ url: string }> = ({ url }) => {
         </div>
       </MessagePrimitive.Root>
       <Avatar className="mr-4 rounded-md bg-transparent">
-        <AvatarImage src={url != "" ? url : user.photoURL} alt="Agent" />
+        <AvatarImage src={user.photoURL} alt="User" />
         <AvatarFallback>U</AvatarFallback>
       </Avatar>
     </div>

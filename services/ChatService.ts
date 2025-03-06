@@ -9,8 +9,6 @@ export default class ChatService {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
         try {
-            console.log("Creating chat with params:", params);
-            
             // Prepare the request body
             const requestBody: any = {
                 agent_id: params.agent_id,
@@ -31,7 +29,6 @@ export default class ChatService {
             );
             return response.data;
         } catch (error) {
-            console.error("Error creating chat:", error);
             throw new Error("Failed to create chat with the shared agent");
         }
     }
@@ -113,7 +110,7 @@ export default class ChatService {
                                     onMessageUpdate(currentMessage, currentCitations);
                                 }
                             } catch (e) {
-                                console.error("Error parsing JSON object:", e);
+                                // Silently handle parsing errors
                             }
                         }
                     }
@@ -125,7 +122,7 @@ export default class ChatService {
             return { message: currentMessage, citations: currentCitations };
             
         } catch (error) {
-            console.error("Error in streamMessage:", error);
+            // Handle streaming error
             throw error;
         }
     }
@@ -274,7 +271,7 @@ export default class ChatService {
                                     onMessageUpdate(currentMessage, currentCitations);
                                 }
                             } catch (e) {
-                                console.error("Error parsing JSON object:", e);
+                                // Silently handle parsing errors
                             }
                         }
                     }
@@ -286,7 +283,7 @@ export default class ChatService {
             return { message: currentMessage, citations: currentCitations };
             
         } catch (error) {
-            console.error("Error in regenerateMessage:", error);
+            // Handle regeneration error
             throw error;
         }
     }

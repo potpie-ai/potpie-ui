@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import NodeSelector from "@/components/NodeSelectorChatForm/NodeSelector";
 import { setChat, setPendingMessage } from "@/lib/state/Reducers/chat";
 import { setRepoName, setBranchName } from "@/lib/state/Reducers/RepoAndBranch";
+import { CheckCircle, XCircle } from "lucide-react";
 import Image from "next/image";
 import {
   Popover,
@@ -40,6 +41,7 @@ const SharedAgentPage = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const dispatch = useDispatch();
+  const queryClient = useQueryClient();
 
   const agentId = searchParams.get("agent_id");
   const [selectedRepo, setSelectedRepo] = useState<string>("");
@@ -53,6 +55,8 @@ const SharedAgentPage = () => {
   const [branchSearchTerm, setBranchSearchTerm] = useState<string>("");
   const [repoOpen, setRepoOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
+  const [parsingStatus, setParsingStatus] = useState<string>("");
+  const [isParseDisabled, setIsParseDisabled] = useState(true);
 
   // Fetch agent details
   const { data: agentDetails, isLoading: isLoadingAgentDetails, error: agentError } = useQuery({
@@ -65,7 +69,6 @@ const SharedAgentPage = () => {
         const details = await AgentService.getAgentDetails(agentId, userId);
         return details;
       } catch (error: any) {
-        console.error("Error fetching agent details:", error);
         if (error.response?.status === 403) {
           setErrorState("You don't have access to this agent.");
         } else if (error.response?.status === 404) {
@@ -87,7 +90,6 @@ const SharedAgentPage = () => {
       try {
         return await BranchAndRepositoryService.getUserRepositories();
       } catch (error) {
-        console.error("Error fetching repositories:", error);
         throw error;
       }
     },
@@ -99,48 +101,46 @@ const SharedAgentPage = () => {
     queryKey: ["branches", selectedRepo],
     queryFn: async () => {
       try {
-        // Find the repository by ID
-        const repo = repositories?.find((r: any) => r.id?.toString() === selectedRepo);
-        if (!repo) {
-          console.log("No repository found for ID:", selectedRepo);
+        if (!selectedRepo || !repositories) {
           return [];
         }
         
-        // Safely set current repository
-        try {
-          setCurrentRepository(repo);
-        } catch (error) {
-          console.error("Error setting current repository:", error);
+        // Find the repo object by ID
+        const repo = repositories.find((r: any) => {
+          if (!r || !r.id) return false;
+          
+          try {
+            // Safely convert IDs to strings for comparison
+            const repoId = r.id?.toString() || "";
+            const selectedRepoId = selectedRepo?.toString() || "";
+            return repoId === selectedRepoId;
+          } catch (error) {
+            return false;
+          }
+        });
+        
+        if (!repo || !repo.full_name) {
+          return [];
         }
         
-        console.log("Fetching branches for repo:", repo.full_name);
-        
-        // Wrap the API call in a try-catch to handle any errors
         try {
           const branchList = await BranchAndRepositoryService.getBranchList(repo.full_name);
-          console.log("Fetched branches:", branchList);
           
-          // Ensure branchList is an array of strings
           if (!branchList) {
-            console.warn("Branch list is null or undefined");
             return [];
           }
           
           // Convert to array if it's not already and filter out non-string values
           const branches = Array.isArray(branchList) 
-            ? branchList.filter(branch => typeof branch === 'string')
+            ? branchList.filter(branch => typeof branch === 'string' && branch !== null && branch !== undefined)
             : [];
-          
-          console.log("Processed branches:", branches);
           
           // Don't auto-select the first branch here, do it in a useEffect instead
           return branches;
         } catch (apiError) {
-          console.error("API error fetching branches:", apiError);
           return [];
         }
       } catch (error) {
-        console.error("Error in branch query function:", error);
         return [];
       }
     },
@@ -148,10 +148,7 @@ const SharedAgentPage = () => {
     retry: 1, // Only retry once to avoid excessive API calls
     retryDelay: 1000,
     staleTime: 0,
-    refetchOnWindowFocus: false,
-    onError: (error) => {
-      console.error("Query error fetching branches:", error);
-    }
+    refetchOnWindowFocus: false
   });
 
   // Auto-select first branch when branches change
@@ -160,30 +157,26 @@ const SharedAgentPage = () => {
       if (branches && Array.isArray(branches) && branches.length > 0 && !selectedBranch) {
         try {
           const firstBranch = branches[0];
-          console.log("Auto-selecting first branch:", firstBranch);
           
-          if (typeof firstBranch === 'string') {
+          if (typeof firstBranch === 'string' && firstBranch !== null && firstBranch !== undefined) {
             setSelectedBranch(firstBranch);
             setCurrentBranch({
               id: firstBranch,
               name: firstBranch
             });
-          } else {
-            console.warn("First branch is not a string:", firstBranch);
           }
         } catch (error) {
-          console.error("Error auto-selecting first branch:", error);
+          // Silent error handling
         }
       }
     } catch (error) {
-      console.error("Error in branch auto-select effect:", error);
+      // Silent error handling
     }
   }, [branches, selectedBranch]);
 
   // Show error toast if branch fetching fails, but only if we have a selected repo
   useEffect(() => {
     if (branchError && selectedRepo) {
-      console.error("Branch fetch error:", branchError);
       toast.error("Failed to load branches. Please try again.");
       setBranchOpen(false);
     }
@@ -200,12 +193,38 @@ const SharedAgentPage = () => {
   // Update current branch when selectedBranch changes
   useEffect(() => {
     if (branches && selectedBranch) {
-      const branch = branches.find((b: any) => b.id.toString() === selectedBranch);
+      // Handle both string branches and object branches
+      const branch = branches.find((b: any) => {
+        if (typeof b === 'string') {
+          return b === selectedBranch;
+        } else if (b && b.id) {
+          return b.id.toString() === selectedBranch;
+        }
+        return false;
+      });
+      
       if (branch) {
-        setCurrentBranch(branch);
+        // If branch is a string, create an object with id and name properties
+        if (typeof branch === 'string') {
+          setCurrentBranch({
+            id: branch,
+            name: branch
+          });
+        } else {
+          setCurrentBranch(branch);
+        }
       }
     }
   }, [branches, selectedBranch]);
+  
+  // Update parse button state
+  useEffect(() => {
+    try {
+      setIsParseDisabled(!currentRepository?.full_name || !currentBranch?.name || parsingStatus === "loading");
+    } catch (error) {
+      setIsParseDisabled(true);
+    }
+  }, [currentRepository, currentBranch, parsingStatus]);
   
   // Clear search terms when changing repo or branch
   useEffect(() => {
@@ -223,18 +242,18 @@ const SharedAgentPage = () => {
         throw new Error("Missing required parameters");
       }
       
-      console.log("Creating chat with:", {
-        agent_id: agentId,
-        repo_id: parseInt(selectedRepo),
-        branch_id: selectedBranch // Using the branch name
-      });
+      const userId = user?.uid;
+      if (!userId) {
+        throw new Error("User ID is missing");
+      }
       
-      // The API expects branch_id or branch_name
-      return ChatService.createChat({
-        agent_id: agentId,
-        repo_id: parseInt(selectedRepo),
-        branch_id: selectedBranch // ChatService will convert this to branch_name
-      });
+      // Create conversation with the shared agent
+      return ChatService.createConversation(
+        userId,
+        "Chat with shared agent", // Default title
+        selectedRepo, // Project ID (repository ID)
+        agentId
+      );
     },
     onSuccess: (data) => {
       if (firstMessage.trim()) {
@@ -253,10 +272,9 @@ const SharedAgentPage = () => {
         }));
       }
       
-      router.push(`/chat/${data.chat_id}`);
+      router.push(`/chat/${data.conversation_id}`);
     },
     onError: (error) => {
-      console.error("Error creating chat:", error);
       toast.error("Failed to start chat. Please try again.");
       setIsStartingChat(false);
     }
@@ -279,24 +297,33 @@ const SharedAgentPage = () => {
     handleStartChat();
   };
 
-  // Handle repository selection
+  // Handle repository selection with better error handling
   const handleRepoSelect = (value: string, repo: any) => {
     try {
-      console.log("Repository selected:", value, repo);
-      setSelectedRepo(value);
+      if (!repo) {
+        toast.error("Invalid repository selection");
+        return;
+      }
+      
+      // Safely get repo ID as string
+      let repoIdStr;
+      try {
+        repoIdStr = repo.id?.toString() || "";
+      } catch (error) {
+        repoIdStr = "";
+      }
+      
+      setSelectedRepo(repoIdStr);
       setSelectedBranch("");
       setCurrentBranch(null);
       setCurrentRepository(repo);
+      
       // Close the repo dropdown
       setRepoOpen(false);
+      
       // Clear branch search term
       setBranchSearchTerm("");
-      
-      // Don't immediately open the branch dropdown or refetch branches
-      // This was causing the crash
-      console.log("Repository selection complete, will fetch branches when branch dropdown is opened");
     } catch (error) {
-      console.error("Error in handleRepoSelect:", error);
       toast.error("An error occurred while selecting the repository. Please try again.");
     }
   };
@@ -319,6 +346,66 @@ const SharedAgentPage = () => {
       </div>
     );
   }
+
+  // Function to parse repository
+  const parseRepo = async (repo_name: string, branch_name: string) => {
+    if (!repo_name || !branch_name) {
+      toast.error("Please select a repository and branch");
+      return;
+    }
+
+    setParsingStatus("loading");
+    try {
+      // Get repo from repositories list
+      const repo = repositories?.find((r: any) => {
+        if (!r || !r.id) return false;
+        try {
+          return r.id?.toString() === selectedRepo?.toString();
+        } catch (error) {
+          return false;
+        }
+      });
+      
+      if (!repo || !repo.full_name) {
+        throw new Error("Repository not found or invalid");
+      }
+
+      // Call parse API
+      const parseResponse = await BranchAndRepositoryService.parseRepo(
+        repo.full_name,
+        branch_name
+      );
+      
+      if (!parseResponse) {
+        throw new Error("Invalid response from parse API");
+      }
+      
+      const projectId = parseResponse.project_id;
+      const initialStatus = parseResponse.status;
+
+      if (!projectId) {
+        throw new Error("No project ID returned from parse API");
+      }
+
+      if (initialStatus === "ready") {
+        setParsingStatus("ready");
+        toast.success("Repository parsed successfully!");
+        return;
+      }
+
+      // Poll for parsing status
+      await BranchAndRepositoryService.pollParsingStatus(
+        projectId,
+        initialStatus,
+        setParsingStatus,
+        () => {} // No step change needed
+      );
+    } catch (err) {
+      setParsingStatus("error");
+      toast.error("Failed to parse repository");
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -385,190 +472,248 @@ const SharedAgentPage = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6 flex-grow">
-                    <div className="flex flex-col md:flex-row gap-4">
-                      {/* Repository Selection */}
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Code className="h-4 w-4 text-muted-foreground" />
-                          <label className="text-sm font-medium">Repository</label>
-                        </div>
-                        <Popover open={repoOpen} onOpenChange={setRepoOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-between"
-                              disabled={isLoadingRepos}
-                            >
-                              {currentRepository ? (
-                                <span className="truncate text-ellipsis whitespace-nowrap">
-                                  {currentRepository.full_name}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">
-                                  Select a repository
-                                </span>
-                              )}
-                              <Code className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[300px] p-0">
-                            <Command>
-                              <CommandInput 
-                                placeholder="Search repository..."
-                                value={repoSearchTerm}
-                                onValueChange={setRepoSearchTerm}
-                                autoFocus={true}
-                              />
-                              <CommandList>
-                                <CommandEmpty>No repositories found</CommandEmpty>
-                                <CommandGroup>
-                                  {isLoadingRepos ? (
-                                    <CommandItem disabled>
-                                      <Loader className="mr-2 h-4 w-4 animate-spin" />
-                                      <span>Loading repositories...</span>
-                                    </CommandItem>
-                                  ) : !repositories || repositories.length === 0 ? (
-                                    <CommandItem disabled>
-                                      <span>No repositories available</span>
-                                    </CommandItem>
-                                  ) : (
-                                    repositories
-                                      ?.filter((repo: any) => {
-                                        if (!repoSearchTerm) return true;
-                                        return repo.full_name.toLowerCase().includes(repoSearchTerm.toLowerCase());
-                                      })
-                                      .map((repo: any) => (
-                                        <CommandItem
-                                          key={repo.id}
-                                          value={repo.id.toString()}
-                                          onSelect={(value) => {
-                                            handleRepoSelect(value, repo);
-                                          }}
-                                        >
-                                          {repo.full_name}
-                                        </CommandItem>
-                                      ))
-                                  )}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
+                    {/* Repository and Branch Selection */}
+                    <div className="space-y-4">
+                      <h3 className="text-md font-medium">Select a repository and branch</h3>
                       
-                      {/* Branch Selection */}
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <GitBranch className="h-4 w-4 text-muted-foreground" />
-                          <label className="text-sm font-medium">Branch</label>
-                        </div>
-                        <Popover 
-                          open={branchOpen} 
-                          onOpenChange={(open) => {
-                            setBranchOpen(open);
-                            
-                            // Only fetch branches when opening the dropdown
-                            if (open && selectedRepo) {
-                              console.log("Branch dropdown opened, fetching branches...");
+                      <div className="flex items-center gap-4 mt-4 ml-5">
+                        {/* Repository Selection */}
+                        {isLoadingRepos ? (
+                          <div className="w-[220px] h-10 flex items-center">
+                            <Loader className="h-4 w-4 animate-spin mr-2" />
+                            <span>Loading repositories...</span>
+                          </div>
+                        ) : (
+                          <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+                            <PopoverTrigger asChild className="w-[220px]">
+                              {!currentRepository ? (
+                                <Button
+                                  className="flex gap-3 items-center font-semibold justify-start w-[220px]"
+                                  variant="outline"
+                                >
+                                  <Code className="h-4 w-4 text-[#7A7A7A]" strokeWidth={1.5} />
+                                  Select Repository
+                                </Button>
+                              ) : (
+                                <Button
+                                  className="flex gap-3 items-center font-semibold justify-start w-[220px]"
+                                  variant="outline"
+                                >
+                                  <Code className="h-4 w-4 text-[#7A7A7A]" strokeWidth={1.5} />
+                                  <span className="truncate text-ellipsis whitespace-nowrap">
+                                    {currentRepository?.full_name || "Select Repository"}
+                                  </span>
+                                </Button>
+                              )}
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto min-w-[220px] max-w-[300px] p-0">
+                              <Command>
+                                <CommandInput
+                                  value={repoSearchTerm}
+                                  onValueChange={(e) => setRepoSearchTerm(e)}
+                                  placeholder="Search repository..."
+                                />
+                                <CommandList>
+                                  <CommandEmpty>No repositories found</CommandEmpty>
+                                  <CommandGroup>
+                                    {repositories?.map((repo: any) => (
+                                      <CommandItem
+                                        key={repo?.id?.toString() || Math.random().toString()}
+                                        value={repo?.full_name || ""}
+                                        onSelect={(value) => {
+                                          try {
+                                            setSelectedRepo(repo?.id?.toString() || "");
+                                            setSelectedBranch("");
+                                            setCurrentBranch(null);
+                                            setCurrentRepository(repo);
+                                            setRepoOpen(false);
+                                            setBranchSearchTerm("");
+                                          } catch (error) {
+                                            toast.error("An error occurred while selecting the repository.");
+                                          }
+                                        }}
+                                      >
+                                        {repo?.full_name || ""}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        
+                        {/* Branch Selection */}
+                        {isLoadingBranches ? (
+                          <div className="w-[220px] h-10 flex items-center">
+                            <Loader className="h-4 w-4 animate-spin mr-2" />
+                            <span>Loading branches...</span>
+                          </div>
+                        ) : (
+                          <Popover 
+                            open={branchOpen} 
+                            onOpenChange={(open) => {
+                              setBranchOpen(open);
                               
-                              // Use setTimeout to avoid React state update issues
-                              setTimeout(() => {
+                              // Only fetch branches when opening the dropdown
+                              if (open && selectedRepo) {
                                 refetchBranches()
-                                  .then(result => {
-                                    console.log("Branch fetch successful:", result);
-                                  })
                                   .catch(error => {
-                                    console.error("Error fetching branches:", error);
                                     if (error.name !== 'CanceledError') {
                                       toast.error("Failed to load branches. Please try again.");
                                     }
                                   });
-                              }, 0);
-                            }
-                          }}
-                        >
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-between"
-                              disabled={!selectedRepo || isLoadingBranches}
-                            >
-                              {currentBranch ? (
-                                <span className="truncate text-ellipsis whitespace-nowrap">
-                                  {currentBranch.name}
-                                </span>
+                              }
+                            }}
+                          >
+                            <PopoverTrigger asChild className="w-[220px]">
+                              {!currentBranch ? (
+                                <Button
+                                  className="flex gap-3 items-center font-semibold justify-start w-[220px]"
+                                  variant="outline"
+                                  disabled={!selectedRepo}
+                                >
+                                  <GitBranch className="h-4 w-4 text-[#7A7A7A]" strokeWidth={1.5} />
+                                  {selectedRepo ? "Select Branch" : "Select Repository First"}
+                                </Button>
                               ) : (
-                                <span className="text-muted-foreground">
-                                  {!selectedRepo ? "Select a repository first" : "Select a branch"}
-                                </span>
+                                <Button
+                                  className="flex gap-3 items-center font-semibold justify-start w-[220px]"
+                                  variant="outline"
+                                >
+                                  <GitBranch className="h-4 w-4 text-[#7A7A7A]" strokeWidth={1.5} />
+                                  <span className="truncate text-ellipsis whitespace-nowrap">
+                                    {currentBranch?.name || "Select Branch"}
+                                  </span>
+                                </Button>
                               )}
-                              <GitBranch className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[200px] p-0">
+                              <Command>
+                                <CommandInput 
+                                  placeholder="Search branch..."
+                                  value={branchSearchTerm}
+                                  onValueChange={setBranchSearchTerm}
+                                />
+                                <CommandList>
+                                  <CommandEmpty>No branches found</CommandEmpty>
+                                  <CommandGroup>
+                                    {isLoadingBranches ? (
+                                      <CommandItem disabled>
+                                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                                        <span>Loading branches...</span>
+                                      </CommandItem>
+                                    ) : branches && Array.isArray(branches) && branches.length > 0 ? (
+                                      branches
+                                        .filter((branch: any) => {
+                                          if (!branch) {
+                                            return false;
+                                          }
+                                          
+                                          let branchStr;
+                                          try {
+                                            branchStr = typeof branch === 'string' ? branch : String(branch);
+                                          } catch (error) {
+                                            return false;
+                                          }
+                                          
+                                          if (!branchStr) {
+                                            return false;
+                                          }
+                                          
+                                          try {
+                                            return branchSearchTerm ? 
+                                              branchStr.toLowerCase().includes(branchSearchTerm.toLowerCase()) : 
+                                              true;
+                                          } catch (error) {
+                                            return false;
+                                          }
+                                        })
+                                        .map((branch: string, index: number) => {
+                                          let branchStr;
+                                          try {
+                                            branchStr = typeof branch === 'string' ? branch : String(branch);
+                                          } catch (error) {
+                                            branchStr = "Unknown branch";
+                                          }
+                                          
+                                          return (
+                                            <CommandItem
+                                              key={`${branchStr || ""}-${index}`}
+                                              value={branchStr || ""}
+                                              onSelect={(value) => {
+                                                try {
+                                                  setSelectedBranch(value);
+                                                  setBranchOpen(false);
+                                                  setCurrentBranch({
+                                                    id: value,
+                                                    name: value
+                                                  });
+                                                } catch (error) {
+                                                  toast.error("Error selecting branch");
+                                                }
+                                              }}
+                                            >
+                                              {branchStr || "Unknown branch"}
+                                            </CommandItem>
+                                          );
+                                        })
+                                    ) : (
+                                      <CommandItem disabled>
+                                        <span>No branches available</span>
+                                      </CommandItem>
+                                    )}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        
+                        {/* Parse Button */}
+                        <div className="flex items-center">
+                          {parsingStatus !== "ready" && (
+                            <Button
+                              className="flex items-center justify-center"
+                              onClick={() => currentRepository?.full_name && currentBranch?.name ? 
+                                parseRepo(currentRepository.full_name, currentBranch.name) : 
+                                toast.error("Please select a repository and branch")}
+                              disabled={isParseDisabled}
+                            >
+                              {parsingStatus === "loading" ? (
+                                <>
+                                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                                  <span>Parsing...</span>
+                                </>
+                              ) : (
+                                <span>Parse</span>
+                              )}
                             </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[200px] p-0">
-                            <Command>
-                              <CommandInput 
-                                placeholder="Search branch..."
-                                value={branchSearchTerm}
-                                onValueChange={setBranchSearchTerm}
-                                autoFocus={true}
-                              />
-                              <CommandList>
-                                <CommandEmpty>No branches found</CommandEmpty>
-                                <CommandGroup>
-                                  {isLoadingBranches ? (
-                                    <CommandItem disabled>
-                                      <Loader className="mr-2 h-4 w-4 animate-spin" />
-                                      <span>Loading branches...</span>
-                                    </CommandItem>
-                                  ) : branchError ? (
-                                    <CommandItem disabled>
-                                      <span>Error loading branches</span>
-                                    </CommandItem>
-                                  ) : !branches || !Array.isArray(branches) || branches.length === 0 ? (
-                                    <CommandItem disabled>
-                                      <span>No branches available</span>
-                                    </CommandItem>
-                                  ) : (
-                                    branches
-                                      .filter((branch: any) => {
-                                        // Make sure branch is a string
-                                        if (typeof branch !== 'string') {
-                                          console.warn('Branch is not a string:', branch);
-                                          return false;
-                                        }
-                                        
-                                        return branchSearchTerm ? 
-                                          branch.toLowerCase().includes(branchSearchTerm.toLowerCase()) : 
-                                          true;
-                                      })
-                                      .map((branch: string, index: number) => (
-                                        <CommandItem
-                                          key={`${branch}-${index}`}
-                                          value={branch}
-                                          onSelect={(value) => {
-                                            try {
-                                              setSelectedBranch(value);
-                                              setBranchOpen(false);
-                                              setCurrentBranch({
-                                                id: value,
-                                                name: value
-                                              });
-                                            } catch (error) {
-                                              console.error("Error selecting branch:", error);
-                                            }
-                                          }}
-                                        >
-                                          {branch}
-                                        </CommandItem>
-                                      ))
-                                  )}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                          )}
+                        </div>
                       </div>
+                      
+                      {/* Parsing Status */}
+                      {parsingStatus === "ready" && (
+                        <div className="flex justify-start items-center gap-3 mt-3 ml-5">
+                          <CheckCircle className="text-[#00C313] h-4 w-4" />
+                          <span className="text-[#00C313]">Ready</span>
+                        </div>
+                      )}
+                      
+                      {parsingStatus === "error" && (
+                        <div className="flex justify-start items-center gap-3 mt-3 ml-5">
+                          <XCircle className="text-[#E53E3E] h-4 w-4" />
+                          <span className="text-[#E53E3E]">Error</span>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => parseRepo(currentRepository?.full_name, currentBranch?.name)}
+                          >
+                            Retry
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Selected Repository and Branch Display */}
@@ -577,19 +722,19 @@ const SharedAgentPage = () => {
                         <div className="flex items-center gap-2">
                           <Code className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm font-medium">Repository:</span>
-                          <span className="text-sm text-muted-foreground">{currentRepository.full_name}</span>
+                          <span className="text-sm text-muted-foreground">{currentRepository?.full_name || "Unknown repository"}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <GitBranch className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm font-medium">Branch:</span>
-                          <span className="text-sm text-muted-foreground">{currentBranch.name}</span>
+                          <span className="text-sm text-muted-foreground">{currentBranch?.name || "Unknown branch"}</span>
                         </div>
                       </div>
                     )}
 
                     {/* Chat Form */}
                     <div className="mt-auto pt-2">
-                      {selectedRepo && selectedBranch ? (
+                      {selectedRepo && selectedBranch && parsingStatus === "ready" ? (
                         <div className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col">
                           <Textarea
                             value={firstMessage}
@@ -623,7 +768,7 @@ const SharedAgentPage = () => {
                       ) : (
                         <div className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col">
                           <Textarea
-                            placeholder="Select a repository and branch to start chatting"
+                            placeholder={selectedRepo && selectedBranch ? "Parse repository first to start chatting" : "Select a repository and branch to start chatting"}
                             className="min-h-12 text-base resize-none border-0 p-3 px-7"
                             disabled={true}
                           />

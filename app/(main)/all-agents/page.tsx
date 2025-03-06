@@ -138,7 +138,6 @@ const AllAgents = () => {
     if (shareAgentId && data) {
       const agentData = data.find((agent: any) => agent.id === shareAgentId);
       if (agentData && (agentData as any).visibility !== undefined) {
-        console.log("useEffect: Setting visibility from agent list:", (agentData as any).visibility);
         setIsPublic((agentData as any).visibility === "public");
       }
     }
@@ -174,7 +173,6 @@ const AllAgents = () => {
     setIsLoadingSharedDetails(true);
     try {
       const response = await AgentService.getSharedAgentsDetails(agentId);
-      console.log("Agent sharing details:", response);
       
       // Update state with the response values
       setIsPublic(response.visibility === "public");
@@ -183,11 +181,8 @@ const AllAgents = () => {
       // Mark toggle as initialized with actual data from API
       setToggleInitialized(true);
       
-      console.log("Toggle initialized with visibility:", response.visibility);
-      
       return response; // Return response for further processing
     } catch (error) {
-      console.error("Error fetching agent sharing details:", error);
       toast.error("Failed to load sharing details");
     } finally {
       setIsLoadingSharedDetails(false);
@@ -409,6 +404,12 @@ const AllAgents = () => {
   // Function to copy shareable URL
   const copyShareableUrl = () => {
     if (!shareAgentId) return;
+    
+    // Don't copy if agent is not public and has no shared emails
+    if (!isPublic && sharedEmails.length === 0) {
+      toast.error("Agent must be public or shared with at least one person to be shareable");
+      return;
+    }
     
     const baseUrl = window.location.origin;
     const shareableUrl = `${baseUrl}/shared-agent?agent_id=${shareAgentId}`;
@@ -786,8 +787,6 @@ const AllAgents = () => {
                       size="icon"
                       className="hover:text-primary"
                       onClick={async () => {
-                        console.log("Share button clicked for agent:", content.id);
-                        
                         // Set the agent ID - the useEffect will handle setting the visibility
                         setShareAgentId(content.id);
                         
@@ -803,13 +802,11 @@ const AllAgents = () => {
                         // Fetch the complete sharing details asynchronously
                         try {
                           const details = await AgentService.getSharedAgentsDetails(content.id);
-                          console.log("Loaded agent sharing details:", details);
                           
                           // Update shared emails
                           setSharedEmails(details.shared_with || []);
                           setToggleInitialized(true);
                         } catch (error) {
-                          console.error("Error loading agent sharing details:", error);
                           toast.error("Failed to load sharing details");
                         } finally {
                           setIsLoadingSharedDetails(false);
@@ -892,8 +889,6 @@ const AllAgents = () => {
       <Dialog
         open={shareModalOpen}
         onOpenChange={(open) => {
-          console.log("Dialog open state changing to:", open);
-          
           if (!open) {
             // Just close the modal and clean up
             setShareModalOpen(false);
@@ -909,7 +904,6 @@ const AllAgents = () => {
             if (shareAgentId) {
               const agentData = data?.find((agent: any) => agent.id === shareAgentId);
               if (agentData && (agentData as any).visibility !== undefined) {
-                console.log("Dialog open: Using visibility from agent list:", (agentData as any).visibility);
                 setIsPublic((agentData as any).visibility === "public");
               }
             }
@@ -923,6 +917,23 @@ const AllAgents = () => {
               Make your agent available to other users by sharing it publicly or with specific people.
             </DialogDescription>
           </DialogHeader>
+          
+          {/* Shareable status indicator */}
+          {!isLoadingSharedDetails && (
+            <div className={`py-2 px-4 rounded-md mb-2 ${
+              isPublic || sharedEmails.length > 0 
+                ? "bg-green-50 text-green-800 border border-green-200" 
+                : "bg-yellow-50 text-yellow-800 border border-yellow-200"
+            }`}>
+              <p className="text-sm">
+                {isPublic 
+                  ? "This agent is public and can be accessed by anyone with the link." 
+                  : sharedEmails.length > 0 
+                    ? `This agent is shared with ${sharedEmails.length} ${sharedEmails.length === 1 ? "person" : "people"}.`
+                    : "This agent is private. Make it public or share with specific people to make it accessible."}
+              </p>
+            </div>
+          )}
           
           <div className="space-y-6 py-4">
             {/* Public/Private Toggle */}
@@ -947,7 +958,6 @@ const AllAgents = () => {
                   <Switch 
                     checked={isPublic} 
                     onCheckedChange={(checked) => {
-                      console.log("Switch toggled from", isPublic, "to", checked);
                       // Use simple direct API call
                       setIsPublic(checked);
                       setIsTogglingVisibility(true);
@@ -956,13 +966,11 @@ const AllAgents = () => {
                         shareAgentId!, 
                         checked ? "public" : "private"
                       ).then(response => {
-                        console.log("Toggle API response:", response);
                         // Update based on response from API
                         setIsPublic(response.visibility === "public");
                         toast.success("Agent visibility updated successfully");
                         setIsTogglingVisibility(false);
                       }).catch(error => {
-                        console.error("Error toggling visibility:", error);
                         // Revert on error
                         setIsPublic(!checked);
                         toast.error("Failed to update agent visibility");
@@ -995,11 +1003,6 @@ const AllAgents = () => {
                   ) : (
                     "Add"
                   )}
-                  {/* Debug info */}
-                  <span className="hidden">
-                    Visibility Debug - Agent: {shareAgentId}, IsPublic: {isPublic ? "true" : "false"}, 
-                    Toggle Initialized: {toggleInitialized ? "true" : "false"}
-                  </span>
                 </Button>
               </div>
               
@@ -1044,10 +1047,15 @@ const AllAgents = () => {
                 variant="outline"
                 className="w-full"
                 onClick={copyShareableUrl}
-                disabled={copyUrlSuccess}
+                disabled={copyUrlSuccess || (!isPublic && sharedEmails.length === 0) || isLoadingSharedDetails}
+                title={!isPublic && sharedEmails.length === 0 ? "Agent must be public or shared with at least one person" : ""}
               >
                 {copyUrlSuccess ? (
                   <>URL Copied</>
+                ) : isLoadingSharedDetails ? (
+                  <>Loading...</>
+                ) : !isPublic && sharedEmails.length === 0 ? (
+                  <>Not Shareable - Make Public or Add Users</>
                 ) : (
                   <>Copy Shareable URL</>
                 )}
@@ -1055,12 +1063,7 @@ const AllAgents = () => {
             </div>
           </div>
           
-          <DialogFooter className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center">
-            {/* Debug information */}
-            <div className="text-xs text-muted-foreground">
-              Visibility Debug - Agent: {shareAgentId}, IsPublic: {isPublic ? "true" : "false"}, 
-              Toggle Initialized: {toggleInitialized ? "true" : "false"}
-            </div>
+          <DialogFooter className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-end sm:items-center">
             <div className="flex space-x-2">
               <Button type="submit" onClick={shareAgentWithEmail} disabled={!emailToShare}>
                 Share

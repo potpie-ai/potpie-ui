@@ -315,6 +315,7 @@ const AssistantMessage: FC = () => {
   const threadRuntime = useThreadRuntime();
   const [isStreaming, setIsStreaming] = useState(false);
   const [text, setText] = useState((message.content[0] as any)?.text || "");
+  const [isRunning, setIsRunning] = useState(false);
 
   if (message.isLast) {
     runtime.subscribe(() => {
@@ -325,6 +326,8 @@ const AssistantMessage: FC = () => {
       setIsStreaming(
         (threadRuntime.getState().extras as any).streaming || false
       );
+      threadRuntime.getState().messages.at(-1)?.id === message.id &&
+        setIsRunning(threadRuntime.getState().isRunning);
     });
   }
 
@@ -334,7 +337,7 @@ const AssistantMessage: FC = () => {
         <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
         <AvatarFallback>P</AvatarFallback>
       </Avatar>
-      {text ? (
+      {!isRunning && text ? (
         <div>
           <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
             <MarkdownComponent content={{ text: text }} />

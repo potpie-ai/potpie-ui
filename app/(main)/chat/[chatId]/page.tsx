@@ -24,6 +24,7 @@ import { ParsingStatusEnum, planTypesEnum } from "@/lib/Constants";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "./components/Thread";
 import { PotpieRuntime } from "./runtime";
+import MinorService from "@/services/minorService";
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const [chatAccess, setChatAccess] = useState("loading");
@@ -40,6 +41,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const currentConversationId = params.chatId;
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
+  const [profilePicUrl, setProfilePicUrl] = useState("");
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -62,6 +64,15 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
     } catch (err) {
       console.error("Error during parsing:", err);
       setParsingStatus(ParsingStatusEnum.ERROR);
+    }
+  };
+
+  const fetchProfilePicture = async (userId: string) => {
+    try {
+      const profilePicture = await MinorService.getProfilePicture(userId);
+      return profilePicture;
+    } catch (error) {
+      console.error("Error fetching profile picture:", error);
     }
   };
 
@@ -114,6 +125,12 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
 
       setProjectId(info.project_ids[0]);
       setInfoLoaded(true);
+
+      if (!info.is_creator) {
+        fetchProfilePicture(info.creator_id).then((profilePicture) => {
+          setProfilePicUrl(profilePicture as string);
+        });
+      }
 
       const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
         info.project_ids[0]
@@ -183,6 +200,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               total_human_messages >=
                 (planType === planTypesEnum.PRO ? 500 : 50)
             }
+            userImageURL={profilePicUrl}
           />
         </AssistantRuntimeProvider>
       </div>

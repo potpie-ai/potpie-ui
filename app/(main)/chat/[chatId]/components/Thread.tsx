@@ -31,9 +31,14 @@ import { useAuthContext } from "@/contexts/AuthContext";
 interface ThreadProps {
   projectId: string;
   writeDisabled: boolean;
+  userImageURL: string;
 }
 
-export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
+export const Thread: FC<ThreadProps> = ({
+  projectId,
+  writeDisabled,
+  userImageURL,
+}) => {
   const runtime = useThreadRuntime();
   const [isLoading, setIsLoading] = useState(true);
 
@@ -63,7 +68,9 @@ export const Thread: FC<ThreadProps> = ({ projectId, writeDisabled }) => {
                 <div className="pb-24 bg-inherit min-w-96 w-full">
                   <ThreadPrimitive.Messages
                     components={{
-                      UserMessage: UserMessage,
+                      UserMessage: UserMessageWithURL({
+                        url: userImageURL,
+                      }),
                       AssistantMessage: AssistantMessage,
                     }}
                   />
@@ -299,7 +306,14 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
   );
 };
 
-const UserMessage: FC = () => {
+const UserMessageWithURL = ({ url }: { url: string }): FC => {
+  const res: FC = () => {
+    return <UserMessage url={url} />;
+  };
+  return res;
+};
+
+const UserMessage: FC<{ url: string }> = ({ url }) => {
   const { user } = useAuthContext();
   return (
     <div className="flex items-center justify-end w-full">
@@ -309,7 +323,7 @@ const UserMessage: FC = () => {
         </div>
       </MessagePrimitive.Root>
       <Avatar className="mr-4 rounded-md bg-transparent">
-        <AvatarImage src={user.photoURL} alt="Agent" />
+        <AvatarImage src={url != "" ? url : user.photoURL} alt="Agent" />
         <AvatarFallback>U</AvatarFallback>
       </Avatar>
     </div>

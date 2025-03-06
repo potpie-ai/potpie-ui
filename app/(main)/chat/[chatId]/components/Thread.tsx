@@ -26,6 +26,7 @@ import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 interface ThreadProps {
   projectId: string;
@@ -299,12 +300,19 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
 };
 
 const UserMessage: FC = () => {
+  const { user } = useAuthContext();
   return (
-    <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
-      <div className="bg-[#f7e6e6] text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-        <MessagePrimitive.Content />
-      </div>
-    </MessagePrimitive.Root>
+    <div className="flex items-center justify-end w-full">
+      <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
+        <div className="bg-[#f7e6e6] text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
+          <MessagePrimitive.Content />
+        </div>
+      </MessagePrimitive.Root>
+      <Avatar className="mr-4 rounded-md bg-transparent">
+        <AvatarImage src={user.photoURL} alt="Agent" />
+        <AvatarFallback>U</AvatarFallback>
+      </Avatar>
+    </div>
   );
 };
 

@@ -359,7 +359,7 @@ const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
       <Avatar className="mr-4 rounded-none bg-transparent">
-        <AvatarImage src="/images/potpie-blue.svg1" alt="Agent" />
+        <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
         <AvatarFallback className="bg-blue-500 text-white">P</AvatarFallback>
       </Avatar>
       {!isRunning && text ? (

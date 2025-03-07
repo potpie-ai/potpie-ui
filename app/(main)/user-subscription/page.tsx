@@ -28,7 +28,7 @@ const PricingPage = () => {
     },
     {
       name: 'Early-Stage',
-      price: '20',
+      price: '19',
       description: 'For startups that have raised less than 100K USD and are pre-revenue',
       features: [
         'Ready-to-use agents',

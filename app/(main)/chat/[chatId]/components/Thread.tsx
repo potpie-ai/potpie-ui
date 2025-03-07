@@ -10,7 +10,7 @@ import {
   useMessageRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import { useState, type FC } from "react";
+import { useMemo, useState, type FC } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -46,6 +46,10 @@ export const Thread: FC<ThreadProps> = ({
     setIsLoading((runtime.getState().extras as any)?.loading === true || false);
   });
 
+  let userMessage = useMemo(() => {
+    return UserMessageWithURL(userImageURL);
+  }, [userImageURL]);
+
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">
       <div className="h-full w-full bg-background">
@@ -68,7 +72,7 @@ export const Thread: FC<ThreadProps> = ({
                 <div className="pb-24 bg-inherit min-w-96 w-full">
                   <ThreadPrimitive.Messages
                     components={{
-                      UserMessage: UserMessage,
+                      UserMessage: userMessage,
                       AssistantMessage: AssistantMessage,
                     }}
                   />
@@ -306,8 +310,14 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
   );
 };
 
-const UserMessage: FC = () => {
-  const { user } = useAuthContext();
+const UserMessageWithURL = (userPhotoURL: string) => {
+  const node: FC = () => {
+    return UserMessage({ userPhotoURL: userPhotoURL });
+  };
+  return node;
+};
+
+const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
   return (
     <div className="flex items-center justify-end w-full">
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
@@ -316,8 +326,8 @@ const UserMessage: FC = () => {
         </div>
       </MessagePrimitive.Root>
       <Avatar className="mr-4 rounded-md bg-transparent">
-        <AvatarImage src={user.photoURL} alt="User" />
-        <AvatarFallback>U</AvatarFallback>
+        <AvatarImage src={userPhotoURL} alt="User" />
+        <AvatarFallback className="bg-lime-500 text-white">U</AvatarFallback>
       </Avatar>
     </div>
   );
@@ -349,8 +359,8 @@ const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
       <Avatar className="mr-4 rounded-none bg-transparent">
-        <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
-        <AvatarFallback>P</AvatarFallback>
+        <AvatarImage src="/images/potpie-blue.svg1" alt="Agent" />
+        <AvatarFallback className="bg-blue-500 text-white">P</AvatarFallback>
       </Avatar>
       {!isRunning && text ? (
         <div>

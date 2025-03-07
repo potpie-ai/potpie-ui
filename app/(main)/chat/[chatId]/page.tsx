@@ -25,6 +25,7 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "./components/Thread";
 import { PotpieRuntime } from "./runtime";
 import MinorService from "@/services/minorService";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 const Chat = ({ params }: { params: { chatId: string } }) => {
   const [chatAccess, setChatAccess] = useState("loading");
@@ -41,7 +42,9 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
   const currentConversationId = params.chatId;
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
-  const [profilePicUrl, setProfilePicUrl] = useState("");
+  const { user } = useAuthContext();
+
+  const [profilePicUrl, setProfilePicUrl] = useState(user.photoURL);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 

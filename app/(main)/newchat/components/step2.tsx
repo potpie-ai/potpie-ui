@@ -9,30 +9,26 @@ import { AppDispatch } from "@/lib/state/store";
 import { useDispatch } from "react-redux";
 import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
-import { toast } from "sonner";
-import { list_system_agents } from "@/lib/utils";
 
 interface AgentType {
   id: string;
   name: string;
   description: string;
-  status	: string
+  status: string;
 }
 
 interface Step2Props {
   projectId: string | null;
   title: string;
   setChatStep: (step: number) => void;
-  setCurrentConversationId: (id: string) => void;
-  setAgentId: (id: string) => void;
+  gotoChat: (conversation_id: string) => void;
 }
 
 const Step2: React.FC<Step2Props> = ({
   projectId,
   title,
   setChatStep,
-  setCurrentConversationId,
-  setAgentId,
+  gotoChat,
 }) => {
   const userId = auth.currentUser?.uid || "";
   const dispatch: AppDispatch = useDispatch();
@@ -58,10 +54,9 @@ const Step2: React.FC<Step2Props> = ({
         projectId,
         agentId
       );
-      dispatch(setChat({agentId: agentId}))
-      setAgentId(agentId);
+      dispatch(setChat({ agentId: agentId }));
       setChatStep(3);
-      setCurrentConversationId(response.conversation_id);
+      gotoChat(response.conversation_id);
     } catch (err) {
       console.error("Unable to create conversation:", err);
       setChatStep(2);

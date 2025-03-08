@@ -9,6 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^1.1.14",
+    "@assistant-ui/react": "^0.8.0",
+    "@assistant-ui/react-ai-sdk": "^0.8.0",
+    "@assistant-ui/react-markdown": "^0.8.0",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.5",
     "@formbricks/js": "^3.0.1",
@@ -34,6 +38,7 @@
     "@tanstack/react-query": "^5.39.0",
     "@tanstack/react-table": "^8.17.3",
     "@types/uuid": "^9.0.8",
+    "ai": "^4.1.46",
     "axios": "^1.7.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
@@ -60,6 +65,7 @@
     "redux": "^5.0.1",
     "redux-persist": "^6.0.0",
     "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
     "sharp": "^0.33.4",
     "sonner": "^1.4.41",
     "tailwind-merge": "^2.3.0",

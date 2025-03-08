@@ -19,8 +19,16 @@
     ],
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+    "target": "ES2017"
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "components/canvas/node/ColorSelectorNode.js", "lib/state/flow/flow.Slicets"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "components/canvas/node/ColorSelectorNode.js",
+    "lib/state/flow/flow.Slicets"
+  ],
   "exclude": ["node_modules"]
 }

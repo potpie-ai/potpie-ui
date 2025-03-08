@@ -2,7 +2,6 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 
 ## Getting Started
 
-
 First, run the development server:
 
 ```bash
@@ -15,12 +14,35 @@ pnpm dev
 bun dev
 ```
 
-
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+
+## Local Development Mode
+
+This project supports a local development mode that allows you to run the app without external service dependencies. The app automatically detects if configuration for these services is missing and falls back to mock implementations:
+
+- **Firebase Authentication**: Uses a mock user with predetermined credentials
+- **PostHog Analytics**: Uses a no-op implementation
+- **Formbricks Bug Reporting**: Disabled in local mode
+
+### How to Use Local Development Mode
+
+1. Create a `.env.local` file without the following environment variables:
+   - Firebase: `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, etc.
+   - PostHog: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`
+   - Formbricks: `NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID`, `NEXT_PUBLIC_FORMBRICKS_API_HOST`
+
+2. Run the application normally with:
+   ```bash
+   npm run dev
+   ```
+
+3. The app will automatically detect missing configurations and use mock implementations.
+
+4. You'll be automatically logged in with a mock user (uid: 'local-dev-user', email: 'local-dev@example.com')
 
 ## Learn More
 

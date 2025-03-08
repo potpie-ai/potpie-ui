@@ -479,7 +479,7 @@ const AllAgents = () => {
                   <Button
                     variant="outline"
                     onClick={() =>
-                      window.open("https://potpie.ai/pricing", "_blank")
+                      window.open(`${window.location.origin}/user-subscription`, "_blank")
                     }
                   >
                     Upgrade

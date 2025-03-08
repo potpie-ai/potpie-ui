@@ -1,4 +1,4 @@
-import Navbar from "../chat/components/Navbar";
+import Navbar from "../chat/[chatId]/components/Navbar";
 
 export default function RootLayout({
   children,

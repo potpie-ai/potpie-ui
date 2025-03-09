@@ -33,14 +33,20 @@ export const AuthContextProvider = ({ children }: { children: React.ReactNode })
 
   React.useEffect(() => {
     if (!isFirebaseActive) {
-      // Use mock user for local development
+      // Use mock user for local development only when Firebase is actually disabled
+      console.log("AuthContext: Using mock user for local development");
       setUser(generateMockUser());
       setLoading(false);
       return () => {};
     }
 
-    // Use real Firebase auth for production
+    // Use real Firebase auth when Firebase is enabled or forced
+    console.log("AuthContext: Using REAL Firebase authentication");
     const unsubscribe = onIdTokenChanged(auth, (firebaseUser) => {
+      console.log(`AuthContext: onIdTokenChanged fired, user: ${firebaseUser ? 'found' : 'null'}`);
+      if (firebaseUser) {
+        console.log(`AuthContext: User ID: ${firebaseUser.uid}`);
+      }
       setUser(firebaseUser);
       setLoading(false);
     });

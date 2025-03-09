@@ -9,23 +9,51 @@ export const list_system_agents = ["codebase_qna_agent","debugging_agent","unit_
 
 // Check if required environment variables are present for a service
 export const isServiceEnabled = (serviceEnvVars: string[]): boolean => {
-  // Return false if any required env var is missing
-  return !serviceEnvVars.some(envVar => 
-    process.env[envVar] === undefined || 
-    process.env[envVar] === '' || 
-    process.env[envVar] === null
+  // Return true if ALL required env vars are present (not undefined, empty, or null)
+  return serviceEnvVars.every(envVar => 
+    process.env[envVar] !== undefined && 
+    process.env[envVar] !== '' && 
+    process.env[envVar] !== null
   );
 };
 
 // Check if Firebase is enabled
 export const isFirebaseEnabled = (): boolean => {
-  const requiredVars = [
-    'NEXT_PUBLIC_FIREBASE_API_KEY',
-    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-    'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-    'NEXT_PUBLIC_FIREBASE_APP_ID'
-  ];
-  return isServiceEnabled(requiredVars);
+  // In Next.js, environment variables can be accessed in different ways
+  // depending on whether code is running server-side or client-side
+  
+  // Direct check of each environment variable
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
+  
+  // Log environment variables for debugging (without revealing values)
+  console.log("Checking Firebase environment variables:");
+  console.log(`- NEXT_PUBLIC_FIREBASE_API_KEY: ${!!apiKey ? 'SET' : 'NOT SET'}`);
+  console.log(`- NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${!!authDomain ? 'SET' : 'NOT SET'}`);
+  console.log(`- NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${!!projectId ? 'SET' : 'NOT SET'}`);
+  console.log(`- NEXT_PUBLIC_FIREBASE_APP_ID: ${!!appId ? 'SET' : 'NOT SET'}`);
+  
+  // Direct check of all required variables
+  const allVarsExist = !!(apiKey && authDomain && projectId && appId);
+  
+  // Skip the helper check which is causing inconsistencies
+  console.log(`Firebase enabled (direct check): ${allVarsExist}`);
+  
+  // Safe check for client-side environment
+  if (typeof window !== 'undefined') {
+    // Try to get cached result if available
+    const cachedResult = (window as any).__firebaseEnabled;
+    if (cachedResult !== undefined) {
+      return cachedResult;
+    }
+    
+    // Store the result in a global cache to ensure consistency
+    (window as any).__firebaseEnabled = allVarsExist;
+  }
+  
+  return allVarsExist;
 };
 
 // Check if PostHog is enabled
@@ -48,6 +76,14 @@ export const isFormbricksEnabled = (): boolean => {
 
 // Generate a mock user for development mode
 export const generateMockUser = () => {
+  // Check if Firebase is enabled
+  const firebaseEnabled = isFirebaseEnabled();
+  
+  // Check if we're using mock Firebase (set in Firebase-config.ts)
+  const usingMockFirebase = typeof window !== 'undefined' && (window as any).__usingMockFirebase === true;
+  
+  console.log(`generateMockUser: Firebase enabled: ${firebaseEnabled}, Using mock Firebase: ${usingMockFirebase}`);
+  
   return {
     uid: 'local-dev-user',
     email: 'local-dev@example.com',
@@ -69,9 +105,15 @@ export const generateMockUser = () => {
     refreshToken: 'mock-refresh-token',
     tenantId: null,
     delete: async () => Promise.resolve(),
-    getIdToken: async () => 'mock-id-token',
+    getIdToken: async () => {
+      console.log('Mock user getIdToken called');
+      // In development mode, we'll return a mock token that will be recognized as such
+      // and will cause the Authorization header to be skipped
+      console.log('Returning mock token identifier for development');
+      return 'mock-token-for-local-development';
+    },
     getIdTokenResult: async () => ({
-      token: 'mock-id-token',
+      token: 'mock-token-for-local-development',
       authTime: new Date().toISOString(),
       expirationTime: new Date(Date.now() + 3600000).toISOString(),
       issuedAtTime: new Date().toISOString(),

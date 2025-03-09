@@ -8,6 +8,7 @@ import {
   XCircle,
   Info,
   Loader2,
+  Folder,
 } from "lucide-react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,6 +54,8 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import { ParsingStatusEnum } from "@/lib/Constants";
+import axios from "axios";
+import getHeaders from "@/app/utils/headers.util";
 
 const repoLinkSchema = z.object({
   repoLink: z
@@ -79,7 +82,10 @@ const Step1: React.FC<Step1Props> = ({
 
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [isPublicRepoDailog, setIsPublicRepoDailog] = useState(false);
+  const [isLocalRepoDailog, setIsLocalRepoDailog] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [localRepoPath, setLocalRepoPath] = useState("");
+  const [localBranchName, setLocalBranchName] = useState("main");
   const [isValidLink, setIsValidLink] = useState(false);
   const [linkedRepoName, setLinkedRepoName] = useState<string | null>(null);
   const [isParseDisabled, setIsParseDisabled] = useState(false);
@@ -135,6 +141,48 @@ const Step1: React.FC<Step1Props> = ({
     } catch (err) {
       console.error("Error during parsing:", err);
       setParsingStatus(ParsingStatusEnum.ERROR);
+    }
+  };
+
+  const parseLocalRepo = async (repo_path: string, branch_name: string) => {
+    setParsingStatus("loading");
+
+    try {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      
+      dispatch(setRepoName(repo_path));
+      dispatch(setBranchName(branch_name));
+      
+      const parseResponse = await axios.post(
+        `${baseUrl}/api/v1/parse`,
+        { repo_path, branch_name },
+        { headers }
+      );
+      
+      const projectId = parseResponse.data.project_id;
+      const initialStatus = parseResponse.data.status;
+
+      if (projectId) {
+        setProjectId(projectId);
+      }
+
+      if (initialStatus === ParsingStatusEnum.READY) {
+        setParsingStatus(ParsingStatusEnum.READY);
+        setChatStep(2);
+        return;
+      }
+
+      await BranchAndRepositoryService.pollParsingStatus(
+        projectId,
+        initialStatus,
+        setParsingStatus,
+        setChatStep
+      );
+    } catch (error) {
+      console.error("Error during parsing local repo:", error);
+      setParsingStatus(ParsingStatusEnum.ERROR);
+      toast.error("Error parsing local repository");
     }
   };
 
@@ -270,6 +318,18 @@ const Step1: React.FC<Step1Props> = ({
     }
   }, [inputValue, isPublicRepoDailog]);
 
+  useEffect(() => {
+    if(isLocalRepoDailog){
+      // Simple validation for local repo path - just check if it's not empty
+      setIsValidLink(!!localRepoPath && !!localBranchName);
+    }
+  }, [localRepoPath, localBranchName, isLocalRepoDailog]);
+
+  // Debug searchValue changes
+  useEffect(() => {
+    console.log("searchValue changed:", searchValue);
+  }, [searchValue]);
+
   return (
     <div className="text-muted">
       <h1 className="text-lg">Select a repository and branch</h1>
@@ -280,6 +340,7 @@ const Step1: React.FC<Step1Props> = ({
         {UserRepositorysLoading ? (
           <Skeleton className="w-[220px] h-10" />
         ) : (
+          <>
           <Popover open={repoOpen} onOpenChange={setRepoOpen}>
             <PopoverTrigger asChild className="w-[220px]">
               {UserRepositorys?.length === 0 || !repoName ? (
@@ -298,10 +359,17 @@ const Step1: React.FC<Step1Props> = ({
                   className="flex gap-3 items-center font-semibold justify-start"
                   variant="outline"
                 >
-                  <Github
-                    className="h-4 w-4 text-[#7A7A7A]"
-                    strokeWidth={1.5}
-                  />
+                  {repoName.startsWith('/') || repoName.includes(':\\') || repoName.includes(':/') ? (
+                    <Folder
+                      className="h-4 w-4 text-[#7A7A7A]"
+                      strokeWidth={1.5}
+                    />
+                  ) : (
+                    <Github
+                      className="h-4 w-4 text-[#7A7A7A]"
+                      strokeWidth={1.5}
+                    />
+                  )}
                   <span className="truncate text-ellipsis whitespace-nowrap">
                     {repoName}
                   </span>
@@ -312,8 +380,10 @@ const Step1: React.FC<Step1Props> = ({
               <Command defaultValue={defaultRepo ?? undefined}>
                 <CommandInput
                   value={searchValue}
-                  onValueChange={(e) => setSearchValue(e)}
-                  placeholder="Search repo or paste link"
+                  onValueChange={(e) => {
+                    setSearchValue(e);
+                  }}
+                  placeholder="Search repo or paste local path (e.g., /Users/...)"
                 />
                 <CommandList>
                   <CommandEmpty>
@@ -323,8 +393,18 @@ const Step1: React.FC<Step1Props> = ({
                         className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
                       >
                           <Plus className="size-4" /> <p> Public Repository</p>
-                    
                       </Button>
+                    ) : searchValue && searchValue.trim() !== "" && 
+                        (searchValue.startsWith('/') || searchValue.includes(':\\') || searchValue.includes(':/')) && 
+                        process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
+                      <Button
+                        onClick={() => {setIsLocalRepoDailog(true);setLocalRepoPath(searchValue)}}
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                      >
+                          <Plus className="size-4" /> <p> Local Repository</p>
+                      </Button>
+                    ) : searchValue && searchValue.trim() !== "" ? (
+                      "No repositories found."
                     ) : (
                       "No results found."
                     )}
@@ -362,6 +442,19 @@ const Step1: React.FC<Step1Props> = ({
                     </span>
                   </CommandItem>
                   <CommandSeparator className="my-1" />
+                  {process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
+                    <>
+                      <CommandItem
+                        value="local"
+                        onSelect={() => setIsLocalRepoDailog(true)}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Folder className="size-4" /> Local Repository
+                        </span>
+                      </CommandItem>
+                      <CommandSeparator className="my-1" />
+                    </>
+                  )}
                   <CommandItem>
                     <span
                       className="flex items-center gap-2"
@@ -377,6 +470,9 @@ const Step1: React.FC<Step1Props> = ({
               </Command>
             </PopoverContent>
           </Popover>
+          
+          {/* No separate local repo button */}
+          </>
         )}
         {UserBranchLoading ? (
           <Skeleton className="w-[220px] h-10" />
@@ -542,27 +638,38 @@ const Step1: React.FC<Step1Props> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={isPublicRepoDailog} onOpenChange={setIsPublicRepoDailog}>
+      
+      <Dialog open={isLocalRepoDailog} onOpenChange={setIsLocalRepoDailog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Parse Public Repository</DialogTitle>
+            <DialogTitle>Import Local Repository</DialogTitle>
             <DialogDescription>
-              Paste the link to your public repository
+              Confirm the path to your local repository and specify the branch name
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="link" className="text-right">
-                Link
+              <Label htmlFor="repo_path" className="text-right">
+                Repository Path
               </Label>
               <Input
-                id="link"
+                id="repo_path"
                 className="col-span-3"
-                value={inputValue}
-                placeholder="https://github.com/username/repo"
-                onChange={(e) => {
-                  setInputValue(e.target.value);
-                }}
+                value={localRepoPath}
+                placeholder="path/to/local/repo"
+                onChange={(e) => setLocalRepoPath(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="branch_name" className="text-right">
+                Branch Name
+              </Label>
+              <Input
+                id="branch_name"
+                className="col-span-3"
+                value={localBranchName}
+                placeholder="main"
+                onChange={(e) => setLocalBranchName(e.target.value)}
               />
             </div>
           </div>
@@ -570,14 +677,15 @@ const Step1: React.FC<Step1Props> = ({
             <Button
               type="submit"
               onClick={() => {
-                if (isValidLink) {
-                  PublicRepoRefetch();
+                if (localRepoPath && localBranchName) {
+                  parseLocalRepo(localRepoPath, localBranchName);
+                  setIsLocalRepoDailog(false);
                 }
               }}
-              disabled={PublicRepoLoading || !isValidLink}
+              disabled={!localRepoPath || !localBranchName}
             >
               <span>
-                {PublicRepoLoading && (
+                {parsingStatus === "loading" && (
                   <Loader className="mr-2 h-4 w-4 animate-spin " />
                 )}
               </span>{" "}

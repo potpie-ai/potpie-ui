@@ -2,6 +2,12 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { ParsingStatusEnum } from "@/lib/Constants";
 
+// Define a type for the headers
+type Headers = {
+    Authorization?: string;
+    [key: string]: string | undefined;
+};
+
 export default class BranchAndRepositoryService {
 
     static async parseRepo(repo_name: string, branch_name: string) {
@@ -36,15 +42,29 @@ export default class BranchAndRepositoryService {
     }
 
     static async getUserRepositories() {
-        const headers = await getHeaders();
+        const headers: Headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+        console.log("BranchAndRepositoryService: Getting user repositories");
+        console.log(`BranchAndRepositoryService: Base URL: ${baseUrl}`);
+        
+        console.log(`BranchAndRepositoryService: Headers: ${JSON.stringify({
+            ...headers,
+            Authorization: headers.Authorization ? `${headers.Authorization.substring(0, 15)}...` : 'Not set'
+        })}`);
 
         try {
             const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
                 headers,
             });
+            console.log("BranchAndRepositoryService: Successfully fetched user repositories");
             return response.data.repositories;
         } catch (error) {
+            console.error("BranchAndRepositoryService: Error fetching user repositories:", error);
+            if (axios.isAxiosError(error)) {
+                console.error(`BranchAndRepositoryService: Status: ${error.response?.status}, Message: ${error.message}`);
+                console.error(`BranchAndRepositoryService: Response data:`, error.response?.data);
+            }
             throw new Error("Error fetching user repositories");
         }
     }

@@ -30,14 +30,14 @@ This project supports a local development mode that allows you to run the app wi
 
 ### How to Use Local Development Mode
 
-1. Create a `.env.local` file without the following environment variables:
+1. Create a `.env` file without the following environment variables:
    - Firebase: `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, etc.
    - PostHog: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`
    - Formbricks: `NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID`, `NEXT_PUBLIC_FORMBRICKS_API_HOST`
 
 2. Run the application normally with:
    ```bash
-   npm run dev
+   pnpm run dev
    ```
 
 3. The app will automatically detect missing configurations and use mock implementations.

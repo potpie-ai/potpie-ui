@@ -4,10 +4,10 @@
   </a>
 </p>
 
-<h1 align="center">Potpie: Prompt-To-Agent</h1>
+<h1 align="center">Prompt-To-Agent: Create custom engineering agents for your code</h1>
 
 <p align="center">
-  <strong>Create custom engineering agents for your code</strong>
+  <strong>User Interface</strong>
 </p>
 
 <p align="center">

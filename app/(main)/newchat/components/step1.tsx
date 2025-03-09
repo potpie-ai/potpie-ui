@@ -243,7 +243,7 @@ const Step1: React.FC<Step1Props> = ({
       if (!match) {
         setLinkedRepoName(null);
         setIsValidLink(false);
-        setIsPublicRepoDailog(false);
+        handleSetPublicRepoDialog(false);
         toast.error("Invalid repository URL. Please try again.");
         return "Invalid repository URL.";
       }
@@ -252,7 +252,7 @@ const Step1: React.FC<Step1Props> = ({
   
       try {
         if(linkedRepoName === ownerRepo){
-        setIsPublicRepoDailog(false);
+        handleSetPublicRepoDialog(false);
         setIsValidLink(true);
           return "Repo is public";
         }
@@ -268,11 +268,11 @@ const Step1: React.FC<Step1Props> = ({
           setLinkedRepoName(null);
           toast.error("Repo is not public. Try linking a private repo.");
         }
-        setIsPublicRepoDailog(false);
+        handleSetPublicRepoDialog(false);
         return response;
       } catch (error: any) {
         setLinkedRepoName(null);
-        setIsPublicRepoDailog(false);
+        handleSetPublicRepoDialog(false);
         
         openPopup();
        toast.error("Repo is not public try linking new private repo...")
@@ -329,6 +329,15 @@ const Step1: React.FC<Step1Props> = ({
   useEffect(() => {
     console.log("searchValue changed:", searchValue);
   }, [searchValue]);
+
+  // Function to safely set the public repo dialog state
+  const handleSetPublicRepoDialog = (value: boolean) => {
+    // Only allow opening the dialog if we're not on localhost
+    if (value && process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost')) {
+      return;
+    }
+    setIsPublicRepoDailog(value);
+  };
 
   return (
     <div className="text-muted">
@@ -387,9 +396,9 @@ const Step1: React.FC<Step1Props> = ({
                 />
                 <CommandList>
                   <CommandEmpty>
-                    {searchValue.startsWith("https://github.com/") ? (
+                    {searchValue.startsWith("https://github.com/") && !process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
                       <Button
-                        onClick={() => {setIsPublicRepoDailog(true);setInputValue(searchValue)}}
+                        onClick={() => {handleSetPublicRepoDialog(true);setInputValue(searchValue)}}
                         className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
                       >
                           <Plus className="size-4" /> <p> Public Repository</p>
@@ -433,15 +442,19 @@ const Step1: React.FC<Step1Props> = ({
                     ))}
                   </CommandGroup>
                   <CommandSeparator className="my-1" />
-                  <CommandItem
-                    value="public"
-                    onSelect={() => setIsPublicRepoDailog(true)}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Plus className="size-4" /> Public Repository
-                    </span>
-                  </CommandItem>
-                  <CommandSeparator className="my-1" />
+                  {!process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
+                    <>
+                      <CommandItem
+                        value="public"
+                        onSelect={() => handleSetPublicRepoDialog(true)}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Plus className="size-4" /> Public Repository
+                        </span>
+                      </CommandItem>
+                      <CommandSeparator className="my-1" />
+                    </>
+                  )}
                   {process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
                     <>
                       <CommandItem
@@ -455,17 +468,19 @@ const Step1: React.FC<Step1Props> = ({
                       <CommandSeparator className="my-1" />
                     </>
                   )}
-                  <CommandItem>
-                    <span
-                      className="flex items-center gap-2"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        openPopup();
-                      }}
-                    >
-                      <Plus className="size-4" /> Link new repository
-                    </span>
-                  </CommandItem>
+                  {!process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
+                    <CommandItem>
+                      <span
+                        className="flex items-center gap-2"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          openPopup();
+                        }}
+                      >
+                        <Plus className="size-4" /> Link new repository
+                      </span>
+                    </CommandItem>
+                  )}
                 </CommandList>
               </Command>
             </PopoverContent>
@@ -596,7 +611,7 @@ const Step1: React.FC<Step1Props> = ({
           </Button>
         </div>
       )}
-      <Dialog open={isPublicRepoDailog} onOpenChange={setIsPublicRepoDailog}>
+      <Dialog open={isPublicRepoDailog} onOpenChange={handleSetPublicRepoDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Parse Public Repository</DialogTitle>

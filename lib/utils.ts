@@ -28,18 +28,8 @@ export const isFirebaseEnabled = (): boolean => {
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
   
-  // Log environment variables for debugging (without revealing values)
-  console.log("Checking Firebase environment variables:");
-  console.log(`- NEXT_PUBLIC_FIREBASE_API_KEY: ${!!apiKey ? 'SET' : 'NOT SET'}`);
-  console.log(`- NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${!!authDomain ? 'SET' : 'NOT SET'}`);
-  console.log(`- NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${!!projectId ? 'SET' : 'NOT SET'}`);
-  console.log(`- NEXT_PUBLIC_FIREBASE_APP_ID: ${!!appId ? 'SET' : 'NOT SET'}`);
-  
   // Direct check of all required variables
   const allVarsExist = !!(apiKey && authDomain && projectId && appId);
-  
-  // Skip the helper check which is causing inconsistencies
-  console.log(`Firebase enabled (direct check): ${allVarsExist}`);
   
   // Safe check for client-side environment
   if (typeof window !== 'undefined') {
@@ -82,8 +72,6 @@ export const generateMockUser = () => {
   // Check if we're using mock Firebase (set in Firebase-config.ts)
   const usingMockFirebase = typeof window !== 'undefined' && (window as any).__usingMockFirebase === true;
   
-  console.log(`generateMockUser: Firebase enabled: ${firebaseEnabled}, Using mock Firebase: ${usingMockFirebase}`);
-  
   return {
     uid: 'local-dev-user',
     email: 'local-dev@example.com',
@@ -106,10 +94,8 @@ export const generateMockUser = () => {
     tenantId: null,
     delete: async () => Promise.resolve(),
     getIdToken: async () => {
-      console.log('Mock user getIdToken called');
       // In development mode, we'll return a mock token that will be recognized as such
       // and will cause the Authorization header to be skipped
-      console.log('Returning mock token identifier for development');
       return 'mock-token-for-local-development';
     },
     getIdTokenResult: async () => ({

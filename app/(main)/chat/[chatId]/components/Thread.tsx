@@ -4,7 +4,6 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
-  useAssistantRuntime,
   useComposerRuntime,
   useMessage,
   useMessageRuntime,
@@ -26,7 +25,6 @@ import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
-import { useAuthContext } from "@/contexts/AuthContext";
 
 interface ThreadProps {
   projectId: string;
@@ -151,7 +149,7 @@ const CustomMarkdown = ({ content }: { content: string }) => {
 
   return (
     <ReactMarkdown
-      className="markdown-content [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
+      className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
       components={{
         code: ({ children }) => (
           <span className="whitespace-pre-wrap">
@@ -180,7 +178,7 @@ const MarkdownComponent = (content: any) => {
               <CustomMarkdown content={section.content} />
             )}
             {section.type === "code" && (
-              <div className="pb-4 text-xs">
+              <div className="pb-4 text-xs max-w-4xl">
                 <MyCodeBlock
                   code={section.content}
                   language={section.language || "json"}

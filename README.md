@@ -11,15 +11,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/potpie-ai/potpie-ui/stargazers">
+  <a href="https://github.com/potpie-ai/potpie/stargazers">
     <img src="https://img.shields.io/github/stars/potpie-ai/potpie-ui" alt="Stars" />
   </a>
-  <a href="https://discord.gg/k22f6Euenk">
-    <img src="https://img.shields.io/discord/1234567890" alt="Discord" />
-  </a>
-  <a href="https://twitter.com/potpiedotai">
+    <a href="https://twitter.com/potpiedotai">
     <img src="https://img.shields.io/twitter/follow/potpiedotai?style=social" alt="Twitter" />
   </a>
+<br/>
+<a href="https://discord.gg/ryk5CMD5v6">
+    <img src="https://img.shields.io/badge/Join%20our-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord">
+</a>
+
+
 </p>
 
 <p align="center">

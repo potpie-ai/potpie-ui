@@ -45,11 +45,9 @@ This repository contains the User Interface for the Potpie platform.
 
 ## ✨ Features
 
-- **Custom AI Agents**: Create agents tailored to your specific codebase
-- **Code Analysis**: Automated analysis of your code structure and dependencies
-- **Testing Assistance**: Help with generating and running tests
-- **Development Support**: Aid in feature development and bug fixing
-- **Knowledge Graph**: Build a comprehensive understanding of your code relationships
+- **Custom AI Agents**: Create agents tailored to your specific codebase from a single prompt
+- **Pre-Built Agents**: Choose from available list of Q&A, Debugging, Unit Test, Integration Test, Low Level Design, Code Generation Agents
+- **Chat**: Easy to use chat interface to interact with your agents with streaming support.
 
 ## 🏁 Quick Start
 

@@ -74,7 +74,7 @@ export function AppSidebar() {
     if (!usageLoading) {
       dispatch(setTotalHumanMessages(userUsage));
     }
-  }, [usageLoading]);
+  }, [usageLoading, dispatch, userUsage]);
 
   // useEffect(() => {
   //   if (!subscriptionLoading) {

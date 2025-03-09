@@ -178,7 +178,7 @@ const MarkdownComponent = (content: any) => {
               <CustomMarkdown content={section.content} />
             )}
             {section.type === "code" && (
-              <div className="pb-4 text-xs">
+              <div className="pb-4 text-xs max-w-4xl">
                 <MyCodeBlock
                   code={section.content}
                   language={section.language || "json"}

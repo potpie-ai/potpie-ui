@@ -36,14 +36,31 @@ export default class AgentService {
     }
   }
 
-  static async getAgentList() {
+  static async getAgentList(includePublic = false, includeShared = false) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
+      console.log("Fetching agent list with params:", { includePublic, includeShared });
       const response: any = await axios.get(
         `${baseUrl}/api/v1/list-available-agents/`,
-        { params: { list_system_agents: false }, headers: headers }
+        { 
+          params: { 
+            list_system_agents: false,
+            include_public: includePublic,
+            include_shared: includeShared 
+          }, 
+          headers: headers 
+        }
       );
+      console.log("Agent list response:", response.data);
+      
+      // Log visibility information for each agent
+      if (response.data && Array.isArray(response.data)) {
+        response.data.forEach((agent: any) => {
+          console.log(`Agent ${agent.id} (${agent.name}) visibility: ${agent.visibility}`);
+        });
+      }
+      
       return response.data;
     } catch (error) {
       throw new Error("Error fetching agent types");
@@ -144,6 +161,82 @@ export default class AgentService {
     } catch (error) {
       console.error("Error fetching agent details:", error);
       throw new Error("Error fetching agent details");
+    }
+  }
+
+  // New methods for agent sharing functionality
+  static async setAgentVisibility(agentId: string, visibility: "private" | "public" | "shared") {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    try {
+      console.log(`Setting agent ${agentId} visibility to:`, visibility);
+      const response = await axios.post(
+        `${baseUrl}/api/v1/custom-agents/agents/share`,
+        {
+          agent_id: agentId,
+          visibility: visibility
+        },
+        { headers }
+      );
+      console.log("Set visibility API response:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("API Error updating agent visibility:", error);
+      throw new Error("Error updating agent visibility");
+    }
+  }
+
+  static async shareAgentWithEmail(agentId: string, email: string) {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    try {
+      const response = await axios.post(
+        `${baseUrl}/api/v1/custom-agents/agents/share`,
+        {
+          agent_id: agentId,
+          visibility: "shared",
+          shared_with_email: email
+        },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error("Error sharing agent with email");
+    }
+  }
+
+  static async revokeAgentAccess(agentId: string, email: string) {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    try {
+      const response = await axios.post(
+        `${baseUrl}/api/v1/custom-agents/agents/revoke-access`,
+        {
+          agent_id: agentId,
+          user_email: email
+        },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error("Error revoking agent access");
+    }
+  }
+
+  static async getSharedAgentsDetails(agentId: string) {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    try {
+      console.log(`Fetching sharing details for agent ${agentId}`);
+      const response = await axios.get(
+        `${baseUrl}/api/v1/custom-agents/agents/${agentId}/shares`,
+        { headers }
+      );
+      console.log("Agent sharing details API response:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("API Error fetching shared agent details:", error);
+      throw new Error("Error fetching shared agent details");
     }
   }
 }

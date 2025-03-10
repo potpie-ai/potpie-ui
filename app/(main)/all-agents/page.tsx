@@ -18,6 +18,8 @@ import {
   AlertCircle,
   Trash,
   Copy,
+  Share2,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -53,6 +55,7 @@ import { RootState } from "@/lib/state/store";
 import MinorService from "@/services/minorService";
 import { planTypesEnum } from "@/lib/Constants";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { Switch } from "@/components/ui/switch";
 
 const AllAgents = () => {
   const { user } = useAuthContext();
@@ -81,6 +84,16 @@ const AllAgents = () => {
   const [agentPrompt, setAgentPrompt] = useState("");
   const [generatedAgent, setGeneratedAgent] = useState<any>(null);
   const [isCreating, setIsCreating] = useState(false);
+  
+  // Share agent modal state
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareAgentId, setShareAgentId] = useState<string | null>(null);
+  const [isPublic, setIsPublic] = useState(false);
+  const [toggleInitialized, setToggleInitialized] = useState(false);
+  const [emailToShare, setEmailToShare] = useState("");
+  const [sharedEmails, setSharedEmails] = useState<string[]>([]);
+  const [isLoadingSharedDetails, setIsLoadingSharedDetails] = useState(false);
+  const [copyUrlSuccess, setCopyUrlSuccess] = useState(false);
 
   const router = useRouter();
 
@@ -119,6 +132,16 @@ const AllAgents = () => {
       return response;
     },
   });
+  
+  // Effect to update isPublic state whenever shareAgentId changes
+  useEffect(() => {
+    if (shareAgentId && data) {
+      const agentData = data.find((agent: any) => agent.id === shareAgentId);
+      if (agentData && (agentData as any).visibility !== undefined) {
+        setIsPublic((agentData as any).visibility === "public");
+      }
+    }
+  }, [shareAgentId, data]);
 
   useEffect(() => {
     if (!isLoading && data && data.length > 0) {
@@ -142,6 +165,29 @@ const AllAgents = () => {
       handler.clear();
     };
   }, [searchTerm]);
+  
+  // Function to fetch agent sharing details
+  const fetchAgentSharingDetails = async (agentId: string) => {
+    if (!agentId) return;
+    
+    setIsLoadingSharedDetails(true);
+    try {
+      const response = await AgentService.getSharedAgentsDetails(agentId);
+      
+      // Update state with the response values
+      setIsPublic(response.visibility === "public");
+      setSharedEmails(response.shared_with || []);
+      
+      // Mark toggle as initialized with actual data from API
+      setToggleInitialized(true);
+      
+      return response; // Return response for further processing
+    } catch (error) {
+      toast.error("Failed to load sharing details");
+    } finally {
+      setIsLoadingSharedDetails(false);
+    }
+  };
 
   const deleteCustomAgentForm = useMutation({
     mutationFn: async (agentId: string) => {
@@ -231,6 +277,49 @@ const AllAgents = () => {
       toast.error("Failed to create agent. Please try again.");
     },
   });
+  
+  // Loading state for visibility toggle
+  const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
+  
+  // Mutation for sharing agent with email
+  const shareWithEmailMutation = useMutation({
+    mutationFn: async ({ agentId, email }: { agentId: string; email: string }) => {
+      return AgentService.shareAgentWithEmail(agentId, email);
+    },
+    onSuccess: (response) => {
+      toast.success("Agent shared successfully");
+      setEmailToShare("");
+      // Update shared emails list from response if available
+      if (response && response.shared_with) {
+        setSharedEmails(response.shared_with);
+      } else {
+        // Fallback to fetching details if response doesn't contain shared_with
+        fetchAgentSharingDetails(shareAgentId!);
+      }
+    },
+    onError: () => {
+      toast.error("Failed to share agent");
+    },
+  });
+  
+  // Mutation for revoking access to agent
+  const revokeAccessMutation = useMutation({
+    mutationFn: async ({ agentId, email }: { agentId: string; email: string }) => {
+      return AgentService.revokeAgentAccess(agentId, email);
+    },
+    onSuccess: (response, variables) => {
+      toast.success("Access revoked successfully");
+      
+      // Optimistically update the UI by removing the email
+      setSharedEmails(prev => prev.filter(e => e !== variables.email));
+      
+      // Then fetch full details to ensure consistency
+      fetchAgentSharingDetails(shareAgentId!);
+    },
+    onError: () => {
+      toast.error("Failed to revoke access");
+    },
+  });
 
   const handleCreateAgent = async () => {
     if (!agentPrompt.trim()) {
@@ -260,6 +349,77 @@ const AllAgents = () => {
   const copyAgentId = (id: string) => {
     navigator.clipboard.writeText(id);
     toast.success("Agent ID copied to clipboard");
+  };
+  
+  // Helper function to refresh agent sharing details
+  const refreshAgentSharingDetails = () => {
+    if (shareAgentId) {
+      fetchAgentSharingDetails(shareAgentId);
+    }
+  };
+  
+  // Function to share agent with email
+  const shareAgentWithEmail = () => {
+    if (!shareAgentId || !emailToShare.trim()) return;
+    
+    // Improved email validation
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(emailToShare)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    
+    // Check if email already exists in the list
+    if (sharedEmails.includes(emailToShare.trim())) {
+      toast.error("This email has already been added");
+      return;
+    }
+    
+    // Optimistically update UI
+    const emailToAdd = emailToShare.trim();
+    setSharedEmails(prev => [...prev, emailToAdd]);
+    
+    // Call the API
+    shareWithEmailMutation.mutate({
+      agentId: shareAgentId,
+      email: emailToAdd
+    }, {
+      onError: () => {
+        // Revert on error
+        setSharedEmails(prev => prev.filter(email => email !== emailToAdd));
+      }
+    });
+  };
+  
+  // Function to revoke access to agent
+  const revokeAccess = (email: string) => {
+    if (!shareAgentId) return;
+    
+    revokeAccessMutation.mutate({
+      agentId: shareAgentId,
+      email: email
+    });
+  };
+  
+  // Function to copy shareable URL
+  const copyShareableUrl = () => {
+    if (!shareAgentId) return;
+    
+    // Don't copy if agent is not public and has no shared emails
+    if (!isPublic && sharedEmails.length === 0) {
+      toast.error("Agent must be public or shared with at least one person to be shareable");
+      return;
+    }
+    
+    const baseUrl = window.location.origin;
+    const shareableUrl = `${baseUrl}/shared-agent?agent_id=${shareAgentId}`;
+    
+    navigator.clipboard.writeText(shareableUrl);
+    setCopyUrlSuccess(true);
+    toast.success("Shareable URL copied to clipboard");
+    
+    // Reset success state after 2 seconds
+    setTimeout(() => setCopyUrlSuccess(false), 2000);
   };
 
   return (
@@ -597,6 +757,9 @@ const AllAgents = () => {
                     <CardTitle className="text-lg text-muted flex gap-2 items-center max-w-[380px]">
                       <div className="truncate">{content.name}</div>
                       <Bot className="flex-shrink-0" />
+                      {(content as any).visibility === "public" && (
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Public</span>
+                      )}
                     </CardTitle>
                   </CardHeader>
 
@@ -616,6 +779,42 @@ const AllAgents = () => {
                       title="Copy Agent ID"
                     >
                       <Copy className="size-5" />
+                    </Button>
+                    
+                    {/* Share Agent Button */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hover:text-primary"
+                      onClick={async () => {
+                        // Set the agent ID - the useEffect will handle setting the visibility
+                        setShareAgentId(content.id);
+                        
+                        // Reset other share-related state
+                        setToggleInitialized(false);
+                        setSharedEmails([]);
+                        setEmailToShare("");
+                        
+                        // Open the modal
+                        setShareModalOpen(true);
+                        setIsLoadingSharedDetails(true);
+                        
+                        // Fetch the complete sharing details asynchronously
+                        try {
+                          const details = await AgentService.getSharedAgentsDetails(content.id);
+                          
+                          // Update shared emails
+                          setSharedEmails(details.shared_with || []);
+                          setToggleInitialized(true);
+                        } catch (error) {
+                          toast.error("Failed to load sharing details");
+                        } finally {
+                          setIsLoadingSharedDetails(false);
+                        }
+                      }}
+                      title="Share Agent"
+                    >
+                      <Share2 className="size-5" />
                     </Button>
                     
                     <Dialog
@@ -685,6 +884,197 @@ const AllAgents = () => {
           )
         )}
       </div>
+      
+      {/* Share Agent Modal */}
+      <Dialog
+        open={shareModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            // Just close the modal and clean up
+            setShareModalOpen(false);
+            setShareAgentId(null);
+            setEmailToShare("");
+            setSharedEmails([]);
+            setToggleInitialized(false);
+          } else {
+            // Just update the open state - data loading is handled elsewhere
+            setShareModalOpen(open);
+            
+            // If we're opening the dialog and we have an agent ID, make sure we have the correct visibility state
+            if (shareAgentId) {
+              const agentData = data?.find((agent: any) => agent.id === shareAgentId);
+              if (agentData && (agentData as any).visibility !== undefined) {
+                setIsPublic((agentData as any).visibility === "public");
+              }
+            }
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Share Agent</DialogTitle>
+            <DialogDescription>
+              Make your agent available to other users by sharing it publicly or with specific people.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Shareable status indicator */}
+          {!isLoadingSharedDetails && (
+            <div className={`py-2 px-4 rounded-md mb-2 ${
+              isPublic || sharedEmails.length > 0 
+                ? "bg-green-50 text-green-800 border border-green-200" 
+                : "bg-yellow-50 text-yellow-800 border border-yellow-200"
+            }`}>
+              <p className="text-sm">
+                {isPublic 
+                  ? "This agent is public and can be accessed by anyone with the link." 
+                  : sharedEmails.length > 0 
+                    ? `This agent is shared with ${sharedEmails.length} ${sharedEmails.length === 1 ? "person" : "people"}.`
+                    : "This agent is private. Make it public or share with specific people to make it accessible."}
+              </p>
+            </div>
+          )}
+          
+          <div className="space-y-6 py-4">
+            {/* Public/Private Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">Make Agent Public</h4>
+                <p className="text-sm text-muted-foreground">
+                  Anyone with the link can access this agent
+                </p>
+              </div>
+              
+              {isLoadingSharedDetails ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Loading...</span>
+                  <Loader className="h-4 w-4 animate-spin" />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {isPublic ? "Public" : "Private"}
+                  </span>
+                  <Switch 
+                    checked={isPublic} 
+                    onCheckedChange={(checked) => {
+                      // Use simple direct API call
+                      setIsPublic(checked);
+                      setIsTogglingVisibility(true);
+                      
+                      AgentService.setAgentVisibility(
+                        shareAgentId!, 
+                        checked ? "public" : "private"
+                      ).then(response => {
+                        // Update based on response from API
+                        setIsPublic(response.visibility === "public");
+                        toast.success("Agent visibility updated successfully");
+                        setIsTogglingVisibility(false);
+                      }).catch(error => {
+                        // Revert on error
+                        setIsPublic(!checked);
+                        toast.error("Failed to update agent visibility");
+                        setIsTogglingVisibility(false);
+                      });
+                    }}
+                    disabled={isLoadingSharedDetails || isTogglingVisibility}
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* Email Sharing */}
+            <div className="space-y-3">
+              <h4 className="font-medium">Share with specific people</h4>
+              <div className="flex space-x-2">
+                <Input
+                  placeholder="Email address"
+                  value={emailToShare}
+                  onChange={(e) => setEmailToShare(e.target.value)}
+                  className="flex-1"
+                  disabled={shareWithEmailMutation.isPending}
+                />
+                <Button 
+                  onClick={shareAgentWithEmail}
+                  disabled={!emailToShare.trim() || shareWithEmailMutation.isPending}
+                >
+                  {shareWithEmailMutation.isPending ? (
+                    <Loader className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Add"
+                  )}
+                </Button>
+              </div>
+              
+              {/* Shared Emails List */}
+              <div className="rounded-md border h-[120px] overflow-y-auto p-2">
+                {isLoadingSharedDetails ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : sharedEmails.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                    No users added yet
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {sharedEmails.map((email, index) => (
+                      <li key={index} className="flex items-center justify-between bg-secondary/30 rounded-md px-3 py-2 text-sm">
+                        <span>{email}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => revokeAccess(email)}
+                          disabled={revokeAccessMutation.isPending}
+                        >
+                          {revokeAccessMutation.isPending ? (
+                            <Loader className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <X className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            
+            {/* Copy URL */}
+            <div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={copyShareableUrl}
+                disabled={copyUrlSuccess || (!isPublic && sharedEmails.length === 0) || isLoadingSharedDetails}
+                title={!isPublic && sharedEmails.length === 0 ? "Agent must be public or shared with at least one person" : ""}
+              >
+                {copyUrlSuccess ? (
+                  <>URL Copied</>
+                ) : isLoadingSharedDetails ? (
+                  <>Loading...</>
+                ) : !isPublic && sharedEmails.length === 0 ? (
+                  <>Not Shareable - Make Public or Add Users</>
+                ) : (
+                  <>Copy Shareable URL</>
+                )}
+              </Button>
+            </div>
+          </div>
+          
+          <DialogFooter className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-end sm:items-center">
+            <div className="flex space-x-2">
+              <Button type="submit" onClick={shareAgentWithEmail} disabled={!emailToShare}>
+                Share
+              </Button>
+              <DialogClose asChild>
+                <Button type="button">Done</Button>
+              </DialogClose>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

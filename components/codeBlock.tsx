@@ -37,9 +37,7 @@ function MyCodeBlock({ code, language }: MyCodeBlockProps) {
           <div className="table-row">
             {/* <CodeBlock.LineNumber className="table-cell pr-4 text-sm text-border text-right select-none" /> */}
             <CodeBlock.LineContent className="table-cell">
-              <div className="whitespace-pre-wrap break-words">
                 <CodeBlock.Token />
-              </div>
             </CodeBlock.LineContent>
           </div>
         </CodeBlock.Code>

@@ -20,22 +20,6 @@ export default class AgentService {
     }
   }
 
-  static async getAgentStatus(agentId: string) {
-    const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    try {
-      const response = await axios.get(
-        `${baseUrl}/deployment/agents/${agentId}/status`,
-        {
-          headers: headers,
-        }
-      );
-      return response.data.status;
-    } catch (error) {
-      console.log(error);
-    }
-  }
-
   static async getAgentList(includePublic = false, includeShared = false) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;

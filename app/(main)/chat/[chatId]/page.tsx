@@ -108,9 +108,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
       setIsCreator(info.is_creator);
 
       if (!list_system_agents.includes(info.agent_ids[0])) {
-        AgentService.getAgentStatus(info.agent_ids[0]).then((agentStatus) => {
-          setChatAccess(info.access_type);
-        });
+        setChatAccess(info.access_type);
       } else {
         setChatAccess(info.is_creator ? "write" : info.access_type);
       }

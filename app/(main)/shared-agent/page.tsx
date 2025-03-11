@@ -57,6 +57,7 @@ const SharedAgentPage = () => {
   const [branchOpen, setBranchOpen] = useState(false);
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [isParseDisabled, setIsParseDisabled] = useState(true);
+  const [parsedProjectId, setParsedProjectId] = useState<string>("");
 
   // Fetch agent details
   const { data: agentDetails, isLoading: isLoadingAgentDetails, error: agentError } = useQuery({
@@ -238,7 +239,7 @@ const SharedAgentPage = () => {
   // Create a new chat with the shared agent
   const createChatMutation = useMutation({
     mutationFn: async () => {
-      if (!agentId || !selectedRepo || !selectedBranch) {
+      if (!agentId || !parsedProjectId || !selectedBranch) {
         throw new Error("Missing required parameters");
       }
       
@@ -247,32 +248,39 @@ const SharedAgentPage = () => {
         throw new Error("User ID is missing");
       }
       
-      // Create conversation with the shared agent
+      // Create conversation with the shared agent using the project ID from parse API
       return ChatService.createConversation(
         userId,
         "Chat with shared agent", // Default title
-        selectedRepo, // Project ID (repository ID)
+        parsedProjectId, // Project ID from parse API response
         agentId
       );
     },
     onSuccess: (data) => {
+      // If we have a first message, send it
       if (firstMessage.trim()) {
+        // Store the message in Redux for display in the chat
         dispatch(setPendingMessage(firstMessage));
+        
+        // Send the first message
+        sendFirstMessage(data.conversation_id, firstMessage);
+      } else {
+        // If no message, just navigate to the chat
+        if (currentRepository && currentBranch) {
+          dispatch(setChat({ 
+            chatFlow: "NEW_CHAT", 
+            temporaryContext: {
+              branch: currentBranch.name, 
+              repo: currentRepository.full_name,
+              projectId: parsedProjectId // Use the project ID from parse API
+            }, 
+            agentId: agentId || undefined 
+          }));
+        }
+        
+        router.push(`/chat/${data.conversation_id}`);
+        setIsStartingChat(false);
       }
-      
-      if (currentRepository && currentBranch) {
-        dispatch(setChat({ 
-          chatFlow: "NEW_CHAT", 
-          temporaryContext: {
-            branch: currentBranch.name, 
-            repo: currentRepository.full_name,
-            projectId: currentRepository.id.toString()
-          }, 
-          agentId: agentId || undefined 
-        }));
-      }
-      
-      router.push(`/chat/${data.conversation_id}`);
     },
     onError: (error) => {
       toast.error("Failed to start chat. Please try again.");
@@ -280,10 +288,56 @@ const SharedAgentPage = () => {
     }
   });
 
+  // Function to send the first message
+  const sendFirstMessage = async (conversationId: string, message: string) => {
+    try {
+      // Set up the chat context in Redux
+      if (currentRepository && currentBranch) {
+        dispatch(setChat({ 
+          chatFlow: "NEW_CHAT", 
+          temporaryContext: {
+            branch: currentBranch.name, 
+            repo: currentRepository.full_name,
+            projectId: parsedProjectId // Use the project ID from parse API
+          }, 
+          agentId: agentId || undefined 
+        }));
+      }
+      
+      // Send the message
+      await ChatService.streamMessage(
+        conversationId,
+        message,
+        [], // No selected nodes for the first message
+        () => {} // No need for streaming updates as we're redirecting
+      );
+      
+      // Navigate to the chat page
+      router.push(`/chat/${conversationId}`);
+    } catch (error) {
+      console.error("Error sending first message:", error);
+      toast.error("Failed to send your message. Please try again in the chat.");
+      // Still navigate to the chat page even if message sending fails
+      router.push(`/chat/${conversationId}`);
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
+
   // Start a new chat
   const handleStartChat = () => {
     if (!selectedRepo || !selectedBranch) {
       toast.error("Please select a repository and branch");
+      return;
+    }
+    
+    if (!parsedProjectId) {
+      toast.error("Please parse the repository first");
+      return;
+    }
+
+    if (!firstMessage.trim()) {
+      toast.error("Please enter a message");
       return;
     }
 
@@ -355,6 +409,7 @@ const SharedAgentPage = () => {
     }
 
     setParsingStatus("loading");
+    setParsedProjectId(""); // Reset project ID when starting a new parse
     try {
       // Get repo from repositories list
       const repo = repositories?.find((r: any) => {
@@ -387,6 +442,9 @@ const SharedAgentPage = () => {
         throw new Error("No project ID returned from parse API");
       }
 
+      // Store the project ID from parse API for later use
+      setParsedProjectId(projectId);
+
       if (initialStatus === "ready") {
         setParsingStatus("ready");
         toast.success("Repository parsed successfully!");
@@ -402,6 +460,7 @@ const SharedAgentPage = () => {
       );
     } catch (err) {
       setParsingStatus("error");
+      setParsedProjectId(""); // Reset project ID on parse failure
       toast.error("Failed to parse repository");
     }
   };
@@ -714,6 +773,13 @@ const SharedAgentPage = () => {
                           </Button>
                         </div>
                       )}
+
+                      {parsingStatus !== "ready" && parsingStatus !== "error" && parsingStatus !== "" && parsingStatus !== "loading" && (
+                        <div className="flex justify-start items-center gap-3 mt-3 ml-5">
+                          <Loader className="h-4 w-4 animate-spin text-primary" />
+                          <span className="text-muted-foreground">{parsingStatus}</span>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Selected Repository and Branch Display */}
@@ -755,7 +821,7 @@ const SharedAgentPage = () => {
                               size="sm" 
                               className="ml-auto !bg-transparent mb-1 fill-primary" 
                               onClick={handleStartChat}
-                              disabled={isStartingChat}
+                              disabled={isStartingChat || !firstMessage.trim()}
                             >
                               {isStartingChat ? (
                                 <Loader className="h-5 w-5 animate-spin" />

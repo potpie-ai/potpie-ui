@@ -138,7 +138,7 @@ export default class BranchAndRepositoryService {
         maxDuration = 45 * 60 * 1000 // 45 minutes in milliseconds - to align with backend
       ) {
         let parsingStatus = initialStatus;
-        let baseDelay = 5000; // Start with 5 seconds
+        const pollInterval = 5000; // Fixed 5-second interval as requested
         const startTime = Date.now();
     
         const getStatusMessage = (status: string) => {
@@ -173,8 +173,8 @@ export default class BranchAndRepositoryService {
             return;
           }
     
-          // Exponential backoff with jitter
-          await new Promise((resolve) => setTimeout(resolve, baseDelay));
+          // Fixed 5-second interval between polls
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
         }
     
         if (Date.now() - startTime >= maxDuration) {

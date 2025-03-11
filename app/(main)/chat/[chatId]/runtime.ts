@@ -1,3 +1,4 @@
+import { RootState } from "@/lib/state/store";
 import ChatService from "@/services/ChatService";
 import {
   AppendMessage,
@@ -5,6 +6,7 @@ import {
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 
 const convertMessage = (message: ThreadMessageLike) => {
   return message;
@@ -33,6 +35,7 @@ export function PotpieRuntime(chatId: string) {
 
   const initarray: ThreadMessageLike[] = [];
   const [messages, setMessages] = useState(initarray);
+  const { pendingMessage } = useSelector((state: RootState) => state.chat);
 
   const loadMessages = async () => {
     try {
@@ -47,6 +50,10 @@ export function PotpieRuntime(chatId: string) {
 
       setMessagesLoaded(true);
       setExtras({ loading: false, streaming: false });
+
+      if (pendingMessage) {
+        await onMessage(pendingMessage);
+      }
     } catch (error) {
       console.error("Error fetching conversations:", error);
     }
@@ -70,6 +77,37 @@ export function PotpieRuntime(chatId: string) {
         },
       ],
     };
+  };
+
+  const onMessage = async (message: string) => {
+    const userMessage: ThreadMessageLike = {
+      role: "user",
+      content: [{ type: "text", text: message }],
+    };
+    setIsRunning(true);
+    setMessages((currentMessages) => [...currentMessages, userMessage]);
+
+    setMessages((currentMessages) => {
+      return [...currentMessages, getMessageFromText(undefined, "")];
+    });
+    await ChatService.streamMessage(
+      chatId,
+      message,
+      [], // @ts-ignore
+      (message: string) => {
+        setIsRunning(false);
+        setExtras({ loading: false, streaming: true });
+
+        setMessages((currentMessages) => {
+          return [
+            ...currentMessages.slice(0, -1),
+            getMessageFromText(currentMessages.at(-1)?.id, message),
+          ];
+        });
+      }
+    );
+    setIsRunning(false);
+    setExtras({ loading: false, streaming: false });
   };
 
   const onNew = async (message: AppendMessage) => {

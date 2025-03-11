@@ -277,7 +277,7 @@ const SharedAgentPage = () => {
             agentId: agentId || undefined 
           }));
         }
-        
+
         router.push(`/chat/${data.conversation_id}`);
         setIsStartingChat(false);
       }
@@ -304,13 +304,6 @@ const SharedAgentPage = () => {
         }));
       }
       
-      // Send the message
-      await ChatService.streamMessage(
-        conversationId,
-        message,
-        [], // No selected nodes for the first message
-        () => {} // No need for streaming updates as we're redirecting
-      );
       
       // Navigate to the chat page
       router.push(`/chat/${conversationId}`);
@@ -444,7 +437,6 @@ const SharedAgentPage = () => {
 
       // Store the project ID from parse API for later use
       setParsedProjectId(projectId);
-
       if (initialStatus === "ready") {
         setParsingStatus("ready");
         toast.success("Repository parsed successfully!");

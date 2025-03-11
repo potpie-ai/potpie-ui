@@ -32,6 +32,23 @@ import { useSearchParams } from "next/navigation";
 export default function Signin() {
   const searchParams = useSearchParams();
   const source = searchParams.get("source");
+  const agent_id = searchParams.get("agent_id");
+  const redirectUrl = searchParams.get("redirect");
+  
+  // Extract agent_id from redirect URL if present
+  let redirectAgent_id = "";
+  if (redirectUrl) {
+    try {
+      const redirectPath = decodeURIComponent(redirectUrl);
+      const url = new URL(redirectPath, window.location.origin);
+      redirectAgent_id = url.searchParams.get("agent_id") || "";
+    } catch (e) {
+      console.error("Error parsing redirect URL:", e);
+    }
+  }
+  
+  // Use agent_id from either direct parameter or redirect URL
+  const finalAgent_id = agent_id || redirectAgent_id;
   
   const formSchema = z.object({
     email: z.string().email(),
@@ -50,7 +67,9 @@ export default function Signin() {
   provider.addScope('user:email');
 
   const handleExternalRedirect = async (token: string) => {
-    if (source === "vscode") {
+    if (finalAgent_id) {
+      window.location.href = `/shared-agent?agent_id=${finalAgent_id}`;
+    } else if (source === "vscode") {
       window.location.href = `http://localhost:54333/auth/callback?token=${token}`;
     }
   };
@@ -67,6 +86,8 @@ export default function Signin() {
             if (source === "vscode") {
               console.log("res.data", res.data);
               handleExternalRedirect(res.data.token);
+            } else if (finalAgent_id) {
+              handleExternalRedirect("");
             }
             return res.data;
           })
@@ -108,6 +129,8 @@ export default function Signin() {
             .then((res: { data: any }) => {
               if (source === "vscode") {
                 handleExternalRedirect(res.data.token);
+              } else if (finalAgent_id) {
+                handleExternalRedirect("");
               }
               return res.data;
             })

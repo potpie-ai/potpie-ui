@@ -12,6 +12,7 @@ export default function AuthLayout({
   const searchParams = useSearchParams();
   const source = searchParams.get("source");
   const redirectUrl = searchParams.get("redirect");
+  const agent_id = searchParams.get("agent_id");
   const router = useRouter();
 
   useEffect(() => {
@@ -25,7 +26,13 @@ export default function AuthLayout({
         return;
       }
 
-      // Handle regular authentication flow
+      // Handle direct agent_id parameter in sign-in/sign-up URL
+      if (agent_id) {
+        router.push(`/shared-agent?agent_id=${agent_id}`);
+        return;
+      }
+
+      // Handle regular authentication flow with redirect parameter
       if (!window.location.pathname.startsWith('/onboarding') && 
           !window.location.pathname.startsWith('/sign-up') && 
           !window.location.pathname.startsWith('/link-github')) {
@@ -33,7 +40,7 @@ export default function AuthLayout({
         router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
       }
     }
-  }, [user, source, redirectUrl, router]);
+  }, [user, source, redirectUrl, agent_id, router]);
 
   return (
     <div className="min-h-screen w-full grid place-items-center">

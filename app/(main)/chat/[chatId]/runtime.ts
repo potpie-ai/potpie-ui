@@ -54,7 +54,7 @@ export function PotpieRuntime(chatId: string) {
       setExtras({ loading: false, streaming: false });
 
       if (pendingMessage) {
-        await onMessage(pendingMessage);
+        onMessage(pendingMessage);
         dispatch(setPendingMessage(""));
       }
     } catch (error) {

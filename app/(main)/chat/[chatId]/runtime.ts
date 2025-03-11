@@ -1,4 +1,5 @@
-import { RootState } from "@/lib/state/store";
+import { setPendingMessage } from "@/lib/state/Reducers/chat";
+import { AppDispatch, RootState } from "@/lib/state/store";
 import ChatService from "@/services/ChatService";
 import {
   AppendMessage,
@@ -6,7 +7,7 @@ import {
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 
 const convertMessage = (message: ThreadMessageLike) => {
   return message;
@@ -36,6 +37,7 @@ export function PotpieRuntime(chatId: string) {
   const initarray: ThreadMessageLike[] = [];
   const [messages, setMessages] = useState(initarray);
   const { pendingMessage } = useSelector((state: RootState) => state.chat);
+  const dispatch: AppDispatch = useDispatch();
 
   const loadMessages = async () => {
     try {
@@ -53,6 +55,7 @@ export function PotpieRuntime(chatId: string) {
 
       if (pendingMessage) {
         await onMessage(pendingMessage);
+        dispatch(setPendingMessage(""));
       }
     } catch (error) {
       console.error("Error fetching conversations:", error);

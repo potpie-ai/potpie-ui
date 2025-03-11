@@ -28,7 +28,7 @@ export function PotpieRuntime(chatId: string) {
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [extras, setExtras] = useState({
     loading: true,
-    streaming: true,
+    streaming: false,
   });
 
   const initarray: ThreadMessageLike[] = [];
@@ -37,6 +37,7 @@ export function PotpieRuntime(chatId: string) {
   const loadMessages = async () => {
     try {
       if (messagesLoaded) return;
+      if (!chatId) return;
 
       setExtras({ loading: true, streaming: false });
 

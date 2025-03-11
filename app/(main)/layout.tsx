@@ -23,14 +23,19 @@ export default function RootLayout({
   const searchParams = useSearchParams();
   const repo = searchParams.get("repo");
   const branch = searchParams.get("branch");
+  const agent_id = searchParams.get("agent_id");
+  
   if (user == null) {
+    // Preserve all query parameters when redirecting to sign-in
+    const queryString = searchParams.toString();
+    const redirectPath = queryString ? `${pathname}?${queryString}` : pathname;
+    
     if (repo && branch) {
       dispatch(setRepoName(repo));
       dispatch(setBranchName(branch));
-      router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
-    } else {
-      router.push(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
     }
+    
+    router.push(`/sign-in?redirect=${encodeURIComponent(redirectPath)}`);
     return null;
   }
   posthog.identify(user.id, { email: user.email, name: user?.name || "" });

@@ -74,6 +74,13 @@ export default class BranchAndRepositoryService {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
         try {
+            console.log(`Fetching branches for repo: ${repoName}`);
+            
+            if (!repoName) {
+                console.error("No repository name provided");
+                return [];
+            }
+            
             const response = await axios.get(
                 `${baseUrl}/api/v1/github/get-branch-list`,
                 {
@@ -83,9 +90,25 @@ export default class BranchAndRepositoryService {
                     headers,
                 }
             );
-            return response.data.branches;
+            
+            console.log("Branch API raw response status:", response.status);
+            
+            // The response format is { branches: string[] }
+            if (response.data && Array.isArray(response.data.branches)) {
+                console.log(`Found ${response.data.branches.length} branches in response`);
+                return response.data.branches;
+            } else if (Array.isArray(response.data)) {
+                console.log(`Found ${response.data.length} branches in direct response array`);
+                return response.data;
+            } else {
+                console.log("No branches array found in response, returning empty array");
+                console.log("Response data type:", typeof response.data);
+                return [];
+            }
         } catch (error) {
-            throw new Error("Error fetching branch list");
+            console.error("Error fetching branch list:", error);
+            // Return empty array instead of throwing to avoid crashing the UI
+            return [];
         }
     }
     static async check_public_repo(repoName: string) {
@@ -115,7 +138,7 @@ export default class BranchAndRepositoryService {
         maxDuration = 45 * 60 * 1000 // 45 minutes in milliseconds - to align with backend
       ) {
         let parsingStatus = initialStatus;
-        let baseDelay = 5000; // Start with 5 seconds
+        const pollInterval = 5000; // Fixed 5-second interval as requested
         const startTime = Date.now();
     
         const getStatusMessage = (status: string) => {
@@ -150,8 +173,8 @@ export default class BranchAndRepositoryService {
             return;
           }
     
-          // Exponential backoff with jitter
-          await new Promise((resolve) => setTimeout(resolve, baseDelay));
+          // Fixed 5-second interval between polls
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
         }
     
         if (Date.now() - startTime >= maxDuration) {

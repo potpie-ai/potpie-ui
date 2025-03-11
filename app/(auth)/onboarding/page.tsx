@@ -25,6 +25,7 @@ const Onboarding = () => {
   const name = searchParams.get('name');
   const plan = searchParams.get('plan');
   const prompt = searchParams.get('prompt');
+  const agent_id = searchParams.get('agent_id');
   const [formData, setFormData] = useState({
     email: email || '',
     name: name || '',
@@ -83,7 +84,10 @@ const Onboarding = () => {
         throw new Error("Error saving user data to database. Please try again.");
       }
 
-      if (plan) {
+      if (agent_id) {
+        // If agent_id parameter exists, redirect to shared agent page
+        router.push(`/shared-agent?agent_id=${agent_id}`);
+      } else if (plan) {
         // If plan parameter exists, redirect to stripe checkout
         await handleCheckoutRedirect(uid);
       } else if (prompt) {

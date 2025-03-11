@@ -19,7 +19,7 @@ import Image from "next/image";
 import { usePostHog } from "posthog-js/react";
 import React, { useRef } from "react";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const Signup = () => {
   const githubAppUrl =
@@ -30,6 +30,21 @@ const Signup = () => {
   const popupRef = useRef<Window | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get("redirect");
+  
+  // Extract agent_id from redirect URL if present
+  let redirectAgent_id = "";
+  if (redirectUrl) {
+    try {
+      const redirectPath = decodeURIComponent(redirectUrl);
+      const url = new URL(redirectPath, window.location.origin);
+      redirectAgent_id = url.searchParams.get("agent_id") || "";
+    } catch (e) {
+      console.error("Error parsing redirect URL:", e);
+    }
+  }
 
   // Cleanup function for timers and popups
   React.useEffect(() => {
@@ -58,8 +73,8 @@ const Signup = () => {
     return router.push(path);
   };
 
-  const openPopup = async (result: any, plan: string = '', prompt: string = '') => {
-    console.log("[DEBUG] openPopup called with plan:", plan, "prompt:", prompt);
+  const openPopup = async (result: any, plan: string = '', prompt: string = '', agent_id: string = '') => {
+    console.log("[DEBUG] openPopup called with plan:", plan, "prompt:", prompt, "agent_id:", agent_id);
     
     // Clean up any existing timer and popup
     if (timerRef.current) {
@@ -77,7 +92,7 @@ const Signup = () => {
       // Popup was blocked
       toast.error("Please allow popups for GitHub app installation");
       // For new users, still redirect to onboarding even if popup is blocked
-      return router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}&plan=${plan}&prompt=${encodeURIComponent(prompt)}`);
+      return router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(agent_id)}`);
     }
 
     popupRef.current = popup;
@@ -91,7 +106,7 @@ const Signup = () => {
           timerRef.current = null;
           // Only redirect to onboarding after popup is closed
           console.log("[DEBUG] Redirecting to onboarding");
-          resolve(router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}&plan=${plan}&prompt=${encodeURIComponent(prompt)}`));
+          resolve(router.push(`/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(agent_id)}`));
         }
       }, 500);
       timerRef.current = timer;
@@ -101,7 +116,6 @@ const Signup = () => {
   const provider = new GithubAuthProvider();
   provider.addScope('read:org');
   provider.addScope('user:email');
-  const router = useRouter();
   
   const onGithub = async () => {
     if (isLoading) return;
@@ -146,17 +160,21 @@ const Signup = () => {
           { email: result.user.email, name: result.user?.displayName || "" }
         );
 
-        const searchParams = new URLSearchParams(window.location.search);
-        const plan = (searchParams.get('plan') || searchParams.get('PLAN') || '').toLowerCase();
-        const prompt = searchParams.get('prompt') || '';
-        console.log("[DEBUG] URL params - plan:", plan, "prompt:", prompt);
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const plan = (urlSearchParams.get('plan') || urlSearchParams.get('PLAN') || '').toLowerCase();
+        const prompt = urlSearchParams.get('prompt') || '';
+        const agent_id = urlSearchParams.get('agent_id') || redirectAgent_id || '';
+        console.log("[DEBUG] URL params - plan:", plan, "prompt:", prompt, "agent_id:", agent_id);
 
         if (userSignup.data.exists) {
           console.log("[DEBUG] Existing user detected");
           toast.success("Welcome back " + result.user.displayName);
           
           // Handle special navigation cases for existing users
-          if (plan) {
+          if (agent_id) {
+            console.log("[DEBUG] Agent ID parameter detected, redirecting to shared agent");
+            return cleanupAndNavigate(`/shared-agent?agent_id=${agent_id}`);
+          } else if (plan) {
             console.log("[DEBUG] Plan parameter detected, redirecting to checkout");
             try {
               const subUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
@@ -185,7 +203,7 @@ const Signup = () => {
         } else {
           console.log("[DEBUG] New user detected, proceeding with GitHub app installation");
           toast.success("Account created successfully as " + result.user.displayName);
-          await openPopup(result, plan, prompt);
+          await openPopup(result, plan, prompt, agent_id);
         }
       } catch (e: any) {
         console.log("[DEBUG] API error:", e.response?.status, e.message);

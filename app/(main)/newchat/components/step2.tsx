@@ -58,7 +58,7 @@ const Step2: React.FC<Step2Props> = ({
       setChatStep(3);
       gotoChat(response.conversation_id);
     } catch (err) {
-      console.error("Unable to create conversation:", err);
+      // Handle conversation creation error
       setChatStep(2);
     }
   };

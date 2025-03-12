@@ -16,6 +16,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
+  Loader,
   RefreshCwIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
+import { Card } from "@/components/ui/card";
 
 interface ThreadProps {
   projectId: string;
@@ -340,9 +342,35 @@ const AssistantMessage: FC = () => {
   const [text, setText] = useState((message.content[0] as any)?.text || "");
   const [isRunning, setIsRunning] = useState(false);
 
+  const [toolsState, setToolsState] = useState<
+    { id: string; message: string; status: string }[]
+  >([]);
+
   if (message.isLast) {
     runtime.subscribe(() => {
       setText((runtime.getState().content[0] as any)?.text || "");
+      const tool_calls = runtime
+        .getState()
+        .content.filter((content) => content.type === "tool-call");
+
+      const callStates = tool_calls.map((call) => {
+        return {
+          id: call.toolCallId,
+          message: (call.result as any)?.response,
+          status: (call.result as any)?.event_type,
+        };
+      });
+      let res: { id: string; message: string; status: string }[] = [];
+      for (var i = 0; i < callStates.length; i++) {
+        const curr = callStates[i];
+        const existing_call_index = res.findIndex((val) => curr.id === val.id);
+        if (existing_call_index === -1) {
+          res.push(curr);
+        } else {
+          res[existing_call_index] = curr;
+        }
+      }
+      setToolsState(res);
     });
 
     threadRuntime.subscribe(() => {
@@ -360,20 +388,42 @@ const AssistantMessage: FC = () => {
         <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
         <AvatarFallback className="bg-blue-500 text-white">P</AvatarFallback>
       </Avatar>
-      {!isRunning && text ? (
-        <div>
-          <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
-            <MarkdownComponent content={{ text: text }} />
-          </div>
-          <AssistantActionBar streaming={isStreaming} />
+      <div>
+        <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
+          {!isRunning && (text || toolsState.length > 0) ? (
+            <div>
+              {toolsState.length > 0 && !text && (
+                <Card>
+                  <ul className="w-full rounded-sm p-4">
+                    {toolsState.map((toolState) => (
+                      <li
+                        key={toolState.id}
+                        className="p-1 m-1 rounded-sm border transition-all ease-in flex-row"
+                      >
+                        <div>{toolState.message} </div>
+                        {toolState.status === "result" ? (
+                          <CheckIcon className="h-4 w-4" color="green" />
+                        ) : (
+                          <Loader className="animate-spin" />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+
+              <MarkdownComponent content={{ text: text }} />
+            </div>
+          ) : (
+            <div className="flex items-center space-x-1 mt-2">
+              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="flex items-center space-x-1 mt-2">
-          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
-          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
-          <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
-        </div>
-      )}
+        <AssistantActionBar streaming={isStreaming} />
+      </div>
     </MessagePrimitive.Root>
   );
 };

@@ -37,7 +37,7 @@ export default class ChatService {
         conversationId: string, 
         message: string, 
         selectedNodes: any[],
-        onMessageUpdate: (message: string, citations: string[]) => void
+        onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void
     ): Promise<{ message: string; citations: string[] }> {
         try {
             const response = await fetch(
@@ -60,6 +60,7 @@ export default class ChatService {
             const decoder = new TextDecoder();
             let currentMessage = "";
             let currentCitations: string[] = [];
+            let currentToolCalls: any[] = [];
             let buffer = '';
 
             if (reader) {
@@ -71,6 +72,7 @@ export default class ChatService {
                         const chunk = decoder.decode(value);
                         buffer += chunk;
 
+                        // Try to extract complete JSON objects from the buffer
                         while (true) {
                             const openBraceIndex = buffer.indexOf('{');
                             if (openBraceIndex === -1) break;
@@ -78,6 +80,7 @@ export default class ChatService {
                             let depth = 0;
                             let jsonEndIndex = -1;
 
+                            // Find the matching closing brace
                             for (let i = openBraceIndex; i < buffer.length; i++) {
                                 if (buffer[i] === '{') depth++;
                                 if (buffer[i] === '}') depth--;
@@ -87,6 +90,7 @@ export default class ChatService {
                                 }
                             }
 
+                            // If we didn't find a complete JSON object, break and wait for more data
                             if (jsonEndIndex === -1) break;
 
                             const jsonStr = buffer.substring(openBraceIndex, jsonEndIndex);
@@ -94,20 +98,23 @@ export default class ChatService {
 
                             try {
                                 const data = JSON.parse(jsonStr);
+                                
                                 if (data.message !== undefined) {
                                     const messageWithEmojis = data.message.replace(/\\u[\dA-F]{4}/gi, 
                                         (match: string) => String.fromCodePoint(parseInt(match.replace(/\\u/g, ''), 16))
                                     );
-                                    for (const char of messageWithEmojis) {
-                                        currentMessage += char;
-                                        onMessageUpdate(currentMessage, currentCitations);
-                                        await new Promise(resolve => setTimeout(resolve, 4));
-                                    }
+                                    currentMessage += messageWithEmojis;
+                                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+                                }
+
+                                if (data.tool_calls !== undefined) {
+                                    currentToolCalls.push(...data.tool_calls)
+                                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
                                 }
                                 
                                 if (data.citations !== undefined) {
                                     currentCitations = data.citations;
-                                    onMessageUpdate(currentMessage, currentCitations);
+                                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
                                 }
                             } catch (e) {
                                 // Silently handle parsing errors
@@ -197,7 +204,7 @@ export default class ChatService {
     static async regenerateMessage(
         conversationId: string,
         selectedNodes: any[],
-        onMessageUpdate: (message: string, citations: string[]) => void
+        onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void
     ): Promise<{ message: string; citations: string[] }> {
         try {
             const response = await fetch(
@@ -220,6 +227,7 @@ export default class ChatService {
             const decoder = new TextDecoder();
             let currentMessage = "";
             let currentCitations: string[] = [];
+            let currentToolCalls: any[] = [];
 
             let buffer = '';
             if (reader) {
@@ -263,12 +271,17 @@ export default class ChatService {
                                         (match: string) => String.fromCodePoint(parseInt(match.replace(/\\u/g, ''), 16))
                                     );
                                     currentMessage += messageWithEmojis;
-                                    onMessageUpdate(currentMessage, currentCitations);
+                                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+                                }
+
+                                if (data.tool_calls !== undefined) {
+                                    currentToolCalls.push(...data.tool_calls)
+                                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
                                 }
                                 
                                 if (data.citations !== undefined) {
                                     currentCitations = data.citations;
-                                    onMessageUpdate(currentMessage, currentCitations);
+                                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
                                 }
                             } catch (e) {
                                 // Silently handle parsing errors

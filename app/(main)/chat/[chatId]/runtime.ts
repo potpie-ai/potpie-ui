@@ -68,7 +68,8 @@ export function PotpieRuntime(chatId: string) {
 
   const getMessageFromText = (
     id: string | undefined,
-    text: string
+    text: string,
+    tool_calls: any[] = []
   ): ThreadMessageLike => {
     return {
       role: "assistant",
@@ -78,6 +79,35 @@ export function PotpieRuntime(chatId: string) {
           type: "text",
           text: text,
         },
+        ...tool_calls.map(
+          (
+            tool_call
+          ): {
+            type: "tool-call";
+            toolCallId: string;
+            toolName: string;
+            result: any;
+          } => {
+            const {
+              call_id,
+              tool_name,
+              tool_call_details,
+              event_type,
+              tool_response,
+            } = JSON.parse(tool_call);
+            console.log("tool_response: ", tool_response);
+            return {
+              type: "tool-call",
+              toolCallId: call_id,
+              toolName: tool_name,
+              result: {
+                event_type: event_type,
+                response: tool_response,
+                details: tool_call_details,
+              },
+            };
+          }
+        ),
       ],
     };
   };
@@ -97,14 +127,14 @@ export function PotpieRuntime(chatId: string) {
       chatId,
       message,
       [], // @ts-ignore
-      (message: string) => {
+      (message: string, tool_calls: any[]) => {
         setIsRunning(false);
         setExtras({ loading: false, streaming: true });
 
         setMessages((currentMessages) => {
           return [
             ...currentMessages.slice(0, -1),
-            getMessageFromText(currentMessages.at(-1)?.id, message),
+            getMessageFromText(currentMessages.at(-1)?.id, message, tool_calls),
           ];
         });
       }
@@ -131,14 +161,14 @@ export function PotpieRuntime(chatId: string) {
       chatId,
       message.content[0].text,
       (message.runConfig?.custom?.selectedNodes as any[]) || [], // @ts-ignore
-      (message: string) => {
+      (message: string, tool_calls: any[]) => {
         setIsRunning(false);
         setExtras({ loading: false, streaming: true });
 
         setMessages((currentMessages) => {
           return [
             ...currentMessages.slice(0, -1),
-            getMessageFromText(currentMessages.at(-1)?.id, message),
+            getMessageFromText(currentMessages.at(-1)?.id, message, tool_calls),
           ];
         });
       }
@@ -149,16 +179,20 @@ export function PotpieRuntime(chatId: string) {
 
   const onReload = async (parentId: string | null) => {
     setIsRunning(true);
-    await ChatService.regenerateMessage(chatId, [], (message: string) => {
-      setIsRunning(false);
-      setExtras({ loading: false, streaming: true });
-      setMessages((currentMessages) => {
-        return [
-          ...currentMessages.slice(0, -1),
-          getMessageFromText(currentMessages.at(-1)?.id, message),
-        ];
-      });
-    });
+    await ChatService.regenerateMessage(
+      chatId,
+      [],
+      (message: string, tool_calls: any[]) => {
+        setIsRunning(false);
+        setExtras({ loading: false, streaming: true });
+        setMessages((currentMessages) => {
+          return [
+            ...currentMessages.slice(0, -1),
+            getMessageFromText(currentMessages.at(-1)?.id, message, tool_calls),
+          ];
+        });
+      }
+    );
     setIsRunning(false);
     setExtras({ loading: false, streaming: false });
   };

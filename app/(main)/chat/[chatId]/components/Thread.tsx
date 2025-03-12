@@ -1,3 +1,4 @@
+
 import {
   ActionBarPrimitive,
   BranchPickerPrimitive,
@@ -30,12 +31,14 @@ interface ThreadProps {
   projectId: string;
   writeDisabled: boolean;
   userImageURL: string;
+  conversation_id: string;
 }
 
 export const Thread: FC<ThreadProps> = ({
   projectId,
   writeDisabled,
   userImageURL,
+  conversation_id,
 }) => {
   const runtime = useThreadRuntime();
   const [isLoading, setIsLoading] = useState(true);
@@ -80,7 +83,7 @@ export const Thread: FC<ThreadProps> = ({
 
             <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center justify-center">
               <ThreadScrollToBottom />
-              {<Composer projectId={projectId} disabled={writeDisabled} />}
+              {<Composer projectId={projectId} disabled={writeDisabled} conversation_id={conversation_id} />}
             </div>
           </div>
         )}
@@ -265,9 +268,10 @@ const ThreadWelcomeSuggestions: FC = () => {
   );
 };
 
-const Composer: FC<{ projectId: string; disabled: boolean }> = ({
+const Composer: FC<{ projectId: string; disabled: boolean; conversation_id: string }> = ({
   projectId,
   disabled,
+  conversation_id,
 }) => {
   const composer = useComposerRuntime();
 
@@ -298,6 +302,7 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
     >
       <MessageComposer
         projectId={projectId}
+        conversation_id = {conversation_id}
         setSelectedNodesInConfig={setSelectedNodesInConfig}
         disabled={isStreaming || disabled}
         key={key}
@@ -437,3 +442,4 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
     </BranchPickerPrimitive.Root>
   );
 };
+

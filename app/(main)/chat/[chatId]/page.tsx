@@ -202,6 +202,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
                 (planType === planTypesEnum.PRO ? 500 : 50)
             }
             userImageURL={profilePicUrl}
+            conversation_id={currentConversationId}
           />
         </AssistantRuntimeProvider>
       </div>

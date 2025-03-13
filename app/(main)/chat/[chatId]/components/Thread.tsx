@@ -392,7 +392,7 @@ const AssistantMessage: FC = () => {
         <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
           {!isRunning && (text || toolsState.length > 0) ? (
             <div>
-              {toolsState.length > 0 && !text && (
+              {toolsState.length > 0 && (
                 <Card>
                   <ul className="w-full rounded-sm p-4">
                     {toolsState.map((toolState) => (

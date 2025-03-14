@@ -53,7 +53,7 @@ export function PotpieRuntime(chatId: string) {
       setMessagesLoaded(true);
       setExtras({ loading: false, streaming: false });
 
-      if (pendingMessage) {
+      if (pendingMessage && pendingMessage != "") {
         onMessage(pendingMessage);
         dispatch(setPendingMessage(""));
       }
@@ -95,7 +95,6 @@ export function PotpieRuntime(chatId: string) {
               event_type,
               tool_response,
             } = JSON.parse(tool_call);
-            console.log("tool_response: ", tool_response);
             return {
               type: "tool-call",
               toolCallId: call_id,

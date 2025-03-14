@@ -27,6 +27,7 @@ import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
 import { Card } from "@/components/ui/card";
+import { motion } from "motion/react";
 
 interface ThreadProps {
   projectId: string;
@@ -389,27 +390,47 @@ const AssistantMessage: FC = () => {
         <AvatarFallback className="bg-blue-500 text-white">P</AvatarFallback>
       </Avatar>
       <div>
-        <div className="bg-gray-200 p-5 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
+        <div className="bg-gray-200 p-4 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
           {!isRunning && (text || toolsState.length > 0) ? (
             <div>
               {toolsState.length > 0 && (
-                <Card>
-                  <ul className="w-full rounded-sm p-4">
-                    {toolsState.map((toolState) => (
-                      <li
-                        key={toolState.id}
-                        className="p-1 m-1 rounded-sm border transition-all ease-in flex-row"
-                      >
-                        <div>{toolState.message} </div>
-                        {toolState.status === "result" ? (
-                          <CheckIcon className="h-4 w-4" color="green" />
-                        ) : (
-                          <Loader className="animate-spin" />
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                >
+                  <Card className="shadow-md w-96">
+                    <motion.ul
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.5 }}
+                      className="w-full rounded-sm p-1"
+                    >
+                      {toolsState.map((toolState, index) => (
+                        <motion.li
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{
+                            duration: 0.6,
+                            ease: "easeOut",
+                          }}
+                          key={toolState.id}
+                          className="m-1 rounded-sm flex flex-row justify-start items-center"
+                        >
+                          <div className="mx-2">
+                            {toolState.status === "result" ? (
+                              <CheckIcon className="h-4 w-4" color="green" />
+                            ) : (
+                              <Loader className="h-4 w-4 animate-spin" />
+                            )}
+                          </div>
+                          <div>{toolState.message}</div>
+                        </motion.li>
+                      ))}
+                    </motion.ul>
+                  </Card>
+                  {text != "" && <div className="mb-8" />}
+                </motion.div>
               )}
 
               <MarkdownComponent content={{ text: text }} />

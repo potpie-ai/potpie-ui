@@ -27,11 +27,13 @@ if (typeof window !== "undefined") {
     console.log("PostHog initialized with real implementation");
   } else {
     // Override methods with no-op implementations while maintaining the original posthog object
-    posthog.capture = () => {};
+    posthog.capture = () => undefined;
     posthog.identify = () => {};
     posthog.reset = () => {};
     posthog.startSessionRecording = () => {};
-    console.log("PostHog initialized with mock implementation for local development");
+    console.log(
+      "PostHog initialized with mock implementation for local development"
+    );
   }
 }
 

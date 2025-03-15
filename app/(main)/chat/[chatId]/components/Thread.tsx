@@ -26,8 +26,8 @@ import ReactMarkdown from "react-markdown";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
-import { Card } from "@/components/ui/card";
 import { motion } from "motion/react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ThreadProps {
   projectId: string;
@@ -176,7 +176,7 @@ const MarkdownComponent = (content: any) => {
     <ul>
       {parsedSections?.map((section, index) => {
         return (
-          <li key={index}>
+          <li key={section.content}>
             {section.type === "text" && (
               <CustomMarkdown content={section.content} />
             )}
@@ -320,7 +320,12 @@ const UserMessageWithURL = (userPhotoURL: string) => {
 
 const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
   return (
-    <div className="flex items-center justify-end w-full">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+      className="flex items-center justify-end w-full"
+    >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-[#f7e6e6] text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
           <MessagePrimitive.Content />
@@ -330,7 +335,7 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
         <AvatarImage src={userPhotoURL} alt="User" />
         <AvatarFallback className="bg-lime-500 text-white">U</AvatarFallback>
       </Avatar>
-    </div>
+    </motion.div>
   );
 };
 
@@ -384,68 +389,79 @@ const AssistantMessage: FC = () => {
   }
 
   return (
-    <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
-      <Avatar className="mr-4 rounded-none bg-transparent">
-        <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
-        <AvatarFallback className="bg-blue-500 text-white">P</AvatarFallback>
-      </Avatar>
-      <div>
-        <div className="bg-gray-200 p-4 rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
-          {!isRunning && (text || toolsState.length > 0) ? (
-            <div>
-              {toolsState.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.6, ease: "easeOut" }}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+    >
+      <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
+        <Avatar className="mr-4 rounded-none bg-transparent">
+          <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
+          <AvatarFallback className="bg-blue-500 text-white">P</AvatarFallback>
+        </Avatar>
+        <div className="rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
+          {toolsState.length > 0 && !isRunning && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="mb-4"
+            >
+              <div className="w-96 bg-transparent">
+                <motion.ul
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="w-full"
                 >
-                  <Card className="shadow-md w-96">
-                    <motion.ul
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.5 }}
-                      className="w-full rounded-sm p-1"
+                  {toolsState.map((toolState, index) => (
+                    <motion.li
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{
+                        duration: 0.6,
+                        ease: "easeOut",
+                      }}
+                      key={toolState.id}
+                      className="m-1 rounded-sm flex flex-row justify-start items-center"
                     >
-                      {toolsState.map((toolState, index) => (
-                        <motion.li
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{
-                            duration: 0.6,
-                            ease: "easeOut",
-                          }}
-                          key={toolState.id}
-                          className="m-1 rounded-sm flex flex-row justify-start items-center"
-                        >
-                          <div className="mx-2">
-                            {toolState.status === "result" ? (
-                              <CheckIcon className="h-4 w-4" color="green" />
-                            ) : (
-                              <Loader className="h-4 w-4 animate-spin" />
-                            )}
-                          </div>
-                          <div>{toolState.message}</div>
-                        </motion.li>
-                      ))}
-                    </motion.ul>
-                  </Card>
-                  {text != "" && <div className="mb-8" />}
-                </motion.div>
-              )}
-
+                      <div>
+                        {toolState.status === "result" ? (
+                          <CheckIcon className="h-4 w-4" color="green" />
+                        ) : (
+                          <Loader className="h-4 w-4 animate-spin" />
+                        )}
+                      </div>
+                      <div className="italic ml-2">{toolState.message}</div>
+                    </motion.li>
+                  ))}
+                </motion.ul>
+              </div>
+            </motion.div>
+          )}
+          {!isRunning && text ? (
+            <div>
               <MarkdownComponent content={{ text: text }} />
             </div>
           ) : (
-            <div className="flex items-center space-x-1 mt-2">
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
-              <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{
+                duration: 0.6,
+                ease: "easeOut",
+                staggerChildren: 0.5,
+              }}
+            >
+              <Skeleton key={1} className="h-4 w-1/2 mb-2"></Skeleton>
+              <Skeleton key={2} className="h-4 w-1/2 mb-2"></Skeleton>
+              <Skeleton key={3} className="h-4 w-1/3"></Skeleton>
+            </motion.div>
           )}
         </div>
-        <AssistantActionBar streaming={isStreaming} />
-      </div>
-    </MessagePrimitive.Root>
+        {!isRunning && <AssistantActionBar streaming={isStreaming} />}
+      </MessagePrimitive.Root>
+    </motion.div>
   );
 };
 

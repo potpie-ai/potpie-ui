@@ -18,7 +18,7 @@ import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "./components/Navbar";
-import AgentService from "@/services/AgentService";
+
 import { list_system_agents } from "@/lib/utils";
 import { ParsingStatusEnum, planTypesEnum } from "@/lib/Constants";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
@@ -26,8 +26,10 @@ import { Thread } from "./components/Thread";
 import { PotpieRuntime } from "./runtime";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useParams } from "next/navigation";
 
-const Chat = ({ params }: { params: { chatId: string } }) => {
+const Chat = () => {
+  const params: { chatId: string } = useParams();
   const [chatAccess, setChatAccess] = useState("loading");
   const dispatch: AppDispatch = useDispatch();
   const [_currentConversation, setCurrentConversation] = useState<any>({

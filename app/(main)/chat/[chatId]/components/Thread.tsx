@@ -176,7 +176,7 @@ const MarkdownComponent = (content: any) => {
     <ul>
       {parsedSections?.map((section, index) => {
         return (
-          <li key={section.content}>
+          <li key={index}>
             {section.type === "text" && (
               <CustomMarkdown content={section.content} />
             )}

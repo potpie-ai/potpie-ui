@@ -441,7 +441,17 @@ const AssistantMessage: FC = () => {
           )}
           {!isRunning && text ? (
             <div>
-              <MarkdownComponent content={{ text: text }} />
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                transition={{
+                  height: { duration: 1, ease: "backInOut" },
+                  opacity: { duration: 0.5, delay: 0.5 },
+                }}
+                className="overflow-hidden"
+              >
+                <MarkdownComponent content={{ text: text }} />
+              </motion.div>
             </div>
           ) : (
             <motion.div

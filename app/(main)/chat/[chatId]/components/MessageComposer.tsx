@@ -267,6 +267,7 @@ const MessageComposer = ({
         message
       );
       setMessage(enhancedMessage);
+      composer.setText(enhancedMessage);
     } catch (error) {
       console.error("Error enhancing prompt:", error);
     } finally {

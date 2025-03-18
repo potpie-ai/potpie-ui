@@ -384,7 +384,7 @@ const SharedAgentPage = () => {
             <CardTitle className="text-center">Unable to Access Agent</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-6">
-            <p className="text-muted-foreground text-center">{errorState}</p>
+            <p className="text-black text-center">{errorState}</p>
             <Button onClick={() => router.push("/all-agents")}>
               Go to My Agents
             </Button>
@@ -463,7 +463,7 @@ const SharedAgentPage = () => {
       <div className="max-w-5xl mx-auto">
         {isLoadingAgentDetails ? (
           <div className="flex items-center justify-center py-8">
-            <Loader className="h-8 w-8 animate-spin text-muted-foreground" />
+            <Loader className="h-8 w-8 animate-spin text-black" />
           </div>
         ) : (
           <div className="space-y-6">
@@ -474,7 +474,7 @@ const SharedAgentPage = () => {
               </div>
               <div>
                 <h1 className="text-3xl font-bold">{agentDetails?.name || "Shared Agent"}</h1>
-                <p className="text-muted-foreground">
+                <p className="text-black">
                   Shared by {agentDetails?.creator || "a Potpie user"}
                 </p>
               </div>
@@ -491,14 +491,14 @@ const SharedAgentPage = () => {
                     {/* Description */}
                     <div>
                       <h3 className="text-md font-medium mb-2">Description</h3>
-                      <p className="text-muted-foreground">{agentDetails?.description}</p>
+                      <p className="text-black">{agentDetails?.description}</p>
                     </div>
                     
                     {/* Role */}
                     {agentDetails?.role && (
                       <div>
                         <h3 className="text-md font-medium mb-2">Role</h3>
-                        <p className="text-muted-foreground">{agentDetails.role}</p>
+                        <p className="text-black">{agentDetails.role}</p>
                       </div>
                     )}
                     
@@ -506,7 +506,7 @@ const SharedAgentPage = () => {
                     {agentDetails?.goal && (
                       <div>
                         <h3 className="text-md font-medium mb-2">Goal</h3>
-                        <p className="text-muted-foreground">{agentDetails.goal}</p>
+                        <p className="text-black">{agentDetails.goal}</p>
                       </div>
                     )}
                   </CardContent>
@@ -757,7 +757,7 @@ const SharedAgentPage = () => {
                           <XCircle className="text-[#E53E3E] h-4 w-4" />
                           <span className="text-[#E53E3E]">Error</span>
                           <Button
-                            variant="destructive"
+                            variant="desctructive"
                             size="sm"
                             onClick={() => parseRepo(currentRepository?.full_name, currentBranch?.name)}
                           >
@@ -769,7 +769,7 @@ const SharedAgentPage = () => {
                       {parsingStatus !== "ready" && parsingStatus !== "error" && parsingStatus !== "" && parsingStatus !== "loading" && (
                         <div className="flex justify-start items-center gap-3 mt-3 ml-5">
                           <Loader className="h-4 w-4 animate-spin text-primary" />
-                          <span className="text-muted-foreground">{parsingStatus}</span>
+                          <span className="text-black">{parsingStatus}</span>
                         </div>
                       )}
                     </div>
@@ -778,14 +778,14 @@ const SharedAgentPage = () => {
                     {currentRepository && currentBranch && (
                       <div className="bg-muted/30 rounded-md p-4 space-y-2">
                         <div className="flex items-center gap-2">
-                          <Code className="h-4 w-4 text-muted-foreground" />
+                          <Code className="h-4 w-4 text-black" />
                           <span className="text-sm font-medium">Repository:</span>
-                          <span className="text-sm text-muted-foreground">{currentRepository?.full_name || "Unknown repository"}</span>
+                          <span className="text-sm text-black">{currentRepository?.full_name || "Unknown repository"}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <GitBranch className="h-4 w-4 text-muted-foreground" />
+                          <GitBranch className="h-4 w-4 text-black" />
                           <span className="text-sm font-medium">Branch:</span>
-                          <span className="text-sm text-muted-foreground">{currentBranch?.name || "Unknown branch"}</span>
+                          <span className="text-sm text-black">{currentBranch?.name || "Unknown branch"}</span>
                         </div>
                       </div>
                     )}

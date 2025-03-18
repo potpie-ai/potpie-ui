@@ -340,9 +340,9 @@ const Step1: React.FC<Step1Props> = ({
   };
 
   return (
-    <div className="text-muted">
+    <div className="text-black">
       <h1 className="text-lg">Select a repository and branch</h1>
-      <Link href="https://docs.potpie.ai/quickstart" className="text-accent underline">
+      <Link href="https://docs.potpie.ai/quickstart" className="text-primary underline">
         Need help?
       </Link>
       <div className="flex items-center gap-4 mt-4 ml-5">
@@ -621,7 +621,7 @@ const Step1: React.FC<Step1Props> = ({
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="link" className="text-right">
+              <Label htmlFor="link" className="text-center">
                 Link
               </Label>
               <Input

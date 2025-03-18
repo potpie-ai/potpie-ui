@@ -36,7 +36,7 @@ const NewChat = () => {
     {
       label: 3,
       content: (
-        <div className="flex flex-col ml-4 w-full">
+        <div className="flex flex-col w-full">
           <span className="text-lg">All Set! Start chatting.</span>
         </div>
       ),

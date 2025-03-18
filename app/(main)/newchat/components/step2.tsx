@@ -48,7 +48,7 @@ const Step2: React.FC<Step2Props> = ({
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const cardsPerPage = 3; // Show 3 cards at a time
+  const cardWidth = 280; // Fixed width for each card in pixels
 
   const createConversation = async (agentId: string) => {
     try {
@@ -75,29 +75,31 @@ const Step2: React.FC<Step2Props> = ({
 
   const nextSlide = () => {
     if (AgentTypes) {
+      const maxCards = Math.floor((window.innerWidth * 0.8) / cardWidth);
       setCurrentIndex((prev) =>
-        prev + cardsPerPage >= AgentTypes.length ? 0 : prev + 1
+        prev + maxCards >= AgentTypes.length ? 0 : prev + 1
       );
     }
   };
 
   const prevSlide = () => {
     if (AgentTypes) {
+      const maxCards = Math.floor((window.innerWidth * 0.8) / cardWidth);
       setCurrentIndex((prev) =>
-        prev === 0 ? AgentTypes.length - cardsPerPage : prev - 1
+        prev === 0 ? AgentTypes.length - maxCards : prev - 1
       );
     }
   };
 
   return (
     <div className="flex flex-col w-full items-start gap-4">
-      <h1 className="text-lg font-semibold">Choose Your Expert</h1>
+      <h1 className="text-lg">Choose Your Expert</h1>
 
-      <div className="relative w-full max-w-5xl">
+      <div className="relative w-full max-w-[900px]">
         {/* Left Arrow */}
         <button
           onClick={prevSlide}
-          className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md p-2 rounded-full hover:bg-gray-100 transition"
+          className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md p-2 rounded-full hover:bg-gray-100 transition z-10"
         >
           <ChevronLeft size={24} />
         </button>
@@ -105,17 +107,17 @@ const Step2: React.FC<Step2Props> = ({
         {/* Cards Container */}
         <div className="overflow-hidden w-full">
           <div
-            className="flex gap-4 transition-transform duration-300 ease-in-out"
-            style={{ transform: `translateX(-${currentIndex * (100 / cardsPerPage)}%)` }}
+            className="flex gap-4 transition-transform duration-300 ease-in-out ml-4"
+            style={{ transform: `translateX(-${currentIndex * (cardWidth + 16)}px)` }}
           >
             {AgentTypesLoading
-              ? Array.from({ length: cardsPerPage }).map((_, index) => (
-                  <div key={index} className="w-1/3 flex-shrink-0">
+              ? Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} style={{ width: `${cardWidth}px` }} className="flex-shrink-0">
                     <Skeleton className="h-[280px] w-full" />
                   </div>
                 ))
               : AgentTypes?.map((content) => (
-                  <div key={content.id} className="w-1/3 flex-shrink-0">
+                  <div key={content.id} style={{ width: `${cardWidth}px` }} className="flex-shrink-0">
                     <Card
                       className={`relative flex flex-col h-[210px] border transition-all duration-300 rounded-xl p-4 cursor-pointer hover:shadow-lg ${
                         selectedCard === content.id
@@ -154,14 +156,14 @@ const Step2: React.FC<Step2Props> = ({
       {/* Pagination Dots */}
       <div className="flex space-x-2 mt-4">
         {AgentTypes &&
-          [...Array(Math.ceil(AgentTypes.length / cardsPerPage))].map(
+          [...Array(Math.ceil(AgentTypes.length / Math.floor((window.innerWidth * 0.8) / cardWidth)))].map(
             (_, index) => (
               <button
                 key={index}
                 className={`h-2 w-2 rounded-full transition ${
-                  currentIndex === index * cardsPerPage ? "bg-blue-500 w-4" : "bg-gray-300"
+                  currentIndex === index * Math.floor((window.innerWidth * 0.8) / cardWidth) ? "bg-blue-500 w-4" : "bg-gray-300"
                 }`}
-                onClick={() => setCurrentIndex(index * cardsPerPage)}
+                onClick={() => setCurrentIndex(index * Math.floor((window.innerWidth * 0.8) / cardWidth))}
               />
             )
           )}

@@ -138,7 +138,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem className="mt-5">
             <SidebarMenuButton
-              className="flex gap-3 bg-primary text-white mx-auto py-5 w-[90%] items-center justify-center"
+              className="flex gap-3 text-white mx-auto py-5 w-[90%] items-center justify-center bg-[#0575E6] bg-gradient-to-r from-[#0575E6] to-[#021B79] hover:bg-[#0575E6] hover:text-white"
               onClick={() => redirectToNewChat()}
             >
               <Plus className="size-4" /> <span>New Chat</span>

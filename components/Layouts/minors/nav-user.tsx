@@ -81,17 +81,21 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => router.push("/key-management")}>
+              <DropdownMenuItem 
+                className="hover:bg-accent cursor-pointer"
+                onClick={() => router.push("/key-management")}
+              >
                 <CreditCard />
                 Key Management
               </DropdownMenuItem>
               <DropdownMenuItem
+                className="hover:bg-accent cursor-pointer"
                 onClick={() => router.push("/user-subscription")}
               >
                 <Receipt />
                 Manage Subscription
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem className="hover:bg-accent cursor-pointer">
                 <Link
                   href={"https://discord.gg/ryk5CMD5v6"}
                   target="_blank"
@@ -104,6 +108,7 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              className="hover:bg-accent cursor-pointer"
               onClick={() => {
                 posthog.reset();
                 signOut(auth);

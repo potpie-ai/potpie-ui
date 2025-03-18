@@ -216,13 +216,16 @@ const Step1: React.FC<Step1Props> = ({
         return BranchAndRepositoryService.getBranchList(ownerRepo);
       }
       return BranchAndRepositoryService.getBranchList(repoName).then((data) => {
-        if (data?.length > 0 && defaultBranch) {
-          if (defaultBranch && data.length > 0) {
-            const matchingBranch = data.find((branch: string) => 
-              branch.toLowerCase() === decodeURIComponent(defaultBranch).toLowerCase()
-            );
-            dispatch(setBranchName(matchingBranch ? decodeURIComponent(defaultBranch) : ""));
-          }
+        // Auto-select branch if there's only one
+        if (data?.length === 1) {
+          dispatch(setBranchName(data[0]));
+        }
+        // Handle default branch selection if provided
+        else if (data?.length > 0 && defaultBranch) {
+          const matchingBranch = data.find((branch: string) => 
+            branch.toLowerCase() === decodeURIComponent(defaultBranch).toLowerCase()
+          );
+          dispatch(setBranchName(matchingBranch ? decodeURIComponent(defaultBranch) : ""));
         }
         return data;
       });
@@ -340,18 +343,18 @@ const Step1: React.FC<Step1Props> = ({
   };
 
   return (
-    <div className="text-black">
+    <div className="text-black max-w-[900px]">
       <h1 className="text-lg">Select a repository and branch</h1>
       <Link href="https://docs.potpie.ai/quickstart" className="text-primary underline">
         Need help?
       </Link>
-      <div className="flex items-center gap-4 mt-4 ml-5">
+      <div className="flex items-center gap-4 mt-4">
         {UserRepositorysLoading ? (
-          <Skeleton className="w-[220px] h-10" />
+          <Skeleton className="flex-1 h-10" />
         ) : (
           <>
           <Popover open={repoOpen} onOpenChange={setRepoOpen}>
-            <PopoverTrigger asChild className="w-[220px]">
+            <PopoverTrigger asChild className="flex-1">
               {UserRepositorys?.length === 0 || !repoName ? (
                 <Button
                   className="flex gap-3 items-center font-semibold justify-start"
@@ -385,7 +388,7 @@ const Step1: React.FC<Step1Props> = ({
                 </Button>
               )}
             </PopoverTrigger>
-            <PopoverContent className="w-auto min-w-[220px] max-w-[300px] p-0">
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
               <Command defaultValue={defaultRepo ?? undefined}>
                 <CommandInput
                   value={searchValue}
@@ -490,10 +493,10 @@ const Step1: React.FC<Step1Props> = ({
           </>
         )}
         {UserBranchLoading ? (
-          <Skeleton className="w-[220px] h-10" />
+          <Skeleton className="flex-1 h-10" />
         ) : (
           <Popover open={branchOpen} onOpenChange={setBranchOpen}>
-            <PopoverTrigger asChild className="w-[220px]">
+            <PopoverTrigger asChild className="flex-1">
               {UserBranch?.length === 0 || !branchName ? (
                 <Button
                   className="flex gap-3 items-center font-semibold justify-start"
@@ -520,8 +523,8 @@ const Step1: React.FC<Step1Props> = ({
                 </Button>
               )}
             </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0">
-            <Command defaultValue={defaultBranch ?? undefined}>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+              <Command defaultValue={defaultBranch ?? undefined}>
                 <CommandInput placeholder="Search branch..." />
                 <CommandList>
                   <CommandEmpty>No branch found.</CommandEmpty>
@@ -545,7 +548,7 @@ const Step1: React.FC<Step1Props> = ({
           </Popover>
         )}
 
-        <div className="flex items-center">
+        <div className="flex items-center shrink-0">
           {parsingStatus !== ParsingStatusEnum.READY && (
             <>
               <Button
@@ -584,12 +587,12 @@ const Step1: React.FC<Step1Props> = ({
         </div>
       </div>
       {parsingStatus !== ParsingStatusEnum.ERROR && parsingStatus === ParsingStatusEnum.READY ? (
-        <div className="flex justify-start items-center gap-3 mt-5 ml-5">
+        <div className="flex justify-start items-center gap-3 mt-5">
           <CheckCircle className="text-[#00C313] h-4 w-4" />{" "}
           <span className="text-[#00C313]">{parsingStatus.charAt(0).toLocaleUpperCase() + parsingStatus.slice(1)}</span>
         </div>
       ) : parsingStatus !== ParsingStatusEnum.ERROR && parsingStatus !== "" ? (
-        <div className="flex justify-start items-center gap-3 mt-5 ml-5 ">
+        <div className="flex justify-start items-center gap-3 mt-5">
           <Loader
             className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
           />{" "}

@@ -208,6 +208,12 @@ const MessageComposer = ({
     );
   };
 
+  const handleSend = () => {
+    composer.send();
+    setMessage("");
+    setSelectedNodes([]);
+  };
+
   const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
     return (
       <div>
@@ -223,16 +229,15 @@ const MessageComposer = ({
           </TooltipIconButton>
         </div> */}
         <ThreadPrimitive.If running={false}>
-          <ComposerPrimitive.Send disabled={disabled}>
-            <TooltipIconButton
-              disabled={disabled}
-              tooltip="Send"
-              variant="default"
-              className="my-2.5 size-8 p-2 transition-opacity ease-in"
-            >
-              <SendHorizontalIcon />
-            </TooltipIconButton>
-          </ComposerPrimitive.Send>
+          <TooltipIconButton
+            disabled={disabled}
+            tooltip="Send"
+            variant="default"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in"
+            onClick={handleSend}
+          >
+            <SendHorizontalIcon />
+          </TooltipIconButton>
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
           <ComposerPrimitive.Cancel asChild>

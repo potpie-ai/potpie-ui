@@ -757,7 +757,7 @@ const SharedAgentPage = () => {
                           <XCircle className="text-[#E53E3E] h-4 w-4" />
                           <span className="text-[#E53E3E]">Error</span>
                           <Button
-                            variant="desctructive"
+                            variant="destructive"
                             size="sm"
                             onClick={() => parseRepo(currentRepository?.full_name, currentBranch?.name)}
                           >

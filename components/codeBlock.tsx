@@ -1,6 +1,6 @@
 "use client";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneLight, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LucideCopy, LucideCopyCheck } from "lucide-react";

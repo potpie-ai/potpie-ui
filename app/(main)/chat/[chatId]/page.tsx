@@ -222,7 +222,7 @@ const Chat = () => {
               <Button
                 variant={
                   parsingStatus === ParsingStatusEnum.ERROR
-                    ? "bg-muted"
+                    ? "destructive"
                     : "default"
                 }
               >

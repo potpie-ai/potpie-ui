@@ -46,7 +46,7 @@ export function PotpieRuntime(chatId: string) {
 
       setExtras({ loading: true, streaming: false });
 
-      const res = await ChatService.loadMessages(chatId, 0, 100);
+      const res = await ChatService.loadMessages(chatId, 0, 1000);
 
       setMessages(res.map((msg: any) => convertToThreadMessage(msg)));
 

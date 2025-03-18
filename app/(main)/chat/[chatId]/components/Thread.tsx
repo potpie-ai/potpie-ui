@@ -333,7 +333,7 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
       </MessagePrimitive.Root>
       <Avatar className="mr-4 rounded-md bg-transparent">
         <AvatarImage src={userPhotoURL} alt="User" />
-        <AvatarFallback className="bg-lime-500 text-white">U</AvatarFallback>
+        <AvatarFallback className="bg-gray-400 text-white">U</AvatarFallback>
       </Avatar>
     </motion.div>
   );
@@ -345,6 +345,7 @@ const AssistantMessage: FC = () => {
 
   const threadRuntime = useThreadRuntime();
   const [isStreaming, setIsStreaming] = useState(false);
+
   const [text, setText] = useState((message.content[0] as any)?.text || "");
   const [isRunning, setIsRunning] = useState(false);
 
@@ -397,7 +398,7 @@ const AssistantMessage: FC = () => {
       <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
         <Avatar className="mr-4 rounded-none bg-transparent">
           <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
-          <AvatarFallback className="bg-blue-500 text-white">P</AvatarFallback>
+          <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
         </Avatar>
         <div className="rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
           {toolsState.length > 0 && !isRunning && (

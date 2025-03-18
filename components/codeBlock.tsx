@@ -27,7 +27,7 @@ function MyCodeBlock({ code, language }: MyCodeBlockProps) {
           variant="secondary"
           size="sm"
           onClick={handleCopy}
-          className="text-xs font-semibold px-2 py-1 rounded text-gray-800"
+          className="text-xs font-semibold px-2 py-1 h-6 rounded text-gray-800"
         >
           {copied ? <div className="flex gap-2 items-center"> <LucideCopyCheck className="size-4"/> Copied! </div> : <div className="flex gap-2 items-center"> <LucideCopy className="size-4"/> Copy</div>}
         </Button>

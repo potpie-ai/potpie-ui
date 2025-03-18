@@ -268,14 +268,14 @@ const Signup = () => {
         <div className="flex items-center justify-center flex-col text-border">
           <h3 className="text-2xl font-bold text-black">Get Started!</h3>
           <div className="flex items-start justify-start flex-col mt-10 gap-4">
-            <p className="flex items-center justify-center text-start gap-4">
+            <p className="flex items-center justify-center text-start text-black gap-4">
               <LucideCheck
                 size={20}
                 className="bg-primary rounded-full p-[0.5px] text-white"
               />
               Select the repositories you want to build your AI agents on.
             </p>
-            <p className="flex items-center justify-center text-start gap-4">
+            <p className="flex items-center justify-center text-start text-black gap-4">
               <LucideCheck
                 size={20}
                 className="bg-primary rounded-full p-[0.5px] text-white"

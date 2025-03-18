@@ -350,7 +350,7 @@ const KeyManagement = () => {
                   Select the LLM you want to use and enter your API key.
                 </p>
                 {userSelectedProvider && (
-                  <p className="text-sm text-muted-foreground mt-2">
+                  <p className="text-sm text-black mt-2">
                     {getKeyPromptMessage(userSelectedProvider)}
                   </p>
                 )}

@@ -80,7 +80,7 @@ const AllRepos = () => {
                 repo.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
               )
               .map((repo: any) => (
-                <TableRow key={repo.id} className="hover:bg-gray-100">
+                <TableRow key={repo.id} className="hover:bg-gray-100 text-black">
                   <TableCell>
                     <a href={repo.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
                       {repo.name}

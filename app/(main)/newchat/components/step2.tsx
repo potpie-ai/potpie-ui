@@ -9,6 +9,7 @@ import { AppDispatch } from "@/lib/state/store";
 import { useDispatch } from "react-redux";
 import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
+import { Bot, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface AgentType {
   id: string;
@@ -45,6 +46,9 @@ const Step2: React.FC<Step2Props> = ({
   });
 
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const cardsPerPage = 3; // Show 3 cards at a time
 
   const createConversation = async (agentId: string) => {
     try {
@@ -58,48 +62,109 @@ const Step2: React.FC<Step2Props> = ({
       setChatStep(3);
       gotoChat(response.conversation_id);
     } catch (err) {
-      // Handle conversation creation error
       setChatStep(2);
     }
   };
 
+  const truncateText = (text: string, wordLimit: number) => {
+    const words = text.split(" ");
+    return words.length > wordLimit
+      ? words.slice(0, wordLimit).join(" ") + "..."
+      : text;
+  };
+
+  const nextSlide = () => {
+    if (AgentTypes) {
+      setCurrentIndex((prev) =>
+        prev + cardsPerPage >= AgentTypes.length ? 0 : prev + 1
+      );
+    }
+  };
+
+  const prevSlide = () => {
+    if (AgentTypes) {
+      setCurrentIndex((prev) =>
+        prev === 0 ? AgentTypes.length - cardsPerPage : prev - 1
+      );
+    }
+  };
+
   return (
-    <div className="flex flex-col w-full gap-3">
-      <h1 className="text-lg">Choose your expert</h1>
-      <div className="w-full max-w-[65rem] h-full grid grid-cols-2 ml-5 space-y6 gap-6">
-        {AgentTypesLoading
-          ? Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="border-border w-[450px] h-40" />
-            ))
-          : AgentTypes?.map((content, index) => (
-              <Card
+    <div className="flex flex-col w-full items-start gap-4">
+      <h1 className="text-lg font-semibold">Choose Your Expert</h1>
+
+      <div className="relative w-full max-w-5xl">
+        {/* Left Arrow */}
+        <button
+          onClick={prevSlide}
+          className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md p-2 rounded-full hover:bg-gray-100 transition"
+        >
+          <ChevronLeft size={24} />
+        </button>
+
+        {/* Cards Container */}
+        <div className="overflow-hidden w-full">
+          <div
+            className="flex gap-4 transition-transform duration-300 ease-in-out"
+            style={{ transform: `translateX(-${currentIndex * (100 / cardsPerPage)}%)` }}
+          >
+            {AgentTypesLoading
+              ? Array.from({ length: cardsPerPage }).map((_, index) => (
+                  <div key={index} className="w-1/3 flex-shrink-0">
+                    <Skeleton className="h-[280px] w-full" />
+                  </div>
+                ))
+              : AgentTypes?.map((content) => (
+                  <div key={content.id} className="w-1/3 flex-shrink-0">
+                    <Card
+                      className={`relative flex flex-col h-[210px] border transition-all duration-300 rounded-xl p-4 cursor-pointer hover:shadow-lg ${
+                        selectedCard === content.id
+                          ? "border-blue-500 shadow-md"
+                          : "border-gray-200"
+                      }`}
+                      onClick={() => {
+                        createConversation(content.id);
+                        setSelectedCard(content.id);
+                      }}
+                    >
+                      <CardHeader className="flex items-center space-x-3 pb-2">
+                      <Bot className="flex-shrink-0" />
+                        <CardTitle className="text-lg font-medium">
+                          {content.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-sm text-gray-600 flex-grow overflow-hidden">
+                        {truncateText(content.description, 15)}
+                      </CardContent>
+                    </Card>
+                  </div>
+                ))}
+          </div>
+        </div>
+
+        {/* Right Arrow */}
+        <button
+          onClick={nextSlide}
+          className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md p-2 rounded-full hover:bg-gray-100 transition"
+        >
+          <ChevronRight size={24} />
+        </button>
+      </div>
+
+      {/* Pagination Dots */}
+      <div className="flex space-x-2 mt-4">
+        {AgentTypes &&
+          [...Array(Math.ceil(AgentTypes.length / cardsPerPage))].map(
+            (_, index) => (
+              <button
                 key={index}
-                className={`pt-2 border-border w-[485px] shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 ${
-                  selectedCard === content.id
-                    ? "border-[#FFB36E] border-2"
-                    : "hover:border-[#FFB36E] hover:border-2"
+                className={`h-2 w-2 rounded-full transition ${
+                  currentIndex === index * cardsPerPage ? "bg-blue-500 w-4" : "bg-gray-300"
                 }`}
-                onClick={() => {
-                  createConversation(content.id);
-                  setSelectedCard(content.id);
-                }}
-              >
-                <CardHeader className="p-1 px-6 font-normal">
-                  <CardTitle className="text-lg flex gap-3 text-muted">
-                    <Image
-                      src={"/images/person.svg"}
-                      alt="logo"
-                      width={20}
-                      height={20}
-                    />
-                    <span>{content.name}</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-base ml-8 text-muted-foreground leading-tight px-6 pb-4">
-                  {content.description}
-                </CardContent>
-              </Card>
-            ))}
+                onClick={() => setCurrentIndex(index * cardsPerPage)}
+              />
+            )
+          )}
       </div>
     </div>
   );

@@ -3,8 +3,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Step1 from "./components/step1";
 import Step2 from "./components/step2";
-import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
+import { useSelector } from "react-redux";
 
 const NewChat = () => {
   const router = useRouter();
@@ -56,11 +56,17 @@ const NewChat = () => {
               className={`absolute left-[15px] top-8 h-full border-l-2 border-gray-300 z-0 ${index === steps.length - 1 ? "hidden" : "top-10"}`}
             ></div>
             <div
-              className={`flex items-center justify-center w-8 h-8 rounded-full z-5 ${step.label === 3 && chatStep === 3 ? "bg-[#00C313] text-white" : step.label <= chatStep ? "bg-white text-border border-2 border-accent" : "bg-border text-white"}`}
+              className={`flex items-center justify-center w-8 h-8 rounded-full z-5 ${
+                step.label === 3 && chatStep === 3 
+                  ? "bg-green-100 text-green-600 border-2 border-green-500" 
+                  : step.label <= chatStep 
+                  ? "bg-green-100 text-green-600 border-2 border-green-500" 
+                  : "bg-gray-100 text-gray-600 border-2 border-gray-500"
+              }`}
             >
               {step.label}
             </div>
-            <div className="flex flex-col ml-8 w-full">{step.content}</div>
+            <div className="flex flex-col ml-8 w-full text-black">{step.content}</div>
           </div>
         ))}
       </div>

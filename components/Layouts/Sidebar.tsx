@@ -121,7 +121,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <Link
               href="/"
-              className="flex items-center gap-3 font-semibold ml-2"
+              className="flex items-center gap-3 font-semibold ml-2 mt-4"
             >
               <Image
                 src={"/images/potpie-blue.svg"}
@@ -129,7 +129,7 @@ export function AppSidebar() {
                 width={35}
                 height={35}
               />
-              <span className="font-bold text-2xl">potpie</span>
+              <span className="text-2xl"><span className="text-foreground">potpie</span><span className="text-primary">.</span><span className="text-foreground">ai</span></span>
             </Link>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -169,7 +169,7 @@ export function AppSidebar() {
                             <span>{link.title}</span>
                           </div>
                           {link.description && (
-                            <span className="border border-white group-hover/menu-item:border-sidebar group-hover/menu-item:bg-white group-hover/menu-item:text-foreground text-white rounded-full px-2 text-[0.6rem]">
+                            <span className="border border-primary text-black group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300">
                               {link.description}
                             </span>
                           )}
@@ -184,13 +184,12 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
       <SidebarFooter>
-        <Separator />
         <SidebarMenu>
           <SidebarMenuItem>
             <Link href={`/user-subscription?end_date=${userSubscription?.end_date ? new Date(userSubscription.end_date).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : ''}&plan_type=${userSubscription?.plan_type}`} className="w-full">
-              <Card className="bg-transparent border-none text-white">
+              <Card className="bg-muted border border-gray-200 text-black">
                 <CardHeader className="p-2 pt-0 md:p-4">
-                  <CardTitle className="text-lg">
+                  <CardTitle className="text-lg text-black">
                     {(() => {
                       const now = new Date();
                       const subscriptionEndDate = new Date(
@@ -219,7 +218,7 @@ export function AppSidebar() {
                       }
                     })()}
                   </CardTitle>
-                  <CardDescription className="flex flex-row justify-between text-tertiary">
+                  <CardDescription className="flex flex-row justify-between text-gray-600">
                     <span>Credits used</span>
                     <span>
                       {usageLoading ? (
@@ -240,7 +239,7 @@ export function AppSidebar() {
                     value={progress}
                   >
                     <Progress.Indicator
-                      className="bg-primary w-full h-full transition-transform transition-duration-[660ms] ease-[cubic-bezier(0.65, 0, 0.35, 1)]"
+                      className="bg-black w-full h-full transition-transform transition-duration-[660ms] ease-[cubic-bezier(0.65, 0, 0.35, 1)]"
                       style={{ transform: `translateX(-${100 - progress}%)` }}
                     />
                   </Progress.Root>
@@ -253,7 +252,7 @@ export function AppSidebar() {
                   >
                     <Button
                       size="sm"
-                      className="w-full bg-white hover:text-white text-foreground !border-none"
+                      className="w-full bg-black hover:text-white text-white !border-none"
                     >
                       ✨ Upgrade
                     </Button>

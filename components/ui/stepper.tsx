@@ -459,7 +459,7 @@ const verticalStepVariants = cva(
   [
     "flex flex-col relative transition-all duration-200",
     "data-[completed=true]:[&:not(:last-child)]:after:bg-primary",
-    "data-[invalid=true]:[&:not(:last-child)]:after:bg-destructive",
+    "data-[invalid=true]:[&:not(:last-child)]:after:bg-muted",
   ],
   {
     variants: {
@@ -669,7 +669,7 @@ const HorizontalStep = React.forwardRef<HTMLDivElement, StepSharedProps>(
           "[&:not(:last-child)]:after:transition-all [&:not(:last-child)]:after:duration-200",
           "[&:not(:last-child)]:after:content-[''] [&:not(:last-child)]:after:h-[2px] [&:not(:last-child)]:after:bg-border",
           "data-[completed=true]:[&:not(:last-child)]:after:bg-primary",
-          "data-[invalid=true]:[&:not(:last-child)]:after:bg-destructive",
+          "data-[invalid=true]:[&:not(:last-child)]:after:bg-muted",
           variant === "circle-alt" &&
             "justify-start flex-col flex-1 [&:not(:last-child)]:after:relative [&:not(:last-child)]:after:order-[-1] [&:not(:last-child)]:after:start-[50%] [&:not(:last-child)]:after:end-[50%] [&:not(:last-child)]:after:top-[calc(var(--step-icon-size)/2)] [&:not(:last-child)]:after:w-[calc((100%-var(--step-icon-size))-(var(--step-gap)))]",
           variant === "circle" &&
@@ -763,7 +763,7 @@ const StepButtonContainer = ({
         "data-[clickable=true]:pointer-events-auto",
         "data-[active=true]:bg-primary data-[active=true]:border-primary data-[active=true]:text-primary-foreground",
         "data-[current=true]:border-primary data-[current=true]:bg-secondary",
-        "data-[invalid=true]:bg-destructive data-[invalid=true]:border-destructive data-[invalid=true]:text-destructive-foreground",
+        "data-[invalid=true]:bg-muted data-[invalid=true]:border-bg-muted data-[invalid=true]:text-bg-muted-foreground",
         styles?.["step-button-container"]
       )}
       aria-current={isCurrentStep ? "step" : undefined}
@@ -982,7 +982,7 @@ const StepLabel = ({
         <span
           className={cn(
             "stepper__step-description",
-            "text-muted-foreground",
+            "text-black",
             descriptionVariants({ size }),
             styles?.["step-description"]
           )}

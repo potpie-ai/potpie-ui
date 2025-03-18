@@ -220,7 +220,7 @@ const Chat = ({ params }: { params: { chatId: string } }) => {
               <Button
                 variant={
                   parsingStatus === ParsingStatusEnum.ERROR
-                    ? "destructive"
+                    ? "bg-muted"
                     : "default"
                 }
               >

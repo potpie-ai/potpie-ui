@@ -298,7 +298,7 @@ const MessageComposer = ({
           placeholder={"Type @ followed by file or function name"}
           onChange={handleMessageChange}
           onKeyDown={handleKeyPress}
-          className="placeholder:text-muted-foreground max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+          className="placeholder:text-black max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
         />
         <ComposerAction disabled={disabled} />
       </div>

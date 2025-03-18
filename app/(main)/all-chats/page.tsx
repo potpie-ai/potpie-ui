@@ -107,7 +107,7 @@ const AllChats = () => {
             {data
               .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Sort by created_at in descending order
               .map((chat: any) => (
-                <TableRow key={chat.id} className="hover:bg-red border-b border-gray-200">
+                <TableRow key={chat.id} className="hover:bg-red border-b border-gray-200 text-black">
                   <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)}>{chat.title}</Link></TableCell>
                   <TableCell>
                     <Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)}>

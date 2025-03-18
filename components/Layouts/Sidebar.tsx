@@ -187,7 +187,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <Link href={`/user-subscription?end_date=${userSubscription?.end_date ? new Date(userSubscription.end_date).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : ''}&plan_type=${userSubscription?.plan_type}`} className="w-full">
-              <Card className="bg-muted border border-gray-200 text-black">
+              <Card className="bg-background border border-gray-200 text-black">
                 <CardHeader className="p-2 pt-0 md:p-4">
                   <CardTitle className="text-lg text-black">
                     {(() => {

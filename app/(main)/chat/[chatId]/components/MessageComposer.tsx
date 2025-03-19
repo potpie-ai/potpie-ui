@@ -11,12 +11,14 @@ import {
 import axios from "axios";
 import { SendHorizontalIcon, CircleStopIcon, X } from "lucide-react";
 import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
+import ChatService from "@/services/ChatService";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
   input: string;
   nodes: NodeOption[];
   disabled: boolean;
+  conversation_id: string;
   setSelectedNodesInConfig: (selectedNodes: any[]) => void;
 }
 
@@ -34,6 +36,7 @@ const MessageComposer = ({
   input,
   nodes,
   disabled,
+  conversation_id,
   setSelectedNodesInConfig,
 }: MessageComposerProps) => {
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
@@ -49,6 +52,7 @@ const MessageComposer = ({
   );
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
+  const [isTextareaDisabled, setIsTextareaDisabled] = useState(false);
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
 
@@ -217,8 +221,7 @@ const MessageComposer = ({
   const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
     return (
       <div>
-        {/* enable below code with prompt enhancer feature */}
-        {/* <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end">
           <TooltipIconButton
             tooltip="Enhance Prompt"
             variant="default"
@@ -227,7 +230,7 @@ const MessageComposer = ({
           >
             <span className="text-lg">✨</span>
           </TooltipIconButton>
-        </div> */}
+        </div>
         <ThreadPrimitive.If running={false}>
           <TooltipIconButton
             disabled={disabled}
@@ -256,19 +259,20 @@ const MessageComposer = ({
   };
 
   const handleEnhancePrompt = async () => {
-    // try {
-    //   setIsTextareaDisabled(true);
-    //   setMessage("Enhancing...");
-    //   const enhancedMessage = await ChatService.enhancePrompt(
-    //     conversation_id,
-    //     message
-    //   );
-    //   setMessage(enhancedMessage);
-    // } catch (error) {
-    //   console.error("Error enhancing prompt:", error);
-    // } finally {
-    //   setIsTextareaDisabled(false);
-    // }
+    try {
+      setIsTextareaDisabled(true);
+      setMessage("Enhancing...");
+      const enhancedMessage = await ChatService.enhancePrompt(
+        conversation_id,
+        message
+      );
+      setMessage(enhancedMessage);
+      composer.setText(enhancedMessage);
+    } catch (error) {
+      console.error("Error enhancing prompt:", error);
+    } finally {
+      setIsTextareaDisabled(false);
+    }
   };
 
   return (

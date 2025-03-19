@@ -76,6 +76,11 @@ const MessageComposer = ({
   };
 
   const composer = useComposerRuntime();
+  composer.subscribe(()=>{
+    if (message != composer.getState().text){
+    setMessage(composer.getState().text)
+  }
+  })
 
   const handleNodeSelect = (node: NodeOption) => {
     const cursorPosition = messageRef.current?.selectionStart || 0;

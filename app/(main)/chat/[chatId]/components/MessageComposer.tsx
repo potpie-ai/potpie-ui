@@ -251,187 +251,14 @@ const MessageComposer = ({
     loadCurrentModel();
   }, []);
 
-  const ModelSelection: FC = () => {
-    // ModelService.listModels();
-    const _models: {
-      [key: string]: {
-        provider: string;
-        name: string;
-        id: string;
-        description: string;
-      }[];
-    } = {};
-    const [models, setModels] = useState(_models);
-    const [loading, setLoading] = useState(true);
-    const [open, setOpen] = useState(false);
-
-    const handleModelList = async () => {
-      setOpen(true);
-      setLoading(true);
-      const res = await ModelService.listModels();
-
-      const response = res.models
-        // .filter((model) => model.is_chat_model)
-        .map((model) => {
-          return {
-            provider: model.provider,
-            name: model.name,
-            id: model.id,
-            description: model.description,
-          };
-        });
-
-      let dict: {
-        [key: string]: {
-          provider: string;
-          name: string;
-          id: string;
-          description: string;
-        }[];
-      } = {};
-      for (let i = 0; i < response.length; i++) {
-        if (!dict[response[i].provider]) {
-          dict[response[i].provider] = [response[i]];
-        } else {
-          dict[response[i].provider].push(response[i]);
-        }
-      }
-
-      setModels(dict);
-      setLoading(false);
-    };
-
-    const [updating, setUpdatingModel] = useState(false);
-
-    const handleModelSelect = (id: string) => {
-      return async () => {
-        console.log("id", id);
-        // setOpen(false);
-        setUpdatingModel(true);
-        await ModelService.setCurrentModel(id);
-        setUpdatingModel(false);
-        loadCurrentModel();
-      };
-    };
-
-    return (
-      <Dialog>
-        {currentModel && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ duration: 0.7, ease: "backInOut" }}
-          >
-            <DialogTrigger asChild>
-              <Button
-                variant={"secondary"}
-                className="p-2 transition ease-in bg-white hover:bg-gray-200"
-                disabled={disabled}
-                onClick={handleModelList}
-              >
-                <div className="flex flex-row">
-                  <Avatar className="overflow-hidden rounded-full w-5 h-5">
-                    <AvatarImage
-                      src={currentModel.provider + ".svg"}
-                      alt={currentModel.provider}
-                      className="w-5 h-5"
-                    />
-                    <AvatarFallback>
-                      {currentModel.provider.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
-                </div>
-              </Button>
-            </DialogTrigger>
-          </motion.div>
-        )}
-        <DialogContent showX={false} className="bg-transparent p-0">
-          <motion.div
-            initial={{ opacity: 0, y: 200, scale: 0 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 200, scale: 0 }}
-            transition={{ duration: 0.3, ease: "backInOut" }}
-          >
-            <DialogTitle hidden={true}>Select Model</DialogTitle>
-            <DialogDescription hidden={true}>
-              List of llm models to select from
-            </DialogDescription>
-            <Command className="rounded-lg border shadow-md w-full">
-              <CommandInput placeholder="Type a command or search..." />
-              {loading ? (
-                <div className="m-4">
-                  <div className="flex flex-row items-center mb-2">
-                    <Skeleton className="w-10 h-10 rounded-full" />
-                    <Skeleton className="w-2/3 h-6 ml-2" />
-                  </div>
-                  <Skeleton className="w-2/3 h-6 mb-2" />
-                  <Skeleton className="w-2/3 h-6 mb-2" />
-                  <div className="flex flex-row items-center mb-2">
-                    <Skeleton className="w-10 h-10 rounded-full" />
-                    <Skeleton className="w-2/3 h-6 ml-2" />
-                  </div>
-                  <Skeleton className="w-2/3 h-6 mb-2" />
-                  <Skeleton className="w-2/3 h-6 mb-2" />
-                </div>
-              ) : (
-                <CommandList>
-                  <CommandEmpty>No models found</CommandEmpty>
-                  {models &&
-                    Object.keys(models).length > 0 &&
-                    Object.values(models).map((models_) => {
-                      return (
-                        models_.length > 0 && (
-                          <CommandGroup
-                            key={models_[0].provider}
-                            heading={models_[0].provider}
-                          >
-                            {models_.map((model) => {
-                              return (
-                                <CommandItem
-                                  key={model.id}
-                                  className="flex flex-col items-start"
-                                  onSelect={handleModelSelect(model.id)}
-                                >
-                                  <div className="flex flex-row">
-                                    <Avatar className="overflow-hidden rounded-full w-5 h-5">
-                                      <AvatarImage
-                                        src={model.provider + ".svg"}
-                                        alt={model.provider}
-                                        className="w-5 h-5"
-                                      />
-                                      <AvatarFallback>
-                                        {model.provider.charAt(0)}
-                                      </AvatarFallback>
-                                    </Avatar>
-
-                                    <h1 className="ml-2">{model.name}</h1>
-                                  </div>
-                                  <span className="text-xs italic">
-                                    {model.description}
-                                  </span>
-                                </CommandItem>
-                              );
-                            })}
-                          </CommandGroup>
-                        )
-                      );
-                    })}
-                </CommandList>
-              )}
-            </Command>
-          </motion.div>
-        </DialogContent>
-      </Dialog>
-    );
-  };
-
   const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
     return (
       <div className="flex flex-row w-full items-center justify-end space-x-4">
-        <ModelSelection />
+        <ModelSelection
+          currentModel={currentModel}
+          loadCurrentModel={loadCurrentModel}
+          disabled={disabled}
+        />
         <div className="flex items-center justify-end">
           <TooltipIconButton
             tooltip="Enhance Prompt"
@@ -545,4 +372,185 @@ const truncateFilePath = (filePath: string) => {
       : filePath;
 
   return truncatedPath;
+};
+
+const ModelSelection: FC<{
+  currentModel: { provider: string; name: string } | null;
+  disabled: boolean;
+  loadCurrentModel: () => {};
+}> = ({ currentModel, disabled, loadCurrentModel }) => {
+  // ModelService.listModels();
+  const _models: {
+    [key: string]: {
+      provider: string;
+      name: string;
+      id: string;
+      description: string;
+    }[];
+  } = {};
+  const [models, setModels] = useState(_models);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+
+  const handleModelList = async () => {
+    setOpen(true);
+    setLoading(true);
+    const res = await ModelService.listModels();
+
+    const response = res.models
+      // .filter((model) => model.is_chat_model)
+      .map((model) => {
+        return {
+          provider: model.provider,
+          name: model.name,
+          id: model.id,
+          description: model.description,
+        };
+      });
+
+    let dict: {
+      [key: string]: {
+        provider: string;
+        name: string;
+        id: string;
+        description: string;
+      }[];
+    } = {};
+    for (let i = 0; i < response.length; i++) {
+      if (!dict[response[i].provider]) {
+        dict[response[i].provider] = [response[i]];
+      } else {
+        dict[response[i].provider].push(response[i]);
+      }
+    }
+
+    setModels(dict);
+    setLoading(false);
+  };
+
+  const [updating, setUpdatingModel] = useState(false);
+
+  const handleModelSelect = (id: string) => {
+    return async () => {
+      console.log("id", id);
+      // setOpen(false);
+      setUpdatingModel(true);
+      await ModelService.setCurrentModel(id);
+      setUpdatingModel(false);
+      loadCurrentModel();
+    };
+  };
+
+  return (
+    <Dialog>
+      {currentModel && (
+        <motion.div
+          initial={{ opacity: 1, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.5 }}
+          transition={{ duration: 0.2, ease: "backInOut" }}
+        >
+          <DialogTrigger asChild>
+            <Button
+              variant={"secondary"}
+              className="p-2 transition ease-in bg-white hover:bg-gray-200"
+              disabled={disabled}
+              onClick={handleModelList}
+            >
+              <div className="flex flex-row">
+                <Avatar className="overflow-hidden rounded-full w-5 h-5">
+                  <AvatarImage
+                    src={currentModel.provider + ".svg"}
+                    alt={currentModel.provider}
+                    className="w-5 h-5"
+                  />
+                  <AvatarFallback>
+                    {currentModel.provider.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+
+                <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
+              </div>
+            </Button>
+          </DialogTrigger>
+        </motion.div>
+      )}
+      <DialogContent showX={false} className="bg-transparent p-0">
+        <motion.div
+          initial={{ opacity: 0, y: 200, scale: 0 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 200, scale: 0 }}
+          transition={{ duration: 0.3, ease: "backInOut" }}
+        >
+          <DialogTitle hidden={true}>Select Model</DialogTitle>
+          <DialogDescription hidden={true}>
+            List of llm models to select from
+          </DialogDescription>
+          <Command className="rounded-lg border shadow-md w-full">
+            <CommandInput placeholder="Type a command or search..." />
+            {loading ? (
+              <div className="m-4">
+                <div className="flex flex-row items-center mb-2">
+                  <Skeleton className="w-10 h-10 rounded-full" />
+                  <Skeleton className="w-2/3 h-6 ml-2" />
+                </div>
+                <Skeleton className="w-2/3 h-6 mb-2" />
+                <Skeleton className="w-2/3 h-6 mb-2" />
+                <div className="flex flex-row items-center mb-2">
+                  <Skeleton className="w-10 h-10 rounded-full" />
+                  <Skeleton className="w-2/3 h-6 ml-2" />
+                </div>
+                <Skeleton className="w-2/3 h-6 mb-2" />
+                <Skeleton className="w-2/3 h-6 mb-2" />
+              </div>
+            ) : (
+              <CommandList>
+                <CommandEmpty>No models found</CommandEmpty>
+                {models &&
+                  Object.keys(models).length > 0 &&
+                  Object.values(models).map((models_) => {
+                    return (
+                      models_.length > 0 && (
+                        <CommandGroup
+                          key={models_[0].provider}
+                          heading={models_[0].provider}
+                        >
+                          {models_.map((model) => {
+                            return (
+                              <CommandItem
+                                key={model.id}
+                                className="flex flex-col items-start"
+                                onSelect={handleModelSelect(model.id)}
+                              >
+                                <div className="flex flex-row">
+                                  <Avatar className="overflow-hidden rounded-full w-5 h-5">
+                                    <AvatarImage
+                                      src={model.provider + ".svg"}
+                                      alt={model.provider}
+                                      className="w-5 h-5"
+                                    />
+                                    <AvatarFallback>
+                                      {model.provider.charAt(0)}
+                                    </AvatarFallback>
+                                  </Avatar>
+
+                                  <h1 className="ml-2">{model.name}</h1>
+                                </div>
+                                <span className="text-xs italic">
+                                  {model.description}
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      )
+                    );
+                  })}
+              </CommandList>
+            )}
+          </Command>
+        </motion.div>
+      </DialogContent>
+    </Dialog>
+  );
 };

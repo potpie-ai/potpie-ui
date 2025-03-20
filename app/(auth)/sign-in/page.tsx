@@ -219,7 +219,7 @@ export default function Signin() {
           <LucideGithub className=" rounded-full border border-white p-1" />
           Signin with GitHub
         </Button>
-        <div className="mt-4 text-center text-sm">
+        <div className="mt-4 text-center text-sm text-black">
             Don&apos;t have an account?{" "}
             <Link href="/sign-up" className="underline">
               Sign up

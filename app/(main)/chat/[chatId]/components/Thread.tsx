@@ -157,13 +157,27 @@ const CustomMarkdown = ({ content }: { content: string }) => {
     <ReactMarkdown
       className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
       components={{
-        code: ({ children }) => (
-          <span className="whitespace-pre-wrap">
-            <code className="bg-gray-100 text-red-500 overflow-x-scroll rounded px-1 py-0.5 text-sm font-bold">
-              {children}
-            </code>
-          </span>
+        p: ({ children }) => (
+          <p className="text-slate-900">{children}</p>
         ),
+        code: ({ children, className }) => {
+          const language = className ? className.replace('language-', '') : 'plaintext';
+          
+          if (language === 'plaintext') {
+            return (
+              <code className="bg-green-200 rounded text-sm font-medium text-slate-900">
+                {children}
+              </code>
+            );
+          }
+
+          return (
+            <MyCodeBlock
+              code={String(children).replace(/\n$/, '')}
+              language={language}
+            />
+          );
+        }
       }}
       remarkPlugins={[remarkGfm]}
     >
@@ -332,7 +346,7 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
       className="flex items-center justify-end w-full"
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
-        <div className="bg-[#f7e6e6] text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
+        <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
           <MessagePrimitive.Content />
         </div>
       </MessagePrimitive.Root>
@@ -488,7 +502,7 @@ const AssistantActionBar: FC<{ streaming: boolean }> = ({ streaming }) => {
     <ActionBarPrimitive.Root
       autohide="not-last"
       autohideFloat="single-branch"
-      className="text-muted-foreground flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
+      className="text-black flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
     >
       <ActionBarPrimitive.Copy asChild>
         <TooltipIconButton tooltip="Copy">
@@ -519,7 +533,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
       className={cn(
-        "text-muted-foreground inline-flex items-center text-xs",
+        "text-black inline-flex items-center text-xs",
         className
       )}
       {...rest}

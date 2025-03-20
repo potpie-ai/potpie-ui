@@ -469,7 +469,7 @@ const AllAgents = () => {
                   <DialogTitle>Agent Limit Reached</DialogTitle>
                 </DialogHeader>
                 <div className="py-4 text-center">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-black">
                     Free users are limited to 3 agents. You already have {data?.length} agent
                     {data?.length > 1 ? "s" : ""}. Upgrade to create more agents and unlock additional
                     features.
@@ -494,7 +494,7 @@ const AllAgents = () => {
               <div className="flex flex-col h-full">
                 <div className="flex-1 py-4">
                   <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-black">
                       Describe the purpose and functionality of your agent in detail.
                       Include any specific tasks, behaviors, or algorithms you want it to
                       implement.
@@ -730,7 +730,7 @@ const AllAgents = () => {
           </Card>
         ) : filteredData && filteredData.length === 0 && searchTerm ? (
           <div className="flex flex-col items-center justify-center w-full py-10">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-lg text-black">
               No agents found matching {debouncedSearchTerm}
             </p>
             <Button
@@ -751,10 +751,10 @@ const AllAgents = () => {
               return (
                 <Card
                   key={index}
-                  className="h-[200px] w-[485px] pt-2 border-border shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-[#FFB36E] hover:border-2 hover:shadow-md flex flex-col justify-between"
+                  className="h-[200px] w-[485px] pt-2 border-border shadow-sm rounded-2xl cursor-pointer hover:scale-105 transition-all duration-300 hover:border-primary hover:border-2 hover:shadow-md flex flex-col justify-between"
                 >
                   <CardHeader className="p-1 px-6 font-normal flex flex-row justify-between items-center">
-                    <CardTitle className="text-lg text-muted flex gap-2 items-center max-w-[380px]">
+                    <CardTitle className="text-lg text-black flex gap-2 items-center max-w-[380px]">
                       <div className="truncate">{content.name}</div>
                       <Bot className="flex-shrink-0" />
                       {(content as any).visibility === "public" && (
@@ -763,7 +763,7 @@ const AllAgents = () => {
                     </CardTitle>
                   </CardHeader>
 
-                  <CardContent className="px-6 pb-4 overflow-hidden text-base text-muted-foreground leading-tight max-w-[480px]">
+                  <CardContent className="px-6 pb-4 overflow-hidden text-base text-black leading-tight max-w-[480px]">
                     <p className="line-clamp-3">{content.description}</p>
                   </CardContent>
 
@@ -940,19 +940,19 @@ const AllAgents = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="font-medium">Make Agent Public</h4>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-black">
                   Anyone with the link can access this agent
                 </p>
               </div>
               
               {isLoadingSharedDetails ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Loading...</span>
+                  <span className="text-xs text-black">Loading...</span>
                   <Loader className="h-4 w-4 animate-spin" />
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-black">
                     {isPublic ? "Public" : "Private"}
                   </span>
                   <Switch 
@@ -1010,10 +1010,10 @@ const AllAgents = () => {
               <div className="rounded-md border h-[120px] overflow-y-auto p-2">
                 {isLoadingSharedDetails ? (
                   <div className="flex items-center justify-center h-full">
-                    <Loader className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader className="h-5 w-5 animate-spin text-black" />
                   </div>
                 ) : sharedEmails.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                  <div className="flex items-center justify-center h-full text-sm text-black">
                     No users added yet
                   </div>
                 ) : (

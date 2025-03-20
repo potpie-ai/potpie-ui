@@ -1,15 +1,35 @@
 import getHeaders from "@/app/utils/headers.util";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import ModelService from "@/services/ModelService";
 import {
   ComposerPrimitive,
   ThreadPrimitive,
   useComposerRuntime,
 } from "@assistant-ui/react";
+import { Avatar, AvatarFallback } from "@radix-ui/react-avatar";
+import { Dialog } from "@radix-ui/react-dialog";
+
 import axios from "axios";
 import { SendHorizontalIcon, CircleStopIcon, X } from "lucide-react";
+import { motion } from "motion/react";
 import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -214,11 +234,205 @@ const MessageComposer = ({
     setSelectedNodes([]);
   };
 
+  const [currentModel, setCurrentModel] = useState<{
+    provider: string;
+    name: string;
+    id: string;
+  } | null>(null);
+  const loadCurrentModel = async () => {
+    const res = await ModelService.getCurrentModel();
+    setCurrentModel({
+      provider: res.provider,
+      name: res.chat_model,
+      id: res.chat_model,
+    });
+  };
+  useEffect(() => {
+    loadCurrentModel();
+  }, []);
+
+  const ModelSelection: FC = () => {
+    // ModelService.listModels();
+    const _models: {
+      [key: string]: {
+        provider: string;
+        name: string;
+        id: string;
+        description: string;
+      }[];
+    } = {};
+    const [models, setModels] = useState(_models);
+    const [loading, setLoading] = useState(true);
+    const [open, setOpen] = useState(false);
+
+    const handleModelList = async () => {
+      setOpen(true);
+      setLoading(true);
+      const res = await ModelService.listModels();
+
+      const response = res.models
+        // .filter((model) => model.is_chat_model)
+        .map((model) => {
+          return {
+            provider: model.provider,
+            name: model.name,
+            id: model.id,
+            description: model.description,
+          };
+        });
+
+      let dict: {
+        [key: string]: {
+          provider: string;
+          name: string;
+          id: string;
+          description: string;
+        }[];
+      } = {};
+      for (let i = 0; i < response.length; i++) {
+        if (!dict[response[i].provider]) {
+          dict[response[i].provider] = [response[i]];
+        } else {
+          dict[response[i].provider].push(response[i]);
+        }
+      }
+
+      setModels(dict);
+      setLoading(false);
+    };
+
+    const [updating, setUpdatingModel] = useState(false);
+
+    const handleModelSelect = (id: string) => {
+      return async () => {
+        console.log("id", id);
+        // setOpen(false);
+        setUpdatingModel(true);
+        await ModelService.setCurrentModel(id);
+        setUpdatingModel(false);
+        loadCurrentModel();
+      };
+    };
+
+    return (
+      <Dialog>
+        {currentModel && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.7, ease: "backInOut" }}
+          >
+            <DialogTrigger asChild>
+              <Button
+                variant={"secondary"}
+                className="p-2 transition ease-in bg-white hover:bg-gray-200"
+                disabled={disabled}
+                onClick={handleModelList}
+              >
+                <div className="flex flex-row">
+                  <Avatar className="overflow-hidden rounded-full w-5 h-5">
+                    <AvatarImage
+                      src={currentModel.provider + ".svg"}
+                      alt={currentModel.provider}
+                      className="w-5 h-5"
+                    />
+                    <AvatarFallback>
+                      {currentModel.provider.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
+                </div>
+              </Button>
+            </DialogTrigger>
+          </motion.div>
+        )}
+        <DialogContent showX={false} className="bg-transparent p-0">
+          <motion.div
+            initial={{ opacity: 0, y: 200, scale: 0 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 200, scale: 0 }}
+            transition={{ duration: 0.3, ease: "backInOut" }}
+          >
+            <DialogTitle hidden={true}>Select Model</DialogTitle>
+            <DialogDescription hidden={true}>
+              List of llm models to select from
+            </DialogDescription>
+            <Command className="rounded-lg border shadow-md w-full">
+              <CommandInput placeholder="Type a command or search..." />
+              {loading ? (
+                <div className="m-4">
+                  <div className="flex flex-row items-center mb-2">
+                    <Skeleton className="w-10 h-10 rounded-full" />
+                    <Skeleton className="w-2/3 h-6 ml-2" />
+                  </div>
+                  <Skeleton className="w-2/3 h-6 mb-2" />
+                  <Skeleton className="w-2/3 h-6 mb-2" />
+                  <div className="flex flex-row items-center mb-2">
+                    <Skeleton className="w-10 h-10 rounded-full" />
+                    <Skeleton className="w-2/3 h-6 ml-2" />
+                  </div>
+                  <Skeleton className="w-2/3 h-6 mb-2" />
+                  <Skeleton className="w-2/3 h-6 mb-2" />
+                </div>
+              ) : (
+                <CommandList>
+                  <CommandEmpty>No models found</CommandEmpty>
+                  {models &&
+                    Object.keys(models).length > 0 &&
+                    Object.values(models).map((models_) => {
+                      return (
+                        models_.length > 0 && (
+                          <CommandGroup
+                            key={models_[0].provider}
+                            heading={models_[0].provider}
+                          >
+                            {models_.map((model) => {
+                              return (
+                                <CommandItem
+                                  key={model.id}
+                                  className="flex flex-col items-start"
+                                  onSelect={handleModelSelect(model.id)}
+                                >
+                                  <div className="flex flex-row">
+                                    <Avatar className="overflow-hidden rounded-full w-5 h-5">
+                                      <AvatarImage
+                                        src={model.provider + ".svg"}
+                                        alt={model.provider}
+                                        className="w-5 h-5"
+                                      />
+                                      <AvatarFallback>
+                                        {model.provider.charAt(0)}
+                                      </AvatarFallback>
+                                    </Avatar>
+
+                                    <h1 className="ml-2">{model.name}</h1>
+                                  </div>
+                                  <span className="text-xs italic">
+                                    {model.description}
+                                  </span>
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        )
+                      );
+                    })}
+                </CommandList>
+              )}
+            </Command>
+          </motion.div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
     return (
-      <div>
-        {/* enable below code with prompt enhancer feature */}
-        {/* <div className="flex items-center justify-end">
+      <div className="flex flex-row w-full items-center justify-end space-x-4">
+        <ModelSelection />
+        <div className="flex items-center justify-end">
           <TooltipIconButton
             tooltip="Enhance Prompt"
             variant="default"
@@ -227,7 +441,7 @@ const MessageComposer = ({
           >
             <span className="text-lg">✨</span>
           </TooltipIconButton>
-        </div> */}
+        </div>
         <ThreadPrimitive.If running={false}>
           <TooltipIconButton
             disabled={disabled}
@@ -272,7 +486,7 @@ const MessageComposer = ({
   };
 
   return (
-    <div className="flex flex-col w-full p-2 ">
+    <div className="flex flex-col w-full p-2">
       {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
       <div className="flex flex-row">
         {/* display selected nodes */}
@@ -293,7 +507,7 @@ const MessageComposer = ({
           </div>
         ))}
       </div>
-      <div className="flex w-full items-start gap-4">
+      <div className="flex flex-col w-full items-start gap-4">
         <ComposerPrimitive.Input
           submitOnEnter={!disabled}
           ref={messageRef}
@@ -303,7 +517,7 @@ const MessageComposer = ({
           placeholder={"Type @ followed by file or function name"}
           onChange={handleMessageChange}
           onKeyDown={handleKeyPress}
-          className="placeholder:text-muted-foreground max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+          className="w-full placeholder:text-muted-foreground max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
         />
         <ComposerAction disabled={disabled} />
       </div>

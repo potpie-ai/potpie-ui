@@ -16,6 +16,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
+  ExternalLinkIcon,
   Loader,
   RefreshCwIcon,
 } from "lucide-react";
@@ -151,21 +152,33 @@ const CustomMarkdown = ({ content }: { content: string }) => {
   const markdownContent = content;
 
   return (
-    <ReactMarkdown
-      className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
-      components={{
-        code: ({ children }) => (
-          <span className="whitespace-pre-wrap">
-            <code className="bg-gray-100 text-red-500 overflow-x-scroll rounded px-1 py-0.5 text-sm font-bold">
+    <div>
+      <ReactMarkdown
+        className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
+        components={{
+          code: ({ children }) => (
+            <span className="whitespace-pre-wrap">
+              <code className="bg-gray-100 text-red-500 overflow-x-scroll rounded px-1 py-0.5 text-sm font-bold">
+                {children}
+              </code>
+            </span>
+          ),
+          a: ({ href, children }) => (
+            <a
+              className="underline inline-flex text-blue-700 hover:text-blue-500 transition-all hover:scale-95"
+              href={href}
+              target="_blank"
+            >
               {children}
-            </code>
-          </span>
-        ),
-      }}
-      remarkPlugins={[remarkGfm]}
-    >
-      {markdownContent}
-    </ReactMarkdown>
+              <ExternalLinkIcon className="h-4 w-4 ml-1" />
+            </a>
+          ),
+        }}
+        remarkPlugins={[remarkGfm]}
+      >
+        {markdownContent}
+      </ReactMarkdown>
+    </div>
   );
 };
 
@@ -181,12 +194,17 @@ const MarkdownComponent = (content: any) => {
               <CustomMarkdown content={section.content} />
             )}
             {section.type === "code" && (
-              <div className="pb-4 text-xs max-w-4xl">
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: "backInOut", stiffness: 50 }}
+                className="pb-4 text-xs max-w-4xl"
+              >
                 <MyCodeBlock
                   code={section.content}
                   language={section.language || "json"}
                 />
-              </div>
+              </motion.div>
             )}
           </li>
         );
@@ -393,7 +411,7 @@ const AssistantMessage: FC = () => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      transition={{ duration: 0.3, ease: "backInOut", stiffness: 50 }}
     >
       <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
         <Avatar className="mr-4 rounded-none bg-transparent">

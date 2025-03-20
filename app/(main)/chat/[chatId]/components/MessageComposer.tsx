@@ -241,11 +241,14 @@ const MessageComposer = ({
   } | null>(null);
   const loadCurrentModel = async () => {
     const res = await ModelService.getCurrentModel();
-    setCurrentModel({
-      provider: res.provider,
-      name: res.chat_model,
-      id: res.chat_model,
-    });
+    res &&
+      res.provider &&
+      res.chat_model &&
+      setCurrentModel({
+        provider: res.provider,
+        name: res.chat_model,
+        id: res.chat_model,
+      });
   };
   useEffect(() => {
     loadCurrentModel();

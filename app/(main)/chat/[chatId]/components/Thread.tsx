@@ -34,12 +34,14 @@ interface ThreadProps {
   projectId: string;
   writeDisabled: boolean;
   userImageURL: string;
+  conversation_id: string;
 }
 
 export const Thread: FC<ThreadProps> = ({
   projectId,
   writeDisabled,
   userImageURL,
+  conversation_id,
 }) => {
   const runtime = useThreadRuntime();
   const [isLoading, setIsLoading] = useState(true);
@@ -84,7 +86,13 @@ export const Thread: FC<ThreadProps> = ({
 
             <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center justify-center">
               <ThreadScrollToBottom />
-              {<Composer projectId={projectId} disabled={writeDisabled} />}
+              {
+                <Composer
+                  projectId={projectId}
+                  disabled={writeDisabled}
+                  conversation_id={conversation_id}
+                />
+              }
             </div>
           </div>
         )}
@@ -152,33 +160,45 @@ const CustomMarkdown = ({ content }: { content: string }) => {
   const markdownContent = content;
 
   return (
-    <div>
-      <ReactMarkdown
-        className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
-        components={{
-          code: ({ children }) => (
-            <span className="whitespace-pre-wrap">
-              <code className="bg-gray-100 text-red-500 overflow-x-scroll rounded px-1 py-0.5 text-sm font-bold">
+    <ReactMarkdown
+      className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
+      components={{
+        p: ({ children }) => <p className="text-slate-900">{children}</p>,
+        code: ({ children, className }) => {
+          const language = className
+            ? className.replace("language-", "")
+            : "plaintext";
+
+          if (language === "plaintext") {
+            return (
+              <code className="bg-green-200 rounded text-sm font-medium text-slate-900">
                 {children}
               </code>
-            </span>
-          ),
-          a: ({ href, children }) => (
-            <a
-              className="underline inline-flex text-blue-700 hover:text-blue-500 transition-all hover:scale-95"
-              href={href}
-              target="_blank"
-            >
-              {children}
-              <ExternalLinkIcon className="h-4 w-4 ml-1" />
-            </a>
-          ),
-        }}
-        remarkPlugins={[remarkGfm]}
-      >
-        {markdownContent}
-      </ReactMarkdown>
-    </div>
+            );
+          }
+
+          return (
+            <MyCodeBlock
+              code={String(children).replace(/\n$/, "")}
+              language={language}
+            />
+          );
+        },
+        a: ({ href, children }) => (
+          <a
+            className="underline inline-flex text-blue-700 hover:text-blue-500 transition-all hover:scale-95"
+            href={href}
+            target="_blank"
+          >
+            {children}
+            <ExternalLinkIcon className="h-4 w-4 ml-1" />
+          </a>
+        ),
+      }}
+      remarkPlugins={[remarkGfm]}
+    >
+      {markdownContent}
+    </ReactMarkdown>
   );
 };
 
@@ -286,10 +306,11 @@ const ThreadWelcomeSuggestions: FC = () => {
   );
 };
 
-const Composer: FC<{ projectId: string; disabled: boolean }> = ({
-  projectId,
-  disabled,
-}) => {
+const Composer: FC<{
+  projectId: string;
+  disabled: boolean;
+  conversation_id: string;
+}> = ({ projectId, disabled, conversation_id }) => {
   const composer = useComposerRuntime();
 
   const setSelectedNodesInConfig = (selectedNodes: any[]) => {
@@ -319,6 +340,7 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
     >
       <MessageComposer
         projectId={projectId}
+        conversation_id={conversation_id}
         setSelectedNodesInConfig={setSelectedNodesInConfig}
         disabled={isStreaming || disabled}
         key={key}
@@ -345,7 +367,7 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
       className="flex items-center justify-end w-full"
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
-        <div className="bg-[#f7e6e6] text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
+        <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
           <MessagePrimitive.Content />
         </div>
       </MessagePrimitive.Root>
@@ -501,7 +523,7 @@ const AssistantActionBar: FC<{ streaming: boolean }> = ({ streaming }) => {
     <ActionBarPrimitive.Root
       autohide="not-last"
       autohideFloat="single-branch"
-      className="text-muted-foreground flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
+      className="text-black flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
     >
       <ActionBarPrimitive.Copy asChild>
         <TooltipIconButton tooltip="Copy">
@@ -531,10 +553,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
   return (
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
-      className={cn(
-        "text-muted-foreground inline-flex items-center text-xs",
-        className
-      )}
+      className={cn("text-black inline-flex items-center text-xs", className)}
       {...rest}
     >
       <BranchPickerPrimitive.Previous asChild>

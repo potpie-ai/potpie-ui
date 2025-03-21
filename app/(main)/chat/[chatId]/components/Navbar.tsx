@@ -276,7 +276,7 @@ const Navbar = ({
 
   if (hidden) return null;
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-[#E3E3E3]">
+    <header className="sticky top-0 z-50 bg-muted border-b border-[#E3E3E3]">
       {showTitle && (
         <div className="flex h-[52px] w-full">
           <div className="flex items-center justify-between w-full px-4 lg:px-6">
@@ -293,7 +293,7 @@ const Navbar = ({
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger className="min-w-0 flex-1 text-left">
-                  <span className="text-muted text-xl truncate block">
+                  <span className="text-black text-xl truncate block">
                     {displayTitle}
                   </span>
                 </DialogTrigger>

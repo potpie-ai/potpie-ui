@@ -48,7 +48,7 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="data-[state=open]:bg-muted data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
@@ -62,7 +62,7 @@ export function NavUser({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-sidebar text-sidebar-foreground"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-muted text-black"
             side={"right"}
             align="end"
             sideOffset={8}
@@ -81,17 +81,21 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => router.push("/key-management")}>
+              <DropdownMenuItem 
+                className="hover:bg-accent cursor-pointer"
+                onClick={() => router.push("/key-management")}
+              >
                 <CreditCard />
                 Key Management
               </DropdownMenuItem>
               <DropdownMenuItem
+                className="hover:bg-accent cursor-pointer"
                 onClick={() => router.push("/user-subscription")}
               >
                 <Receipt />
                 Manage Subscription
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem className="hover:bg-accent cursor-pointer">
                 <Link
                   href={"https://discord.gg/ryk5CMD5v6"}
                   target="_blank"
@@ -104,6 +108,7 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              className="hover:bg-accent cursor-pointer"
               onClick={() => {
                 posthog.reset();
                 signOut(auth);

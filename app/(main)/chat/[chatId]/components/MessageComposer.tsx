@@ -35,12 +35,14 @@ import {
   Loader2Icon,
 } from "lucide-react";
 import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
+import ChatService from "@/services/ChatService";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
   input: string;
   nodes: NodeOption[];
   disabled: boolean;
+  conversation_id: string;
   setSelectedNodesInConfig: (selectedNodes: any[]) => void;
 }
 
@@ -58,6 +60,7 @@ const MessageComposer = ({
   input,
   nodes,
   disabled,
+  conversation_id,
   setSelectedNodesInConfig,
 }: MessageComposerProps) => {
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
@@ -73,6 +76,7 @@ const MessageComposer = ({
   );
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
+  const [isTextareaDisabled, setIsTextareaDisabled] = useState(false);
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
 
@@ -305,19 +309,20 @@ const MessageComposer = ({
   };
 
   const handleEnhancePrompt = async () => {
-    // try {
-    //   setIsTextareaDisabled(true);
-    //   setMessage("Enhancing...");
-    //   const enhancedMessage = await ChatService.enhancePrompt(
-    //     conversation_id,
-    //     message
-    //   );
-    //   setMessage(enhancedMessage);
-    // } catch (error) {
-    //   console.error("Error enhancing prompt:", error);
-    // } finally {
-    //   setIsTextareaDisabled(false);
-    // }
+    try {
+      setIsTextareaDisabled(true);
+      setMessage("Enhancing...");
+      const enhancedMessage = await ChatService.enhancePrompt(
+        conversation_id,
+        message
+      );
+      setMessage(enhancedMessage);
+      composer.setText(enhancedMessage);
+    } catch (error) {
+      console.error("Error enhancing prompt:", error);
+    } finally {
+      setIsTextareaDisabled(false);
+    }
   };
 
   return (
@@ -352,7 +357,7 @@ const MessageComposer = ({
           placeholder={"Type @ followed by file or function name"}
           onChange={handleMessageChange}
           onKeyDown={handleKeyPress}
-          className="w-full placeholder:text-muted-foreground max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+          className="placeholder:text-black max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
         />
         <ComposerAction disabled={disabled} />
       </div>

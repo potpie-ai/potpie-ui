@@ -76,6 +76,9 @@ const KeyManagement = () => {
   // User key (secret) management state
   const [inputKeyValue, setInputKeyValue] = React.useState("");
   const [userSelectedProvider, setUserSelectedProvider] = React.useState("");
+  useEffect(() => {
+    setUserSelectedProvider(selectedGlobalProvider);
+  }, [selectedGlobalProvider]);
 
   // Radio selection: "momentumKey" = using Potpie's key, "userKey" = using your own key.
   const [keyType, setKeyType] = React.useState("momentumKey");

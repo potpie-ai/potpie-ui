@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
 import ChatService from "@/services/ChatService";
+import Image from "next/image";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
@@ -357,7 +358,7 @@ const MessageComposer = ({
           placeholder={"Type @ followed by file or function name"}
           onChange={handleMessageChange}
           onKeyDown={handleKeyPress}
-          className="placeholder:text-black max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+          className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
         />
         <ComposerAction disabled={disabled} />
       </div>
@@ -403,10 +404,8 @@ const ModelSelection: FC<{
   } = {};
   const [models, setModels] = useState(_models);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
 
   const handleModelList = async () => {
-    setOpen(true);
     setLoading(true);
     const res = await ModelService.listModels();
 
@@ -465,17 +464,13 @@ const ModelSelection: FC<{
             disabled={disabled}
             onClick={handleModelList}
           >
-            <div className="flex flex-row">
-              <Avatar className="overflow-hidden rounded-full w-5 h-5">
-                <AvatarImage
-                  src={currentModel.provider + ".svg"}
-                  alt={currentModel.provider}
-                  className="w-5 h-5"
-                />
-                <AvatarFallback>
-                  {currentModel.provider.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+            <div className="flex flex-row justify-center items-center">
+              <Image
+                height={20}
+                width={20}
+                src={currentModel.provider + ".svg"}
+                alt={currentModel.provider.charAt(0)}
+              />
 
               <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
             </div>
@@ -487,7 +482,10 @@ const ModelSelection: FC<{
           <Skeleton className="h-5 w-12 rounded-sm ml-2" />
         </div>
       )}
-      <DialogContent showX={false} className="bg-transparent p-0">
+      <DialogContent
+        showX={false}
+        className="bg-transparent p-0 w-1/2 max-w-full max-h-full"
+      >
         <DialogTitle hidden={true}>Select Model</DialogTitle>
         <DialogDescription hidden={true}>
           List of llm models to select from
@@ -508,9 +506,15 @@ const ModelSelection: FC<{
               </div>
               <Skeleton className="w-2/3 h-6 mb-2" />
               <Skeleton className="w-2/3 h-6 mb-2" />
+              <div className="flex flex-row items-center mb-2">
+                <Skeleton className="w-10 h-10 rounded-full" />
+                <Skeleton className="w-2/3 h-6 ml-2" />
+              </div>
+              <Skeleton className="w-2/3 h-6 mb-2" />
+              <Skeleton className="w-2/3 h-6 mb-2" />
             </div>
           ) : (
-            <CommandList>
+            <CommandList className="px-5">
               <CommandEmpty>No models found</CommandEmpty>
               {models &&
                 Object.keys(models).length > 0 &&

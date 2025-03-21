@@ -35,6 +35,7 @@ import { Eye, EyeOff, Trash } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import getHeaders from "@/app/utils/headers.util";
+import ModelService from "@/services/ModelService";
 
 interface KeySecrets {
   api_key: string;
@@ -46,9 +47,8 @@ interface ApiKeyState extends KeySecrets {
 }
 
 interface ProviderInfo {
-  id: string;
   name: string;
-  description: string;
+  inference_model_id: string;
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
@@ -57,7 +57,12 @@ const KeyManagement = () => {
   const queryClient = useQueryClient();
 
   const getKeyPromptMessage = (provider: string) => {
-    const openrouterProviders = ['deepseek', 'meta-llama', 'mistralai', 'gemini'];
+    const openrouterProviders = [
+      "deepseek",
+      "meta-llama",
+      "mistralai",
+      "gemini",
+    ];
     if (openrouterProviders.includes(provider)) {
       return "Please enter your OpenRouter API key. This provider is accessed through OpenRouter's API.";
     }
@@ -65,7 +70,8 @@ const KeyManagement = () => {
   };
 
   // Global provider state – only provider is selected.
-  const [selectedGlobalProvider, setSelectedGlobalProvider] = React.useState("");
+  const [selectedGlobalProvider, setSelectedGlobalProvider] =
+    React.useState("");
 
   // User key (secret) management state
   const [inputKeyValue, setInputKeyValue] = React.useState("");
@@ -73,56 +79,61 @@ const KeyManagement = () => {
 
   // Radio selection: "momentumKey" = using Potpie's key, "userKey" = using your own key.
   const [keyType, setKeyType] = React.useState("momentumKey");
-  const [createNewKeyDialogOpen, setCreateNewKeyDialogOpen] = React.useState(false);
+  const [createNewKeyDialogOpen, setCreateNewKeyDialogOpen] =
+    React.useState(false);
   const [deleteKeyDialogOpen, setDeleteKeyDialogOpen] = React.useState(false);
 
   // Query available providers for both global and secret registration
   const { data: availableProviders } = useQuery<ProviderInfo[]>({
     queryKey: ["available-providers"],
     queryFn: async () => {
-      const headers = await getHeaders();
-      const response = await axios.get<ProviderInfo[]>(
-        `${BASE_URL}/api/v1/list-available-llms/`,
-        { headers }
-      );
-      return response.data;
+      const res = await ModelService.listModels();
+      return res.models
+        .filter((model) => model.is_inference_model)
+        .map((model) => {
+          return { inference_model_id: model.id, name: model.provider };
+        });
     },
   });
 
   // Query global AI provider settings
   const { data: globalAIProvider } = useQuery<{
-    preferred_llm: string;
-    low_reasoning_model: string;
-    high_reasoning_model: string;
+    provider: string;
+    mode_id: string;
+    model_name: string;
   }>({
     queryKey: ["global-provider"],
     queryFn: async () => {
       const headers = await getHeaders();
-      const response = await axios.get(`${BASE_URL}/api/v1/get-global-ai-provider/`, {
-        headers,
-      });
-      return response.data;
+      const response = await axios.get(
+        `${BASE_URL}/api/v1/get-global-ai-provider/`,
+        {
+          headers,
+        }
+      );
+      return response.data.inference_model;
     },
   });
 
   useEffect(() => {
-    if (globalAIProvider?.preferred_llm) {
-      setSelectedGlobalProvider(globalAIProvider.preferred_llm);
+    if (globalAIProvider?.provider) {
+      setSelectedGlobalProvider(globalAIProvider.provider);
     }
   }, [globalAIProvider]);
 
   // Query user key secret (using "all" to fetch saved secret)
-  const { data: KeySecrets, isLoading: isLoadingSecrets } = useQuery<KeySecrets>({
-    queryKey: ["secrets"],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const response = await axios.get<KeySecrets>(
-        `${BASE_URL}/api/v1/secrets/all`,
-        { headers }
-      );
-      return response.data;
-    },
-  });
+  const { data: KeySecrets, isLoading: isLoadingSecrets } =
+    useQuery<KeySecrets>({
+      queryKey: ["secrets"],
+      queryFn: async () => {
+        const headers = await getHeaders();
+        const response = await axios.get<KeySecrets>(
+          `${BASE_URL}/api/v1/secrets/all`,
+          { headers }
+        );
+        return response.data;
+      },
+    });
 
   useEffect(() => {
     if (KeySecrets?.api_key) {
@@ -150,22 +161,29 @@ const KeyManagement = () => {
   });
 
   // Mutation: Set Global AI Provider (only provider is sent)
-  const { mutate: setGlobalProviderMutation, isPending: isSettingGlobal } = useMutation({
-    mutationFn: async () => {
-      const headers = await getHeaders();
-      const payload = {
-        provider: selectedGlobalProvider,
-      };
-      return axios.post(`${BASE_URL}/api/v1/set-global-ai-provider/`, payload, { headers });
-    },
-    onSuccess: () => {
-      toast.success("Global AI provider set successfully");
-      queryClient.invalidateQueries({ queryKey: ["global-provider"] });
-    },
-    onError: () => {
-      toast.error("Failed to set global AI provider");
-    },
-  });
+  const { mutate: setGlobalProviderMutation, isPending: isSettingGlobal } =
+    useMutation({
+      mutationFn: async () => {
+        const headers = await getHeaders();
+        const payload = {
+          inference_model: availableProviders?.findLast(
+            (provider) => provider.name == selectedGlobalProvider
+          )?.inference_model_id,
+        };
+        return axios.post(
+          `${BASE_URL}/api/v1/set-global-ai-provider/`,
+          payload,
+          { headers }
+        );
+      },
+      onSuccess: () => {
+        toast.success("Global AI provider set successfully");
+        queryClient.invalidateQueries({ queryKey: ["global-provider"] });
+      },
+      onError: () => {
+        toast.error("Failed to set global AI provider");
+      },
+    });
 
   // Mutation: Save user secret (register user key) – no model fields sent.
   const { mutate: saveSecret, isPending: isSaving } = useMutation({
@@ -231,19 +249,20 @@ const KeyManagement = () => {
       queryClient.setQueryData(["api-key"], null);
     },
     onError: (error: any) => {
-      toast.error(
-        error.response?.data?.message || "Failed to revoke API key"
-      );
+      toast.error(error.response?.data?.message || "Failed to revoke API key");
     },
   });
 
   // Toggle API key visibility
   const toggleKeyVisibility = () => {
     if (!apiKey) return;
-    queryClient.setQueryData(["api-key"], (oldData: ApiKeyState | undefined) => {
-      if (!oldData) return oldData;
-      return { ...oldData, isVisible: !oldData.isVisible };
-    });
+    queryClient.setQueryData(
+      ["api-key"],
+      (oldData: ApiKeyState | undefined) => {
+        if (!oldData) return oldData;
+        return { ...oldData, isVisible: !oldData.isVisible };
+      }
+    );
   };
 
   // Mask key for display
@@ -271,7 +290,7 @@ const KeyManagement = () => {
             </SelectTrigger>
             <SelectContent className="bg-muted">
               {availableProviders?.map((prov) => (
-                <SelectItem key={prov.id} className="pl-8" value={prov.id}>
+                <SelectItem key={prov.name} className="pl-8" value={prov.name}>
                   {prov.name}
                 </SelectItem>
               ))}
@@ -313,7 +332,10 @@ const KeyManagement = () => {
           </div>
         </RadioGroup>
         {/* Delete (switch back to Potpie's key) Dialog */}
-        <Dialog open={deleteKeyDialogOpen} onOpenChange={setDeleteKeyDialogOpen}>
+        <Dialog
+          open={deleteKeyDialogOpen}
+          onOpenChange={setDeleteKeyDialogOpen}
+        >
           <DialogContent className="max-w-xl">
             <DialogHeader>
               <DialogTitle className="text-lg text-primary">
@@ -321,9 +343,9 @@ const KeyManagement = () => {
               </DialogTitle>
               <DialogDescription>
                 <p className="text-base text-black mt-2">
-                  We don&apos;t keep unused keys. If you switch to Potpie&apos;s key,
-                  all your saved keys will be deleted and you will have to re-register them later.
-                  Are you sure you want to proceed?
+                  We don&apos;t keep unused keys. If you switch to Potpie&apos;s
+                  key, all your saved keys will be deleted and you will have to
+                  re-register them later. Are you sure you want to proceed?
                 </p>
               </DialogDescription>
             </DialogHeader>
@@ -334,17 +356,25 @@ const KeyManagement = () => {
               >
                 Delete All Keys
               </Button>
-              <Button variant="outline" onClick={() => setDeleteKeyDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteKeyDialogOpen(false)}
+              >
                 Cancel
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
         {/* Create new key (user key) Dialog */}
-        <Dialog open={createNewKeyDialogOpen} onOpenChange={setCreateNewKeyDialogOpen}>
+        <Dialog
+          open={createNewKeyDialogOpen}
+          onOpenChange={setCreateNewKeyDialogOpen}
+        >
           <DialogContent className="max-w-xl">
             <DialogHeader>
-              <DialogTitle className="text-lg text-primary">Register New Key</DialogTitle>
+              <DialogTitle className="text-lg text-primary">
+                Register New Key
+              </DialogTitle>
               <DialogDescription>
                 <p className="text-base text-black mt-2">
                   Select the LLM you want to use and enter your API key.
@@ -368,7 +398,7 @@ const KeyManagement = () => {
                   <SelectContent className="bg-background">
                     <SelectGroup>
                       {availableProviders?.map((prov) => (
-                        <SelectItem key={prov.id} value={prov.id}>
+                        <SelectItem key={prov.name} value={prov.name}>
                           {prov.name}
                         </SelectItem>
                       ))}
@@ -410,7 +440,9 @@ const KeyManagement = () => {
             <TableHeader>
               <TableRow className="border-bottom border-border">
                 <TableHead className="w-[200px] text-black">Provider</TableHead>
-                <TableHead className="w-[400px] text-black">Key Value</TableHead>
+                <TableHead className="w-[400px] text-black">
+                  Key Value
+                </TableHead>
                 <TableHead className="w-[100px] text-black">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -450,7 +482,7 @@ const KeyManagement = () => {
         {!isLoadingKey && !apiKey && (
           <Button
             onClick={() => generateApiKey()}
-            className="text-right w-40 ml-auto pr-6"
+            className="text-right w-40 ml-auto mr-10"
             disabled={isGenerating}
           >
             {isGenerating ? "Generating..." : "Generate API Key"}
@@ -475,9 +507,7 @@ const KeyManagement = () => {
             <TableBody>
               <TableRow>
                 <TableCell className="font-mono">
-                  {apiKey.isVisible
-                    ? apiKey.api_key
-                    : maskKey(apiKey.api_key)}
+                  {apiKey.isVisible ? apiKey.api_key : maskKey(apiKey.api_key)}
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button

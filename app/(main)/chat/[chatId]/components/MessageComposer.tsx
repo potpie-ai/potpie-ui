@@ -252,12 +252,11 @@ const MessageComposer = ({
     const res = await ModelService.getCurrentModel();
 
     res &&
-      res.provider &&
       res.chat_model &&
       setCurrentModel({
-        provider: res.provider,
-        name: res.chat_model,
-        id: res.chat_model,
+        provider: res.chat_model.provider,
+        name: res.chat_model.name,
+        id: res.chat_model.id,
       });
   };
   useEffect(() => {
@@ -440,17 +439,13 @@ const ModelSelection: FC<{
     setLoading(false);
   };
 
-  const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const [selectedId, setSelectedId] = useState("");
 
   const handleModelSelect = (id: string) => {
     return async () => {
-      // setOpen(false);
       setSelectedId(id);
-      setIsUpdatingModel(true);
       await ModelService.setCurrentModel(id);
       await loadCurrentModel();
-      setIsUpdatingModel(false);
     };
   };
 
@@ -479,7 +474,7 @@ const ModelSelection: FC<{
       ) : (
         <div className="flex flex-row items-center justify-center">
           <Skeleton className="h-6 w-6 rounded-full" />
-          <Skeleton className="h-5 w-12 rounded-sm ml-2" />
+          <Skeleton className="h-5 w-20 rounded-sm ml-1" />
         </div>
       )}
       <DialogContent

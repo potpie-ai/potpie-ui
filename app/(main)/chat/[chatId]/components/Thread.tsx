@@ -29,6 +29,8 @@ import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
 import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Accordion, AccordionTrigger } from "@/components/ui/accordion";
+import { AccordionContent, AccordionItem } from "@radix-ui/react-accordion";
 
 interface ThreadProps {
   projectId: string;
@@ -186,7 +188,7 @@ const CustomMarkdown = ({ content }: { content: string }) => {
         },
         a: ({ href, children }) => (
           <a
-            className="underline inline-flex text-blue-700 hover:text-blue-500 transition-all hover:scale-95"
+            className="underline inline-flex transition-all"
             href={href}
             target="_blank"
           >
@@ -435,7 +437,7 @@ const AssistantMessage: FC = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "backInOut", stiffness: 50 }}
     >
-      <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
+      <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative">
         <Avatar className="mr-4 rounded-none bg-transparent">
           <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
           <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
@@ -448,36 +450,69 @@ const AssistantMessage: FC = () => {
               transition={{ duration: 0.6, ease: "easeOut" }}
               className="mb-4"
             >
-              <div className="w-96 bg-transparent">
-                <motion.ul
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5 }}
-                  className="w-full"
-                >
-                  {toolsState.map((toolState, index) => (
-                    <motion.li
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        duration: 0.6,
-                        ease: "easeOut",
-                      }}
-                      key={toolState.id}
-                      className="m-1 rounded-sm flex flex-row justify-start items-center"
-                    >
-                      <div>
-                        {toolState.status === "result" ? (
-                          <CheckIcon className="h-4 w-4" color="green" />
-                        ) : (
-                          <Loader className="h-4 w-4 animate-spin" />
-                        )}
-                      </div>
-                      <div className="italic ml-2">{toolState.message}</div>
-                    </motion.li>
-                  ))}
-                </motion.ul>
-              </div>
+              <Accordion
+                type="single"
+                collapsible
+                defaultValue="tool-results"
+                className="w-96"
+              >
+                <AccordionItem value="tool-results" className="w-96">
+                  <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
+                    <div className="italic ml-2 mr-2">Tool Calls</div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="w-96 bg-transparent">
+                      <motion.ul
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.5 }}
+                        className="w-full"
+                      >
+                        {toolsState.map((toolState, index) => (
+                          <motion.li
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{
+                              duration: 0.6,
+                              ease: "easeOut",
+                            }}
+                            key={toolState.id}
+                            className="m-1 rounded-sm"
+                          >
+                            <Accordion
+                              type="single"
+                              className="w-96"
+                              collapsible
+                            >
+                              <AccordionItem
+                                value={toolState.id}
+                                className="w-96"
+                              >
+                                <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
+                                  <div>
+                                    {toolState.status === "result" ? (
+                                      <CheckIcon
+                                        className="h-4 w-4"
+                                        color="green"
+                                      />
+                                    ) : (
+                                      <Loader className="h-4 w-4 animate-spin" />
+                                    )}
+                                  </div>
+                                  <div className="italic ml-2 mr-2">
+                                    {toolState.message}
+                                  </div>
+                                </AccordionTrigger>
+                                <AccordionContent></AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+                          </motion.li>
+                        ))}
+                      </motion.ul>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </motion.div>
           )}
           {!isRunning && text ? (
@@ -499,8 +534,8 @@ const AssistantMessage: FC = () => {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{
-                duration: 0.6,
-                ease: "easeOut",
+                duration: 0.2,
+                ease: "backInOut",
                 staggerChildren: 0.5,
               }}
             >

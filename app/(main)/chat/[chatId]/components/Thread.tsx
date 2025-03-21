@@ -71,7 +71,7 @@ export const Thread: FC<ThreadProps> = ({
 
             <ThreadPrimitive.If empty={false}>
               <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
-                <div className="pb-24 bg-inherit min-w-96 w-full">
+                <div className="pb-36 bg-inherit min-w-96 w-full">
                   <ThreadPrimitive.Messages
                     components={{
                       UserMessage: userMessage,
@@ -312,7 +312,7 @@ const Composer: FC<{ projectId: string; disabled: boolean }> = ({
 
   return (
     <ComposerPrimitive.Root
-      className="bg-white z-10 w-3/4 focus-within:-translate-y-4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out"
+      className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out"
       onSubmit={() => {
         setKey(key + 1); // Current this is used to rerender MessageComposer (so that message and nodes are reset)
       }}

@@ -21,7 +21,7 @@ export default class ModelService {
 
     try {
       const response = await axios.get(
-        `${baseUrl}/api/v1/list-available-models`,
+        `${baseUrl}/api/v1/list-available-models/`,
         {
           headers,
         }
@@ -38,7 +38,7 @@ export default class ModelService {
 
     try {
       const response = await axios.post(
-        `${baseUrl}/api/v1/set-global-ai-provider`,
+        `${baseUrl}/api/v1/set-global-ai-provider/`,
         { chat_model: model_id },
         {
           headers,
@@ -56,7 +56,7 @@ export default class ModelService {
 
     try {
       const response = await axios.get(
-        `${baseUrl}/api/v1/get-global-ai-provider`,
+        `${baseUrl}/api/v1/get-global-ai-provider/`,
         {
           headers,
         }

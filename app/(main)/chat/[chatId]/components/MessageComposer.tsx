@@ -28,8 +28,12 @@ import { Avatar, AvatarFallback } from "@radix-ui/react-avatar";
 import { Dialog } from "@radix-ui/react-dialog";
 
 import axios from "axios";
-import { SendHorizontalIcon, CircleStopIcon, X } from "lucide-react";
-import { motion } from "motion/react";
+import {
+  SendHorizontalIcon,
+  CircleStopIcon,
+  X,
+  Loader2Icon,
+} from "lucide-react";
 import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -241,6 +245,7 @@ const MessageComposer = ({
   } | null>(null);
   const loadCurrentModel = async () => {
     const res = await ModelService.getCurrentModel();
+
     res &&
       res.provider &&
       res.chat_model &&
@@ -431,128 +436,125 @@ const ModelSelection: FC<{
     setLoading(false);
   };
 
-  const [updating, setUpdatingModel] = useState(false);
+  const [isUpdatingModel, setIsUpdatingModel] = useState(false);
+  const [selectedId, setSelectedId] = useState("");
 
   const handleModelSelect = (id: string) => {
     return async () => {
-      console.log("id", id);
       // setOpen(false);
-      setUpdatingModel(true);
+      setSelectedId(id);
+      setIsUpdatingModel(true);
       await ModelService.setCurrentModel(id);
-      setUpdatingModel(false);
-      loadCurrentModel();
+      await loadCurrentModel();
+      setIsUpdatingModel(false);
     };
   };
 
   return (
     <Dialog>
-      {currentModel && (
-        <motion.div
-          initial={{ opacity: 1, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.5 }}
-          transition={{ duration: 0.2, ease: "backInOut" }}
-        >
-          <DialogTrigger asChild>
-            <Button
-              variant={"secondary"}
-              className="p-2 transition ease-in bg-white hover:bg-gray-200"
-              disabled={disabled}
-              onClick={handleModelList}
-            >
-              <div className="flex flex-row">
-                <Avatar className="overflow-hidden rounded-full w-5 h-5">
-                  <AvatarImage
-                    src={currentModel.provider + ".svg"}
-                    alt={currentModel.provider}
-                    className="w-5 h-5"
-                  />
-                  <AvatarFallback>
-                    {currentModel.provider.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
+      {currentModel ? (
+        <DialogTrigger asChild>
+          <Button
+            variant={"secondary"}
+            className="p-2 transition ease-in bg-white hover:bg-gray-200"
+            disabled={disabled}
+            onClick={handleModelList}
+          >
+            <div className="flex flex-row">
+              <Avatar className="overflow-hidden rounded-full w-5 h-5">
+                <AvatarImage
+                  src={currentModel.provider + ".svg"}
+                  alt={currentModel.provider}
+                  className="w-5 h-5"
+                />
+                <AvatarFallback>
+                  {currentModel.provider.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
 
-                <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
-              </div>
-            </Button>
-          </DialogTrigger>
-        </motion.div>
+              <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
+            </div>
+          </Button>
+        </DialogTrigger>
+      ) : (
+        <div className="flex flex-row items-center justify-center">
+          <Skeleton className="h-6 w-6 rounded-full" />
+          <Skeleton className="h-5 w-12 rounded-sm ml-2" />
+        </div>
       )}
       <DialogContent showX={false} className="bg-transparent p-0">
-        <motion.div
-          initial={{ opacity: 0, y: 200, scale: 0 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 200, scale: 0 }}
-          transition={{ duration: 0.3, ease: "backInOut" }}
-        >
-          <DialogTitle hidden={true}>Select Model</DialogTitle>
-          <DialogDescription hidden={true}>
-            List of llm models to select from
-          </DialogDescription>
-          <Command className="rounded-lg border shadow-md w-full">
-            <CommandInput placeholder="Type a command or search..." />
-            {loading ? (
-              <div className="m-4">
-                <div className="flex flex-row items-center mb-2">
-                  <Skeleton className="w-10 h-10 rounded-full" />
-                  <Skeleton className="w-2/3 h-6 ml-2" />
-                </div>
-                <Skeleton className="w-2/3 h-6 mb-2" />
-                <Skeleton className="w-2/3 h-6 mb-2" />
-                <div className="flex flex-row items-center mb-2">
-                  <Skeleton className="w-10 h-10 rounded-full" />
-                  <Skeleton className="w-2/3 h-6 ml-2" />
-                </div>
-                <Skeleton className="w-2/3 h-6 mb-2" />
-                <Skeleton className="w-2/3 h-6 mb-2" />
+        <DialogTitle hidden={true}>Select Model</DialogTitle>
+        <DialogDescription hidden={true}>
+          List of llm models to select from
+        </DialogDescription>
+        <Command className="rounded-lg border shadow-md w-full">
+          <CommandInput placeholder="Type a command or search..." />
+          {loading ? (
+            <div className="m-4">
+              <div className="flex flex-row items-center mb-2">
+                <Skeleton className="w-10 h-10 rounded-full" />
+                <Skeleton className="w-2/3 h-6 ml-2" />
               </div>
-            ) : (
-              <CommandList>
-                <CommandEmpty>No models found</CommandEmpty>
-                {models &&
-                  Object.keys(models).length > 0 &&
-                  Object.values(models).map((models_) => {
-                    return (
-                      models_.length > 0 && (
-                        <CommandGroup
-                          key={models_[0].provider}
-                          heading={models_[0].provider}
-                        >
-                          {models_.map((model) => {
-                            return (
-                              <CommandItem
-                                key={model.id}
-                                className="flex flex-col items-start"
-                                onSelect={handleModelSelect(model.id)}
-                              >
-                                <div className="flex flex-row">
-                                  <Avatar className="overflow-hidden rounded-full w-5 h-5">
-                                    <AvatarImage
-                                      src={model.provider + ".svg"}
-                                      alt={model.provider}
-                                      className="w-5 h-5"
-                                    />
-                                    <AvatarFallback>
-                                      {model.provider.charAt(0)}
-                                    </AvatarFallback>
-                                  </Avatar>
-
-                                  <h1 className="ml-2">{model.name}</h1>
+              <Skeleton className="w-2/3 h-6 mb-2" />
+              <Skeleton className="w-2/3 h-6 mb-2" />
+              <div className="flex flex-row items-center mb-2">
+                <Skeleton className="w-10 h-10 rounded-full" />
+                <Skeleton className="w-2/3 h-6 ml-2" />
+              </div>
+              <Skeleton className="w-2/3 h-6 mb-2" />
+              <Skeleton className="w-2/3 h-6 mb-2" />
+            </div>
+          ) : (
+            <CommandList>
+              <CommandEmpty>No models found</CommandEmpty>
+              {models &&
+                Object.keys(models).length > 0 &&
+                Object.values(models).map((models_) => {
+                  return (
+                    models_.length > 0 && (
+                      <CommandGroup
+                        key={models_[0].provider}
+                        heading={models_[0].provider}
+                      >
+                        {models_.map((model) => {
+                          return (
+                            <CommandItem
+                              key={model.id}
+                              className={`flex flex-row items-start ${selectedId === model.id ? "animate-pulse" : ""}`}
+                              onSelect={handleModelSelect(model.id)}
+                              value={model.name + " " + model.provider}
+                            >
+                              <Avatar className="overflow-hidden rounded-full w-8 h-8">
+                                <AvatarImage
+                                  src={model.provider + ".svg"}
+                                  alt={model.provider}
+                                  className="w-8 h-8"
+                                />
+                                <AvatarFallback>
+                                  {model.provider.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex flex-col">
+                                <div className="flex flex-row items-center">
+                                  <span className="ml-2">{model.name}</span>
+                                  {selectedId === model.id && (
+                                    <Loader2Icon className="ml-2 h-3 w-3 animate-spin" />
+                                  )}
                                 </div>
-                                <span className="text-xs italic">
+                                <div className="text-xs italic ml-2">
                                   {model.description}
-                                </span>
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      )
-                    );
-                  })}
-              </CommandList>
-            )}
-          </Command>
-        </motion.div>
+                                </div>
+                              </div>
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    )
+                  );
+                })}
+            </CommandList>
+          )}
+        </Command>
       </DialogContent>
     </Dialog>
   );

@@ -38,8 +38,10 @@ import getHeaders from "@/app/utils/headers.util";
 import ModelService from "@/services/ModelService";
 
 interface KeySecrets {
-  api_key: string;
-  provider?: string;
+  inference_config: {
+    api_key: string;
+    provider?: string;
+  };
 }
 
 interface ApiKeyState extends KeySecrets {
@@ -139,7 +141,7 @@ const KeyManagement = () => {
     });
 
   useEffect(() => {
-    if (KeySecrets?.api_key) {
+    if (KeySecrets?.inference_config?.api_key) {
       setKeyType("userKey");
     } else {
       setKeyType("momentumKey");
@@ -192,7 +194,18 @@ const KeyManagement = () => {
   const { mutate: saveSecret, isPending: isSaving } = useMutation({
     mutationFn: async (data: { provider: string; api_key: string }) => {
       const headers = await getHeaders();
-      return axios.post(`${BASE_URL}/api/v1/secrets`, data, { headers });
+      return axios.post(
+        `${BASE_URL}/api/v1/secrets`,
+        {
+          inference_config: {
+            api_key: data.api_key,
+            model: availableProviders?.findLast(
+              (provider) => provider.name == selectedGlobalProvider
+            )?.inference_model_id,
+          },
+        },
+        { headers }
+      );
     },
     onSuccess: () => {
       toast.success("Key saved successfully");
@@ -354,7 +367,9 @@ const KeyManagement = () => {
             </DialogHeader>
             <DialogFooter>
               <Button
-                onClick={() => deleteSecret(KeySecrets?.provider || "all")}
+                onClick={() =>
+                  deleteSecret(KeySecrets?.inference_config.provider || "all")
+                }
                 disabled={isDeleting}
               >
                 Delete All Keys
@@ -438,7 +453,7 @@ const KeyManagement = () => {
       <Separator className="pr-20 mt-4" />
       {/* Display Saved Key */}
       <div className="mt-4 pr-10">
-        {KeySecrets?.api_key && (
+        {KeySecrets?.inference_config.api_key && keyType === "userKey" && (
           <Table>
             <TableHeader>
               <TableRow className="border-bottom border-border">
@@ -450,21 +465,27 @@ const KeyManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow key={KeySecrets.api_key}>
+              <TableRow key={KeySecrets.inference_config.api_key}>
                 <TableCell>
-                  {KeySecrets?.provider
-                    ? KeySecrets.provider.charAt(0).toUpperCase() +
-                      KeySecrets.provider.slice(1)
+                  {KeySecrets?.inference_config.provider
+                    ? KeySecrets.inference_config.provider
+                        .charAt(0)
+                        .toUpperCase() +
+                      KeySecrets.inference_config.provider.slice(1)
                     : "Unknown Provider"}
                 </TableCell>
                 <TableCell className="font-mono">
-                  {maskKey(KeySecrets.api_key)}
+                  {maskKey(KeySecrets.inference_config.api_key)}
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => deleteSecret(KeySecrets?.provider || "all")}
+                    onClick={() =>
+                      deleteSecret(
+                        KeySecrets?.inference_config.provider || "all"
+                      )
+                    }
                     disabled={isDeleting}
                   >
                     <Trash className="h-4 w-4" />
@@ -497,7 +518,7 @@ const KeyManagement = () => {
           <div className="text-center py-4 text-gray-500">
             Loading API key...
           </div>
-        ) : apiKey?.api_key ? (
+        ) : apiKey?.inference_config.api_key ? (
           <Table>
             <TableHeader>
               <TableRow className="border-bottom border-border">
@@ -510,7 +531,9 @@ const KeyManagement = () => {
             <TableBody>
               <TableRow>
                 <TableCell className="font-mono">
-                  {apiKey.isVisible ? apiKey.api_key : maskKey(apiKey.api_key)}
+                  {apiKey.isVisible
+                    ? apiKey.inference_config.api_key
+                    : maskKey(apiKey.inference_config.api_key)}
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button

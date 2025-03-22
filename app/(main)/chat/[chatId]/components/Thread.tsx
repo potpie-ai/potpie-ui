@@ -9,7 +9,7 @@ import {
   useMessageRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import { useMemo, useState, type FC } from "react";
+import { useEffect, useMemo, useState, type FC } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -188,7 +188,7 @@ const CustomMarkdown = ({ content }: { content: string }) => {
         },
         a: ({ href, children }) => (
           <a
-            className="underline inline-flex transition-all"
+            className="underline inline-flex transition-all text-blue-600 hover:text-blue-800"
             href={href}
             target="_blank"
           >
@@ -388,11 +388,25 @@ const AssistantMessage: FC = () => {
   const threadRuntime = useThreadRuntime();
   const [isStreaming, setIsStreaming] = useState(false);
 
-  const [text, setText] = useState((message.content[0] as any)?.text || "");
+  const [text, setText] = useState<string>(
+    (message.content[0] as any)?.text || ""
+  );
   const [isRunning, setIsRunning] = useState(false);
+  const [accordianTransitionDone, setAccordianTransitionDone] = useState(false);
+  useEffect(() => {
+    if (accordianTransitionDone) {
+      return;
+    }
+    if (isStreaming && text.length < 600) {
+      setAccordianValue("tool-results");
+    } else if (isStreaming && text.length > 600) {
+      setAccordianValue("");
+      setAccordianTransitionDone(true);
+    }
+  }, [isStreaming, text]);
 
   const [toolsState, setToolsState] = useState<
-    { id: string; message: string; status: string }[]
+    { id: string; message: string; status: string; details_summary: string }[]
   >([]);
 
   if (message.isLast) {
@@ -407,9 +421,15 @@ const AssistantMessage: FC = () => {
           id: call.toolCallId,
           message: (call.result as any)?.response,
           status: (call.result as any)?.event_type,
+          details_summary: (call.result as any)?.details?.summary,
         };
       });
-      let res: { id: string; message: string; status: string }[] = [];
+      let res: {
+        id: string;
+        message: string;
+        status: string;
+        details_summary: string;
+      }[] = [];
       for (var i = 0; i < callStates.length; i++) {
         const curr = callStates[i];
         const existing_call_index = res.findIndex((val) => curr.id === val.id);
@@ -431,6 +451,8 @@ const AssistantMessage: FC = () => {
     });
   }
 
+  const [accordionValue, setAccordianValue] = useState("tool-results");
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -447,21 +469,27 @@ const AssistantMessage: FC = () => {
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="mb-4"
             >
               <Accordion
                 type="single"
                 collapsible
-                defaultValue="tool-results"
-                className="w-96"
+                value={accordionValue}
+                onValueChange={() => {
+                  if (accordionValue === "") {
+                    setAccordianValue("tool-results");
+                  } else {
+                    setAccordianValue("");
+                  }
+                }}
               >
-                <AccordionItem value="tool-results" className="w-96">
+                <AccordionItem value="tool-results" className="">
                   <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
                     <div className="italic ml-2 mr-2">Tool Calls</div>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <div className="w-96 bg-transparent">
+                    <div className="bg-transparent">
                       <motion.ul
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -473,7 +501,7 @@ const AssistantMessage: FC = () => {
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{
-                              duration: 0.6,
+                              duration: 0.3,
                               ease: "easeOut",
                             }}
                             key={toolState.id}
@@ -481,14 +509,12 @@ const AssistantMessage: FC = () => {
                           >
                             <Accordion
                               type="single"
-                              className="w-96"
+                              className=""
                               collapsible
+                              defaultValue={toolState.id}
                             >
-                              <AccordionItem
-                                value={toolState.id}
-                                className="w-96"
-                              >
-                                <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
+                              <AccordionItem value={toolState.id} className="">
+                                <AccordionTrigger className="p-0 flex flex-row justify-start items-center">
                                   <div>
                                     {toolState.status === "result" ? (
                                       <CheckIcon
@@ -503,7 +529,9 @@ const AssistantMessage: FC = () => {
                                     {toolState.message}
                                   </div>
                                 </AccordionTrigger>
-                                <AccordionContent></AccordionContent>
+                                <AccordionContent className="px-12 max-h-96 overflow-y-scroll">
+                                  {toolState.details_summary}
+                                </AccordionContent>
                               </AccordionItem>
                             </Accordion>
                           </motion.li>
@@ -522,7 +550,7 @@ const AssistantMessage: FC = () => {
                 animate={{ height: "auto", opacity: 1 }}
                 transition={{
                   height: { duration: 1, ease: "backInOut" },
-                  opacity: { duration: 0.5, delay: 0.5 },
+                  opacity: { duration: 0.3, delay: 0.5 },
                 }}
                 className="overflow-hidden"
               >
@@ -536,7 +564,7 @@ const AssistantMessage: FC = () => {
               transition={{
                 duration: 0.2,
                 ease: "backInOut",
-                staggerChildren: 0.5,
+                staggerChildren: 0.3,
               }}
             >
               <Skeleton key={1} className="h-4 w-1/2 mb-2"></Skeleton>

@@ -61,7 +61,6 @@ export default class ModelService {
           headers,
         }
       );
-      console.log("data:", response.data);
       return response.data;
     } catch (error) {
       throw new Error("Error fetching current model");

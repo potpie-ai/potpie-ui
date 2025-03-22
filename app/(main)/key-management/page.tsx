@@ -172,7 +172,7 @@ const KeyManagement = () => {
         const headers = await getHeaders();
         const payload = {
           inference_model: availableProviders?.findLast(
-            (provider) => provider.name == selectedGlobalProvider
+            (provider) => provider.name == userSelectedProvider
           )?.inference_model_id,
         };
         return axios.post(
@@ -200,7 +200,7 @@ const KeyManagement = () => {
           inference_config: {
             api_key: data.api_key,
             model: availableProviders?.findLast(
-              (provider) => provider.name == selectedGlobalProvider
+              (provider) => provider.name == userSelectedProvider
             )?.inference_model_id,
           },
         },

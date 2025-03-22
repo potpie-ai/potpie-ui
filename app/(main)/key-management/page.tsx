@@ -368,7 +368,7 @@ const KeyManagement = () => {
             <DialogFooter>
               <Button
                 onClick={() =>
-                  deleteSecret(KeySecrets?.inference_config.provider || "all")
+                  deleteSecret(KeySecrets?.inference_config?.provider || "all")
                 }
                 disabled={isDeleting}
               >
@@ -453,7 +453,7 @@ const KeyManagement = () => {
       <Separator className="pr-20 mt-4" />
       {/* Display Saved Key */}
       <div className="mt-4 pr-10">
-        {KeySecrets?.inference_config.api_key && keyType === "userKey" && (
+        {KeySecrets?.inference_config?.api_key && keyType === "userKey" && (
           <Table>
             <TableHeader>
               <TableRow className="border-bottom border-border">
@@ -465,10 +465,10 @@ const KeyManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow key={KeySecrets.inference_config.api_key}>
+              <TableRow key={KeySecrets?.inference_config?.api_key}>
                 <TableCell>
-                  {KeySecrets?.inference_config.provider
-                    ? KeySecrets.inference_config.provider
+                  {KeySecrets?.inference_config?.provider
+                    ? KeySecrets?.inference_config?.provider
                         .charAt(0)
                         .toUpperCase() +
                       KeySecrets.inference_config.provider.slice(1)
@@ -483,7 +483,7 @@ const KeyManagement = () => {
                     size="icon"
                     onClick={() =>
                       deleteSecret(
-                        KeySecrets?.inference_config.provider || "all"
+                        KeySecrets?.inference_config?.provider || "all"
                       )
                     }
                     disabled={isDeleting}
@@ -518,7 +518,7 @@ const KeyManagement = () => {
           <div className="text-center py-4 text-gray-500">
             Loading API key...
           </div>
-        ) : apiKey?.inference_config.api_key ? (
+        ) : apiKey?.inference_config?.api_key ? (
           <Table>
             <TableHeader>
               <TableRow className="border-bottom border-border">

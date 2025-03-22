@@ -397,9 +397,9 @@ const AssistantMessage: FC = () => {
     if (accordianTransitionDone) {
       return;
     }
-    if (isStreaming && text.length < 600) {
+    if (isStreaming && text.length < 1200) {
       setAccordianValue("tool-results");
-    } else if (isStreaming && text.length > 600) {
+    } else if (isStreaming && text.length > 1200) {
       setAccordianValue("");
       setAccordianTransitionDone(true);
     }
@@ -421,7 +421,9 @@ const AssistantMessage: FC = () => {
           id: call.toolCallId,
           message: (call.result as any)?.response,
           status: (call.result as any)?.event_type,
-          details_summary: (call.result as any)?.details?.summary,
+          details_summary: JSON.stringify(
+            (call.result as any)?.details?.summary
+          ),
         };
       });
       let res: {
@@ -436,6 +438,10 @@ const AssistantMessage: FC = () => {
         if (existing_call_index === -1) {
           res.push(curr);
         } else {
+          curr.details_summary =
+            res[existing_call_index].details_summary +
+            "\n" +
+            curr.details_summary;
           res[existing_call_index] = curr;
         }
       }

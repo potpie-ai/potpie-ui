@@ -1,4 +1,3 @@
-
 import {
   ActionBarPrimitive,
   BranchPickerPrimitive,
@@ -10,13 +9,14 @@ import {
   useMessageRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import { useMemo, useState, type FC } from "react";
+import { useEffect, useMemo, useState, type FC } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
+  ExternalLinkIcon,
   Loader,
   RefreshCwIcon,
 } from "lucide-react";
@@ -29,6 +29,8 @@ import MessageComposer from "./MessageComposer";
 import remarkGfm from "remark-gfm";
 import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Accordion, AccordionTrigger } from "@/components/ui/accordion";
+import { AccordionContent, AccordionItem } from "@radix-ui/react-accordion";
 
 interface ThreadProps {
   projectId: string;
@@ -73,7 +75,7 @@ export const Thread: FC<ThreadProps> = ({
 
             <ThreadPrimitive.If empty={false}>
               <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
-                <div className="pb-24 bg-inherit min-w-96 w-full">
+                <div className="pb-36 bg-inherit min-w-96 w-full">
                   <ThreadPrimitive.Messages
                     components={{
                       UserMessage: userMessage,
@@ -86,7 +88,13 @@ export const Thread: FC<ThreadProps> = ({
 
             <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center justify-center">
               <ThreadScrollToBottom />
-              {<Composer projectId={projectId} disabled={writeDisabled} conversation_id={conversation_id} />}
+              {
+                <Composer
+                  projectId={projectId}
+                  disabled={writeDisabled}
+                  conversation_id={conversation_id}
+                />
+              }
             </div>
           </div>
         )}
@@ -157,13 +165,13 @@ const CustomMarkdown = ({ content }: { content: string }) => {
     <ReactMarkdown
       className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
       components={{
-        p: ({ children }) => (
-          <p className="text-slate-900">{children}</p>
-        ),
+        p: ({ children }) => <p className="text-slate-900">{children}</p>,
         code: ({ children, className }) => {
-          const language = className ? className.replace('language-', '') : 'plaintext';
-          
-          if (language === 'plaintext') {
+          const language = className
+            ? className.replace("language-", "")
+            : "plaintext";
+
+          if (language === "plaintext") {
             return (
               <code className="bg-green-200 rounded text-sm font-medium text-slate-900">
                 {children}
@@ -173,11 +181,21 @@ const CustomMarkdown = ({ content }: { content: string }) => {
 
           return (
             <MyCodeBlock
-              code={String(children).replace(/\n$/, '')}
+              code={String(children).replace(/\n$/, "")}
               language={language}
             />
           );
-        }
+        },
+        a: ({ href, children }) => (
+          <a
+            className="underline inline-flex transition-all text-blue-600 hover:text-blue-800"
+            href={href}
+            target="_blank"
+          >
+            {children}
+            <ExternalLinkIcon className="h-4 w-4 ml-1" />
+          </a>
+        ),
       }}
       remarkPlugins={[remarkGfm]}
     >
@@ -198,12 +216,17 @@ const MarkdownComponent = (content: any) => {
               <CustomMarkdown content={section.content} />
             )}
             {section.type === "code" && (
-              <div className="pb-4 text-xs max-w-4xl">
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: "backInOut", stiffness: 50 }}
+                className="pb-4 text-xs max-w-4xl"
+              >
                 <MyCodeBlock
                   code={section.content}
                   language={section.language || "json"}
                 />
-              </div>
+              </motion.div>
             )}
           </li>
         );
@@ -285,11 +308,11 @@ const ThreadWelcomeSuggestions: FC = () => {
   );
 };
 
-const Composer: FC<{ projectId: string; disabled: boolean; conversation_id: string }> = ({
-  projectId,
-  disabled,
-  conversation_id,
-}) => {
+const Composer: FC<{
+  projectId: string;
+  disabled: boolean;
+  conversation_id: string;
+}> = ({ projectId, disabled, conversation_id }) => {
   const composer = useComposerRuntime();
 
   const setSelectedNodesInConfig = (selectedNodes: any[]) => {
@@ -312,14 +335,14 @@ const Composer: FC<{ projectId: string; disabled: boolean; conversation_id: stri
 
   return (
     <ComposerPrimitive.Root
-      className="bg-white z-10 w-3/4 focus-within:-translate-y-4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out"
+      className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out"
       onSubmit={() => {
         setKey(key + 1); // Current this is used to rerender MessageComposer (so that message and nodes are reset)
       }}
     >
       <MessageComposer
         projectId={projectId}
-        conversation_id = {conversation_id}
+        conversation_id={conversation_id}
         setSelectedNodesInConfig={setSelectedNodesInConfig}
         disabled={isStreaming || disabled}
         key={key}
@@ -365,11 +388,25 @@ const AssistantMessage: FC = () => {
   const threadRuntime = useThreadRuntime();
   const [isStreaming, setIsStreaming] = useState(false);
 
-  const [text, setText] = useState((message.content[0] as any)?.text || "");
+  const [text, setText] = useState<string>(
+    (message.content[0] as any)?.text || ""
+  );
   const [isRunning, setIsRunning] = useState(false);
+  const [accordianTransitionDone, setAccordianTransitionDone] = useState(false);
+  useEffect(() => {
+    if (accordianTransitionDone) {
+      return;
+    }
+    if (isStreaming && text.length < 600) {
+      setAccordianValue("tool-results");
+    } else if (isStreaming && text.length > 600) {
+      setAccordianValue("");
+      setAccordianTransitionDone(true);
+    }
+  }, [isStreaming, text]);
 
   const [toolsState, setToolsState] = useState<
-    { id: string; message: string; status: string }[]
+    { id: string; message: string; status: string; details_summary: string }[]
   >([]);
 
   if (message.isLast) {
@@ -384,9 +421,15 @@ const AssistantMessage: FC = () => {
           id: call.toolCallId,
           message: (call.result as any)?.response,
           status: (call.result as any)?.event_type,
+          details_summary: (call.result as any)?.details?.summary,
         };
       });
-      let res: { id: string; message: string; status: string }[] = [];
+      let res: {
+        id: string;
+        message: string;
+        status: string;
+        details_summary: string;
+      }[] = [];
       for (var i = 0; i < callStates.length; i++) {
         const curr = callStates[i];
         const existing_call_index = res.findIndex((val) => curr.id === val.id);
@@ -408,13 +451,15 @@ const AssistantMessage: FC = () => {
     });
   }
 
+  const [accordionValue, setAccordianValue] = useState("tool-results");
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      transition={{ duration: 0.3, ease: "backInOut", stiffness: 50 }}
     >
-      <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative py-4">
+      <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative">
         <Avatar className="mr-4 rounded-none bg-transparent">
           <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
           <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
@@ -424,39 +469,78 @@ const AssistantMessage: FC = () => {
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="mb-4"
             >
-              <div className="w-96 bg-transparent">
-                <motion.ul
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5 }}
-                  className="w-full"
-                >
-                  {toolsState.map((toolState, index) => (
-                    <motion.li
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        duration: 0.6,
-                        ease: "easeOut",
-                      }}
-                      key={toolState.id}
-                      className="m-1 rounded-sm flex flex-row justify-start items-center"
-                    >
-                      <div>
-                        {toolState.status === "result" ? (
-                          <CheckIcon className="h-4 w-4" color="green" />
-                        ) : (
-                          <Loader className="h-4 w-4 animate-spin" />
-                        )}
-                      </div>
-                      <div className="italic ml-2">{toolState.message}</div>
-                    </motion.li>
-                  ))}
-                </motion.ul>
-              </div>
+              <Accordion
+                type="single"
+                collapsible
+                value={accordionValue}
+                onValueChange={() => {
+                  if (accordionValue === "") {
+                    setAccordianValue("tool-results");
+                  } else {
+                    setAccordianValue("");
+                  }
+                }}
+              >
+                <AccordionItem value="tool-results" className="">
+                  <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
+                    <div className="italic ml-2 mr-2">Tool Calls</div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="bg-transparent">
+                      <motion.ul
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.5 }}
+                        className="w-full"
+                      >
+                        {toolsState.map((toolState, index) => (
+                          <motion.li
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{
+                              duration: 0.3,
+                              ease: "easeOut",
+                            }}
+                            key={toolState.id}
+                            className="m-1 rounded-sm"
+                          >
+                            <Accordion
+                              type="single"
+                              className=""
+                              collapsible
+                              defaultValue={toolState.id}
+                            >
+                              <AccordionItem value={toolState.id} className="">
+                                <AccordionTrigger className="p-0 flex flex-row justify-start items-center">
+                                  <div>
+                                    {toolState.status === "result" ? (
+                                      <CheckIcon
+                                        className="h-4 w-4"
+                                        color="green"
+                                      />
+                                    ) : (
+                                      <Loader className="h-4 w-4 animate-spin" />
+                                    )}
+                                  </div>
+                                  <div className="italic ml-2 mr-2">
+                                    {toolState.message}
+                                  </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="px-12 max-h-96 overflow-y-scroll">
+                                  {toolState.details_summary}
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+                          </motion.li>
+                        ))}
+                      </motion.ul>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </motion.div>
           )}
           {!isRunning && text ? (
@@ -466,7 +550,7 @@ const AssistantMessage: FC = () => {
                 animate={{ height: "auto", opacity: 1 }}
                 transition={{
                   height: { duration: 1, ease: "backInOut" },
-                  opacity: { duration: 0.5, delay: 0.5 },
+                  opacity: { duration: 0.3, delay: 0.5 },
                 }}
                 className="overflow-hidden"
               >
@@ -478,9 +562,9 @@ const AssistantMessage: FC = () => {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{
-                duration: 0.6,
-                ease: "easeOut",
-                staggerChildren: 0.5,
+                duration: 0.2,
+                ease: "backInOut",
+                staggerChildren: 0.3,
               }}
             >
               <Skeleton key={1} className="h-4 w-1/2 mb-2"></Skeleton>
@@ -532,10 +616,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
   return (
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
-      className={cn(
-        "text-black inline-flex items-center text-xs",
-        className
-      )}
+      className={cn("text-black inline-flex items-center text-xs", className)}
       {...rest}
     >
       <BranchPickerPrimitive.Previous asChild>
@@ -554,4 +635,3 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
     </BranchPickerPrimitive.Root>
   );
 };
-

@@ -27,24 +27,6 @@ const PricingPage = () => {
       buttonColor: 'bg-blue-600 hover:bg-blue-700'
     },
     {
-      name: 'Early-Stage',
-      price: '19',
-      description: 'For startups that have raised less than 100K USD and are pre-revenue',
-      features: [
-        'Ready-to-use agents',
-        '50 requests/month',
-        'Unlimited if using your own keys',
-        'Private repos',
-        'Multi-LLM Support',
-        'Tool library',
-        'Community & Email support',
-        'Dedicated deployment support'
-      ],
-      buttonText: 'Get Started',
-      borderColor: 'border-gray-200',
-      buttonColor: 'bg-gray-600 hover:bg-gray-700'
-    },
-    {
       name: 'Individual - Pro',
       price: '39',
       description: 'For developers who want to use agents extensively in their workflow',
@@ -113,7 +95,7 @@ const PricingPage = () => {
     fetchSubscriptionDetails();
   }, [userId]);
 
-  // Convert plan type to display name
+  // Convert plan type to display name - keep startup support for existing users
   const getPlanDisplayName = (type: string) => {
     switch(type.toLowerCase()) {
       case 'pro':
@@ -191,7 +173,7 @@ const PricingPage = () => {
     }
   };
 
-  // Helper function to get plan type from name
+  // Helper function to get plan type from name - keep startup support for existing users
   const getPlanType = (planName: string): string => {
     switch(planName) {
       case 'Individual - Pro': return 'pro';

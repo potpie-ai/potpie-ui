@@ -394,13 +394,18 @@ const AssistantMessage: FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [accordianTransitionDone, setAccordianTransitionDone] = useState(false);
   useEffect(() => {
+    if (isStreaming && text.length < 1200) {
+      setToolcallHeading("Reasoning ...");
+    }
     if (accordianTransitionDone) {
       return;
     }
-    if (isStreaming && text.length < 600) {
+    if (isStreaming && text.length < 1200) {
       setAccordianValue("tool-results");
-    } else if (isStreaming && text.length > 600) {
+      setToolcallHeading("Reasoning ...");
+    } else if (isStreaming && text.length > 1200) {
       setAccordianValue("");
+      setToolcallHeading("Reasoning completed");
       setAccordianTransitionDone(true);
     }
   }, [isStreaming, text]);
@@ -436,6 +441,10 @@ const AssistantMessage: FC = () => {
         if (existing_call_index === -1) {
           res.push(curr);
         } else {
+          curr.details_summary =
+            res[existing_call_index].details_summary +
+            "\n" +
+            curr.details_summary;
           res[existing_call_index] = curr;
         }
       }
@@ -452,6 +461,7 @@ const AssistantMessage: FC = () => {
   }
 
   const [accordionValue, setAccordianValue] = useState("tool-results");
+  const [toolcallHeading, setToolcallHeading] = useState("Reasoning ...");
 
   return (
     <motion.div
@@ -486,7 +496,7 @@ const AssistantMessage: FC = () => {
               >
                 <AccordionItem value="tool-results" className="">
                   <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
-                    <div className="italic ml-2 mr-2">Tool Calls</div>
+                    <div className="italic mr-2">{toolcallHeading}</div>
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="bg-transparent">
@@ -530,7 +540,12 @@ const AssistantMessage: FC = () => {
                                   </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-12 max-h-96 overflow-y-scroll">
-                                  {toolState.details_summary}
+                                  <ReactMarkdown
+                                    className="markdown-content break-words break-before-avoid stroke-red-600 text-xs"
+                                    remarkPlugins={[remarkGfm]}
+                                  >
+                                    {toolState.details_summary}
+                                  </ReactMarkdown>
                                 </AccordionContent>
                               </AccordionItem>
                             </Accordion>

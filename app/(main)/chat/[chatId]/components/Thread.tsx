@@ -394,13 +394,18 @@ const AssistantMessage: FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [accordianTransitionDone, setAccordianTransitionDone] = useState(false);
   useEffect(() => {
+    if (isStreaming && text.length < 1200) {
+      setToolcallHeading("Reasoning ...");
+    }
     if (accordianTransitionDone) {
       return;
     }
     if (isStreaming && text.length < 1200) {
       setAccordianValue("tool-results");
+      setToolcallHeading("Reasoning ...");
     } else if (isStreaming && text.length > 1200) {
       setAccordianValue("");
+      setToolcallHeading("Reasoning completed");
       setAccordianTransitionDone(true);
     }
   }, [isStreaming, text]);
@@ -456,6 +461,7 @@ const AssistantMessage: FC = () => {
   }
 
   const [accordionValue, setAccordianValue] = useState("tool-results");
+  const [toolcallHeading, setToolcallHeading] = useState("Reasoning ...");
 
   return (
     <motion.div
@@ -490,7 +496,7 @@ const AssistantMessage: FC = () => {
               >
                 <AccordionItem value="tool-results" className="">
                   <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
-                    <div className="italic ml-2 mr-2">thinking ...</div>
+                    <div className="italic mr-2">{toolcallHeading}</div>
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="bg-transparent">

@@ -462,6 +462,7 @@ const AssistantMessage: FC = () => {
 
   const [accordionValue, setAccordianValue] = useState("tool-results");
   const [toolcallHeading, setToolcallHeading] = useState("Reasoning ...");
+  console.log("test");
 
   return (
     <motion.div

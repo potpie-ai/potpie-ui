@@ -421,9 +421,7 @@ const AssistantMessage: FC = () => {
           id: call.toolCallId,
           message: (call.result as any)?.response,
           status: (call.result as any)?.event_type,
-          details_summary: JSON.stringify(
-            (call.result as any)?.details?.summary
-          ),
+          details_summary: (call.result as any)?.details?.summary,
         };
       });
       let res: {
@@ -492,7 +490,7 @@ const AssistantMessage: FC = () => {
               >
                 <AccordionItem value="tool-results" className="">
                   <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
-                    <div className="italic ml-2 mr-2">Tool Calls</div>
+                    <div className="italic ml-2 mr-2">thinking ...</div>
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="bg-transparent">
@@ -536,7 +534,12 @@ const AssistantMessage: FC = () => {
                                   </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-12 max-h-96 overflow-y-scroll">
-                                  {toolState.details_summary}
+                                  <ReactMarkdown
+                                    className="markdown-content break-words break-before-avoid stroke-red-600 text-xs"
+                                    remarkPlugins={[remarkGfm]}
+                                  >
+                                    {toolState.details_summary}
+                                  </ReactMarkdown>
                                 </AccordionContent>
                               </AccordionItem>
                             </Accordion>

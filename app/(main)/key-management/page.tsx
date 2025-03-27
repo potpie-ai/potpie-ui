@@ -44,7 +44,8 @@ interface KeySecrets {
   };
 }
 
-interface ApiKeyState extends KeySecrets {
+interface ApiKeyState {
+  api_key: string;
   isVisible: boolean;
 }
 
@@ -157,11 +158,11 @@ const KeyManagement = () => {
     queryKey: ["api-key"],
     queryFn: async () => {
       const headers = await getHeaders();
-      const response = await axios.get<KeySecrets>(
+      const response = await axios.get<{ api_key: string }>(
         `${BASE_URL}/api/v1/api-keys`,
         { headers }
       );
-      return { ...response.data, isVisible: false };
+      return { api_key: response.data.api_key, isVisible: false };
     },
   });
 
@@ -518,7 +519,7 @@ const KeyManagement = () => {
           <div className="text-center py-4 text-gray-500">
             Loading API key...
           </div>
-        ) : apiKey?.inference_config?.api_key ? (
+        ) : apiKey?.api_key ? (
           <Table>
             <TableHeader>
               <TableRow className="border-bottom border-border">
@@ -531,9 +532,7 @@ const KeyManagement = () => {
             <TableBody>
               <TableRow>
                 <TableCell className="font-mono">
-                  {apiKey.isVisible
-                    ? apiKey.inference_config.api_key
-                    : maskKey(apiKey.inference_config.api_key)}
+                  {apiKey.isVisible ? apiKey.api_key : maskKey(apiKey.api_key)}
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button

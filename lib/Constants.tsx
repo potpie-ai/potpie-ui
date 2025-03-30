@@ -4,6 +4,8 @@ import {
   BotIcon,
   CircleAlert,
   Github,
+  Code,
+  Slack,
   LucideFileText,
   MessagesSquare,
 } from "lucide-react";
@@ -111,7 +113,7 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         icons: <BotIcon size={20} strokeWidth={1.5} />,
         title: "Custom Agents",
         href: "/all-agents",
-        disabled: false
+        disabled: false,
       },
     ],
   },
@@ -131,6 +133,25 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         href: "#",
         disabled: true,
         description: "Coming soon",
+      },
+    ],
+  },
+  {
+    title: "Extensions",
+    links: [
+      {
+        icons: <Code size={20} strokeWidth={1.5} />,
+        icon: Github,
+        title: "VS Code Extension",
+        href: "https://marketplace.visualstudio.com/items?itemName=PotpieAI.potpie-vscode-extension",
+        disabled: false,
+      },
+      {
+        icons: <Slack size={20} strokeWidth={1.5} />,
+        title: "Install Slack Bot",
+        href: "https://slack.potpie.ai/slack/install",
+        disabled: false,
+        description: "New",
       },
     ],
   },

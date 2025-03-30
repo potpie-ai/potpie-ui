@@ -141,14 +141,13 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     links: [
       {
         icons: <Code size={20} strokeWidth={1.5} />,
-        icon: Github,
-        title: "VS Code Extension",
+        title: "VS Code",
         href: "https://marketplace.visualstudio.com/items?itemName=PotpieAI.potpie-vscode-extension",
         disabled: false,
       },
       {
         icons: <Slack size={20} strokeWidth={1.5} />,
-        title: "Install Slack Bot",
+        title: "Slack",
         href: "https://slack.potpie.ai/slack/install",
         disabled: false,
         description: "New",

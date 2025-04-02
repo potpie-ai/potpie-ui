@@ -158,7 +158,6 @@ export default function Signin() {
             toast.success("Logged in successfully as " + result.user.displayName);
           } catch (e: any) {
             console.error("API error:", e);
-            console.log(e);
             toast.error("Sign-in unsuccessful");
           }
         }

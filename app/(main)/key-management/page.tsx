@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import axios from "axios";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,7 +32,7 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@radix-ui/react-label";
 import { Separator } from "@radix-ui/react-select";
-import { Eye, EyeOff, Trash } from "lucide-react";
+import { Eye, EyeOff, Trash, Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import getHeaders from "@/app/utils/headers.util";
@@ -42,6 +43,11 @@ interface KeySecrets {
     api_key: string;
     provider?: string;
   };
+}
+
+interface IntegrationKey {
+  service: string;
+  api_key: string;
 }
 
 interface ApiKeyState {
@@ -88,6 +94,12 @@ const KeyManagement = () => {
   const [createNewKeyDialogOpen, setCreateNewKeyDialogOpen] =
     React.useState(false);
   const [deleteKeyDialogOpen, setDeleteKeyDialogOpen] = React.useState(false);
+  
+  // Integrations state
+  const [selectedIntegration, setSelectedIntegration] = React.useState("");
+  const [integrationKeyValue, setIntegrationKeyValue] = React.useState("");
+  const [createIntegrationDialogOpen, setCreateIntegrationDialogOpen] =
+    React.useState(false);
 
   // Query available providers for both global and secret registration
   const { data: availableProviders } = useQuery<ProviderInfo[]>({
@@ -139,6 +151,24 @@ const KeyManagement = () => {
         );
         return response.data;
       },
+    });
+    
+  // Query integration keys
+  const { data: integrationKeys, isLoading: isLoadingIntegrationKeys } =
+    useQuery<IntegrationKey[]>({
+      queryKey: ["integration-keys"],
+      queryFn: async () => {
+        const headers = await getHeaders();
+        const response = await axios.get<IntegrationKey[]>(
+          `${BASE_URL}/api/v1/integration-keys`,
+          { headers }
+        );
+        return response.data;
+      },
+      onError: () => {
+        // Silently fail if there are no integration keys
+        return [];
+      }
     });
 
   useEffect(() => {
@@ -235,6 +265,44 @@ const KeyManagement = () => {
     },
     onError: () => {
       toast.error("Something went wrong while deleting the key");
+    },
+  });
+  
+  // Mutation: Save integration API key
+  const { mutate: saveIntegration, isPending: isSavingIntegration } = useMutation({
+    mutationFn: async (data: { service: string; api_key: string }) => {
+      const headers = await getHeaders();
+      const payload = {
+        integration_keys: [
+          { service: data.service, api_key: data.api_key }
+        ]
+      };
+      return axios.post(`${BASE_URL}/api/v1/integration-keys`, payload, { headers });
+    },
+    onSuccess: () => {
+      toast.success("Integration key saved successfully");
+      setCreateIntegrationDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["integration-keys"] });
+      setIntegrationKeyValue("");
+      setSelectedIntegration("");
+    },
+    onError: () => {
+      toast.error("Something went wrong while saving the integration key");
+    },
+  });
+  
+  // Mutation: Delete integration API key
+  const { mutate: deleteIntegration, isPending: isDeletingIntegration } = useMutation({
+    mutationFn: async (service: string) => {
+      const headers = await getHeaders();
+      await axios.delete(`${BASE_URL}/api/v1/integration-keys/${service}`, { headers });
+    },
+    onSuccess: () => {
+      toast.success("Integration key deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["integration-keys"] });
+    },
+    onError: () => {
+      toast.error("Something went wrong while deleting the integration key");
     },
   });
 
@@ -497,6 +565,140 @@ const KeyManagement = () => {
           </Table>
         )}
       </div>
+      <Separator className="pr-20 mt-8" />
+      
+      {/* Integrations Section */}
+      <div className="flex flex-col pb-8">
+        <h2 className="text-2xl font-semibold mb-4 text-primary mt-4">
+          Integrations
+        </h2>
+        <div className="flex items-center gap-4">
+          <Button
+            onClick={() => setCreateIntegrationDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus size={16} /> Add Integration Key
+          </Button>
+        </div>
+        
+        {/* Create Integration Key Dialog */}
+        <Dialog
+          open={createIntegrationDialogOpen}
+          onOpenChange={setCreateIntegrationDialogOpen}
+        >
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg text-primary">
+                Add Integration Key
+              </DialogTitle>
+              <DialogDescription>
+                <p className="text-base text-black mt-2">
+                  Select an integration and enter your API key.
+                </p>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col">
+              <div className="flex mt-2">
+                <Select
+                  value={selectedIntegration}
+                  onValueChange={setSelectedIntegration}
+                >
+                  <SelectTrigger className="w-xl rounded-sm">
+                    <SelectValue placeholder="Select an integration" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background">
+                    <SelectGroup>
+                      <SelectItem value="notion">Notion</SelectItem>
+                      <SelectItem value="linear">Linear</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col mt-2">
+                <h2 className="text-base text-black">Enter Your API Key</h2>
+                <Input
+                  type="password"
+                  className="w-xl bg-background mt-2"
+                  value={integrationKeyValue}
+                  onChange={(e) => setIntegrationKeyValue(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() =>
+                  saveIntegration({
+                    service: selectedIntegration,
+                    api_key: integrationKeyValue,
+                  })
+                }
+                disabled={!selectedIntegration || !integrationKeyValue || isSavingIntegration}
+              >
+                {isSavingIntegration ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Display Saved Integration Keys */}
+        <div className="mt-4 pr-10">
+          {integrationKeys && integrationKeys.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow className="border-bottom border-border">
+                  <TableHead className="w-[200px] text-black">Integration</TableHead>
+                  <TableHead className="w-[400px] text-black">
+                    Key Value
+                  </TableHead>
+                  <TableHead className="w-[100px] text-black">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {integrationKeys.map((item) => (
+                  <TableRow key={item.service}>
+                    <TableCell className="flex items-center gap-2">
+                      <div className="w-6 h-6 relative">
+                        <Image
+                          src={`/images/${item.service}.svg`}
+                          alt={item.service}
+                          width={24}
+                          height={24}
+                        />
+                      </div>
+                      {item.service.charAt(0).toUpperCase() + item.service.slice(1)}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {maskKey(item.api_key)}
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteIntegration(item.service)}
+                        disabled={isDeletingIntegration}
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {isLoadingIntegrationKeys && (
+            <div className="text-center py-4 text-gray-500">
+              Loading integration keys...
+            </div>
+          )}
+          {integrationKeys && integrationKeys.length === 0 && !isLoadingIntegrationKeys && (
+            <div className="text-center py-4 text-gray-500">
+              No integration keys found. Add one to get started.
+            </div>
+          )}
+        </div>
+      </div>
+      
       <Separator className="pr-20 mt-8" />
       {/* API Key Management Section */}
       <h2 className="text-2xl font-semibold mb-4 text-primary mt-4">

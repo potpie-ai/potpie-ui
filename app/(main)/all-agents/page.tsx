@@ -56,6 +56,7 @@ import MinorService from "@/services/minorService";
 import { planTypesEnum } from "@/lib/Constants";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Switch } from "@/components/ui/switch";
+import AgentCreationChatPanel from "@/components/agent-creation/AgentCreationChatPanel";
 
 const AllAgents = () => {
   const { user } = useAuthContext();
@@ -84,6 +85,8 @@ const AllAgents = () => {
   const [agentPrompt, setAgentPrompt] = useState("");
   const [generatedAgent, setGeneratedAgent] = useState<any>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [agentToEdit, setAgentToEdit] = useState<any>(null);
   
   // Share agent modal state
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -323,26 +326,28 @@ const AllAgents = () => {
 
   const handleCreateAgent = async () => {
     if (!agentPrompt.trim()) {
-      toast.error("Please provide a detailed description for your agent.");
+      toast.error("Please provide a description for your agent");
       return;
     }
 
-    // Ensure limit applies only to free users
-    if (isFreeUser && data?.length >= 3) {
-      setIsUpgradeMode(true);
-      return;
+    setIsCreating(true);
+    try {
+      const response = await AgentService.createAgentFromPrompt(agentPrompt);
+      setGeneratedAgent(response);
+      toast.success("Agent created successfully!");
+      queryClient.invalidateQueries({ queryKey: ["all-agents"] });
+    } catch (error) {
+      toast.error("Failed to create agent. Please try again.");
+    } finally {
+      setIsCreating(false);
     }
-
-    await createAgentMutation.mutateAsync(agentPrompt);
   };
 
-  // Update dialog close handler
-  const handleDialogClose = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["all-agents"] });
-    await refetch();
+  const handleDialogClose = () => {
+    setPromptModalOpen(false);
     setGeneratedAgent(null);
     setAgentPrompt("");
-    setPromptModalOpen(false);
+    setIsUpgradeMode(false);
   };
 
   // Add function to copy agent ID to clipboard
@@ -422,6 +427,18 @@ const AllAgents = () => {
     setTimeout(() => setCopyUrlSuccess(false), 2000);
   };
 
+  const handleEditClick = async (agent: any) => {
+    try {
+      // Fetch complete agent details
+      const fullAgentDetails = await AgentService.getAgentDetails(agent.id, userId as string);
+      setAgentToEdit(fullAgentDetails);
+      setEditDialogOpen(true);
+    } catch (error) {
+      toast.error("Failed to load agent details");
+      console.error("Error loading agent details:", error);
+    }
+  };
+
   return (
     <div className="container mx-auto py-10">
       <div className="flex w-full mx-auto items-center space-x-2 mb-5">
@@ -459,7 +476,7 @@ const AllAgents = () => {
                 ? "sm:max-w-[600px] p-6"
                 : !generatedAgent
                 ? "sm:max-w-[600px] h-[80vh] p-6"
-                : "sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-6"
+                : "sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-0"
             }
           >
             {isUpgradeMode ? (
@@ -532,184 +549,12 @@ const AllAgents = () => {
                 </DialogFooter>
               </div>
             ) : (
-              // Generated agent review modal content (unchanged)
-              <div className="flex flex-col h-full">
-                <DialogHeader className="px-1">
-                  <DialogTitle>Review Generated Agent</DialogTitle>
-                  <DialogDescription>
-                    Review the generated agent configuration across different sections.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="flex-1 overflow-hidden mt-4">
-                  <Tabs defaultValue="system" className="h-full flex flex-col">
-                    <TabsList className="w-full grid grid-cols-3 p-1 bg-background border rounded-lg mb-4">
-                      <TabsTrigger
-                        value="system"
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                      >
-                        System Configuration
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="identity"
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                      >
-                        Agent Identity
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="tasks"
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                      >
-                        Tasks
-                      </TabsTrigger>
-                    </TabsList>
-
-                    <div className="flex-1 overflow-hidden">
-                      <TabsContent
-                        value="system"
-                        className="h-full mt-0 data-[state=active]:flex flex-col"
-                      >
-                        <div className="space-y-4 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
-                          <div>
-                            <h3 className="text-lg font-semibold mb-2 text-foreground">
-                              System Prompt
-                            </h3>
-                            <div className="bg-background rounded-lg p-6 border shadow-sm">
-                              <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
-                                {generatedAgent.system_prompt}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent
-                        value="identity"
-                        className="h-full mt-0 data-[state=active]:flex flex-col"
-                      >
-                        <div className="space-y-6 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
-                          <div>
-                            <h3 className="text-lg font-semibold mb-2 text-foreground">
-                              Role
-                            </h3>
-                            <div className="bg-background rounded-lg p-6 border shadow-sm">
-                              <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
-                                {generatedAgent.role}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-
-                          <div>
-                            <h3 className="text-lg font-semibold mb-2 text-foreground">
-                              Goal
-                            </h3>
-                            <div className="bg-background rounded-lg p-6 border shadow-sm">
-                              <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
-                                {generatedAgent.goal}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-
-                          <div>
-                            <h3 className="text-lg font-semibold mb-2 text-foreground">
-                              Backstory
-                            </h3>
-                            <div className="bg-background rounded-lg p-6 border shadow-sm">
-                              <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
-                                {generatedAgent.backstory}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent
-                        value="tasks"
-                        className="h-full mt-0 data-[state=active]:flex flex-col"
-                      >
-                        <div className="grid grid-cols-1 gap-6 overflow-y-auto pr-4 h-[calc(100vh-350px)]">
-                          {generatedAgent.tasks?.map((task: any, index: number) => (
-                            <div key={index} className="bg-background rounded-lg p-6 border shadow-sm">
-                              <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-foreground">
-                                  Task {index + 1}
-                                </h3>
-                                <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                                  {task.type || "Custom Task"}
-                                </span>
-                              </div>
-
-                              <div className="space-y-6">
-                                <div>
-                                  <h4 className="text-sm font-medium mb-2 text-foreground">
-                                    Description
-                                  </h4>
-                                  <div className="bg-muted/30 rounded-lg p-4">
-                                    <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
-                                      {task.description}
-                                    </ReactMarkdown>
-                                  </div>
-                                </div>
-
-                                {task.tools && task.tools.length > 0 && (
-                                  <div>
-                                    <h4 className="text-sm font-medium mb-2 text-foreground">
-                                      Tools
-                                    </h4>
-                                    <div className="bg-muted/30 rounded-lg p-4">
-                                      <div className="flex flex-wrap gap-2">
-                                        {task.tools.map((tool: string, toolIndex: number) => (
-                                          <span
-                                            key={toolIndex}
-                                            className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full text-xs font-medium"
-                                          >
-                                            {tool}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {task.expected_output && (
-                                  <div>
-                                    <h4 className="text-sm font-medium mb-2 text-foreground">
-                                      Expected Output
-                                    </h4>
-                                    <div className="bg-muted/30 rounded-lg p-4">
-                                      <pre className="text-sm whitespace-pre-wrap overflow-x-auto">
-                                        {JSON.stringify(task.expected_output, null, 2)}
-                                      </pre>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </TabsContent>
-                    </div>
-                  </Tabs>
-                </div>
-
-                <DialogFooter className="mt-6 pb-2 px-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      router.push(`/agents?edit=${generatedAgent.id}`);
-                      setPromptModalOpen(false);
-                    }}
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit Agent
-                  </Button>
-                  <DialogClose asChild>
-                    <Button onClick={handleDialogClose}>
-                      Close
-                    </Button>
-                  </DialogClose>
-                </DialogFooter>
-              </div>
+              // New split-panel view for generated agent
+              <AgentCreationChatPanel
+                agentPrompt={agentPrompt}
+                generatedAgent={generatedAgent}
+                onClose={handleDialogClose}
+              />
             )}
           </DialogContent>
         </Dialog>
@@ -868,15 +713,14 @@ const AllAgents = () => {
                       </DialogContent>
                     </Dialog>
 
-                    <Link href={`/agents?edit=${content.id}`}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="hover:text-primary"
-                      >
-                        <Edit className="w-5 h-5" />
-                      </Button>
-                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hover:text-primary"
+                      onClick={() => handleEditClick(content)}
+                    >
+                      <Edit className="w-5 h-5" />
+                    </Button>
                   </CardFooter>
                 </Card>
               );
@@ -1073,6 +917,31 @@ const AllAgents = () => {
               </DialogClose>
             </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Agent Modal */}
+      <Dialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditDialogOpen(false);
+            setAgentToEdit(null);
+            // Refetch the agents list to get updated data
+            queryClient.invalidateQueries({ queryKey: ["all-agents"] });
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-0"
+        >
+          {agentToEdit && (
+            <AgentCreationChatPanel
+              agentPrompt=""
+              generatedAgent={agentToEdit}
+              onClose={() => setEditDialogOpen(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

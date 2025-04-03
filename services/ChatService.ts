@@ -324,13 +324,14 @@ export default class ChatService {
           user_id: userId,
           title: title,
           status: "active",
-          project_ids: [projectId],
+          project_ids: projectId ? [projectId] : [],
           agent_ids: [agentId],
         },
         { headers: headers }
       );
       return response.data;
     } catch (error) {
+      console.error("Error creating conversation:", error);
       throw new Error("Error creating conversation");
     }
   }

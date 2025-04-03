@@ -14,7 +14,7 @@ import {
 } from "@/public";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { db } from "@/configs/Firebase-config";
 import axios from "axios";
 import { toast } from "sonner";
@@ -39,6 +39,45 @@ const Onboarding = () => {
 
   const router = useRouter();
 
+  // Add state to track authentication status
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState("");
+  
+  // Check if the user is authenticated and email matches
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        // Import auth only on client side
+        const { getAuth, onAuthStateChanged } = await import('firebase/auth');
+        const auth = getAuth();
+        
+        onAuthStateChanged(auth, (user) => {
+          if (user) {
+            // User is signed in
+            if (user.email === email) {
+              setIsAuthenticated(true);
+              setAuthError("");
+            } else {
+              setIsAuthenticated(false);
+              setAuthError("Email mismatch. Please sign in with the correct account.");
+             
+            }
+          } else {
+            // User is not signed in
+            setIsAuthenticated(false);
+            setAuthError("You must be signed in to access this page.");
+            
+          }
+        });
+      } catch (error) {
+        console.error("Auth check error:", error);
+        setAuthError("Authentication error. Please try again.");
+      }
+    };
+    
+    checkAuth();
+  }, [email, router]);
+
   const handleCheckoutRedirect = async (uid: string) => {
     try {
       const subUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
@@ -59,6 +98,10 @@ const Onboarding = () => {
 
   const submitOnboarding = async () => {
     try {
+      if (!isAuthenticated) {
+        throw new Error(authError || "Authentication required. Please sign in.");
+      }
+      
       if (!uid) {
         throw new Error("User ID is missing");
       }
@@ -147,87 +190,117 @@ const Onboarding = () => {
         <Image src={logoWithText} alt="logo" />
         <div className="flex items-center justify-center flex-col text-border">
           <h3 className="text-2xl font-bold text-black">Lets get a few more info and you are good to go!</h3>
+          
+          {/* Add authentication error message */}
+          {authError && (
+            <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {authError}
+            </div>
+          )}
 
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            submitOnboarding();
-          }} className="flex items-start justify-start flex-col mt-10 gap-6">
-             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-black">Email</label>
-              <input 
-                type="email"
-                value={email || ''}
-                className="w-80 p-2 border rounded-md bg-gray-100" 
-                disabled
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-black">Name</label>
-              <input 
-                type="text"
-                placeholder="Enter your name"
-                value={formData.name || ''}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-80 p-2 border rounded-md"
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-black">How did you find us?</label>
-              <select 
-                value={formData.source}
-                onChange={(e) => setFormData({...formData, source: e.target.value})}
-                className="w-80 p-2 border rounded-md" 
-                required
+          {/* Only show the form if authenticated */}
+          {isAuthenticated ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitOnboarding();
+              }}
+              className="flex flex-col gap-6 mt-10"
+            >
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-900">Email</label>
+                <input
+                  type="email"
+                  value={email || ""}
+                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed"
+                  disabled
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-900">Name</label>
+                <input
+                  type="text"
+                  placeholder="Enter your name"
+                  value={formData.name || ""}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-900">How did you find us?</label>
+                <select
+                  value={formData.source}
+                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="">Select an option</option>
+                  <option value="Reddit">Reddit</option>
+                  <option value="Twitter">Twitter</option>
+                  <option value="LinkedIn">LinkedIn</option>
+                  <option value="HackerNews">HackerNews</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-900">Industry you work in?</label>
+                <input
+                  type="text"
+                  placeholder="Enter your industry"
+                  value={formData.industry}
+                  onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-900">Your job title?</label>
+                <input
+                  type="text"
+                  placeholder="Enter your job title"
+                  value={formData.jobTitle}
+                  onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-900">Your company name?</label>
+                <input
+                  type="text"
+                  placeholder="Enter your company name"
+                  value={formData.companyName}
+                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+            </form>
+          ) : (
+            <div className="mt-10 p-6 bg-gray-100 rounded-md text-black text-center">
+              <p>Please sign in to continue.</p>
+              <Button 
+                onClick={() => router.push('/sign-in')} 
+                className="mt-4 mx-auto"
               >
-                <option value="">Select an option</option>
-                <option value="Reddit">Reddit</option>
-                <option value="Twitter">Twitter</option>
-                <option value="LinkedIn">LinkedIn</option>
-                <option value="HackerNews">HackerNews</option>
-                <option value="Other">Other</option>
-              </select>
+                Go to Sign In
+              </Button>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-black">Industry you work in?</label>
-              <input 
-                type="text"
-                placeholder="Enter your industry"
-                value={formData.industry}
-                onChange={(e) => setFormData({...formData, industry: e.target.value})}
-                className="w-80 p-2 border rounded-md"
-                required
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-black">Your job title?</label>
-              <input
-                type="text" 
-                placeholder="Enter your job title"
-                value={formData.jobTitle}
-                onChange={(e) => setFormData({...formData, jobTitle: e.target.value})}
-                className="w-80 p-2 border rounded-md"
-                required
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-black">Your company name?</label>
-              <input
-                type="text"
-                placeholder="Enter your company name"
-                value={formData.companyName} 
-                onChange={(e) => setFormData({...formData, companyName: e.target.value})}
-                className="w-80 p-2 border rounded-md"
-                required
-              />
-            </div>
-          </form>
-          <Button onClick={() => submitOnboarding()} className="mt-14 gap-2">
-            Submit
-          </Button>
+          )}
+          
+          {isAuthenticated && (
+            <Button 
+              onClick={() => submitOnboarding()} 
+              className="mt-14 gap-2"
+              disabled={!isAuthenticated}
+            >
+              Submit
+            </Button>
+          )}
         </div>
       </div>
       <Image src={chat} className="absolute top-0" alt="chat" />

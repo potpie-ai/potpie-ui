@@ -46,49 +46,45 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-4 border-b">
-        <h3 className="text-lg font-medium">Agent Configuration</h3>
-      </div>
-      
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto">
         <Tabs defaultValue="system" className="h-full flex flex-col">
-          <TabsList className="w-full grid grid-cols-3 p-1 bg-background border rounded-lg mb-4">
-            <TabsTrigger
-              value="system"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              System Configuration
-            </TabsTrigger>
-            <TabsTrigger
-              value="identity"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              Agent Identity
-            </TabsTrigger>
-            <TabsTrigger
-              value="tasks"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              Tasks
-            </TabsTrigger>
-          </TabsList>
+  <TabsList className="w-full flex justify-center gap-1 mb-6 p-1 bg-background border rounded-lg">
+    <TabsTrigger 
+      value="system" 
+      className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+    >
+      System Configuration
+    </TabsTrigger>
+    <TabsTrigger 
+      value="identity" 
+      className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+    >
+      Agent Identity
+    </TabsTrigger>
+    <TabsTrigger 
+      value="tasks" 
+      className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+    >
+      Tasks
+    </TabsTrigger>
+  </TabsList>
 
           <div className="flex-1 overflow-hidden">
             <TabsContent
               value="system"
-              className="h-full mt-0 data-[state=active]:flex flex-col"
+              className="h-full mt-0 data-[state=active]:flex flex-col overflow-hidden"
             >
-              <div className="space-y-4 overflow-y-auto pr-4 h-full">
+              <div className="flex-1 overflow-y-auto space-y-4 p-4">
                 <div>
                   <h3 className="text-lg font-semibold mb-2 text-foreground">
                     System Prompt
                   </h3>
-                  <div className="bg-background rounded-lg p-6 border shadow-sm">
+                  <div className="bg-background rounded-lg p-6 border shadow-sm overflow-auto max-h-[60vh]">
                     {isEditing ? (
                       <Textarea
                         value={editedAgent.system_prompt}
                         onChange={(e) => setEditedAgent({...editedAgent, system_prompt: e.target.value})}
-                        className="min-h-[200px] text-sm"
+                        className="min-h-[250px] text-sm w-full resize-vertical"
                       />
                     ) : (
                       <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
@@ -102,19 +98,19 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
 
             <TabsContent
               value="identity"
-              className="h-full mt-0 data-[state=active]:flex flex-col"
+              className="h-full mt-0 data-[state=active]:flex flex-col overflow-hidden"
             >
-              <div className="space-y-6 overflow-y-auto pr-4 h-full">
+              <div className="flex-1 overflow-y-auto space-y-6 p-4">
                 <div>
                   <h3 className="text-lg font-semibold mb-2 text-foreground">
                     Role
                   </h3>
-                  <div className="bg-background rounded-lg p-6 border shadow-sm">
+                  <div className="bg-background rounded-lg p-6 border shadow-sm overflow-auto max-h-[40vh]">
                     {isEditing ? (
                       <Textarea
                         value={editedAgent.role}
                         onChange={(e) => setEditedAgent({...editedAgent, role: e.target.value})}
-                        className="min-h-[100px] text-sm"
+                        className="min-h-[120px] text-sm w-full resize-vertical"
                       />
                     ) : (
                       <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
@@ -128,12 +124,12 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                   <h3 className="text-lg font-semibold mb-2 text-foreground">
                     Goal
                   </h3>
-                  <div className="bg-background rounded-lg p-6 border shadow-sm">
+                  <div className="bg-background rounded-lg p-6 border shadow-sm overflow-auto max-h-[40vh]">
                     {isEditing ? (
                       <Textarea
                         value={editedAgent.goal}
                         onChange={(e) => setEditedAgent({...editedAgent, goal: e.target.value})}
-                        className="min-h-[100px] text-sm"
+                        className="min-h-[120px] text-sm w-full resize-vertical"
                       />
                     ) : (
                       <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
@@ -147,12 +143,12 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                   <h3 className="text-lg font-semibold mb-2 text-foreground">
                     Backstory
                   </h3>
-                  <div className="bg-background rounded-lg p-6 border shadow-sm">
+                  <div className="bg-background rounded-lg p-6 border shadow-sm overflow-auto max-h-[40vh]">
                     {isEditing ? (
                       <Textarea
                         value={editedAgent.backstory}
                         onChange={(e) => setEditedAgent({...editedAgent, backstory: e.target.value})}
-                        className="min-h-[100px] text-sm"
+                        className="min-h-[120px] text-sm w-full resize-vertical"
                       />
                     ) : (
                       <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
@@ -166,26 +162,26 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
 
             <TabsContent
               value="tasks"
-              className="h-full mt-0 data-[state=active]:flex flex-col"
+              className="h-full mt-0 data-[state=active]:flex flex-col overflow-hidden"
             >
-              <div className="grid grid-cols-1 gap-6 overflow-y-auto pr-4 h-full">
+              <div className="flex-1 overflow-y-auto space-y-6 p-4">
                 {editedAgent.tasks?.map((task: any, index: number) => (
-                  <div key={index} className="bg-background rounded-lg p-6 border shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
+                  <div key={index} className="bg-background rounded-lg p-6 border shadow-sm overflow-auto max-h-[70vh] transition-all duration-200 hover:shadow-md">
+                    <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-semibold text-foreground">
                         Task {index + 1}
                       </h3>
-                      <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                      <span className="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
                         {task.type || "Custom Task"}
                       </span>
                     </div>
 
                     <div className="space-y-6">
-                      <div>
+                      <div className="overflow-auto max-h-[35vh] w-full">
                         <h4 className="text-sm font-medium mb-2 text-foreground">
                           Description
                         </h4>
-                        <div className="bg-muted/30 rounded-lg p-4">
+                        <div className="bg-muted/30 rounded-lg p-4 overflow-auto break-words min-h-[160px]">
                           {isEditing ? (
                             <Textarea
                               value={task.description}
@@ -194,7 +190,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                                 updatedTasks[index] = {...task, description: e.target.value};
                                 setEditedAgent({...editedAgent, tasks: updatedTasks});
                               }}
-                              className="min-h-[100px] text-sm"
+                              className="min-h-[160px] text-sm w-full resize-vertical"
                             />
                           ) : (
                             <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
@@ -205,7 +201,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                       </div>
 
                       {task.tools && task.tools.length > 0 && (
-                        <div>
+                        <div className="overflow-auto max-h-[20vh]">
                           <h4 className="text-sm font-medium mb-2 text-foreground">
                             Tools
                           </h4>
@@ -225,11 +221,11 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                       )}
 
                       {task.expected_output && (
-                        <div>
+                        <div className="overflow-auto max-h-[35vh] w-full">
                           <h4 className="text-sm font-medium mb-2 text-foreground">
                             Expected Output
                           </h4>
-                          <div className="bg-muted/30 rounded-lg p-4">
+                          <div className="bg-muted/30 rounded-lg p-4 min-h-[160px]">
                             {isEditing ? (
                               <Textarea
                                 value={JSON.stringify(task.expected_output, null, 2)}
@@ -239,14 +235,12 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                                     const updatedTasks = [...editedAgent.tasks];
                                     updatedTasks[index] = {...task, expected_output: parsedOutput};
                                     setEditedAgent({...editedAgent, tasks: updatedTasks});
-                                  } catch (error) {
-                                    // Don't update if JSON is invalid
-                                  }
+                                  } catch (error) {}
                                 }}
-                                className="min-h-[100px] text-sm font-mono"
+                                className="min-h-[160px] text-sm font-mono w-full resize-vertical"
                               />
                             ) : (
-                              <pre className="text-sm whitespace-pre-wrap overflow-x-auto">
+                              <pre className="text-sm whitespace-pre-wrap overflow-x-auto max-w-full">
                                 {JSON.stringify(task.expected_output, null, 2)}
                               </pre>
                             )}

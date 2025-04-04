@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Loader, X, ChevronRight, ChevronLeft, Send } from "lucide-react";
+import { Loader, X, ChevronRight, ChevronLeft, Send, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { useDispatch } from "react-redux";
 import { setChat } from "@/lib/state/Reducers/chat";
@@ -15,17 +15,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import ParsingProgress from "./ParsingProgress";
-
-// Enum for parsing status
-enum ParsingStatusEnum {
-  SUBMITTED = "submitted",
-  PROCESSING = "processing",
-  CLONED = "cloned",
-  PARSED = "parsed",
-  READY = "ready",
-  ERROR = "error"
-}
+import ParsingProgress, { ParsingStatusEnum } from "./ParsingProgress";
 
 // Panel layout states
 enum PanelLayoutState {
@@ -60,6 +50,8 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
   const [parsedProjectId, setParsedProjectId] = useState<string>("");
   const [isEditing, setIsEditing] = useState(false);
   const [layoutState, setLayoutState] = useState<PanelLayoutState>(PanelLayoutState.SPLIT);
+  const leftPanelRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
 
   // Fetch repositories
   const { data: repositories, isLoading: repositoriesLoading } = useQuery({
@@ -97,7 +89,8 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
         userId,
         `Chat with ${generatedAgent?.name || "new agent"}`,
         projectId,
-        agentId
+        agentId,
+        true // Set isHidden to true for conversations created from the agent creation modal
       );
     },
     onSuccess: (data) => {
@@ -234,17 +227,20 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex flex-1 relative">
-        {/* Left Panel Content */}
-        <div className={`h-full transition-all duration-300 ${getLeftPanelWidth()} overflow-hidden border-r relative`}>
+      <div className="flex flex-1 relative overflow-hidden">
+        {/* Left Panel Content - with isolated scrolling */}
+        <div className={`h-full transition-all duration-300 ${getLeftPanelWidth()} border-r relative flex flex-col`} style={{ overflow: 'hidden' }}>
           {layoutState !== PanelLayoutState.RIGHT_ONLY && (
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between p-4 border-b shrink-0">
                 <h2 className="text-lg font-semibold">Agent Configuration</h2>
-
               </div>
-              {/* Main content area with custom scrollbar */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {/* Isolated scrollable area for left panel */}
+              <div 
+                ref={leftPanelRef}
+                className="flex-1 overflow-y-auto custom-scrollbar" 
+                style={{ overscrollBehavior: 'contain' }}
+              >
                 <AgentReviewPanel 
                   generatedAgent={generatedAgent} 
                   onEdit={() => setIsEditing(true)}
@@ -292,15 +288,19 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
           </div>
         )}
 
-        {/* Right Panel Content */}
-        <div className={`h-full transition-all duration-300 ${getRightPanelWidth()} overflow-hidden relative`}>
+        {/* Right Panel Content - with isolated scrolling */}
+        <div className={`h-full transition-all duration-300 ${getRightPanelWidth()} relative flex flex-col`} style={{ overflow: 'hidden' }}>
           {layoutState !== PanelLayoutState.LEFT_ONLY && (
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between p-4 border-b shrink-0">
                 <h2 className="text-lg font-semibold">Test your agent</h2>
               </div>
-              {/* Main content area with custom scrollbar */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {/* Isolated scrollable area for right panel */}
+              <div 
+                ref={rightPanelRef}
+                className="flex-1 overflow-hidden" 
+                style={{ overscrollBehavior: 'contain' }}
+              >
                 {conversationId ? (
                   <ChatPanel 
                     conversationId={conversationId} 
@@ -501,6 +501,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
         .custom-scrollbar {
           scrollbar-width: thin;
           scrollbar-color: #d1d5db transparent;
+          overscroll-behavior: contain;
         }
       `}</style>
     </div>

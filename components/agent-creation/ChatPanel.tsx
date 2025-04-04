@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader, Bot } from "lucide-react";
@@ -29,6 +29,24 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [lastScrollHeight, setLastScrollHeight] = useState(0);
+  const [lastScrollTop, setLastScrollTop] = useState(0);
+  const [newMessageCount, setNewMessageCount] = useState(0);
+
+  // Check if scroll is at bottom
+  const checkIfScrollAtBottom = useCallback(() => {
+    if (!messagesContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 20;
+    setIsAtBottom(isBottom);
+    
+    // Save last position
+    setLastScrollTop(scrollTop);
+    setLastScrollHeight(scrollHeight);
+  }, []);
 
   // Load initial messages if any
   useEffect(() => {
@@ -46,14 +64,49 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   }, [conversationId]);
 
-  // Scroll to bottom when messages change
+  // Setup scroll listener
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    
+    container.addEventListener('scroll', checkIfScrollAtBottom);
+    return () => container.removeEventListener('scroll', checkIfScrollAtBottom);
+  }, [checkIfScrollAtBottom]);
+
+  // Handle scroll position when new messages arrive
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    
+    if (isLoading) {
+      // Always scroll to the bottom when loading a new message
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } else if (isAtBottom) {
+      // Only auto-scroll if user was already at bottom
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setNewMessageCount(0);
+    } else if (messages.length > 0 && lastScrollHeight > 0) {
+      // Maintain relative scroll position when new content is added
+      const heightDiff = container.scrollHeight - lastScrollHeight;
+      if (heightDiff > 0) {
+        container.scrollTop = lastScrollTop + heightDiff;
+        setNewMessageCount(prev => prev + 1);
+      }
+    }
+    
+    // Update scroll height after rendering
+    setLastScrollHeight(container.scrollHeight);
+  }, [messages, isAtBottom, lastScrollHeight, lastScrollTop, isLoading]);
 
   // Handle sending a message
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !conversationId) return;
+
+    // Reset new message counter when user sends a message
+    setNewMessageCount(0);
+    
+    // Set isAtBottom to true when sending new message
+    setIsAtBottom(true);
 
     // Add user message to UI immediately
     const userMessage: Message = {
@@ -119,7 +172,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+        onScroll={checkIfScrollAtBottom}
+      >
         {messages.length === 0 && !isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
             <Bot className="h-12 w-12 text-primary/50" />
@@ -141,7 +198,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     : "bg-muted/30 text-foreground"
                 }`}
               >
-                <ReactMarkdown className="prose prose-sm max-w-none break-words">
+                <ReactMarkdown className="prose prose-sm max-w-none break-words overflow-hidden">
                   {message.text}
                 </ReactMarkdown>
               </div>

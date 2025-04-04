@@ -313,7 +313,8 @@ export default class ChatService {
     userId: string,
     title: string,
     projectId: string | null,
-    agentId: string
+    agentId: string,
+    isHidden: boolean = false
   ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
@@ -324,13 +325,17 @@ export default class ChatService {
           user_id: userId,
           title: title,
           status: "active",
-          project_ids: [projectId],
+          project_ids: projectId ? [projectId] : [],
           agent_ids: [agentId],
         },
-        { headers: headers }
+        { 
+          headers: headers,
+          params: isHidden ? { hidden: true } : undefined
+        }
       );
       return response.data;
     } catch (error) {
+      console.error("Error creating conversation:", error);
       throw new Error("Error creating conversation");
     }
   }

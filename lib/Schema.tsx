@@ -59,6 +59,7 @@ export const CustomAgentsFormSchema = z.object({
     .array(CustomAgentsTaskSchema)
     .min(1)
     .max(5, { message: "You can add up to 5 tasks" }),
+  tools: z.array(z.string()).optional(),
 });
 
 export type CustomAgentsFormValues = z.infer<typeof CustomAgentsFormSchema>;

@@ -80,8 +80,8 @@
   "devDependencies": {
     "@types/node": "^20.17.24",
     "@types/prismjs": "^1.26.5",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.6",
     "@types/react-syntax-highlighter": "^15.5.13",
     "autoprefixer": "^10.4.21",
     "eslint": "^8.57.1",

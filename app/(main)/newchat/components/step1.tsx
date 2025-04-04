@@ -56,6 +56,7 @@ import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import { ParsingStatusEnum } from "@/lib/Constants";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import ParsingProgress from "./ParsingProgress";
 
 const repoLinkSchema = z.object({
   repoLink: z
@@ -328,11 +329,6 @@ const Step1: React.FC<Step1Props> = ({
     }
   }, [localRepoPath, localBranchName, isLocalRepoDailog]);
 
-  // Debug searchValue changes
-  useEffect(() => {
-    console.log("searchValue changed:", searchValue);
-  }, [searchValue]);
-
   // Function to safely set the public repo dialog state
   const handleSetPublicRepoDialog = (value: boolean) => {
     // Only allow opening the dialog if we're not on localhost
@@ -586,34 +582,15 @@ const Step1: React.FC<Step1Props> = ({
           )}
         </div>
       </div>
-      {parsingStatus !== ParsingStatusEnum.ERROR && parsingStatus === ParsingStatusEnum.READY ? (
-        <div className="flex justify-start items-center gap-3 mt-5">
-          <CheckCircle className="text-[#00C313] h-4 w-4" />{" "}
-          <span className="text-[#00C313]">{parsingStatus.charAt(0).toLocaleUpperCase() + parsingStatus.slice(1)}</span>
-        </div>
-      ) : parsingStatus !== ParsingStatusEnum.ERROR && parsingStatus !== "" ? (
-        <div className="flex justify-start items-center gap-3 mt-5">
-          <Loader
-            className={`animate-spin h-4 w-4 ${parsingStatus === "" && "hidden"}`}
-          />{" "}
-          <span>{parsingStatus.charAt(0).toLocaleUpperCase() + parsingStatus.slice(1)}</span>
-        </div>
-      ) : null}
-      {parsingStatus === ParsingStatusEnum.ERROR && (
-        <div className="flex gap-4 items-center my-3">
-          <div className="flex justify-start items-center gap-3 ">
-            <XCircle className="text-[#E53E3E] h-4 w-4" />{" "}
-            <span>{parsingStatus.charAt(0).toLocaleUpperCase() + parsingStatus.slice(1)}</span>
-          </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => branchName && parseRepo(repoName, branchName)}
-          >
-            Retry
-          </Button>
-        </div>
-      )}
+      
+      {/* Parsing Status with new ParsingProgress component */}
+      {parsingStatus && (
+  <ParsingProgress 
+    status={parsingStatus} 
+    onRetry={() => branchName && parseRepo(repoName, branchName)} 
+  />
+)}
+      
       <Dialog open={isPublicRepoDailog} onOpenChange={handleSetPublicRepoDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

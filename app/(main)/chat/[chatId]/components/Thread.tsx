@@ -9,7 +9,7 @@ import {
   useMessageRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import { useEffect, useMemo, useState, type FC } from "react";
+import { useEffect, useMemo, useState, type FC, useCallback } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -48,9 +48,12 @@ export const Thread: FC<ThreadProps> = ({
   const runtime = useThreadRuntime();
   const [isLoading, setIsLoading] = useState(true);
 
-  runtime.subscribe(() => {
-    setIsLoading((runtime.getState().extras as any)?.loading === true || false);
-  });
+  useEffect(() => {
+    const unsubscribe = runtime.subscribe(() => {
+      setIsLoading((runtime.getState().extras as any)?.loading === true || false);
+    });
+    return () => unsubscribe();
+  }, [runtime]);
 
   let userMessage = useMemo(() => {
     return UserMessageWithURL(userImageURL);
@@ -299,30 +302,32 @@ const Composer: FC<{
   conversation_id: string;
 }> = ({ projectId, disabled, conversation_id }) => {
   const composer = useComposerRuntime();
+  const [key, setKey] = useState(0);
+  const runtime = useThreadRuntime();
+  const [isStreaming, setIsStreaming] = useState(false);
 
-  const setSelectedNodesInConfig = (selectedNodes: any[]) => {
+  useEffect(() => {
+    const unsubscribe = runtime.subscribe(() => {
+      setIsStreaming(
+        (runtime.getState().extras as any)?.streaming === true || false
+      );
+    });
+    return () => unsubscribe();
+  }, [runtime]);
+
+  const setSelectedNodesInConfig = useCallback((selectedNodes: any[]) => {
     composer.setRunConfig({
       custom: {
         selectedNodes: selectedNodes,
       },
     });
-  };
-
-  const [key, setKey] = useState(0);
-
-  const runtime = useThreadRuntime();
-  const [isStreaming, setIsStreaming] = useState(false);
-  runtime.subscribe(() => {
-    setIsStreaming(
-      (runtime.getState().extras as any)?.streaming === true || false
-    );
-  });
+  }, [composer]);
 
   return (
     <ComposerPrimitive.Root
       className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out"
       onSubmit={() => {
-        setKey(key + 1); // Current this is used to rerender MessageComposer (so that message and nodes are reset)
+        setKey(key + 1);
       }}
     >
       <MessageComposer
@@ -366,18 +371,68 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
   );
 };
 
+const ThreadScrollToBottom: FC = () => {
+  const threadRuntime = useThreadRuntime();
+  const [showButton, setShowButton] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const checkScrollPosition = useCallback(() => {
+    const viewport = document.querySelector('.thread-viewport');
+    if (!viewport) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = viewport as HTMLElement;
+    const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 20;
+    setIsAtBottom(isBottom);
+    setShowButton(!isBottom);
+  }, []);
+
+  useEffect(() => {
+    const viewport = document.querySelector('.thread-viewport');
+    if (!viewport) return;
+    
+    viewport.addEventListener('scroll', checkScrollPosition);
+    return () => viewport.removeEventListener('scroll', checkScrollPosition);
+  }, [checkScrollPosition]);
+
+  const scrollToBottom = () => {
+    const viewport = document.querySelector('.thread-viewport');
+    if (!viewport) return;
+    
+    viewport.scrollTo({
+      top: viewport.scrollHeight,
+      behavior: 'smooth'
+    });
+  };
+
+  if (!showButton) return null;
+
+  return (
+    <button
+      onClick={scrollToBottom}
+      className="mb-2 p-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
+      aria-label="Scroll to bottom"
+    >
+      <ArrowDownIcon className="h-5 w-5" />
+    </button>
+  );
+};
+
 const AssistantMessage: FC = () => {
   const message = useMessage();
   const runtime = useMessageRuntime();
-
   const threadRuntime = useThreadRuntime();
   const [isStreaming, setIsStreaming] = useState(false);
-
   const [text, setText] = useState<string>(
     (message.content[0] as any)?.text || ""
   );
   const [isRunning, setIsRunning] = useState(false);
   const [accordianTransitionDone, setAccordianTransitionDone] = useState(false);
+  const [accordionValue, setAccordianValue] = useState("tool-results");
+  const [toolcallHeading, setToolcallHeading] = useState("Reasoning ...");
+  const [toolsState, setToolsState] = useState<
+    { id: string; message: string; status: string; details_summary: string }[]
+  >([]);
+
   useEffect(() => {
     if (isStreaming && text.length < 1200) {
       setToolcallHeading("Reasoning ...");
@@ -393,14 +448,12 @@ const AssistantMessage: FC = () => {
       setToolcallHeading("Reasoning completed");
       setAccordianTransitionDone(true);
     }
-  }, [isStreaming, text]);
+  }, [isStreaming, text, accordianTransitionDone]);
 
-  const [toolsState, setToolsState] = useState<
-    { id: string; message: string; status: string; details_summary: string }[]
-  >([]);
+  useEffect(() => {
+    if (!message.isLast) return;
 
-  if (message.isLast) {
-    runtime.subscribe(() => {
+    const unsubscribeRuntime = runtime.subscribe(() => {
       setText((runtime.getState().content[0] as any)?.text || "");
       const tool_calls = runtime
         .getState()
@@ -436,17 +489,19 @@ const AssistantMessage: FC = () => {
       setToolsState(res);
     });
 
-    threadRuntime.subscribe(() => {
+    const unsubscribeThreadRuntime = threadRuntime.subscribe(() => {
       setIsStreaming(
         (threadRuntime.getState().extras as any).streaming || false
       );
       threadRuntime.getState().messages.at(-1)?.id === message.id &&
         setIsRunning(threadRuntime.getState().isRunning);
     });
-  }
 
-  const [accordionValue, setAccordianValue] = useState("tool-results");
-  const [toolcallHeading, setToolcallHeading] = useState("Reasoning ...");
+    return () => {
+      unsubscribeRuntime();
+      unsubscribeThreadRuntime();
+    };
+  }, [message.isLast, message.id, runtime, threadRuntime]);
 
   return (
     <motion.div

@@ -226,280 +226,271 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex flex-1 relative overflow-hidden">
-        {/* Left Panel Content - with isolated scrolling */}
-        <div 
-          className={`h-full transition-all duration-300 ${getLeftPanelWidth()} border-r relative flex flex-col overflow-hidden`}
-        >
-          {layoutState !== PanelLayoutState.RIGHT_ONLY && (
-            <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex items-center justify-between p-4 border-b shrink-0">
-                <h2 className="text-lg font-semibold">Agent Configuration</h2>
-              </div>
-              {/* Isolated scrollable area for left panel */}
-              <div 
-                ref={leftPanelRef}
-                className="flex-1 overflow-y-auto custom-scrollbar" 
-                style={{ 
-                  overscrollBehavior: 'contain',
-                  isolation: 'isolate',
-                  position: 'relative'
-                }}
-                onScroll={(e) => {
-                  // Ensure the event doesn't propagate
-                  e.stopPropagation();
-                }}
-              >
-                <AgentReviewPanel 
-                  generatedAgent={generatedAgent} 
-                  onEdit={() => setIsEditing(true)}
-                />
-              </div>
+    <div className="flex h-full relative">
+      {/* Left Panel Content - with isolated scrolling */}
+      <div 
+        className={`h-full transition-all duration-300 ${getLeftPanelWidth()} border-r relative flex flex-col`}
+      >
+        {layoutState !== PanelLayoutState.RIGHT_ONLY && (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-4 border-b shrink-0">
+              <h2 className="text-lg font-semibold">Agent Configuration</h2>
             </div>
-          )}
-          
-          {/* Toggle button to show right panel when in left-only mode */}
-          {layoutState === PanelLayoutState.LEFT_ONLY && (
-            <Button 
-              variant="secondary"
-              size="icon"
-              onClick={toggleToSplit}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20 bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center"
-              aria-label="Show Test Panel"
+            {/* Isolated scrollable area for left panel */}
+            <div 
+              ref={leftPanelRef}
+              className="flex-1 overflow-y-auto custom-scrollbar" 
+              style={{ 
+                overscrollBehavior: 'contain',
+              }}
             >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-          )}
-        </div>
-
-        {/* Toggle buttons in the middle for split mode */}
-        {layoutState === PanelLayoutState.SPLIT && (
-          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col gap-4">
-            <Button 
-              variant="secondary"
-              size="icon"
-              onClick={toggleToLeftOnly}
-              className="bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center"
-              aria-label="Hide Test Panel"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-            
-            <Button 
-              variant="secondary"
-              size="icon"
-              onClick={toggleToRightOnly}
-              className="bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center"
-              aria-label="Hide Configuration Panel"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
+              <AgentReviewPanel 
+                generatedAgent={generatedAgent} 
+                onEdit={() => setIsEditing(true)}
+                onSave={(agent) => {
+                  // Handle saving the agent
+                  console.log("Saving agent:", agent);
+                  // You can add your save logic here
+                }}
+                availableTools={[]} // Add an empty array or fetch tools from your service
+              />
+            </div>
           </div>
         )}
+        
+        {/* Toggle button to show right panel when in left-only mode */}
+        {layoutState === PanelLayoutState.LEFT_ONLY && (
+          <Button 
+            variant="secondary"
+            size="icon"
+            onClick={toggleToSplit}
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center"
+            style={{ zIndex: 10 }}
+            aria-label="Show Test Panel"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+        )}
+      </div>
 
-        {/* Right Panel Content - with isolated scrolling */}
-        <div 
-          className={`h-full transition-all duration-300 ${getRightPanelWidth()} relative flex flex-col overflow-hidden`}
-        >
-          {layoutState !== PanelLayoutState.LEFT_ONLY && (
-            <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex items-center justify-between p-4 border-b shrink-0">
-                <h2 className="text-lg font-semibold">Test your agent</h2>
-              </div>
-              {/* Isolated scrollable area for right panel */}
-              <div 
-                ref={rightPanelRef}
-                className="flex-1 overflow-hidden" 
-                style={{ 
-                  overscrollBehavior: 'contain',
-                  isolation: 'isolate',
-                  position: 'relative'
-                }}
-                onScroll={(e) => {
-                  // Ensure the event doesn't propagate
-                  e.stopPropagation();
-                }}
+      {/* Right Panel Content - with isolated scrolling */}
+      <div 
+        className={`h-full transition-all duration-300 ${getRightPanelWidth()} relative flex flex-col`}
+      >
+        {layoutState !== PanelLayoutState.LEFT_ONLY && (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-4 border-b shrink-0">
+              <h2 className="text-lg font-semibold">Test your agent</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="ml-auto"
+                aria-label="Close Panel"
               >
-                {conversationId ? (
-                  <ChatPanel 
-                    conversationId={conversationId} 
-                    agentId={generatedAgent?.id}
-                    agentName={generatedAgent?.name || "Agent"}
-                  />
-                ) : (
-                  <div className="flex flex-col p-6 space-y-6 max-w-md mx-auto mt-8">
-                    <div className="text-center mb-6">
-                      <div className="flex justify-center mb-4">
-                        <div className="p-3 bg-blue-50 rounded-full">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM5 19V5H19V19H5Z" fill="#4F86FF"/>
-                            <path d="M7 12H9V17H7V12ZM11 7H13V17H11V7ZM15 9H17V17H15V9Z" fill="#4F86FF"/>
-                          </svg>
-                        </div>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            {/* Isolated scrollable area for right panel */}
+            <div 
+              ref={rightPanelRef}
+              className="flex-1 overflow-hidden" 
+              style={{ 
+                overscrollBehavior: 'contain',
+                isolation: 'isolate',
+                position: 'relative'
+              }}
+              onScroll={(e) => {
+                // Ensure the event doesn't propagate
+                e.stopPropagation();
+              }}
+            >
+              {conversationId ? (
+                <ChatPanel 
+                  conversationId={conversationId} 
+                  agentId={generatedAgent?.id}
+                  agentName={generatedAgent?.name || "Agent"}
+                />
+              ) : (
+                <div className="flex flex-col p-6 space-y-6 max-w-md mx-auto mt-8">
+                  <div className="text-center mb-6">
+                    <div className="flex justify-center mb-4">
+                      <div className="p-3 bg-blue-50 rounded-full">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM5 19V5H19V19H5Z" fill="#4F86FF"/>
+                          <path d="M7 12H9V17H7V12ZM11 7H13V17H11V7ZM15 9H17V17H15V9Z" fill="#4F86FF"/>
+                        </svg>
                       </div>
-                      <h3 className="text-xl font-medium mb-2">Connect to a Repository</h3>
-                      <p className="text-muted-foreground">
-                        Select a repository and branch to test your agent with real code.
-                      </p>
                     </div>
-                    
-                    <div className="space-y-6">
-                      {/* Repository Selection */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Repository</label>
-                        <Popover open={repoOpen} onOpenChange={setRepoOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              aria-expanded={repoOpen}
-                              className="w-full justify-between"
-                              disabled={repositoriesLoading}
-                            >
-                              {repositoriesLoading ? (
-                                <span className="flex items-center">
-                                  <Loader className="mr-2 h-4 w-4 animate-spin" />
-                                  Loading...
-                                </span>
-                              ) : (
-                                selectedRepo?.full_name || "Select repository..."
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-full p-0" align="start">
-                            <Command>
-                              <CommandInput
-                                placeholder="Search repositories..."
-                                value={repoSearchTerm}
-                                onValueChange={setRepoSearchTerm}
-                              />
-                              <CommandList className="custom-scrollbar max-h-60 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                                <CommandEmpty>No repositories found.</CommandEmpty>
-                                <CommandGroup>
-                                  {repositories?.map((repo: any) => (
-                                    <CommandItem
-                                      key={repo.id}
-                                      value={repo.full_name}
-                                      onSelect={() => {
-                                        setSelectedRepo(repo);
-                                        setRepoOpen(false);
-                                      }}
-                                    >
-                                      {repo.full_name}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      {/* Branch Selection */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Branch</label>
-                        <Popover open={branchOpen} onOpenChange={setBranchOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              aria-expanded={branchOpen}
-                              className="w-full justify-between"
-                              disabled={!selectedRepo || branchesLoading}
-                            >
-                              {branchesLoading ? (
-                                <span className="flex items-center">
-                                  <Loader className="mr-2 h-4 w-4 animate-spin" />
-                                  Loading branches...
-                                </span>
-                              ) : (
-                                selectedBranch || "Select branch..."
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-full p-0" align="start">
-                            <Command>
-                              <CommandInput
-                                placeholder="Search branches..."
-                                value={branchSearchTerm}
-                                onValueChange={setBranchSearchTerm}
-                              />
+                    <h3 className="text-xl font-medium mb-2">Connect to a Repository</h3>
+                    <p className="text-muted-foreground">
+                      Select a repository and branch to test your agent with real code.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-6">
+                    {/* Repository Selection */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Repository</label>
+                      <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={repoOpen}
+                            className="w-full justify-between"
+                            disabled={repositoriesLoading}
+                          >
+                            {repositoriesLoading ? (
+                              <span className="flex items-center">
+                                <Loader className="mr-2 h-4 w-4 animate-spin" />
+                                Loading...
+                              </span>
+                            ) : (
+                              selectedRepo?.full_name || "Select repository..."
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput
+                              placeholder="Search repositories..."
+                              value={repoSearchTerm}
+                              onValueChange={setRepoSearchTerm}
+                            />
                             <CommandList className="custom-scrollbar max-h-60 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                              <CommandEmpty>No branches found.</CommandEmpty>
+                              <CommandEmpty>No repositories found.</CommandEmpty>
                               <CommandGroup>
-                                {Array.isArray(branches) && branches.map((branch: string) => (
+                                {repositories?.map((repo: any) => (
                                   <CommandItem
-                                    key={branch}
-                                    value={branch}
+                                    key={repo.id}
+                                    value={repo.full_name}
                                     onSelect={() => {
-                                      setSelectedBranch(branch);
-                                      setBranchOpen(false);
+                                      setSelectedRepo(repo);
+                                      setRepoOpen(false);
                                     }}
                                   >
-                                    {branch}
+                                    {repo.full_name}
                                   </CommandItem>
                                 ))}
                               </CommandGroup>
                             </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      {/* Parsing Status */}
-                      {parsingStatus && (
-                        <ParsingProgress 
-                          status={parsingStatus} 
-                          projectId={parsedProjectId}
-                          onRetry={parseRepo}
-                        />
-                      )}
-
-                      {/* Parse Button */}
-                      <Button
-                        className="w-full"
-                        disabled={!selectedRepo || !selectedBranch || 
-                                  [ParsingStatusEnum.SUBMITTED, ParsingStatusEnum.PROCESSING, 
-                                   ParsingStatusEnum.CLONED, ParsingStatusEnum.PARSED].includes(parsingStatus as ParsingStatusEnum)}
-                        onClick={parseRepo}
-                      >
-                        {[ParsingStatusEnum.SUBMITTED, ParsingStatusEnum.PROCESSING, 
-                          ParsingStatusEnum.CLONED, ParsingStatusEnum.PARSED].includes(parsingStatus as ParsingStatusEnum) ? (
-                          <>
-                            <Loader className="mr-2 h-4 w-4 animate-spin" />
-                            Parsing...
-                          </>
-                        ) : parsingStatus === ParsingStatusEnum.ERROR ? (
-                          "Try Again"
-                        ) : (
-                          "Parse Repository"
-                        )}
-                      </Button>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
+
+                    {/* Branch Selection */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Branch</label>
+                      <Popover open={branchOpen} onOpenChange={setBranchOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={branchOpen}
+                            className="w-full justify-between"
+                            disabled={!selectedRepo || branchesLoading}
+                          >
+                            {branchesLoading ? (
+                              <span className="flex items-center">
+                                <Loader className="mr-2 h-4 w-4 animate-spin" />
+                                Loading branches...
+                              </span>
+                            ) : (
+                              selectedBranch || "Select branch..."
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput
+                              placeholder="Search branches..."
+                              value={branchSearchTerm}
+                              onValueChange={setBranchSearchTerm}
+                            />
+                          <CommandList className="custom-scrollbar max-h-60 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
+                            <CommandEmpty>No branches found.</CommandEmpty>
+                            <CommandGroup>
+                              {Array.isArray(branches) && branches.map((branch: string) => (
+                                <CommandItem
+                                  key={branch}
+                                  value={branch}
+                                  onSelect={() => {
+                                    setSelectedBranch(branch);
+                                    setBranchOpen(false);
+                                  }}
+                                >
+                                  {branch}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* Parsing Status */}
+                    {parsingStatus && (
+                      <ParsingProgress 
+                        status={parsingStatus} 
+                        projectId={parsedProjectId}
+                        onRetry={parseRepo}
+                      />
+                    )}
+
+                    {/* Parse Button */}
+                    <Button
+                      className="w-full"
+                      disabled={!selectedRepo || !selectedBranch || 
+                                [ParsingStatusEnum.SUBMITTED, ParsingStatusEnum.PROCESSING, 
+                                 ParsingStatusEnum.CLONED, ParsingStatusEnum.PARSED].includes(parsingStatus as ParsingStatusEnum)}
+                      onClick={parseRepo}
+                    >
+                      {[ParsingStatusEnum.SUBMITTED, ParsingStatusEnum.PROCESSING, 
+                        ParsingStatusEnum.CLONED, ParsingStatusEnum.PARSED].includes(parsingStatus as ParsingStatusEnum) ? (
+                        <>
+                          <Loader className="mr-2 h-4 w-4 animate-spin" />
+                          Parsing...
+                        </>
+                      ) : parsingStatus === ParsingStatusEnum.ERROR ? (
+                        "Try Again"
+                      ) : (
+                        "Parse Repository"
+                      )}
+                    </Button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          )}
-          
-          {/* Toggle button to show left panel when in right-only mode */}
-          {layoutState === PanelLayoutState.RIGHT_ONLY && (
-            <Button 
-              variant="secondary"
-              size="icon"
-              onClick={toggleToSplit}
-              className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20 bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center"
-              aria-label="Show Configuration Panel"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          )}
-        </div>
+          </div>
+        )}
+        
+        {/* Toggle button to show left panel when in right-only mode */}
+        {layoutState === PanelLayoutState.RIGHT_ONLY && (
+          <Button 
+            variant="secondary"
+            size="icon"
+            onClick={toggleToSplit}
+            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center"
+            style={{ zIndex: 10 }}
+            aria-label="Show Configuration Panel"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        )}
       </div>
 
-      {/* Custom scrollbar styles */}
+      {/* Global styles */}
       <style jsx global>{`
+        /* Remove any transform or isolation properties that might create stacking contexts */
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #d1d5db transparent;
+          overscroll-behavior: contain;
+        }
+
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
           height: 8px;
@@ -517,13 +508,11 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: #9ca3af;
         }
-        
-        .custom-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: #d1d5db transparent;
-          overscroll-behavior: contain;
-          scroll-behavior: auto;
-          transform: translateZ(0); /* Create a new stacking context */
+
+        /* Ensure tooltips are rendered at the highest level */
+        [data-radix-popper-content-wrapper] {
+          position: fixed !important;
+          z-index: 99999 !important;
         }
       `}</style>
     </div>

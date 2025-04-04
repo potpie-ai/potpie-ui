@@ -20,7 +20,9 @@
     "paths": {
       "@/*": ["./*"]
     },
-    "target": "ES2017"
+    "target": "ES2017",
+    "baseUrl": ".",
+    "forceConsistentCasingInFileNames": true
   },
   "include": [
     "next-env.d.ts",

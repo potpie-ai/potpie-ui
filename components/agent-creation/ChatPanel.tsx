@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader, Bot, ChevronDown } from "lucide-react";
+import { Loader, Bot, ChevronDown, SendHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
 import ChatService from "@/services/ChatService";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import MyCodeBlock from "@/components/codeBlock";
+import { ExternalLinkIcon } from "lucide-react";
 
 interface ChatPanelProps {
   conversationId: string;
@@ -19,6 +22,50 @@ interface Message {
   sender: "user" | "agent";
   citations?: string[];
 }
+
+const CustomMarkdown = ({ content }: { content: string }) => {
+  return (
+    <ReactMarkdown
+      className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
+      components={{
+        p: ({ children }) => <p className="text-slate-900">{children}</p>,
+        code: ({ children, className }) => {
+          const language = className
+            ? className.replace("language-", "")
+            : "plaintext";
+
+          if (language === "plaintext") {
+            return (
+              <code className="bg-green-200 rounded text-sm font-medium text-slate-900">
+                {children}
+              </code>
+            );
+          }
+
+          return (
+            <MyCodeBlock
+              code={String(children).replace(/\n$/, "")}
+              language={language}
+            />
+          );
+        },
+        a: ({ href, children }) => (
+          <a
+            className="underline inline-flex transition-all text-blue-600 hover:text-blue-800"
+            href={href}
+            target="_blank"
+          >
+            {children}
+            <ExternalLinkIcon className="h-4 w-4 ml-1" />
+          </a>
+        ),
+      }}
+      remarkPlugins={[remarkGfm]}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+};
 
 const ChatPanel: React.FC<ChatPanelProps> = ({
   conversationId,
@@ -202,9 +249,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     : "bg-muted/30 text-foreground"
                 }`}
               >
-                <ReactMarkdown className="prose prose-sm max-w-none break-words overflow-hidden">
-                  {message.text}
-                </ReactMarkdown>
+                {message.sender === "user" ? (
+                  <p className="break-words">{message.text}</p>
+                ) : (
+                  <CustomMarkdown content={message.text} />
+                )}
               </div>
             </div>
           ))
@@ -240,7 +289,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             {isLoading ? (
               <Loader className="h-5 w-5 animate-spin" />
             ) : (
-              <Image src="/images/sendmsg.svg" alt="Send" width={20} height={20} />
+              <SendHorizontalIcon className="h-5 w-5" />
             )}
           </Button>
         </div>

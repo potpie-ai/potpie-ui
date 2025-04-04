@@ -255,10 +255,9 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
           </div>
         </Tabs>
       </div>
-      
-      <div className="p-4 border-t">
+      <div className="p-4 border-t h-[76px] flex items-center">
         {isEditing ? (
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full">
             <Button
               variant="outline"
               onClick={handleCancel}

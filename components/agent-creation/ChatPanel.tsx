@@ -119,10 +119,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
-        <h3 className="text-lg font-medium">Chat with {agentName}</h3>
-      </div>
-      
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && !isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
@@ -165,21 +161,20 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         )}
         <div ref={messagesEndRef} />
       </div>
-      
-      <div className="p-4 border-t">
+      <div className="p-4 border-t h-[76px]">
         <div className="flex items-center space-x-2">
           <Textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             placeholder={`Ask ${agentName} a question...`}
-            className="min-h-[60px] resize-none"
+            className="min-h-[44px] resize-none"
             onKeyDown={handleKeyDown}
             disabled={isLoading}
           />
           <Button
             onClick={handleSendMessage}
             disabled={!inputMessage.trim() || isLoading}
-            className="h-[60px] px-4"
+            className="h-[44px] px-4"
           >
             {isLoading ? (
               <Loader className="h-5 w-5 animate-spin" />

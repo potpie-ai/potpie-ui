@@ -45,34 +45,34 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-1 overflow-auto">
+    <div className="flex flex-col h-full relative">
+      <div className="flex-1 overflow-hidden">
         <Tabs defaultValue="system" className="h-full flex flex-col">
-  <TabsList className="w-full flex justify-center gap-1 mb-6 p-1 bg-background border rounded-lg">
-    <TabsTrigger 
-      value="system" 
-      className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-    >
-      System Configuration
-    </TabsTrigger>
-    <TabsTrigger 
-      value="identity" 
-      className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-    >
-      Agent Identity
-    </TabsTrigger>
-    <TabsTrigger 
-      value="tasks" 
-      className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-    >
-      Tasks
-    </TabsTrigger>
-  </TabsList>
+          <TabsList className="w-full flex justify-center gap-1 mb-6 p-1 bg-background border rounded-lg sticky top-0 z-10">
+            <TabsTrigger 
+              value="system" 
+              className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            >
+              System Configuration
+            </TabsTrigger>
+            <TabsTrigger 
+              value="identity" 
+              className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            >
+              Agent Identity
+            </TabsTrigger>
+            <TabsTrigger 
+              value="tasks" 
+              className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            >
+              Tasks
+            </TabsTrigger>
+          </TabsList>
 
           <div className="flex-1 overflow-hidden">
             <TabsContent
               value="system"
-              className="h-full mt-0 data-[state=active]:flex flex-col overflow-hidden"
+              className="h-full pb-20 mt-0 data-[state=active]:flex flex-col overflow-hidden"
             >
               <div className="flex-1 overflow-y-auto space-y-4 p-4">
                 <div>
@@ -98,7 +98,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
 
             <TabsContent
               value="identity"
-              className="h-full mt-0 data-[state=active]:flex flex-col overflow-hidden"
+              className="h-full pb-20 mt-0 data-[state=active]:flex flex-col overflow-hidden"
             >
               <div className="flex-1 overflow-y-auto space-y-6 p-4">
                 <div>
@@ -162,7 +162,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
 
             <TabsContent
               value="tasks"
-              className="h-full mt-0 data-[state=active]:flex flex-col overflow-hidden"
+              className="h-full pb-20 mt-0 data-[state=active]:flex flex-col overflow-hidden"
             >
               <div className="flex-1 overflow-y-auto space-y-6 p-4">
                 {editedAgent.tasks?.map((task: any, index: number) => (
@@ -255,7 +255,9 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
           </div>
         </Tabs>
       </div>
-      <div className="p-4 border-t h-[76px] flex items-center">
+      
+      {/* Make the button container sticky */}
+      <div className="p-4 border-t h-[76px] bg-background flex items-center absolute bottom-0 left-0 right-0 z-20">
         {isEditing ? (
           <div className="flex gap-2 w-full">
             <Button

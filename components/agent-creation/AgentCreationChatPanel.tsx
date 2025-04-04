@@ -229,9 +229,11 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex flex-1 relative overflow-hidden">
         {/* Left Panel Content - with isolated scrolling */}
-        <div className={`h-full transition-all duration-300 ${getLeftPanelWidth()} border-r relative flex flex-col`} style={{ overflow: 'hidden' }}>
+        <div 
+          className={`h-full transition-all duration-300 ${getLeftPanelWidth()} border-r relative flex flex-col overflow-hidden`}
+        >
           {layoutState !== PanelLayoutState.RIGHT_ONLY && (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full overflow-hidden">
               <div className="flex items-center justify-between p-4 border-b shrink-0">
                 <h2 className="text-lg font-semibold">Agent Configuration</h2>
               </div>
@@ -239,7 +241,15 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
               <div 
                 ref={leftPanelRef}
                 className="flex-1 overflow-y-auto custom-scrollbar" 
-                style={{ overscrollBehavior: 'contain' }}
+                style={{ 
+                  overscrollBehavior: 'contain',
+                  isolation: 'isolate',
+                  position: 'relative'
+                }}
+                onScroll={(e) => {
+                  // Ensure the event doesn't propagate
+                  e.stopPropagation();
+                }}
               >
                 <AgentReviewPanel 
                   generatedAgent={generatedAgent} 
@@ -289,9 +299,11 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
         )}
 
         {/* Right Panel Content - with isolated scrolling */}
-        <div className={`h-full transition-all duration-300 ${getRightPanelWidth()} relative flex flex-col`} style={{ overflow: 'hidden' }}>
+        <div 
+          className={`h-full transition-all duration-300 ${getRightPanelWidth()} relative flex flex-col overflow-hidden`}
+        >
           {layoutState !== PanelLayoutState.LEFT_ONLY && (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full overflow-hidden">
               <div className="flex items-center justify-between p-4 border-b shrink-0">
                 <h2 className="text-lg font-semibold">Test your agent</h2>
               </div>
@@ -299,7 +311,15 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
               <div 
                 ref={rightPanelRef}
                 className="flex-1 overflow-hidden" 
-                style={{ overscrollBehavior: 'contain' }}
+                style={{ 
+                  overscrollBehavior: 'contain',
+                  isolation: 'isolate',
+                  position: 'relative'
+                }}
+                onScroll={(e) => {
+                  // Ensure the event doesn't propagate
+                  e.stopPropagation();
+                }}
               >
                 {conversationId ? (
                   <ChatPanel 
@@ -502,6 +522,8 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
           scrollbar-width: thin;
           scrollbar-color: #d1d5db transparent;
           overscroll-behavior: contain;
+          scroll-behavior: auto;
+          transform: translateZ(0); /* Create a new stacking context */
         }
       `}</style>
     </div>

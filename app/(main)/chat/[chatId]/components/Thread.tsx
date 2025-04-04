@@ -234,19 +234,7 @@ const MarkdownComponent = (content: any) => {
     </ul>
   );
 };
-const ThreadScrollToBottom: FC = () => {
-  return (
-    <ThreadPrimitive.ScrollToBottom asChild>
-      <TooltipIconButton
-        tooltip="Scroll to bottom"
-        variant="outline"
-        className="h-8 w-8 z-20 mb-8 rounded-full hover:scale-105 shadow-md hover:shadow-lg disabled:invisible transition ease-out"
-      >
-        <ArrowDownIcon />
-      </TooltipIconButton>
-    </ThreadPrimitive.ScrollToBottom>
-  );
-};
+
 
 const ThreadWelcome: FC<{ showSuggestions: boolean }> = ({
   showSuggestions,

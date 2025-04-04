@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader, Bot } from "lucide-react";
+import { Loader, Bot, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
 import ChatService from "@/services/ChatService";
@@ -34,6 +34,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [lastScrollHeight, setLastScrollHeight] = useState(0);
   const [lastScrollTop, setLastScrollTop] = useState(0);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Check if scroll is at bottom
   const checkIfScrollAtBottom = useCallback(() => {
@@ -42,6 +43,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
     const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 20;
     setIsAtBottom(isBottom);
+    setShowScrollButton(!isBottom);
     
     // Save last position
     setLastScrollTop(scrollTop);
@@ -78,25 +80,26 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     const container = messagesContainerRef.current;
     if (!container) return;
     
+    // Only auto-scroll in specific cases:
+    // 1. If this is a new user message being sent (tracked by a separate flag)
+    // 2. If user was already at bottom and a new message comes in
     if (isLoading) {
-      // Always scroll to the bottom when loading a new message
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    } else if (isAtBottom) {
+      // Don't force scroll while loading, let user control
+    } else if (isAtBottom && messages.length > 0) {
       // Only auto-scroll if user was already at bottom
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      });
       setNewMessageCount(0);
-    } else if (messages.length > 0 && lastScrollHeight > 0) {
-      // Maintain relative scroll position when new content is added
-      const heightDiff = container.scrollHeight - lastScrollHeight;
-      if (heightDiff > 0) {
-        container.scrollTop = lastScrollTop + heightDiff;
-        setNewMessageCount(prev => prev + 1);
-      }
+    } else if (messages.length > 0) {
+      // If not at bottom, just increment new message count
+      // but don't manipulate scroll position
+      setNewMessageCount(prev => prev + 1);
     }
     
     // Update scroll height after rendering
     setLastScrollHeight(container.scrollHeight);
-  }, [messages, isAtBottom, lastScrollHeight, lastScrollTop, isLoading]);
+  }, [messages, isAtBottom, isLoading]);
 
   // Handle sending a message
   const handleSendMessage = async () => {
@@ -170,11 +173,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   };
 
+
   return (
     <div className="flex flex-col h-full">
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth relative"
         onScroll={checkIfScrollAtBottom}
       >
         {messages.length === 0 && !isLoading ? (

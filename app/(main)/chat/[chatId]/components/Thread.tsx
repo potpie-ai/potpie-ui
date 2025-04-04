@@ -278,17 +278,15 @@ const ThreadWelcomeSuggestions: FC = () => {
         className="hover:bg-slate-300/20 flex max-w-sm min-w-fit basis-0 flex-col items-center justify-center rounded-full border border-neutral-400/20 p-3 transition-colors ease-in"
         prompt="What does this repo do?"
         method="replace"
-        autoSend
       >
         <span className="line-clamp-2 text-ellipsis text-sm">
           What does this repo do?
-        </span>
+        </span> 
       </ThreadPrimitive.Suggestion>
       <ThreadPrimitive.Suggestion
         className="hover:bg-slate-300/20 flex max-w-sm min-w-fit basis-0 flex-col items-center justify-center rounded-full p-3 border border-neutral-400/20 transition-colors ease-in"
         prompt="How do i add integration tests to @somefile.ext?"
         method="replace"
-        autoSend
       >
         <span className="line-clamp-2 text-ellipsis text-sm">
           How do i add integration tests to @ ?
@@ -298,7 +296,6 @@ const ThreadWelcomeSuggestions: FC = () => {
         className="hover:bg-slate-300/20 flex max-w-sm min-w-fit basis-0 flex-col items-center justify-center rounded-full p-3 border border-neutral-400/20 transition-colors ease-in"
         prompt="Write a typescript client for the router at @"
         method="replace"
-        autoSend
       >
         <span className="line-clamp-2 text-ellipsis text-sm">
           Write a typescript client for the router at @

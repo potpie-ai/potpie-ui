@@ -165,10 +165,7 @@ const KeyManagement = () => {
         );
         return response.data;
       },
-      onError: () => {
-        // Silently fail if there are no integration keys
-        return [];
-      }
+      placeholderData: []
     });
 
   useEffect(() => {

@@ -113,7 +113,7 @@ export default class AgentService {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       const response = await axios.post(
-        `${baseUrl}/api/v1/custom-agents/agents/from-prompt`,
+        `${baseUrl}/api/v1/custom-agents/agents/auto`,
         { prompt },
         { headers }
       );

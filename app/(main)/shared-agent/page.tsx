@@ -253,7 +253,8 @@ const SharedAgentPage = () => {
         userId,
         "Chat with shared agent", // Default title
         parsedProjectId, // Project ID from parse API response
-        agentId
+        agentId,
+        true // Set isHidden to true for conversations created from the shared agent page
       );
     },
     onSuccess: (data) => {

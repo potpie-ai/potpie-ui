@@ -56,8 +56,7 @@ const Step2: React.FC<Step2Props> = ({
         userId,
         title,
         projectId,
-        agentId,
-        true
+        agentId
       );
       dispatch(setChat({ agentId: agentId }));
       setChatStep(3);

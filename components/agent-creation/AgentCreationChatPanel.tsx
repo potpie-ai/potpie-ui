@@ -281,7 +281,8 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between p-4 border-b shrink-0">
               <h2 className="text-lg font-semibold">Test your agent</h2>
-              <Button
+              {/* Remove this button cause modal already has a close button */}
+              {/* <Button
                 variant="ghost"
                 size="icon"
                 onClick={onClose}
@@ -289,7 +290,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                 aria-label="Close Panel"
               >
                 <X className="h-5 w-5" />
-              </Button>
+              </Button> */}
             </div>
             {/* Isolated scrollable area for right panel */}
             <div 

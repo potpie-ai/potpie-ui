@@ -223,8 +223,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
 
   return (
     <TooltipProvider delayDuration={0}>
-      {/* Main container with relative position and explicit height */}
-      <div className="flex flex-col h-full relative">
+      <div className="flex flex-col max-h-[80vh] h-full relative">
         {/* Add custom scrollbar styles */}
         <style jsx global>{`
           .custom-scrollbar {
@@ -250,10 +249,9 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
             background: #9ca3af;
           }
         `}</style>
-        {/* Tabs container with overflow hidden to contain scrollable content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <Tabs defaultValue="system" className="h-full flex flex-col">
-            <TabsList className="w-full flex justify-center gap-1 mb-6 p-1 bg-background border rounded-lg sticky top-0 z-10">
+            <TabsList className="w-full flex-none flex justify-center gap-1 mb-6 p-1 bg-background border rounded-lg z-10">
               <TabsTrigger 
                 value="system" 
                 className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
@@ -274,8 +272,8 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
               </TabsTrigger>
             </TabsList>
 
-            {/* Main content area - KEY FIX: modified to have proper padding bottom to prevent overlap with buttons */}
-            <div className="flex-1 overflow-hidden">
+            {/* Main content area */}
+            <div className="flex-1 min-h-0 overflow-hidden">
               <TabsContent
                 value="system"
                 className="h-full mt-0 data-[state=active]:flex flex-col overflow-hidden"
@@ -370,273 +368,262 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                 value="tasks"
                 className="h-full mt-0 data-[state=active]:flex flex-col overflow-hidden"
               >
-                <div className="flex-1 overflow-y-auto space-y-6 p-4 pb-24 custom-scrollbar"> {/* Added pb-24 to create space for bottom buttons and custom-scrollbar class */}
-                  {editedAgent.tasks?.map((task: any, index: number) => (
-                    <div key={index} className="bg-background rounded-lg border shadow-sm transition-all duration-200 hover:shadow-md flex flex-col">
-                      {/* Fixed header section */}
-                      <div className="p-6 border-b sticky top-0 bg-background z-10">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold text-foreground">
-                            Task {index + 1}
-                          </h3>
-                          <span className="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                            {task.type || "Custom Task"}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Task content */}
-                      <div className="p-6 overflow-y-auto"> {/* Added overflow-y-auto here */}
-                        <div className="space-y-6">
-                          {/* Description section */}
-                          <div className="w-full">
-                            <h4 className="text-sm font-medium mb-2 text-foreground sticky top-0 bg-background py-2 z-10">
-                              Description
-                            </h4>
-                            <div className="bg-muted/30 rounded-lg p-4 break-words min-h-[160px] max-h-[250px] overflow-y-auto">
-                              {isEditing ? (
-                                <Textarea
-                                  value={task.description}
-                                  onChange={(e) => handleTaskChange(index, 'description', e.target.value)}
-                                  className="min-h-[160px] text-sm w-full resize-vertical"
-                                />
-                              ) : (
-                                <div className="overflow-y-auto max-h-full">
-                                  <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
-                                    {task.description}
-                                  </ReactMarkdown>
-                                </div>
-                              )}
-                            </div>
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-6 p-4 pb-24 custom-scrollbar">
+                  <div className="space-y-6">
+                    {editedAgent.tasks?.map((task: any, index: number) => (
+                      <div key={index} className="bg-background rounded-lg border shadow-sm">
+                        {/* Task header - not sticky anymore since we have task-level scroll */}
+                        <div className="p-6 border-b bg-background">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-foreground">
+                              Task {index + 1}
+                            </h3>
+                            <span className="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                              {task.type || "Custom Task"}
+                            </span>
                           </div>
+                        </div>
+                        
+                        {/* Task content - each section gets its own scroll */}
+                        <div className="p-6">
+                          <div className="space-y-6">
+                            {/* Description section */}
+                            <div className="w-full">
+                              <h4 className="text-sm font-medium mb-2 text-foreground">
+                                Description
+                              </h4>
+                              <div className="bg-muted/30 rounded-lg p-4 max-h-[200px] overflow-y-auto">
+                                {isEditing ? (
+                                  <Textarea
+                                    value={task.description}
+                                    onChange={(e) => handleTaskChange(index, 'description', e.target.value)}
+                                    className="min-h-[160px] text-sm w-full resize-vertical"
+                                  />
+                                ) : (
+                                  <div className="overflow-y-auto max-h-full">
+                                    <ReactMarkdown className="text-sm prose prose-sm max-w-none prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+                                      {task.description}
+                                    </ReactMarkdown>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
 
-                          {/* Tools section */}
-                          <div>
-                            <h4 className="text-sm font-medium mb-2 text-foreground sticky top-0 bg-background py-2 z-10">
-                              Tools
-                            </h4>
-                            <div className="bg-muted/30 rounded-lg p-4">
-                              {isEditing ? (
-                                <div className="space-y-4">
-                                  {/* Show currently selected tools as tags/pills */}
-                                  <div className="flex flex-wrap gap-2 mb-3">
+                            {/* Tools section */}
+                            <div className="w-full">
+                              <h4 className="text-sm font-medium mb-2 text-foreground">
+                                Tools
+                              </h4>
+                              <div className="bg-muted/30 rounded-lg p-4 max-h-[200px] overflow-y-auto">
+                                {isEditing ? (
+                                  <div className="space-y-4">
+                                    {/* Show currently selected tools as tags/pills */}
+                                    <div className="flex flex-wrap gap-2 mb-3">
+                                      {task.tools && task.tools.length > 0 ? (
+                                        task.tools.map((tool: string, toolIndex: number) => (
+                                          <Badge 
+                                            key={toolIndex}
+                                            variant="secondary"
+                                            className="px-3 py-1.5 bg-primary/20 text-primary rounded-full text-xs font-medium flex items-center gap-1"
+                                          >
+                                            {tool}
+                                            <button 
+                                              onClick={() => handleTaskToolChange(index, tool, false)}
+                                              className="ml-1 text-primary hover:text-primary/80"
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          </Badge>
+                                        ))
+                                      ) : (
+                                        <span className="text-sm text-muted-foreground">No tools assigned</span>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Popover for tool selection */}
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button 
+                                          variant="outline" 
+                                          className="w-full flex justify-between items-center"
+                                        >
+                                          <span className="flex items-center">
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            {task.tools?.length ? `${task.tools.length} tools selected` : "Select tools..."}
+                                          </span>
+                                          <ChevronDown className="h-4 w-4" />
+                                        </Button>
+                                      </PopoverTrigger>
+                                      
+                                      <PopoverContent 
+                                        className="w-[350px] p-0 bg-popover" 
+                                        align="start"
+                                        sideOffset={5}
+                                      >
+                                        <div className="grid gap-0 bg-background rounded-md shadow-sm">
+                                          <div className="p-3 border-b">
+                                            <Input
+                                              placeholder="Search tools..."
+                                              value={taskToolStates[index]?.searchTerm || ""}
+                                              onChange={(e) => updateTaskToolSearch(index, e.target.value)}
+                                              className="w-full"
+                                            />
+                                          </div>
+                                          
+                                          <div className="p-2 flex gap-2 border-b bg-muted/50">
+                                            <Button 
+                                              variant="outline" 
+                                              size="sm"
+                                              onClick={() => selectAllToolsForTask(index)}
+                                              className="flex-1"
+                                            >
+                                              <Check className="h-4 w-4 mr-2" />
+                                              Select All
+                                            </Button>
+                                            <Button 
+                                              variant="outline" 
+                                              size="sm"
+                                              onClick={() => deselectAllToolsForTask(index)}
+                                              className="flex-1"
+                                            >
+                                              <X className="h-4 w-4 mr-2" />
+                                              Deselect All
+                                            </Button>
+                                          </div>
+                                          
+                                          {/* Tool list with checkboxes */}
+                                          {isLoadingTools ? (
+                                            <div className="flex justify-center items-center py-4">
+                                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                                            </div>
+                                          ) : (
+                                            <div className="max-h-[300px] overflow-y-auto">
+                                              {getFilteredTools(index).map((tool: { name: string; description: string }) => (
+                                                <Tooltip key={tool.name}>
+                                                  <TooltipTrigger asChild>
+                                                    <div 
+                                                      className={`flex items-start space-x-3 p-2 hover:bg-muted/50 cursor-pointer transition-colors ${
+                                                        task.tools?.includes(tool.name) ? "bg-muted/30" : ""
+                                                      }`}
+                                                      onClick={() => handleTaskToolChange(index, tool.name, !task.tools?.includes(tool.name))}
+                                                    >
+                                                      <Checkbox
+                                                        id={`task-${index}-tool-${tool.name}`}
+                                                        checked={task.tools?.includes(tool.name) || false}
+                                                        onCheckedChange={(checked) => handleTaskToolChange(index, tool.name, Boolean(checked))}
+                                                      />
+                                                      <div className="flex-1">
+                                                        <label
+                                                          htmlFor={`task-${index}-tool-${tool.name}`}
+                                                          className="text-sm font-medium cursor-pointer"
+                                                        >
+                                                          {tool.name}
+                                                        </label>
+                                                      </div>
+                                                    </div>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent 
+                                                    side="right" 
+                                                    align="start" 
+                                                    className="max-w-[300px]"
+                                                    sideOffset={5}
+                                                  >
+                                                    <p className="text-sm">{tool.description}</p>
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
                                     {task.tools && task.tools.length > 0 ? (
                                       task.tools.map((tool: string, toolIndex: number) => (
-                                        <Badge 
+                                        <Badge
                                           key={toolIndex}
                                           variant="secondary"
-                                          className="px-3 py-1.5 bg-primary/20 text-primary rounded-full text-xs font-medium flex items-center gap-1"
+                                          className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full text-xs font-medium"
                                         >
                                           {tool}
-                                          <button 
-                                            onClick={() => handleTaskToolChange(index, tool, false)}
-                                            className="ml-1 text-primary hover:text-primary/80"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
                                         </Badge>
                                       ))
                                     ) : (
                                       <span className="text-sm text-muted-foreground">No tools assigned</span>
                                     )}
                                   </div>
-                                  
-                                  {/* Popover for tool selection */}
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Button 
-                                        variant="outline" 
-                                        className="w-full flex justify-between items-center"
-                                      >
-                                        <span className="flex items-center">
-                                          <Plus className="h-4 w-4 mr-2" />
-                                          {task.tools?.length ? `${task.tools.length} tools selected` : "Select tools..."}
-                                        </span>
-                                        <ChevronDown className="h-4 w-4" />
-                                      </Button>
-                                    </PopoverTrigger>
-                                    
-                                    <PopoverContent 
-                                      className="w-[350px] p-0 bg-popover" 
-                                      align="start"
-                                      sideOffset={5}
-                                    >
-                                      <div className="grid gap-0 bg-background rounded-md shadow-sm">
-                                        <div className="p-3 border-b">
-                                          <Input
-                                            placeholder="Search tools..."
-                                            value={taskToolStates[index]?.searchTerm || ""}
-                                            onChange={(e) => updateTaskToolSearch(index, e.target.value)}
-                                            className="w-full"
-                                          />
-                                        </div>
-                                        
-                                        <div className="p-2 flex gap-2 border-b bg-muted/50">
-                                          <Button 
-                                            variant="outline" 
-                                            size="sm"
-                                            onClick={() => selectAllToolsForTask(index)}
-                                            className="flex-1"
-                                          >
-                                            <Check className="h-4 w-4 mr-2" />
-                                            Select All
-                                          </Button>
-                                          <Button 
-                                            variant="outline" 
-                                            size="sm"
-                                            onClick={() => deselectAllToolsForTask(index)}
-                                            className="flex-1"
-                                          >
-                                            <X className="h-4 w-4 mr-2" />
-                                            Deselect All
-                                          </Button>
-                                        </div>
-                                        
-                                        {/* Tool list with checkboxes */}
-                                        {isLoadingTools ? (
-                                          <div className="flex justify-center items-center py-4">
-                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                                          </div>
-                                        ) : (
-                                          <div className="max-h-[300px] overflow-y-auto">
-                                            {getFilteredTools(index).map((tool: { name: string; description: string }) => (
-                                              <Tooltip key={tool.name}>
-                                                <TooltipTrigger asChild>
-                                                  <div 
-                                                    className={`flex items-start space-x-3 p-2 hover:bg-muted/50 cursor-pointer transition-colors ${
-                                                      task.tools?.includes(tool.name) ? "bg-muted/30" : ""
-                                                    }`}
-                                                    onClick={() => handleTaskToolChange(index, tool.name, !task.tools?.includes(tool.name))}
-                                                  >
-                                                    <Checkbox
-                                                      id={`task-${index}-tool-${tool.name}`}
-                                                      checked={task.tools?.includes(tool.name) || false}
-                                                      onCheckedChange={(checked) => handleTaskToolChange(index, tool.name, Boolean(checked))}
-                                                    />
-                                                    <div className="flex-1">
-                                                      <label
-                                                        htmlFor={`task-${index}-tool-${tool.name}`}
-                                                        className="text-sm font-medium cursor-pointer"
-                                                      >
-                                                        {tool.name}
-                                                      </label>
-                                                    </div>
-                                                  </div>
-                                                </TooltipTrigger>
-                                                <TooltipContent 
-                                                  side="right" 
-                                                  align="start" 
-                                                  className="max-w-[300px]"
-                                                  sideOffset={5}
-                                                >
-                                                  <p className="text-sm">{tool.description}</p>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </PopoverContent>
-                                  </Popover>
-                                </div>
-                              ) : (
-                                <div className="flex flex-wrap gap-2">
-                                  {task.tools && task.tools.length > 0 ? (
-                                    task.tools.map((tool: string, toolIndex: number) => (
-                                      <Badge
-                                        key={toolIndex}
-                                        variant="secondary"
-                                        className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full text-xs font-medium"
-                                      >
-                                        {tool}
-                                      </Badge>
-                                    ))
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground">No tools assigned</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Expected Output section */}
-                          {task.expected_output && (
-                            <div className="w-full">
-                              <h4 className="text-sm font-medium mb-2 text-foreground sticky top-0 bg-background py-2 z-10">
-                                Expected Output
-                              </h4>
-                              <div className="bg-muted/30 rounded-lg p-4 min-h-[160px] max-h-[250px] overflow-y-auto">
-                                {isEditing ? (
-                                  <Textarea
-                                    value={JSON.stringify(task.expected_output, null, 2)}
-                                    onChange={(e) => {
-                                      try {
-                                        const parsedOutput = JSON.parse(e.target.value);
-                                        handleTaskChange(index, 'expected_output', parsedOutput);
-                                      } catch (error) {}
-                                    }}
-                                    className="min-h-[160px] text-sm font-mono w-full resize-vertical"
-                                  />
-                                ) : (
-                                  <div className="overflow-y-auto max-h-full">
-                                    <pre className="text-sm whitespace-pre-wrap overflow-x-auto max-w-full">
-                                      {JSON.stringify(task.expected_output, null, 2)}
-                                    </pre>
-                                  </div>
                                 )}
                               </div>
                             </div>
-                          )}
+
+                            {/* Expected Output section */}
+                            {task.expected_output && (
+                              <div className="w-full">
+                                <h4 className="text-sm font-medium mb-2 text-foreground">
+                                  Expected Output
+                                </h4>
+                                <div className="bg-muted/30 rounded-lg p-4 max-h-[200px] overflow-y-auto">
+                                  {isEditing ? (
+                                    <Textarea
+                                      value={JSON.stringify(task.expected_output, null, 2)}
+                                      onChange={(e) => {
+                                        try {
+                                          const parsedOutput = JSON.parse(e.target.value);
+                                          handleTaskChange(index, 'expected_output', parsedOutput);
+                                        } catch (error) {}
+                                      }}
+                                      className="min-h-[160px] text-sm font-mono w-full resize-vertical"
+                                    />
+                                  ) : (
+                                    <div className="overflow-y-auto max-h-full">
+                                      <pre className="text-sm whitespace-pre-wrap overflow-x-auto max-w-full">
+                                        {JSON.stringify(task.expected_output, null, 2)}
+                                      </pre>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="sticky bottom-0 left-0 right-0 p-4 bg-background border-t flex-none">
+                  {isEditing ? (
+                    <div className="flex gap-2 w-full">
+                      <Button variant="outline" onClick={handleCancel} className="flex-1">
+                        <X className="w-4 h-4 mr-2" />
+                        Cancel
+                      </Button>
+                      <Button onClick={handleSave} className="flex-1" disabled={isSaving}>
+                        {isSaving ? (
+                          <div className="flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                            Saving...
+                          </div>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Changes
+                          </>
+                        )}
+                      </Button>
                     </div>
-                  ))}
+                  ) : (
+                    <Button variant="outline" onClick={handleEdit} className="w-full">
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit Agent Configuration
+                    </Button>
+                  )}
                 </div>
               </TabsContent>
             </div>
           </Tabs>
-        </div>
-        
-        {/* Fixed bottom buttons - updated to ensure visibility and proper z-index */}
-        <div className="sticky bottom-0 left-0 right-0 p-4 border-t bg-background z-20 mt-auto">
-          {isEditing ? (
-            <div className="flex gap-2 w-full">
-              <Button
-                variant="outline"
-                onClick={handleCancel}
-                className="flex-1"
-              >
-                <X className="w-4 h-4 mr-2" />
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSave}
-                className="flex-1"
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Saving...
-                  </div>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
-            </div>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={handleEdit}
-              className="w-full"
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Agent Configuration
-            </Button>
-          )}
         </div>
       </div>
     </TooltipProvider>

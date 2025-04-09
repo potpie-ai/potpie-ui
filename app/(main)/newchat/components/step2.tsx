@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { auth } from "@/configs/Firebase-config";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { AppDispatch } from "@/lib/state/store";
@@ -45,11 +45,13 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
   const cardWidth = 280; // Fixed width for each card in pixels
   const containerPadding = 32; // 16px padding on both sides (px-4)
   const cardGap = 16;
-
+  const containerRef = useRef<HTMLDivElement>(null);
   // Helper function to calculate how many cards can be shown based on available width.
   const calculateVisibleCards = () => {
-    const availableWidth = window.innerWidth * 0.8 - containerPadding;
-    return Math.max(1, Math.floor(availableWidth / (cardWidth + cardGap)));
+        const availableWidth = containerRef.current 
+      ? containerRef.current.clientWidth
+      : window.innerWidth * 0.8 - containerPadding;
+    return Math.max(1, Math.floor((availableWidth / (cardWidth + cardGap)) + 0.9));
   };
 
   // Update visible cards and adjust the current index if necessary on mount and window resize.
@@ -57,18 +59,33 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
     const updateVisibleCards = () => {
       const newVisibleCards = calculateVisibleCards();
       setVisibleCards(newVisibleCards);
-      if (AgentTypes) {
-        const maxIndex = Math.max(0, AgentTypes.length - newVisibleCards);
-        if (currentIndex > maxIndex) {
-          setCurrentIndex(maxIndex);
-        }
-      }
+    };
+    
+    // Basic debounce implementation
+    let resizeTimer: NodeJS.Timeout;
+    const debouncedResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(updateVisibleCards, 150);
     };
     
     updateVisibleCards();
-    window.addEventListener('resize', updateVisibleCards);
-    return () => window.removeEventListener('resize', updateVisibleCards);
-  }, [AgentTypes, currentIndex]);
+    window.addEventListener('resize', debouncedResize);
+    
+    return () => {
+      window.removeEventListener('resize', debouncedResize);
+      clearTimeout(resizeTimer);
+    };
+  }, [AgentTypes]); // Removed currentIndex from dependencies
+
+  // Separate effect to handle currentIndex adjustments
+  useEffect(() => {
+    if (AgentTypes && visibleCards > 0) {
+      const maxIndex = Math.max(0, AgentTypes.length - visibleCards);
+      if (currentIndex > maxIndex) {
+        setCurrentIndex(maxIndex);
+      }
+    }
+  }, [AgentTypes, visibleCards, currentIndex]);
 
   const createConversation = async (agentId: string) => {
     try {
@@ -118,7 +135,7 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
         </button>
 
         {/* Cards Container */}
-        <div className="overflow-hidden w-full px-4">
+        <div className="overflow-hidden w-full px-4" ref={containerRef}>
           <div
             className="flex gap-4 transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(-${currentIndex * (cardWidth + cardGap)}px)` }}

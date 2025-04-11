@@ -11,31 +11,52 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import WorkflowService, { Workflow } from "@/services/WorkflowService";
+import AgentService from "@/services/AgentService";
+
+import WorkflowService, { Trigger, Workflow } from "@/services/WorkflowService";
 import { Hammer, LucideEdit, LucideTrash } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+
+interface Agent {
+  id: string;
+  name: string;
+}
 
 const Workflows = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
+  const [triggers, setTriggers] = useState<Trigger[]>([]);
 
   useEffect(() => {
-    async function fetchWorkflows() {
+    async function fetchData() {
       setLoading(true);
       const workflows = await WorkflowService.getWorkflowsList();
       setWorkflows(workflows);
+
+      const agents = await AgentService.getAgentTypes();
+      setAvailableAgents(
+        agents.map((agent: any) => ({ id: agent.id, name: agent.name }))
+      );
+      const _triggers = await WorkflowService.getAllTriggers();
+      setTriggers(_triggers);
       setLoading(false);
     }
-    fetchWorkflows();
+
+    fetchData();
   }, []);
 
-  const handleCreateWorkflow = () => {};
-  const handleWorkflowClick = (workflow: Workflow) => {};
-  const handleProjectClick = (workflow: Workflow) => {};
-  const handleEditWorkflow = (workflow: Workflow) => {};
-  const handleDeleteWorkflow = (workflow: Workflow) => {};
+  const handleDeleteWorkflow = (workflow: Workflow) => {
+    if (confirm("Are you sure you want to delete this workflow?")) {
+      WorkflowService.deleteWorkflow(workflow.id).then(() => {
+        setWorkflows((prevWorkflows) =>
+          prevWorkflows.filter((w) => w.id !== workflow.id)
+        );
+      });
+    }
+  };
 
   return (
     <div>
@@ -47,10 +68,12 @@ const Workflows = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Button onClick={handleCreateWorkflow} className="gap-2">
-          <Hammer className="h-6 w-6" />
-          Create Workflow
-        </Button>
+        <Link href={"/workflows/create"}>
+          <Button className="gap-2">
+            <Hammer className="h-6 w-6" />
+            Create Workflow
+          </Button>
+        </Link>
       </div>
 
       {/* LIST WORKFLOWS */}
@@ -62,10 +85,12 @@ const Workflows = () => {
               <TableHead className="w-[200px] text-primary">
                 Repository
               </TableHead>
+              <TableHead className="w-[200px] text-primary">Agent</TableHead>
+              <TableHead className="w-[200px] text-primary">Trigger</TableHead>
               <TableHead className="w-[200px] text-primary">
                 Created At
               </TableHead>
-              <TableHead className="w-[200px] text-primary text-end">
+              <TableHead className="w-[200px] text-primary pl-4">
                 Actions
               </TableHead>
             </TableRow>
@@ -73,18 +98,28 @@ const Workflows = () => {
           <TableBody>
             {loading ? (
               <>
-                <TableRow className="w-full">
-                  <Skeleton className="w-full h-8 my-4" />
-                </TableRow>
-                <TableRow className="w-full">
-                  <Skeleton className="w-full h-8 my-4" />
-                </TableRow>
-                <TableRow className="w-full">
-                  <Skeleton className="w-full h-8 my-4" />
-                </TableRow>
-                <TableRow className="w-full">
-                  <Skeleton className="w-full h-8 my-4" />
-                </TableRow>
+                {[...Array(5)].map((_, index) => (
+                  <TableRow key={index} className="w-full">
+                    <TableCell>
+                      <Skeleton className="w-1/3 h-8" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="w-2/3 h-8" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="w-2/3 h-8" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="w-1/3 h-8" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="w-4/5 h-8" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="w-1/5 h-8" />
+                    </TableCell>
+                  </TableRow>
+                ))}
               </>
             ) : (
               workflows
@@ -101,32 +136,33 @@ const Workflows = () => {
                     <TableCell>
                       <Link
                         href={`/workflows/${workflow.id}`}
-                        onClick={() => handleWorkflowClick(workflow)}
+                        className="hover:text-blue-600"
                       >
                         {workflow.title}
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <Link
-                        href={`/projects/${workflow.project_id}`}
-                        onClick={() => handleProjectClick(workflow)}
-                      >
-                        {workflow?.project_name}
-                      </Link>
+                      {workflow.repo_name || "<Deleted project>"}
+                    </TableCell>
+                    <TableCell>
+                      {availableAgents.find(
+                        (agent) => agent.id == workflow?.agent_id
+                      )?.name || "<Deleted Agent>"}
+                    </TableCell>
+                    <TableCell>
+                      {triggers.find(
+                        (trigger) => trigger.id == workflow?.triggers[0]
+                      )?.name || "<Unknown Trigger>"}
                     </TableCell>
                     <TableCell>
                       {new Date(workflow.created_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end gap-5">
-                        <div className="flex gap-3"></div>
+                      <div className="flex gap-2">
                         <Link href={`/workflows/${workflow.id}/edit`}>
                           <Button
                             variant="link"
                             className="configure-button hover:bg-gray-200"
-                            onClick={() => {
-                              handleEditWorkflow(workflow);
-                            }}
                           >
                             <LucideEdit className="h-4 w-4" />
                           </Button>

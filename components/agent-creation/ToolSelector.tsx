@@ -1,12 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Check, X, Move, GripHorizontal } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useDrag, useDrop, DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Check, 
+  Search, 
+  X,
+  ChevronDown,
+  Plus,
+  Info
+} from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipPortal,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 interface Tool {
   name: string;
@@ -16,267 +27,284 @@ interface Tool {
 interface ToolSelectorProps {
   availableTools: Tool[];
   selectedTools: string[];
-  onToolsChange: (tools: string[]) => void;
   isLoading?: boolean;
+  onChange: (tools: string[]) => void;
+  placeholderText?: string;
 }
 
-// Tool item type for drag and drop
-const TOOL_ITEM_TYPE = 'tool';
-
-// DraggableTool component
-const DraggableTool = ({ tool, isSelected, onToggle, index }: { 
-  tool: Tool; 
-  isSelected: boolean; 
-  onToggle: (tool: Tool) => void; 
-  index: number;
+const ToolSelector: React.FC<ToolSelectorProps> = ({
+  availableTools = [],
+  selectedTools = [],
+  isLoading = false,
+  onChange,
+  placeholderText = "Select tools..."
 }) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: TOOL_ITEM_TYPE,
-    item: { tool, isSelected, index },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  }), [tool, isSelected, index]);
-
-  return (
-    <div
-      ref={drag as any}
-      className={`flex items-center justify-between p-2.5 rounded-md mb-1 cursor-move border ${
-        isSelected ? 'bg-primary/10 border-primary/20' : 'bg-background border-border/30 hover:bg-muted/30'
-      } ${isDragging ? 'opacity-50' : 'opacity-100'}`}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="flex items-center flex-1 gap-2">
-            <GripHorizontal className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            <span className="text-sm font-medium truncate">{tool.name}</span>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs">
-          <p className="text-sm">{tool.description}</p>
-        </TooltipContent>
-      </Tooltip>
-      
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        className="h-6 w-6 p-0 rounded-full"
-        onClick={() => onToggle(tool)}
-      >
-        {isSelected ? (
-          <X className="h-3.5 w-3.5 text-muted-foreground" />
-        ) : (
-          <Check className="h-3.5 w-3.5 text-muted-foreground" />
-        )}
-      </Button>
-    </div>
-  );
-};
-
-// ToolDropZone component
-const ToolDropZone = ({ 
-  title, 
-  tools, 
-  onDrop, 
-  allowedDropEffect, 
-  onToggle, 
-  searchTerm = "" 
-}: { 
-  title: string;
-  tools: Tool[];
-  onDrop: (tool: Tool, effect: string) => void;
-  allowedDropEffect: string;
-  onToggle: (tool: Tool) => void;
-  searchTerm?: string;
-}) => {
-  const [{ isOver, canDrop }, drop] = useDrop(() => ({
-    accept: TOOL_ITEM_TYPE,
-    drop: (item: { tool: Tool; isSelected: boolean }) => {
-      onDrop(item.tool, allowedDropEffect);
-      return { name: allowedDropEffect };
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-      canDrop: monitor.canDrop(),
-    }),
-    canDrop: (item: { tool: Tool; isSelected: boolean }) => {
-      return allowedDropEffect === 'add' ? !item.isSelected : item.isSelected;
-    },
-  }), [allowedDropEffect, onDrop]);
-
-  // Filter tools based on search term if provided
-  const filteredTools = searchTerm
-    ? tools.filter(tool => 
-        tool.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        tool.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    : tools;
-
-  return (
-    <div 
-      ref={drop as any}
-      className={`flex-1 border rounded-md p-3 ${
-        isOver && canDrop ? 'bg-primary/5 border-primary/20' : 'bg-background'
-      }`}
-    >
-      <h3 className="text-sm font-medium mb-3 text-foreground flex items-center justify-between">
-        <span>{title}</span>
-        <Badge variant="outline" className="text-xs">
-          {filteredTools.length}
-        </Badge>
-      </h3>
-      
-      <ScrollArea className="h-[300px] pr-3">
-        {filteredTools.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground text-sm">
-            {searchTerm ? "No matching tools found" : "No tools available"}
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {filteredTools.map((tool, index) => (
-              <DraggableTool
-                key={tool.name}
-                tool={tool}
-                isSelected={allowedDropEffect === 'remove'}
-                onToggle={onToggle}
-                index={index}
-              />
-            ))}
-          </div>
-        )}
-      </ScrollArea>
-    </div>
-  );
-};
-
-// Main ToolSelector component
-const ToolSelector: React.FC<ToolSelectorProps> = ({ 
-  availableTools = [], 
-  selectedTools = [], 
-  onToolsChange,
-  isLoading = false
-}) => {
+  const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [availableList, setAvailableList] = useState<Tool[]>([]);
-  const [selectedList, setSelectedList] = useState<Tool[]>([]);
-
-  useEffect(() => {
-    // Filter out selected tools from available tools
-    const selected = selectedTools.map(name => 
-      availableTools.find(tool => tool.name === name) || { name, description: '' }
-    );
-    
-    const available = availableTools.filter(
-      tool => !selectedTools.includes(tool.name)
-    );
-
-    setAvailableList(available);
-    setSelectedList(selected);
-  }, [availableTools, selectedTools]);
-
-  // Handle tool drop
-  const handleDrop = (tool: Tool, dropEffect: string) => {
-    let newSelectedTools;
-    
-    if (dropEffect === 'add') {
-      // Add the tool to selected
-      newSelectedTools = [...selectedTools, tool.name];
-    } else {
-      // Remove the tool from selected
-      newSelectedTools = selectedTools.filter(name => name !== tool.name);
-    }
-    
-    onToolsChange(newSelectedTools);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [selectedCount, setSelectedCount] = useState(selectedTools.length);
+  
+  // Helper function to normalize tool names for comparison
+  const normalizeToolName = (name: string): string => {
+    return name.toLowerCase().replace(/[ -]/g, '_');
   };
-
-  // Handle tool toggle
-  const handleToggle = (tool: Tool) => {
-    const isSelected = selectedTools.includes(tool.name);
-    let newSelectedTools;
+  
+  // Helper function to check if a tool is selected using normalized names
+  const isToolSelected = (toolName: string) => {
+    const normalizedName = normalizeToolName(toolName);
+    return selectedTools.some(selected => normalizeToolName(selected) === normalizedName);
+  };
+  
+  // Update selected count whenever selectedTools changes
+  useEffect(() => {
+    setSelectedCount(selectedTools.length);
+  }, [selectedTools]);
+  
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
+  
+  const handleToolToggle = (toolName: string) => {
+    const normalizedToolName = normalizeToolName(toolName);
+    const isSelected = selectedTools.some(selected => 
+      normalizeToolName(selected) === normalizedToolName
+    );
+    
+    let updatedTools: string[];
     
     if (isSelected) {
-      newSelectedTools = selectedTools.filter(name => name !== tool.name);
+      updatedTools = selectedTools.filter(name => 
+        normalizeToolName(name) !== normalizedToolName
+      );
     } else {
-      newSelectedTools = [...selectedTools, tool.name];
+      // Use the original format from the tool object if possible, or the provided name
+      const toolObject = availableTools.find(t => normalizeToolName(t.name) === normalizedToolName);
+      const nameToAdd = toolObject ? toolObject.name : toolName;
+      updatedTools = [...selectedTools, nameToAdd];
     }
     
-    onToolsChange(newSelectedTools);
+    onChange(updatedTools);
   };
-
-  // Select all available tools
-  const handleSelectAll = () => {
-    const allToolNames = availableTools.map(tool => tool.name);
-    onToolsChange(allToolNames);
+  
+  const selectAllTools = () => {
+    onChange(availableTools.map(tool => tool.name));
   };
-
-  // Deselect all tools
-  const handleDeselectAll = () => {
-    onToolsChange([]);
+  
+  const deselectAllTools = () => {
+    onChange([]);
   };
-
+  
+  const getFilteredTools = () => {
+    if (!searchTerm) return availableTools;
+    
+    return availableTools.filter(tool => {
+      return tool.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+             tool.description.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+  };
+  
+  const filteredTools = getFilteredTools();
+  
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search tools..."
-            className="pl-9 w-full"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        
-        <div className="flex gap-4 h-[300px]">
-          {isLoading ? (
-            <div className="flex-1 border rounded-md p-3 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-            </div>
+    <TooltipProvider delayDuration={0}>
+      <div className="space-y-3">
+        {/* Selected tool badges */}
+        <div className="flex flex-wrap gap-2 min-h-8">
+          {selectedTools.length > 0 ? (
+            selectedTools.map((toolName) => (
+              <Badge 
+                key={toolName}
+                variant="secondary"
+                className="px-3 py-1.5 bg-accent/20 text-accent-foreground rounded-full text-xs font-medium flex items-center gap-1 hover:bg-accent/30 transition-colors"
+              >
+                {toolName}
+                <button 
+                  onClick={() => handleToolToggle(toolName)}
+                  className="ml-1 text-accent-foreground/70 hover:text-accent-foreground transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))
           ) : (
-            <>
-              <ToolDropZone
-                title="Available Tools"
-                tools={availableList}
-                onDrop={handleDrop}
-                allowedDropEffect="add"
-                onToggle={handleToggle}
-                searchTerm={searchTerm}
-              />
-              
-              <ToolDropZone
-                title="Selected Tools"
-                tools={selectedList}
-                onDrop={handleDrop}
-                allowedDropEffect="remove"
-                onToggle={handleToggle}
-                searchTerm={searchTerm}
-              />
-            </>
+            <span className="text-sm text-muted-foreground">No tools assigned</span>
           )}
         </div>
         
-        <div className="flex justify-between">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleSelectAll}
-            disabled={isLoading}
+        {/* Tool selection popover */}
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+          <PopoverTrigger asChild>
+            <Button 
+              variant="outline" 
+              className="w-full flex justify-between items-center hover:bg-accent/5 hover:border-accent/20 transition-colors"
+            >
+              <span className="flex items-center">
+                <Plus className="h-4 w-4 mr-2 text-accent" />
+                {selectedCount > 0 ? `${selectedCount} tools selected` : placeholderText}
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+          
+          <PopoverContent 
+            className="w-[400px] p-0"
+            align="start"
+            sideOffset={5}
           >
-            <Check className="h-4 w-4 mr-2" />
-            Select All
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleDeselectAll}
-            disabled={isLoading}
-          >
-            <X className="h-4 w-4 mr-2" />
-            Deselect All
-          </Button>
-        </div>
+            <div className="flex flex-col border border-border/50 rounded-md bg-background/95 backdrop-blur-sm overflow-hidden">
+              {/* Search header */}
+              <div className="p-3 border-b border-border/50 bg-background/50 z-10">
+                <div className="relative flex items-center">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    ref={searchInputRef}
+                    placeholder="Search tools..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-8 h-9 bg-background/50 border-border/50 focus:border-accent/50"
+                    autoComplete="off"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Tool listing with scrollable area */}
+              <div 
+                className="custom-scrollbar" 
+                style={{ maxHeight: '350px', overflowY: 'auto' }}
+              >
+                {isLoading ? (
+                  <div className="flex justify-center items-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
+                  </div>
+                ) : (
+                  <div className="p-2 grid grid-cols-2 gap-2">
+                    {filteredTools.length > 0 ? (
+                      filteredTools.map((tool) => {
+                        const isSelected = isToolSelected(tool.name);
+                        return (
+                          <div key={tool.name} className="relative">
+                            <div 
+                              onClick={() => handleToolToggle(tool.name)}
+                              className={`flex items-center p-2 rounded-md transition-all w-full cursor-pointer ${
+                                isSelected
+                                  ? 'bg-accent text-accent-foreground shadow-sm hover:bg-accent/90'
+                                  : 'bg-muted/20 hover:bg-muted/40'
+                              }`}
+                            >
+                              <span className="flex-1 text-sm truncate text-left mr-1">
+                                {tool.name}
+                              </span>
+                              
+                              {isSelected ? (
+                                <Check className="h-4 w-4 flex-shrink-0" />
+                              ) : (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                      className="p-1 hover:bg-muted/20 rounded"
+                                    >
+                                      <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipPortal>
+                                    <TooltipContent 
+                                      side="right" 
+                                      align="start"
+                                      className="max-w-[250px] z-[9999] bg-background border shadow-lg p-2"
+                                      collisionPadding={20}
+                                    >
+                                      <p className="text-sm">{tool.description}</p>
+                                    </TooltipContent>
+                                  </TooltipPortal>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="col-span-2 py-8 text-center text-muted-foreground">
+                        No tools match your search
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Footer actions */}
+              <div className="p-2 flex justify-between items-center border-t border-border/50 bg-background/50 z-10">
+                <div className="text-xs text-muted-foreground">
+                  {selectedCount} of {availableTools.length} tools selected
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={deselectAllTools}
+                    className="text-xs h-8 px-2 hover:bg-accent/5 hover:text-accent hover:border-accent/20"
+                  >
+                    Clear
+                  </Button>
+                  <Button 
+                    variant="default" 
+                    size="sm"
+                    onClick={selectAllTools}
+                    className="text-xs h-8 px-2 bg-accent hover:bg-accent/90"
+                  >
+                    Select All
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
-    </DndProvider>
+    </TooltipProvider>
   );
 };
 
-export default ToolSelector; 
+/* Add explicit scrollbar styles directly within this component file */
+<style jsx global>{`
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px; /* Width of the vertical scrollbar */
+    height: 8px; /* Height of the horizontal scrollbar */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent; /* Make the track invisible */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1; /* A slightly visible gray for the thumb */
+    border-radius: 4px; /* Round the corners */
+    border: 2px solid transparent; /* Creates padding around thumb */
+    background-clip: content-box; /* Ensures border acts as padding */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #a0aec0; /* Darker gray on hover */
+  }
+
+  /* Basic Firefox scrollbar styling */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent; /* thumb color track color */
+  }
+`}</style>
+
+export default ToolSelector;

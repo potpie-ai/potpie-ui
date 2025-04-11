@@ -19,7 +19,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
-import ToolSelector from "./ToolSelector";
+import ToolSelector from "@/components/agent-creation/ToolSelector";
 
 interface Agent {
   id: string;
@@ -61,6 +61,11 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   
   const [taskToolStates, setTaskToolStates] = useState<Record<number, TaskToolState>>({});
+
+  // Log when the component receives props
+  useEffect(() => {
+    console.log('[AgentReviewPanel] Generated agent tools:', generatedAgent.tools);
+  }, [generatedAgent]);
 
   const fetchTools = async () => {
     const header = await getHeaders();
@@ -126,6 +131,13 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
   }, []);
 
   const handleTaskChange = useCallback((index: number, field: string, value: any) => {
+    console.log('[AgentReviewPanel] Task change:', {
+      taskIndex: index,
+      field,
+      value,
+      currentTask: editedAgent.tasks[index]
+    });
+    
     setEditedAgent((prev: Agent) => ({
       ...prev,
       tasks: prev.tasks.map((task, i) =>
@@ -133,6 +145,105 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
       ),
     }));
   }, []);
+
+  const handleToolToggle = useCallback((toolId: string) => {
+    console.log('[AgentReviewPanel] Toggling tool:', toolId);
+    console.log('[AgentReviewPanel] Current tools:', editedAgent.tools);
+    
+    setEditedAgent((prev: Agent) => {
+      const updated = {
+        ...prev,
+        tools: prev.tools.includes(toolId)
+          ? prev.tools.filter((id: string) => id !== toolId)
+          : [...prev.tools, toolId],
+      };
+      console.log('[AgentReviewPanel] Updated tools:', updated.tools);
+      return updated;
+    });
+  }, []);
+
+  const handleTaskToolChange = (taskIndex: number, toolName: string, checked: boolean) => {
+    console.log('[AgentReviewPanel] Task tool change:', {
+      taskIndex,
+      toolName,
+      checked,
+      currentTaskTools: editedAgent.tasks[taskIndex].tools
+    });
+    
+    const updatedTasks = [...editedAgent.tasks];
+    const task = updatedTasks[taskIndex];
+    
+    if (!task.tools) {
+      task.tools = [];
+    }
+    
+    if (checked) {
+      if (!task.tools.includes(toolName)) {
+        task.tools = [...task.tools, toolName];
+      }
+    } else {
+      task.tools = task.tools.filter((t: string) => t !== toolName);
+    }
+    
+    setEditedAgent({...editedAgent, tasks: updatedTasks});
+  };
+
+  const selectAllToolsForTask = (taskIndex: number) => {
+    console.log('[AgentReviewPanel] Selecting all tools for task:', taskIndex);
+    
+    const updatedTasks = [...editedAgent.tasks];
+    const task = updatedTasks[taskIndex];
+    
+    if (!task.tools) {
+      task.tools = [];
+    }
+    
+    const newTools = [...new Set([...task.tools, ...availableTools.map((tool: { name: string }) => tool.name)])];
+    updatedTasks[taskIndex] = {...task, tools: newTools};
+    
+    setEditedAgent({...editedAgent, tasks: updatedTasks});
+  };
+
+  const deselectAllToolsForTask = (taskIndex: number) => {
+    console.log('[AgentReviewPanel] Deselecting all tools for task:', taskIndex);
+    
+    const updatedTasks = [...editedAgent.tasks];
+    const task = updatedTasks[taskIndex];
+    
+    if (!task.tools) {
+      task.tools = [];
+    }
+    
+    updatedTasks[taskIndex] = {...task, tools: []};
+    
+    setEditedAgent({...editedAgent, tasks: updatedTasks});
+  };
+
+  const updateTaskToolSearch = (taskIndex: number, searchTerm: string) => {
+    setTaskToolStates({
+      ...taskToolStates,
+      [taskIndex]: {
+        ...taskToolStates[taskIndex],
+        searchTerm
+      }
+    });
+  };
+
+  const getFilteredTools = (taskIndex: number) => {
+    const searchTerm = taskToolStates[taskIndex]?.searchTerm?.toLowerCase() || "";
+    const filtered = availableTools.filter((tool: { name: string; description: string }) => 
+      tool.name.toLowerCase().includes(searchTerm) || 
+      tool.description.toLowerCase().includes(searchTerm)
+    );
+    
+    console.log('[AgentReviewPanel] Filtered tools for task:', {
+      taskIndex,
+      searchTerm,
+      filteredTools: filtered.map((tool: { name: string }) => tool.name)
+    });
+    
+    return filtered;
+  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -290,12 +401,15 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                               </h4>
                               <div className="bg-muted/30 rounded-lg p-4 max-h-[200px] overflow-y-auto">
                                 {isEditing ? (
-                                  <ToolSelector
-                                    availableTools={availableTools}
-                                    selectedTools={task.tools || []}
-                                    onToolsChange={(newTools) => handleTaskChange(index, 'tools', newTools)}
-                                    isLoading={isLoadingTools}
-                                  />
+                                  <div className="space-y-4">
+                                    <ToolSelector
+                                      availableTools={availableTools}
+                                      selectedTools={task.tools || []}
+                                      isLoading={isLoadingTools}
+                                      onChange={(selectedTools) => handleTaskChange(index, 'tools', selectedTools)}
+                                      placeholderText="Select tools for this task..."
+                                    />
+                                  </div>
                                 ) : (
                                   <div className="flex flex-wrap gap-2">
                                     {task.tools && task.tools.length > 0 ? (

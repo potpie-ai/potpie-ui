@@ -9,7 +9,7 @@ import { queryClient } from "@/app/utils/queryClient";
 import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
-import ChatPanel from "./ChatPanel";
+import { ChatPanel } from "./ChatPanel";
 import AgentReviewPanel from "./AgentReviewPanel";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -226,33 +226,32 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
   };
 
   return (
-    <div className="flex h-full relative">
-      {/* Left Panel Content - with isolated scrolling */}
+    <div className="flex h-full w-full relative overflow-hidden">
+      {/* Left Panel Content */}
       <div 
-        className={`h-full transition-all duration-300 ${getLeftPanelWidth()} border-r relative flex flex-col`}
+        className={`h-full transition-all duration-300 ${getLeftPanelWidth()} border-r relative flex flex-col overflow-hidden`}
       >
         {layoutState !== PanelLayoutState.RIGHT_ONLY && (
-          <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between p-4 border-b shrink-0">
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Fixed header - exactly 60px height to match right panel */}
+            <div className="flex items-center justify-between p-4 border-b flex-shrink-0 h-[60px]">
               <h2 className="text-lg font-semibold">Agent Configuration</h2>
             </div>
-            {/* Isolated scrollable area for left panel */}
+            
+            {/* Scrollable content area with flex-1 to take remaining space */}
             <div 
               ref={leftPanelRef}
-              className="flex-1 overflow-y-auto custom-scrollbar" 
-              style={{ 
-                overscrollBehavior: 'contain',
-              }}
+              className="flex-1 overflow-hidden" 
             >
               <AgentReviewPanel 
                 generatedAgent={generatedAgent} 
                 onEdit={() => setIsEditing(true)}
                 onSave={(agent) => {
-                  // Handle saving the agent
                   console.log("Saving agent:", agent);
-                  // You can add your save logic here
                 }}
-                availableTools={[]} // Add an empty array or fetch tools from your service
+                availableTools={[]}
+                // Pass fixed footer height to ensure alignment
+                footerHeight={60}
               />
             </div>
           </div>
@@ -264,8 +263,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
             variant="secondary"
             size="icon"
             onClick={toggleToSplit}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center"
-            style={{ zIndex: 10 }}
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center z-20"
             aria-label="Show Test Panel"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -273,47 +271,32 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
         )}
       </div>
 
-      {/* Right Panel Content - with isolated scrolling */}
+      {/* Right Panel Content */}
       <div 
-        className={`h-full transition-all duration-300 ${getRightPanelWidth()} relative flex flex-col`}
+        className={`h-full transition-all duration-300 ${getRightPanelWidth()} relative flex flex-col overflow-hidden`}
       >
         {layoutState !== PanelLayoutState.LEFT_ONLY && (
-          <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between p-4 border-b shrink-0">
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Fixed header - exactly 60px height to match left panel */}
+            <div className="flex items-center justify-between p-4 border-b flex-shrink-0 h-[60px]">
               <h2 className="text-lg font-semibold">Test your agent</h2>
-              {/* Remove this button cause modal already has a close button */}
-              {/* <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                className="ml-auto"
-                aria-label="Close Panel"
-              >
-                <X className="h-5 w-5" />
-              </Button> */}
             </div>
-            {/* Isolated scrollable area for right panel */}
+            
+            {/* Scrollable content area with flex-1 to take remaining space */}
             <div 
               ref={rightPanelRef}
               className="flex-1 overflow-hidden" 
-              style={{ 
-                overscrollBehavior: 'contain',
-                isolation: 'isolate',
-                position: 'relative'
-              }}
-              onScroll={(e) => {
-                // Ensure the event doesn't propagate
-                e.stopPropagation();
-              }}
             >
               {conversationId ? (
                 <ChatPanel 
                   conversationId={conversationId} 
                   agentId={generatedAgent?.id}
                   agentName={generatedAgent?.name || "Agent"}
+                  // Pass fixed footer height to ensure alignment
+                  footerHeight={60}
                 />
               ) : (
-                <div className="flex flex-col p-6 space-y-6 max-w-md mx-auto mt-8">
+                <div className="flex flex-col p-6 space-y-6 max-w-md mx-auto mt-8 overflow-y-auto h-full">
                   <div className="text-center mb-6">
                     <div className="flex justify-center mb-4">
                       <div className="p-3 bg-blue-50 rounded-full">
@@ -330,7 +313,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                   </div>
                   
                   <div className="space-y-6">
-                    {/* Repository Selection */}
+                    {/* Repository selection form... */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Repository</label>
                       <Popover open={repoOpen} onOpenChange={setRepoOpen}>
@@ -359,7 +342,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                               value={repoSearchTerm}
                               onValueChange={setRepoSearchTerm}
                             />
-                            <CommandList className="custom-scrollbar max-h-60 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
+                            <CommandList className="custom-scrollbar max-h-60 overflow-y-auto">
                               <CommandEmpty>No repositories found.</CommandEmpty>
                               <CommandGroup>
                                 {repositories?.map((repo: any) => (
@@ -410,23 +393,23 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                               value={branchSearchTerm}
                               onValueChange={setBranchSearchTerm}
                             />
-                          <CommandList className="custom-scrollbar max-h-60 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                            <CommandEmpty>No branches found.</CommandEmpty>
-                            <CommandGroup>
-                              {Array.isArray(branches) && branches.map((branch: string) => (
-                                <CommandItem
-                                  key={branch}
-                                  value={branch}
-                                  onSelect={() => {
-                                    setSelectedBranch(branch);
-                                    setBranchOpen(false);
-                                  }}
-                                >
-                                  {branch}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
+                            <CommandList className="custom-scrollbar max-h-60 overflow-y-auto">
+                              <CommandEmpty>No branches found.</CommandEmpty>
+                              <CommandGroup>
+                                {Array.isArray(branches) && branches.map((branch: string) => (
+                                  <CommandItem
+                                    key={branch}
+                                    value={branch}
+                                    onSelect={() => {
+                                      setSelectedBranch(branch);
+                                      setBranchOpen(false);
+                                    }}
+                                  >
+                                    {branch}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
                           </Command>
                         </PopoverContent>
                       </Popover>
@@ -474,8 +457,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
             variant="secondary"
             size="icon"
             onClick={toggleToSplit}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center"
-            style={{ zIndex: 10 }}
+            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-background border rounded-full shadow-md h-10 w-10 flex items-center justify-center z-20"
             aria-label="Show Configuration Panel"
           >
             <ChevronRight className="h-5 w-5" />
@@ -485,11 +467,9 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
 
       {/* Global styles */}
       <style jsx global>{`
-        /* Remove any transform or isolation properties that might create stacking contexts */
         .custom-scrollbar {
           scrollbar-width: thin;
           scrollbar-color: #d1d5db transparent;
-          overscroll-behavior: contain;
         }
 
         .custom-scrollbar::-webkit-scrollbar {
@@ -504,16 +484,6 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background: #d1d5db;
           border-radius: 4px;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #9ca3af;
-        }
-
-        /* Ensure tooltips are rendered at the highest level */
-        [data-radix-popper-content-wrapper] {
-          position: fixed !important;
-          z-index: 99999 !important;
         }
       `}</style>
     </div>

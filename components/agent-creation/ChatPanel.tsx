@@ -14,6 +14,7 @@ interface ChatPanelProps {
   conversationId: string;
   agentId: string;
   agentName: string;
+  footerHeight?: number; // Add optional prop for footer height
 }
 
 interface Message {
@@ -67,10 +68,11 @@ const CustomMarkdown = ({ content }: { content: string }) => {
   );
 };
 
-const ChatPanel: React.FC<ChatPanelProps> = ({
+export const ChatPanel: React.FC<ChatPanelProps> = ({
   conversationId,
   agentId,
   agentName,
+  footerHeight = 60, // Default height if not specified
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -127,9 +129,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     const container = messagesContainerRef.current;
     if (!container) return;
     
-    // Only auto-scroll in specific cases:
-    // 1. If this is a new user message being sent (tracked by a separate flag)
-    // 2. If user was already at bottom and a new message comes in
     if (isLoading) {
       // Don't force scroll while loading, let user control
     } else if (isAtBottom && messages.length > 0) {
@@ -220,12 +219,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   };
 
-
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {/* Message container with padding at bottom to account for fixed footer */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth relative"
+        className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar pb-16"
         onScroll={checkIfScrollAtBottom}
       >
         {messages.length === 0 && !isLoading ? (
@@ -271,20 +270,25 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div className="p-4 border-t h-[76px]">
-        <div className="flex items-center space-x-2">
+      
+      {/* Fixed-height input area at bottom */}
+      <div 
+        className="absolute bottom-0 left-0 right-0 p-4 border-t bg-background flex-none z-10"
+        style={{ height: `${footerHeight}px` }}
+      >
+        <div className="flex items-center h-full space-x-2">
           <Textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             placeholder={`Ask ${agentName} a question...`}
-            className="min-h-[44px] resize-none"
+            className="min-h-[38px] resize-none flex-1"
             onKeyDown={handleKeyDown}
             disabled={isLoading}
           />
           <Button
             onClick={handleSendMessage}
             disabled={!inputMessage.trim() || isLoading}
-            className="h-[44px] px-4"
+            className="h-[38px] px-4 flex-shrink-0"
           >
             {isLoading ? (
               <Loader className="h-5 w-5 animate-spin" />
@@ -294,8 +298,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           </Button>
         </div>
       </div>
+      
+      {/* Scroll to bottom button */}
+      {showScrollButton && newMessageCount > 0 && (
+        <button
+          onClick={() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            setNewMessageCount(0);
+            setIsAtBottom(true);
+          }}
+          className="absolute bottom-[70px] right-4 bg-primary text-white rounded-full p-2 shadow-lg flex items-center z-20"
+        >
+          <ChevronDown className="h-4 w-4 mr-1" />
+          {newMessageCount} new message{newMessageCount !== 1 && 's'}
+        </button>
+      )}
     </div>
   );
 };
-
-export default ChatPanel; 

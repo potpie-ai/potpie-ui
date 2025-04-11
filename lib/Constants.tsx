@@ -8,6 +8,7 @@ import {
   Slack,
   LucideFileText,
   MessagesSquare,
+  Zap,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -113,6 +114,17 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         icons: <BotIcon size={20} strokeWidth={1.5} />,
         title: "Custom Agents",
         href: "/all-agents",
+        disabled: false,
+      },
+    ],
+  },
+  {
+    title: "Workflows",
+    links: [
+      {
+        icons: <Zap size={20} strokeWidth={1.5} />,
+        title: "Workflows",
+        href: "/workflows",
         disabled: false,
       },
     ],

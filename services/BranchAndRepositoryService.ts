@@ -69,6 +69,21 @@ export default class BranchAndRepositoryService {
         }
     }
 
+    static async getUserProjects() {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+      try {
+          const statusResponse = await axios.get(
+              `${baseUrl}/api/v1/projects/list`,
+              { headers }
+          );
+          return statusResponse.data;
+      } catch (error) {
+          throw new Error("Error fetching projects");
+      }
+  }
+
     static async getBranchList(repoName: string) {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;

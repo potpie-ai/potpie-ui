@@ -13,13 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import AgentService from "@/services/AgentService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
-import WorkflowService, { Trigger, Workflow } from "@/services/WorkflowService";
+import WorkflowService, { Trigger } from "@/services/WorkflowService";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { MultiSelectDropdown } from "../../components/trigger-select";
+import { MultiSelectDropdown } from "../components/trigger-select";
 import {
   Carousel,
   CarouselContent,
@@ -29,14 +29,7 @@ import {
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Bot,
-  Folder,
-  GitBranch,
-  Github,
-  LucideLoader2,
-  Plus,
-} from "lucide-react";
+import { Bot, Folder, GitBranch, Github, Plus } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -53,7 +46,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
-import Link from "next/link";
 
 const formSchema = z.object({
   title: z.string().min(2, {
@@ -78,7 +70,6 @@ interface Agent {
 }
 
 export default function CreateWorkflowPage() {
-  const params: { workflowId: string } = useParams();
   const [repoOpen, setRepoOpen] = useState(false);
   const [repoName, setRepoName] = useState("");
   const [searchValue, setSearchValue] = useState("");
@@ -87,14 +78,12 @@ export default function CreateWorkflowPage() {
   const [inputValue, setInputValue] = useState("");
   const [branchOpen, setBranchOpen] = useState(false);
   const [branchName, setBranchName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [workflow, setWorkflow] = useState<Workflow | undefined>();
 
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   useEffect(() => {
     async function fetchData() {
-      setLoading(true);
+      const _triggers = await WorkflowService.getAllTriggers();
       const agents = await AgentService.getAgentTypes();
       setAvailableAgents(
         agents.map((agent: any) => ({
@@ -103,29 +92,11 @@ export default function CreateWorkflowPage() {
           description: agent.description,
         }))
       );
-      const _triggers = await WorkflowService.getAllTriggers();
       setTriggers(_triggers);
-      const _workflow = await WorkflowService.getWorkflowById(
-        params.workflowId
-      );
-      if (_workflow) {
-        form.setValue("title", _workflow.title);
-        form.setValue("description", _workflow.description);
-        form.setValue("agent_id", _workflow.agent_id);
-        form.setValue("repo_name", _workflow.repo_name);
-        setRepoName(_workflow.repo_name);
-        setBranchName(_workflow.branch);
-        form.setValue("branch", _workflow.branch);
-        form.setValue("triggers", _workflow.triggers);
-        form.setValue("task", _workflow.task);
-      }
-      setWorkflow(_workflow);
-      setLoading(false);
     }
 
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.workflowId]);
+  }, []);
 
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery(
     {
@@ -183,8 +154,7 @@ export default function CreateWorkflowPage() {
   const router = useRouter();
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!workflow) return;
-    const _workflow = await WorkflowService.updateWorkflow(workflow?.id, {
+    const workflow = await WorkflowService.createWorkflow({
       title: values.title,
       description: values.description || "",
       triggers: values.triggers,
@@ -193,16 +163,12 @@ export default function CreateWorkflowPage() {
       agent_id: values.agent_id,
       task: values.task,
     });
-    if (_workflow) {
+    if (workflow) {
       router.push(`/workflows/${workflow.id}`);
     }
   }
 
-  return loading ? (
-    <div className="flex w-full h-svh items-center justify-center">
-      <LucideLoader2 className="w-12 h-12 animate-spin" />
-    </div>
-  ) : (
+  return (
     <div className="p-8">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -213,6 +179,7 @@ export default function CreateWorkflowPage() {
               <FormItem>
                 <FormControl>
                   <Input
+                    autoFocus
                     className="rounded-none p-0 focus-visible:ring-0 focus-visible:ring-offset-0
                     focus:ring-0 focus:ring-offset-0 focus:outline-none w-1/2
                     border-none outline-none text-4xl font-bold placeholder:italic placeholder:text-gray-300"
@@ -338,7 +305,7 @@ export default function CreateWorkflowPage() {
               </PopoverContent>
             </Popover>
 
-            {UserBranchLoading && !branchName ? (
+            {UserBranchLoading ? (
               <Skeleton className="flex-1 h-10" />
             ) : (
               <Popover open={branchOpen} onOpenChange={setBranchOpen}>
@@ -489,13 +456,6 @@ export default function CreateWorkflowPage() {
           <Button type="submit" className="mt-8">
             Save
           </Button>
-          {workflow && (
-            <Link href={`/workflows/${workflow?.id}`}>
-              <Button className="bg-transparent outline outline-1 ml-4 text-gray-600 hover:bg-slate-100">
-                Cancel
-              </Button>
-            </Link>
-          )}
         </form>
       </Form>
     </div>

@@ -2,69 +2,173 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 
 export interface Workflow {
-  title: string;
-  description?: string;
-  created_at: string;
   id: string;
-  project_id: string;
-  project_name: string;
+  title: string;
+  description: string;
+  repo_name: string;
+  branch: string;
+  agent_id: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  triggers: string[];
+  hash: string;
+  task: string;
 }
 
-const mockData = [
-  {
-    id: "1",
-    title: "Workflow 1",
-    description: "Description for Workflow 1",
-    created_at: "2023-10-01T12:00:00Z",
-    project_id: "project_1",
-    project_name: "Project 1",
-  },
-  {
-    id: "2",
-    title: "Workflow 2",
-    description: "Description for Workflow 1",
-    created_at: "2023-10-02T12:00:00Z",
-    project_id: "project_2",
-    project_name: "Project 2",
-  },
-];
+export interface CreateWorkflowRequest {
+  title: string;
+  description: string;
+  repo_name: string;
+  branch: string;
+  agent_id: string;
+  triggers: string[];
+  task: string;
+}
+
+export interface UpdateWorkflowRequest {
+  title: string;
+  description: string;
+  repo_name: string;
+  branch: string;
+  agent_id: string;
+  triggers: string[];
+  task: string;
+}
+
+// Enum for trigger groups
+export enum TriggerGroup {
+  GITHUB = "github",
+  LINEAR = "linear",
+}
+
+// Enum for permissions
+export enum Permission {
+  READ_GITHUB = "read_github",
+  WRITE_GITHUB = "write_github",
+  WRITE_LINEAR = "write_linear",
+}
+
+// Interface for triggers
+export interface Trigger {
+  id: string;
+  name: string;
+  description: string;
+  group: TriggerGroup;
+  required_permissions: Permission[];
+}
 
 export default class WorkflowService {
-  static async getWorkflowsList(): Promise<Workflow[]> {
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    return mockData;
+  static async getAllTriggers(): Promise<Trigger[]> {
     try {
       const headers = await getHeaders();
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/workflows`,
+        `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/triggers`,
         {
           headers,
         }
       );
+      return response.data.available_triggers;
+    } catch (error) {
+      console.error("Error fetching triggers:", error);
+      return [];
+    }
+  }
+
+  private static readonly BASE_URL = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/workflows`;
+
+  static async getWorkflowsList(): Promise<Workflow[]> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.get(this.BASE_URL, { headers });
       return response.data.workflows;
     } catch (error) {
-      console.log("Error fetching profile picture:", error);
+      console.error("Error fetching workflows:", error);
+      return [];
     }
-    return [];
   }
 
   static async getWorkflowById(
     workflowId: string
   ): Promise<Workflow | undefined> {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    return mockData[0];
     try {
       const headers = await getHeaders();
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/workflows/${workflowId}`,
-        {
-          headers,
-        }
+      const response = await axios.get(`${this.BASE_URL}/${workflowId}`, {
+        headers,
+      });
+      return response.data.workflow;
+    } catch (error) {
+      console.error("Error fetching workflow:", error);
+      return undefined;
+    }
+  }
+
+  static async createWorkflow(
+    workflow: CreateWorkflowRequest
+  ): Promise<Workflow | undefined> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post(this.BASE_URL, workflow, { headers });
+      return response.data.workflow;
+    } catch (error) {
+      console.error("Error creating workflow:", error);
+      throw error;
+    }
+  }
+
+  static async updateWorkflow(
+    workflowId: string,
+    workflow: UpdateWorkflowRequest
+  ): Promise<Workflow | undefined> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.put(
+        `${this.BASE_URL}/${workflowId}`,
+        workflow,
+        { headers }
       );
       return response.data.workflow;
     } catch (error) {
-      console.log("Error fetching profile picture:", error);
+      console.error("Error updating workflow:", error);
+      throw error;
     }
-    return;
+  }
+
+  static async deleteWorkflow(workflowId: string): Promise<boolean> {
+    try {
+      const headers = await getHeaders();
+      await axios.delete(`${this.BASE_URL}/${workflowId}`, { headers });
+      return true;
+    } catch (error) {
+      console.error("Error deleting workflow:", error);
+      throw error;
+    }
+  }
+
+  static async getWorkflowsByTrigger(triggerId: string): Promise<Workflow[]> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.get(
+        `${this.BASE_URL}/triggers/${triggerId}`,
+        { headers }
+      );
+      return response.data.workflows;
+    } catch (error) {
+      console.error("Error fetching workflows by trigger:", error);
+      return [];
+    }
+  }
+
+  static async getWorkflowLogs(workflowId: string): Promise<Workflow[]> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.get(`${this.BASE_URL}/${workflowId}/logs`, {
+        headers,
+      });
+      return response.data.executions;
+    } catch (error) {
+      console.error("Error fetching workflows by trigger:", error);
+      return [];
+    }
   }
 }

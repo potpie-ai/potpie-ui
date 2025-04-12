@@ -61,7 +61,7 @@ const WorkflowPage = () => {
       }
       setWorkflow(workflow);
       setWebhookURL(
-        `${process.env.NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL || process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/webhook/${workflow?.hash}`
+        `${process.env.NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL || process.env.NEXT_PUBLIC_WORKFLOWS_URL || "https://stage-workflows.potpie.ai/api/v1"}/api/v1/webhook/${workflow?.hash}`
       );
       const agents = await AgentService.getAgentTypes();
       setAvailableAgents(

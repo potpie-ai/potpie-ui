@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: "read"
+      id-token: "write"
 
     steps:
       - name: Checkout
@@ -28,10 +28,10 @@ jobs:
           submodules: false
 
       # Setup gcloud CLI
-      - id: 'auth'
-        uses: 'google-github-actions/auth@v1'
+      - id: "auth"
+        uses: "google-github-actions/auth@v1"
         with:
-          credentials_json: '${{ secrets.STAGE_GKE_SA_KEY }}'
+          credentials_json: "${{ secrets.STAGE_GKE_SA_KEY }}"
 
       # Install gke-gcloud-auth-plugin
       - name: Install gke-gcloud-auth-plugin
@@ -68,6 +68,7 @@ jobs:
           echo "NEXT_PUBLIC_HMAC_SECRET_KEY=${{ secrets.STAGE_NEXT_PUBLIC_HMAC_SECRET_KEY }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FORMBRICKS_API_HOST=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_API_HOST }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_WORKFLOWS_URL=${{ secrets.STAGE_NEXT_PUBLIC_WORKFLOWS_URL }}" >> $GITHUB_ENV
 
       # Build the Docker image
       - name: Build
@@ -95,6 +96,7 @@ jobs:
             --build-arg NEXT_PUBLIC_HMAC_SECRET_KEY="${{ env.NEXT_PUBLIC_HMAC_SECRET_KEY }}" \
             --build-arg NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID="${{ env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" \
             --build-arg NEXT_PUBLIC_FORMBRICKS_API_HOST="${{ env.NEXT_PUBLIC_FORMBRICKS_API_HOST }}" \
+            --build-arg NEXT_PUBLIC_WORKFLOWS_URL="${{ env.NEXT_PUBLIC_WORKFLOWS_URL }}" \
             -f Dockerfile .
 
       # Push the Docker image to Google Artifact Registry

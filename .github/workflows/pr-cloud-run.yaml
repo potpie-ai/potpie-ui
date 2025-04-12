@@ -66,6 +66,12 @@ jobs:
         echo "NEXT_PUBLIC_HMAC_SECRET_KEY=${{ secrets.STAGE_NEXT_PUBLIC_HMAC_SECRET_KEY }}" >> $GITHUB_ENV
         echo "NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" >> $GITHUB_ENV
         echo "NEXT_PUBLIC_FORMBRICKS_API_HOST=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_API_HOST }}" >> $GITHUB_ENV
+        
+        # Convert branch name to valid service name (replace underscores with dashes and ensure it's lowercase)
+        BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
+        BRANCH_NAME=${BRANCH_NAME//_/-}
+        BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
+        echo "SANITIZED_BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
     # Build the Docker image
     - name: Build
@@ -103,7 +109,7 @@ jobs:
     # Deploy to Cloud Run
     - name: Deploy to Cloud Run
       run: |-
-        gcloud run deploy "pr-${GITHUB_HEAD_REF}" \
+        gcloud run deploy "pr-${SANITIZED_BRANCH_NAME}" \
           --image "$IMAGE_TAG" \
           --region $GAR_ZONE \
           --platform managed \
@@ -112,7 +118,7 @@ jobs:
           --memory 2Gi \
           --cpu 2
 
-        SERVICE_URL=$(gcloud run services describe "pr-${GITHUB_HEAD_REF}" --region $GAR_ZONE --format 'value(status.url)')
+        SERVICE_URL=$(gcloud run services describe "pr-${SANITIZED_BRANCH_NAME}" --region $GAR_ZONE --format 'value(status.url)')
         echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
 
     # Post a comment on the pull request with the Cloud Run URL
@@ -145,10 +151,10 @@ jobs:
       with:
         credentials_json: '${{ secrets.STAGE_GKE_SA_KEY }}'
 
-    # Delete Cloud Run Service
+    # Sanitize branch name and delete Cloud Run Service
     - name: Delete Cloud Run Service
       run: |-
         BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
-        SERVICE_URL=$(gcloud run services describe "pr-${BRANCH_NAME}" --region $GAR_ZONE --format 'value(status.url)')
+        BRANCH_NAME=${BRANCH_NAME//_/-}
+        BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
         gcloud run services delete "pr-${BRANCH_NAME}" --region $GAR_ZONE --platform managed --quiet
-

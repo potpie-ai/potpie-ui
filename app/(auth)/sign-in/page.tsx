@@ -105,51 +105,67 @@ export default function Signin() {
 
   const onGithub = async () => {
     signInWithPopup(auth, provider)
-      .then((result) => {
+      .then(async (result) => {
         const credential = GithubAuthProvider.credentialFromResult(result);
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         if (credential) {
-          axios
-            .post(`${baseUrl}/api/v1/signup`, {
-              uid: result.user.uid,
-              email: result.user.email,
-              displayName: result.user.displayName || result.user.email?.split("@")[0],
-              emailVerified: result.user.emailVerified,
-              createdAt: result.user.metadata?.creationTime
-                ? new Date(result.user.metadata.creationTime).toISOString()
-                : "",
-              lastLoginAt: result.user.metadata?.lastSignInTime
-                ? new Date(result.user.metadata.lastSignInTime).toISOString()
-                : "",
-
-              providerData: result.user.providerData,
-              accessToken: credential.accessToken,
-              providerUsername: (result as any)._tokenResponse.screenName,
-            })
-            .then((res: { data: any }) => {
-              if (source === "vscode") {
-                handleExternalRedirect(res.data.token);
-              } else if (finalAgent_id) {
-                handleExternalRedirect("");
-              }
-              return res.data;
-            })
-            .catch((e: any) => {
-              toast.error("Signup call unsuccessful");
-            });
+          try {
+            const headers = await getHeaders();
+            const userSignup = await axios.post(
+              `${baseUrl}/api/v1/signup`, 
+              {
+                uid: result.user.uid,
+                email: result.user.email,
+                displayName: result.user.displayName || result.user.email?.split("@")[0],
+                emailVerified: result.user.emailVerified,
+                createdAt: result.user.metadata?.creationTime
+                  ? new Date(result.user.metadata.creationTime).toISOString()
+                  : "",
+                lastLoginAt: result.user.metadata?.lastSignInTime
+                  ? new Date(result.user.metadata.lastSignInTime).toISOString()
+                  : "",
+                providerData: result.user.providerData,
+                accessToken: credential.accessToken,
+                providerUsername: (result as any)._tokenResponse.screenName,
+              },
+              { headers: headers }
+            );
             
-          posthog.identify(
-            result.user.uid,
-            { email: result.user.email, name: result.user?.displayName || "" }
-          );
-          
-          toast.success("Logged in successfully");
+            posthog.identify(
+              result.user.uid,
+              { email: result.user.email, name: result.user?.displayName || "" }
+            );
+            //if this is a new user
+            if (!userSignup.data.exists) {
+              // For new users, redirect to onboarding
+              toast.success("Account created successfully as " + result.user.displayName);
+              
+              const urlSearchParams = new URLSearchParams(window.location.search);
+              const plan = (urlSearchParams.get('plan') || urlSearchParams.get('PLAN') || '').toLowerCase();
+              const prompt = urlSearchParams.get('prompt') || '';
+              
+              return window.location.href = `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || '')}&name=${encodeURIComponent(result.user.displayName || '')}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(finalAgent_id || '')}`;
+            }
+            
+            if (source === "vscode") {
+              handleExternalRedirect(userSignup.data.token);
+            } else if (finalAgent_id) {
+              handleExternalRedirect("");
+            } else {
+              window.location.href = '/newchat';
+            }
+            
+            toast.success("Logged in successfully as " + result.user.displayName);
+          } catch (e: any) {
+            console.error("API error:", e);
+            toast.error("Sign-in unsuccessful");
+          }
         }
       })
       .catch((error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
-        const email = error.customData.email;
+        const email = error.customData?.email;
         const credential = GithubAuthProvider.credentialFromError(error);
         toast.error(errorMessage);
       });

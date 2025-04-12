@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Edit, Save, X, ChevronDown, ChevronUp, Plus, Check } from "lucide-react";
+import { Edit, Save, X, ChevronDown, ChevronUp, Plus, Check, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -20,25 +20,12 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import ToolSelector from "@/components/agent-creation/ToolSelector";
-
-interface Agent {
-  id: string;
-  system_prompt: string;
-  role: string;
-  goal: string;
-  backstory: string;
-  tasks: Array<{
-    description: string;
-    tools?: string[];
-    expected_output?: any;
-  }>;
-  tools: string[];
-}
+import { CustomAgentsFormValues } from "@/lib/Schema";
 
 interface AgentReviewPanelProps {
-  generatedAgent: Agent;
+  generatedAgent: CustomAgentsFormValues;
   onEdit: () => void;
-  onSave: (agent: Agent) => void;
+  onSave: (agent: CustomAgentsFormValues) => void;
   availableTools: Array<{ name: string; description: string }>;
   isLoadingTools?: boolean;
   footerHeight?: number;
@@ -57,7 +44,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
   footerHeight = 60,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedAgent, setEditedAgent] = useState<Agent>(generatedAgent);
+  const [editedAgent, setEditedAgent] = useState<CustomAgentsFormValues>(generatedAgent);
   const [isSaving, setIsSaving] = useState(false);
   
   const [taskToolStates, setTaskToolStates] = useState<Record<number, TaskToolState>>({});
@@ -103,28 +90,24 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     }
   }, [isEditing, generatedAgent]);
 
-  useEffect(() => {
-    if (isSaving) {
-      onSave(editedAgent);
-      setIsSaving(false);
-    }
-  }, [isSaving, editedAgent, onSave]);
-
   const handleEdit = useCallback(() => {
     setIsEditing(true);
   }, []);
 
   const handleSave = useCallback(() => {
     setIsSaving(true);
-  }, []);
+    onSave(editedAgent);
+    setIsSaving(false);
+    setIsEditing(false);
+  }, [editedAgent, onSave]);
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
     setEditedAgent(generatedAgent);
   }, [generatedAgent]);
 
-  const handleInputChange = useCallback((field: keyof Agent, value: string) => {
-    setEditedAgent((prev: Agent) => ({
+  const handleInputChange = useCallback((field: keyof CustomAgentsFormValues, value: string) => {
+    setEditedAgent((prev: CustomAgentsFormValues) => ({
       ...prev,
       [field]: value,
     }));
@@ -138,24 +121,27 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
       currentTask: editedAgent.tasks[index]
     });
     
-    setEditedAgent((prev: Agent) => ({
-      ...prev,
-      tasks: prev.tasks.map((task, i) =>
-        i === index ? { ...task, [field]: value } : task
-      ),
-    }));
+    setEditedAgent((prev: CustomAgentsFormValues) => {
+      const updatedTasks = [...prev.tasks];
+      updatedTasks[index] = { ...updatedTasks[index], [field]: value };
+      return {
+        ...prev,
+        tasks: updatedTasks
+      };
+    });
   }, []);
 
   const handleToolToggle = useCallback((toolId: string) => {
     console.log('[AgentReviewPanel] Toggling tool:', toolId);
     console.log('[AgentReviewPanel] Current tools:', editedAgent.tools);
     
-    setEditedAgent((prev: Agent) => {
+    setEditedAgent((prev: CustomAgentsFormValues) => {
+      const currentTools = prev.tools || [];
       const updated = {
         ...prev,
-        tools: prev.tools.includes(toolId)
-          ? prev.tools.filter((id: string) => id !== toolId)
-          : [...prev.tools, toolId],
+        tools: currentTools.includes(toolId)
+          ? currentTools.filter((id: string) => id !== toolId)
+          : [...currentTools, toolId],
       };
       console.log('[AgentReviewPanel] Updated tools:', updated.tools);
       return updated;
@@ -179,13 +165,16 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     
     if (checked) {
       if (!task.tools.includes(toolName)) {
-        task.tools = [...task.tools, toolName];
+        task.tools.push(toolName);
       }
     } else {
-      task.tools = task.tools.filter((t: string) => t !== toolName);
+      task.tools = task.tools.filter(tool => tool !== toolName);
     }
     
-    setEditedAgent({...editedAgent, tasks: updatedTasks});
+    setEditedAgent(prev => ({
+      ...prev,
+      tasks: updatedTasks
+    }));
   };
 
   const selectAllToolsForTask = (taskIndex: number) => {
@@ -244,6 +233,13 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     
     return filtered;
   };
+
+  const handleDeleteTask = useCallback((index: number) => {
+    setEditedAgent(prev => ({
+      ...prev,
+      tasks: prev.tasks.filter((_, i) => i !== index)
+    }));
+  }, []);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -363,12 +359,24 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                       <div key={index} className="bg-background rounded-lg border shadow-sm">
                         <div className="p-6 border-b bg-background">
                           <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-semibold text-foreground">
-                              Task {index + 1}
-                            </h3>
-                            <span className="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                              {task.type || "Custom Task"}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-semibold text-foreground">
+                                Task {index + 1}
+                              </h3>
+                              <span className="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                                {task.type || "Custom Task"}
+                              </span>
+                            </div>
+                            {isEditing && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteTask(index)}
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                         
@@ -430,38 +438,64 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                               </div>
                             </div>
 
-                            {task.expected_output && (
-                              <div className="w-full">
-                                <h4 className="text-sm font-medium mb-2 text-foreground">
-                                  Expected Output
-                                </h4>
-                                <div className="bg-muted/30 rounded-lg p-4 max-h-[200px] overflow-y-auto">
-                                  {isEditing ? (
-                                    <Textarea
-                                      value={JSON.stringify(task.expected_output, null, 2)}
-                                      onChange={(e) => {
-                                        try {
-                                          const parsedOutput = JSON.parse(e.target.value);
-                                          handleTaskChange(index, 'expected_output', parsedOutput);
-                                        } catch (error) {}
-                                      }}
-                                      className="min-h-[160px] text-sm font-mono w-full resize-vertical"
-                                    />
-                                  ) : (
-                                    <div className="overflow-y-auto max-h-full">
-                                      <pre className="text-sm whitespace-pre-wrap overflow-x-auto max-w-full">
-                                        {JSON.stringify(task.expected_output, null, 2)}
-                                      </pre>
-                                    </div>
-                                  )}
-                                </div>
+                            <div className="w-full">
+                              <h4 className="text-sm font-medium mb-2 text-foreground">
+                                Expected Output
+                              </h4>
+                              <div className="bg-muted/30 rounded-lg p-4 max-h-[200px] overflow-y-auto">
+                                {isEditing ? (
+                                  <Textarea
+                                    value={typeof task.expected_output === 'string' ? task.expected_output : JSON.stringify(task.expected_output, null, 2)}
+                                    onChange={(e) => {
+                                      try {
+                                        const parsedOutput = JSON.parse(e.target.value);
+                                        handleTaskChange(index, 'expected_output', parsedOutput);
+                                      } catch (error) {
+                                        handleTaskChange(index, 'expected_output', e.target.value);
+                                      }
+                                    }}
+                                    className="min-h-[160px] text-sm font-mono w-full resize-vertical"
+                                    placeholder='{"key": "value", "someotherkey": "value"}'
+                                  />
+                                ) : (
+                                  <div className="overflow-y-auto max-h-full">
+                                    <pre className="text-sm whitespace-pre-wrap overflow-x-auto max-w-full">
+                                      {typeof task.expected_output === 'string' ? task.expected_output : JSON.stringify(task.expected_output, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            </div>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
+                  {isEditing && (
+                    <div className="flex justify-center mt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setEditedAgent(prev => ({
+                            ...prev,
+                            tasks: [
+                              ...prev.tasks,
+                              {
+                                description: "",
+                                tools: [],
+                                expected_output: "{}"
+                              }
+                            ]
+                          }));
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        New Task
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </div>

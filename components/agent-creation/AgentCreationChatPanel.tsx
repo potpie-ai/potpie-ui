@@ -16,6 +16,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import ParsingProgress, { ParsingStatusEnum } from "./ParsingProgress";
+import { CustomAgentsFormValues } from "@/lib/Schema";
 
 // Panel layout states
 enum PanelLayoutState {
@@ -112,6 +113,23 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to start a conversation with the agent.");
+    }
+  });
+
+  // Add mutation for updating agent
+  const updateAgentMutation = useMutation({
+    mutationFn: async (agentData: CustomAgentsFormValues) => {
+      if (!generatedAgent?.id) {
+        throw new Error("Agent ID is required for updating");
+      }
+      return await AgentService.updateAgent(generatedAgent.id, agentData);
+    },
+    onSuccess: () => {
+      toast.success("Agent updated successfully");
+      setIsEditing(false);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update agent");
     }
   });
 
@@ -247,10 +265,9 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                 generatedAgent={generatedAgent} 
                 onEdit={() => setIsEditing(true)}
                 onSave={(agent) => {
-                  console.log("Saving agent:", agent);
+                  updateAgentMutation.mutate(agent);
                 }}
                 availableTools={[]}
-                // Pass fixed footer height to ensure alignment
                 footerHeight={60}
               />
             </div>

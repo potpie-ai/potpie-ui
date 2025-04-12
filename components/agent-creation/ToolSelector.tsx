@@ -182,7 +182,12 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
               {/* Tool listing with scrollable area */}
               <div 
                 className="custom-scrollbar" 
-                style={{ maxHeight: '350px', overflowY: 'auto' }}
+                style={{ 
+                  maxHeight: '350px', 
+                  overflowY: 'auto',
+                  minHeight: '200px',
+                  position: 'relative'
+                }}
               >
                 {isLoading ? (
                   <div className="flex justify-center items-center py-8">

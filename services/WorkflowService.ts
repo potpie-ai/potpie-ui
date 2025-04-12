@@ -63,7 +63,8 @@ export default class WorkflowService {
     try {
       const headers = await getHeaders();
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/triggers`,
+        // `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/triggers`,
+        `https:stage-workflows.potpie.ai/api/v1/triggers`,
         {
           headers,
         }
@@ -75,7 +76,8 @@ export default class WorkflowService {
     }
   }
 
-  private static readonly BASE_URL = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/workflows`;
+  // private static readonly BASE_URL = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/workflows`;
+  private static readonly BASE_URL = `https:stage-workflows.potpie.ai/api/v1/workflows`; // TODO: temporary fix for staging
 
   static async getWorkflowsList(): Promise<Workflow[]> {
     try {

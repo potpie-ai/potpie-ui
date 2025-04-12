@@ -197,11 +197,7 @@ const Chat = () => {
         <AssistantRuntimeProvider runtime={runtime}>
           <Thread
             projectId={projectId}
-            writeDisabled={
-              chatAccess !== "write" ||
-              parsingStatus !== ParsingStatusEnum.READY ||
-              total_human_messages >=
-                (planType === planTypesEnum.PRO ? 500 : 50)
+            writeDisabled={false
             }
             userImageURL={profilePicUrl}
             conversation_id={currentConversationId}

@@ -71,7 +71,7 @@ export default class WorkflowService {
       return response.data.available_triggers;
     } catch (error) {
       console.error("Error fetching triggers:", error);
-      return [];
+      throw error;
     }
   }
 
@@ -84,7 +84,7 @@ export default class WorkflowService {
       return response.data.workflows;
     } catch (error) {
       console.error("Error fetching workflows:", error);
-      return [];
+      throw error;
     }
   }
 
@@ -99,7 +99,7 @@ export default class WorkflowService {
       return response.data.workflow;
     } catch (error) {
       console.error("Error fetching workflow:", error);
-      return undefined;
+      throw error;
     }
   }
 
@@ -155,7 +155,7 @@ export default class WorkflowService {
       return response.data.workflows;
     } catch (error) {
       console.error("Error fetching workflows by trigger:", error);
-      return [];
+      throw error;
     }
   }
 
@@ -167,8 +167,8 @@ export default class WorkflowService {
       });
       return response.data.executions;
     } catch (error) {
-      console.error("Error fetching workflows by trigger:", error);
-      return [];
+      console.error("Error fetching workflows logs:", error);
+      throw error;
     }
   }
 }

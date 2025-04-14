@@ -49,8 +49,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 const formSchema = z.object({
-  title: z.string().min(2, {
-    message: "Title must be at least 5 characters.",
+  title: z.string().min(3, {
+    message: "Title must be at least 3 characters.",
   }),
   description: z.string().optional(),
   repo_name: z.string().nonempty(),

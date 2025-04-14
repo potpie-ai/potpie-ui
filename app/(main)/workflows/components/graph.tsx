@@ -24,8 +24,11 @@ import {
 } from "lucide-react";
 import { Trigger, Workflow } from "@/services/WorkflowService";
 import Link from "next/link";
-import { Tooltip, TooltipContent } from "@/components/ui/tooltip";
-import { TooltipTrigger } from "@radix-ui/react-tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Repository Node
 const RepositoryNode: FC<any> = ({ data }) => {
@@ -44,6 +47,7 @@ const RepositoryNode: FC<any> = ({ data }) => {
             <Link
               href={`https://github.com/${data.repoName}`}
               target="_blank"
+              rel="noopener noreferrer"
               className="hover:underline hover:text-blue-700 flex justify-start items-center gap-1"
             >
               {data.repoName}
@@ -82,12 +86,12 @@ const TriggerNode: FC<any> = ({ data }) => {
           <TooltipTrigger className="space-y-2">
             {data.selected_triggers.map((current: string, index: number) =>
               index == 2 ? (
-                <>+{data.selected_triggers.length - 2}</>
+                <div key={current}>+{data.selected_triggers.length - 2}</div>
               ) : index > 2 ? (
-                <></>
+                <div key={current}></div>
               ) : (
                 <div
-                  key={index}
+                  key={current}
                   className="flex items-center bg-orange-50 rounded-md p-2"
                 >
                   <CircleDot className="w-3 h-3 text-orange-500 mr-2" />

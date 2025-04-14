@@ -71,6 +71,35 @@
   }
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Tool selection animation */
+.tool-item {
+  transition: all 0.2s ease-in-out;
+}
+
+.tool-item:hover {
+  transform: translateY(-1px);
+}
+
+.tool-item.selected {
+  transform: translateY(-1px);
+}
+
+/* Ensure the popover has proper z-index */
+.tool-popover {
+  z-index: 50;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

@@ -18,7 +18,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { promise, z } from "zod";
 import { MultiSelectDropdown } from "../components/trigger-select";
 import {
   Carousel,
@@ -47,6 +47,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { resolve } from "path";
 
 const formSchema = z.object({
   title: z.string().min(3, {
@@ -408,6 +409,14 @@ export default function CreateWorkflowPage() {
                   >
                     <CarouselPrevious type="button" />
                     <CarouselNext type="button" />
+                    {availableAgents.length === 0 && (
+                      <div className="flex items-center justify-start gap-4 w-full h-full">
+                        <Skeleton className="h-60 w-1/4 " />
+                        <Skeleton className="h-60 w-1/4 " />
+                        <Skeleton className="h-60 w-1/4 " />
+                        <Skeleton className="h-60 w-1/4 " />
+                      </div>
+                    )}
                     <CarouselContent className="p-2">
                       {availableAgents.map((agent) => (
                         <CarouselItem key={agent.id} className="basis-1/4 ">

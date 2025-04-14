@@ -341,6 +341,13 @@ const WorkflowPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {logs.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center h-96">
+                      No logs available
+                    </TableCell>
+                  </TableRow>
+                )}
                 {logs.length > 0 &&
                   logs
                     .sort(

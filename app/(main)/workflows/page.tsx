@@ -133,7 +133,7 @@ const Workflows = () => {
                 .map((workflow) => (
                   <TableRow
                     key={workflow.id}
-                    className="hover:bg-red border-b border-black text-black"
+                    className="hover:bg-red border-b border-gray-200 text-black"
                   >
                     <TableCell>
                       <Link
@@ -202,6 +202,19 @@ const Workflows = () => {
                     </TableCell>
                   </TableRow>
                 ))
+            )}
+            {workflows.length === 0 && !loading && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center h-[500px]">
+                  <div>No workflows found. Create your first workflow</div>
+                  <Link href={"/workflows/create"}>
+                    <Button className="gap-2 mt-4">
+                      <Hammer className="h-6 w-6" />
+                      Create Workflow
+                    </Button>
+                  </Link>
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>

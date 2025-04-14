@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { Trigger, Workflow } from "@/services/WorkflowService";
 import Link from "next/link";
+import { Tooltip, TooltipContent } from "@/components/ui/tooltip";
+import { TooltipTrigger } from "@radix-ui/react-tooltip";
 
 // Repository Node
 const RepositoryNode: FC<any> = ({ data }) => {
@@ -76,7 +78,45 @@ const TriggerNode: FC<any> = ({ data }) => {
         </div>
       </div>
       <div className="p-4">
-        <div className="space-y-2">
+        <Tooltip>
+          <TooltipTrigger className="space-y-2">
+            {data.selected_triggers.map((current: string, index: number) =>
+              index == 2 ? (
+                <>+{data.selected_triggers.length - 2}</>
+              ) : index > 2 ? (
+                <></>
+              ) : (
+                <div
+                  key={index}
+                  className="flex items-center bg-orange-50 rounded-md p-2"
+                >
+                  <CircleDot className="w-3 h-3 text-orange-500 mr-2" />
+                  <span className="text-sm text-gray-700">
+                    {data.all_triggers.find(
+                      (trigger: any) => trigger.id == current
+                    )?.name || "<Unknown Trigger>"}
+                  </span>
+                </div>
+              )
+            )}
+          </TooltipTrigger>
+          <TooltipContent side="top" className="space-y-2">
+            {data.selected_triggers.map((current: string, index: number) => (
+              <div
+                key={index}
+                className="flex items-center bg-orange-50 rounded-md p-2"
+              >
+                <CircleDot className="w-3 h-3 text-orange-500 mr-2" />
+                <span className="text-sm text-gray-700">
+                  {data.all_triggers.find(
+                    (trigger: any) => trigger.id == current
+                  )?.name || "<Unknown Trigger>"}
+                </span>
+              </div>
+            ))}
+          </TooltipContent>
+        </Tooltip>
+        {/* <div className="space-y-2">
           {data.selected_triggers.map((current: string, index: number) => (
             <div
               key={index}
@@ -89,7 +129,7 @@ const TriggerNode: FC<any> = ({ data }) => {
               </span>
             </div>
           ))}
-        </div>
+        </div> */}
       </div>
       <Handle
         type="target"
@@ -195,7 +235,7 @@ const generateNodes = (
     {
       id: "3",
       type: "agentNode",
-      position: { x: 50, y: 500 },
+      position: { x: 50, y: 530 },
       data: {
         agentName: agent_name,
       },
@@ -203,7 +243,7 @@ const generateNodes = (
     {
       id: "4",
       type: "taskNode",
-      position: { x: 100, y: 700 },
+      position: { x: 100, y: 750 },
       data: {
         task: workflow.task,
       },

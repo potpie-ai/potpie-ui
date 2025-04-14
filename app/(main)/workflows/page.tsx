@@ -11,9 +11,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent } from "@/components/ui/tooltip";
 import AgentService from "@/services/AgentService";
 
 import WorkflowService, { Trigger, Workflow } from "@/services/WorkflowService";
+import { TooltipTrigger } from "@radix-ui/react-tooltip";
 import { Hammer, LucideEdit, LucideTrash } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -86,7 +88,7 @@ const Workflows = () => {
                 Repository
               </TableHead>
               <TableHead className="w-[200px] text-primary">Agent</TableHead>
-              <TableHead className="w-[200px] text-primary">Trigger</TableHead>
+              <TableHead className="w-[200px] text-primary">Triggers</TableHead>
               <TableHead className="w-[200px] text-primary">
                 Created At
               </TableHead>
@@ -150,9 +152,29 @@ const Workflows = () => {
                       )?.name || "<Deleted Agent>"}
                     </TableCell>
                     <TableCell>
-                      {triggers.find(
-                        (trigger) => trigger.id == workflow?.triggers[0]
-                      )?.name || "<Unknown Trigger>"}
+                      <Tooltip>
+                        <TooltipTrigger className="space-y-2">
+                          {triggers.find(
+                            (trigger) => trigger.id == workflow?.triggers[0]
+                          )?.name || "<Unknown Trigger>"}{" "}
+                          {workflow.triggers.length > 1
+                            ? ` +${workflow.triggers.length - 1}`
+                            : ""}
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="space-y-2">
+                          {workflow.triggers.map(
+                            (current: string, index: number) => (
+                              <div key={index} className="">
+                                <span className="text-sm text-gray-700">
+                                  {triggers.find(
+                                    (trigger) => trigger.id == current
+                                  )?.name || "<Unknown Trigger>"}
+                                </span>
+                              </div>
+                            )
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
                     </TableCell>
                     <TableCell>
                       {new Date(workflow.created_at).toLocaleString()}

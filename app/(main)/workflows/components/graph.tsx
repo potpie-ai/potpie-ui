@@ -74,7 +74,7 @@ const TriggerNode: FC<any> = ({ data }) => {
       <div className="bg-orange-50 p-3 border-b border-gray-200">
         <div className="flex items-center">
           <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
-          <h3 className="font-semibold text-gray-800">Trigger</h3>
+          <h3 className="font-semibold text-gray-800">Triggers</h3>
         </div>
       </div>
       <div className="p-4">

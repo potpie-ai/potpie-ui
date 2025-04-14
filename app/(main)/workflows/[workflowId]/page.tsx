@@ -220,23 +220,21 @@ const WorkflowPage = () => {
                     >
                       {/* <CarouselPrevious />
                   <CarouselNext /> */}
-                      <CarouselContent className="max-w-full w-2/3 overflow-x-hidden">
+                      <CarouselContent className="overflow-y-hidden">
                         {currentTriggers.find(
                           (trigger) => trigger.group === "github"
                         ) && (
-                          <CarouselItem className="basis-1/3 w-[350px]">
-                            <Card className="w-[350px] p-4">
-                              <CardHeader className="p-2 font-semibold flex flex-col items-start gap-2">
-                                <div className="w-full flex items-center justify-center">
-                                  <Github className="h-5 w-5" />
-                                </div>
-                                <div>
+                          <CarouselItem className="">
+                            <Card className="w-full p-4">
+                              <CardHeader className="p-2 font-semibold">
+                                <span>
+                                  <Github className="h-5 w-5 inline mr-2" />
                                   To trigger on{" "}
-                                  {currentTriggers.map(
-                                    (trigger) => `${trigger.name}`
-                                  )}
+                                  {currentTriggers
+                                    .map((trigger) => `${trigger.name}`)
+                                    .join(" or ")}
                                   {":"}
-                                </div>
+                                </span>
                               </CardHeader>
                               <CardContent>
                                 <ol className="list-decimal">
@@ -245,16 +243,20 @@ const WorkflowPage = () => {
                                   </li>
                                   <li key={2}>
                                     {" "}
-                                    <h2 className="">
+                                    <h2 className="inline">
                                       {" "}
-                                      Go to your repository on Github
-                                    </h2>
-                                  </li>
-                                  <li key={3}>
-                                    {" "}
-                                    <h2 className="">
-                                      {" "}
-                                      Go to Settings {">"} Webhooks
+                                      Add a new webhook{" "}
+                                      <Link
+                                        href={`https://github.com/${workflow?.repo_name}/settings/hooks/new`}
+                                        className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-700"
+                                        target="_blank"
+                                      >
+                                        {" "}
+                                        here{" "}
+                                        <ExternalLink className=" h-4 w-4" />
+                                      </Link>{" "}
+                                      or navigate to your repo{">"}settings{">"}
+                                      webhooks
                                     </h2>
                                   </li>
                                   <li key={4}>
@@ -268,7 +270,14 @@ const WorkflowPage = () => {
                                     {" "}
                                     <h2 className="">
                                       {" "}
-                                      Select Content Type application json
+                                      Select{" "}
+                                      <span className="font-semibold">
+                                        Content Type
+                                      </span>{" "}
+                                      as{" "}
+                                      <span className="italic">
+                                        `application/json`
+                                      </span>
                                     </h2>
                                   </li>
                                   <li key={6}>

@@ -22,6 +22,7 @@ import { z } from "zod";
 import { MultiSelectDropdown } from "../../components/trigger-select";
 import {
   Carousel,
+  CarouselApi,
   CarouselContent,
   CarouselItem,
   CarouselNext,
@@ -54,6 +55,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { toast } from "sonner";
 
 const formSchema = z.object({
   title: z.string().min(2, {
@@ -77,7 +79,7 @@ interface Agent {
   description: string;
 }
 
-export default function CreateWorkflowPage() {
+export default function UpdateWorkflowPage() {
   const params: { workflowId: string } = useParams();
   const [repoOpen, setRepoOpen] = useState(false);
   const [repoName, setRepoName] = useState("");
@@ -95,7 +97,7 @@ export default function CreateWorkflowPage() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      const agents = await AgentService.getAgentTypes();
+      const agents: any[] = await AgentService.getAgentTypes();
       setAvailableAgents(
         agents.map((agent: any) => ({
           id: agent.id,
@@ -184,17 +186,22 @@ export default function CreateWorkflowPage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!workflow) return;
-    const _workflow = await WorkflowService.updateWorkflow(workflow?.id, {
-      title: values.title,
-      description: values.description || "",
-      triggers: values.triggers,
-      repo_name: values.repo_name,
-      branch: values.branch,
-      agent_id: values.agent_id,
-      task: values.task,
-    });
-    if (_workflow) {
-      router.push(`/workflows/${workflow.id}`);
+    try {
+      const _workflow = await WorkflowService.updateWorkflow(workflow?.id, {
+        title: values.title,
+        description: values.description || "",
+        triggers: values.triggers,
+        repo_name: values.repo_name,
+        branch: values.branch,
+        agent_id: values.agent_id,
+        task: values.task,
+      });
+      if (_workflow) {
+        router.push(`/workflows/${workflow.id}`);
+      }
+    } catch (error) {
+      console.error("Error updating workflow:", error);
+      toast.error("Error updating workflow. Please try again.");
     }
   }
 

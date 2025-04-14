@@ -46,6 +46,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 const formSchema = z.object({
   title: z.string().min(2, {
@@ -154,17 +155,23 @@ export default function CreateWorkflowPage() {
   const router = useRouter();
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    const workflow = await WorkflowService.createWorkflow({
-      title: values.title,
-      description: values.description || "",
-      triggers: values.triggers,
-      repo_name: values.repo_name,
-      branch: values.branch,
-      agent_id: values.agent_id,
-      task: values.task,
-    });
-    if (workflow) {
-      router.push(`/workflows/${workflow.id}`);
+    try {
+      const workflow = await WorkflowService.createWorkflow({
+        title: values.title,
+        description: values.description || "",
+        triggers: values.triggers,
+        repo_name: values.repo_name,
+        branch: values.branch,
+        agent_id: values.agent_id,
+        task: values.task,
+      });
+      if (workflow) {
+        router.push(`/workflows/${workflow.id}`);
+      }
+    } catch (error) {
+      console.error("Error creating workflow:", error);
+      console.error("Error updating workflow:", error);
+      toast.error("Error updating workflow. Please try again.");
     }
   }
 

@@ -5,6 +5,7 @@ import AgentService from "@/services/AgentService";
 import WorkflowService, { Trigger, Workflow } from "@/services/WorkflowService";
 import {
   CopyIcon,
+  ExternalLink,
   Github,
   LucideEdit,
   LucideLoader2,
@@ -32,6 +33,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import WorkflowDiagram from "../components/graph";
 
 interface Agent {
   id: string;
@@ -180,131 +182,118 @@ const WorkflowPage = () => {
               <TabsTrigger value="logs">Logs</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="p-8 bg-gray-50 rounded-sm">
-              <div>
-                <p className="text-lg">For project</p>
-                <p className="text-xl text-gray-500 font-semibold border-solid">
-                  {workflow?.repo_name}
-                </p>
-                <p className="text-lg">on</p>
-                <p className="text-xl text-gray-500 font-semibold flex flex-row gap-2 items-center">
-                  {workflow?.triggers.map((triggerId) => (
-                    <p key={triggerId}>
-                      {triggers.find((trigger) => trigger.id == triggerId)
-                        ?.name || "<Unknown Trigger>"}
-                    </p>
-                  ))}
-                  <Github className="h-5 w-5" />
-                </p>
-                <p className="text-lg">route to</p>
-                <p className="text-xl text-gray-500 font-semibold">
-                  {availableAgents.find(
-                    (agent) => agent.id == workflow?.agent_id
-                  )?.name || "<Deleted Agent>"}
-                </p>
-              </div>
-              <div>
-                <p className="text-lg mt-8">Task</p>
-                <p className="text-xl text-gray-500 font-semibold border-solid">
-                  {workflow?.task}
-                </p>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold mt-8">Webhook URL</h2>
-                <div className="flex items-center w-fit p-2 outline-1 rounded-sm outline outline-gray-300 mt-2">
-                  <span className="text-sm font-mono">{webhookURL}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-4"
-                    onClick={handleCopy}
-                  >
-                    <CopyIcon className="w-4 h-4 mr-2" />
-                    {copied ? "Copied!" : "Copy"}
-                  </Button>
-                </div>
-              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {workflow && (
+                  <WorkflowDiagram
+                    workflow={workflow}
+                    agent_name={
+                      availableAgents.find(
+                        (agent) => agent.id == workflow?.agent_id
+                      )?.name || "<Deleted Agent>"
+                    }
+                    triggers={triggers}
+                  />
+                )}
+                <div>
+                  <div>
+                    <h2 className="text-lg font-semibold mt-8">Webhook URL</h2>
+                    <div className="flex items-center w-fit p-2 outline-1 rounded-sm outline outline-gray-300 mt-2">
+                      <span className="text-sm font-mono">{webhookURL}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-4"
+                        onClick={handleCopy}
+                      >
+                        <CopyIcon className="w-4 h-4 mr-2" />
+                        {copied ? "Copied!" : "Copy"}
+                      </Button>
+                    </div>
+                  </div>
 
-              <div className="mt-8 flex gap-4">
-                <Carousel
-                  opts={{
-                    align: "start",
-                  }}
-                  className="w-full max-w-full"
-                >
-                  {/* <CarouselPrevious />
+                  <div className="mt-8 flex gap-4">
+                    <Carousel
+                      opts={{
+                        align: "start",
+                      }}
+                      className="w-full max-w-full"
+                    >
+                      {/* <CarouselPrevious />
                   <CarouselNext /> */}
-                  <CarouselContent className="max-w-full w-2/3 overflow-x-hidden">
-                    {currentTriggers.find(
-                      (trigger) => trigger.group === "github"
-                    ) && (
-                      <CarouselItem className="basis-1/3 w-[350px]">
-                        <Card className="w-[350px] p-4">
-                          <CardHeader className="p-2 font-semibold flex flex-col items-start gap-2">
-                            <div className="w-full flex items-center justify-center">
-                              <Github className="h-5 w-5" />
-                            </div>
-                            <div>
-                              To trigger on{" "}
-                              {currentTriggers.map(
-                                (trigger) => `${trigger.name}`
-                              )}
-                              {":"}
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <ol className="list-decimal">
-                              <li key={1}>
-                                <h2 className=""> Copy the webhook URL</h2>
-                              </li>
-                              <li key={2}>
-                                {" "}
-                                <h2 className="">
-                                  {" "}
-                                  Go to your repository on Github
-                                </h2>
-                              </li>
-                              <li key={3}>
-                                {" "}
-                                <h2 className="">
-                                  {" "}
-                                  Go to Settings {">"} Webhooks
-                                </h2>
-                              </li>
-                              <li key={4}>
-                                {" "}
-                                <h2 className="">
-                                  {" "}
-                                  Add Payload URL you just copied
-                                </h2>
-                              </li>
-                              <li key={5}>
-                                {" "}
-                                <h2 className="">
-                                  {" "}
-                                  Select Content Type application json
-                                </h2>
-                              </li>
-                              <li key={6}>
-                                {" "}
-                                <h2 className="">
-                                  {" "}
-                                  Select appropriate events or just select{" "}
-                                  <span className="italic">
-                                    `Send me everything`
-                                  </span>
-                                </h2>
-                              </li>
-                              <li key={7}>
-                                {" "}
-                                <h2 className=""> Save the webhook</h2>
-                              </li>
-                            </ol>
-                          </CardContent>
-                        </Card>
-                      </CarouselItem>
-                    )}
-                  </CarouselContent>
-                </Carousel>
+                      <CarouselContent className="max-w-full w-2/3 overflow-x-hidden">
+                        {currentTriggers.find(
+                          (trigger) => trigger.group === "github"
+                        ) && (
+                          <CarouselItem className="basis-1/3 w-[350px]">
+                            <Card className="w-[350px] p-4">
+                              <CardHeader className="p-2 font-semibold flex flex-col items-start gap-2">
+                                <div className="w-full flex items-center justify-center">
+                                  <Github className="h-5 w-5" />
+                                </div>
+                                <div>
+                                  To trigger on{" "}
+                                  {currentTriggers.map(
+                                    (trigger) => `${trigger.name}`
+                                  )}
+                                  {":"}
+                                </div>
+                              </CardHeader>
+                              <CardContent>
+                                <ol className="list-decimal">
+                                  <li key={1}>
+                                    <h2 className=""> Copy the webhook URL</h2>
+                                  </li>
+                                  <li key={2}>
+                                    {" "}
+                                    <h2 className="">
+                                      {" "}
+                                      Go to your repository on Github
+                                    </h2>
+                                  </li>
+                                  <li key={3}>
+                                    {" "}
+                                    <h2 className="">
+                                      {" "}
+                                      Go to Settings {">"} Webhooks
+                                    </h2>
+                                  </li>
+                                  <li key={4}>
+                                    {" "}
+                                    <h2 className="">
+                                      {" "}
+                                      Add Payload URL you just copied
+                                    </h2>
+                                  </li>
+                                  <li key={5}>
+                                    {" "}
+                                    <h2 className="">
+                                      {" "}
+                                      Select Content Type application json
+                                    </h2>
+                                  </li>
+                                  <li key={6}>
+                                    {" "}
+                                    <h2 className="">
+                                      {" "}
+                                      Select appropriate events or just select{" "}
+                                      <span className="italic">
+                                        `Send me everything`
+                                      </span>
+                                    </h2>
+                                  </li>
+                                  <li key={7}>
+                                    {" "}
+                                    <h2 className=""> Save the webhook</h2>
+                                  </li>
+                                </ol>
+                              </CardContent>
+                            </Card>
+                          </CarouselItem>
+                        )}
+                      </CarouselContent>
+                    </Carousel>
+                  </div>
+                </div>
               </div>
             </TabsContent>
             <TabsContent value="logs" className="p-8 bg-gray-50 rounded-sm">
@@ -353,7 +342,7 @@ const WorkflowPage = () => {
                     .map((log) => (
                       <TableRow
                         key={log.id}
-                        className="hover:bg-red border-b border-gray-200 text-black"
+                        className="hover:bg-red  text-black"
                       >
                         <TableCell>{log.id}</TableCell>
                         <TableCell>{log.trigger}</TableCell>

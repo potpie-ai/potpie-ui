@@ -131,7 +131,7 @@ const Workflows = () => {
                 .map((workflow) => (
                   <TableRow
                     key={workflow.id}
-                    className="hover:bg-red border-b border-gray-200 text-black"
+                    className="hover:bg-red border-b border-black text-black"
                   >
                     <TableCell>
                       <Link

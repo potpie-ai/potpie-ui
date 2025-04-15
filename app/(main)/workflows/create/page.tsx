@@ -433,10 +433,17 @@ export default function CreateWorkflowPage() {
                   Choose an agent to use for the trigger:{" "}
                   <FormMessage className="text-red-500 italic" />
                   <RefreshCcw
-                    className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
+                    className={`h-4 w-4 cursor-pointer ${loading ? "animate-spin" : ""}`}
                     onClick={() => fetchData()}
                   />
                 </FormLabel>
+                <div>
+                  <Label className="text-xs text-gray-400 italic">
+                    Note: Make sure to add necessary tools to the agent you
+                    select to complete the task. Make sure you have integrated
+                    with platform you are asking the agent to take action on
+                  </Label>
+                </div>
                 <FormControl>
                   <Carousel
                     opts={{

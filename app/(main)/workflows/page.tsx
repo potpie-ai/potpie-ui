@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -16,7 +17,7 @@ import AgentService from "@/services/AgentService";
 
 import WorkflowService, { Trigger, Workflow } from "@/services/WorkflowService";
 import { TooltipTrigger } from "@radix-ui/react-tooltip";
-import { Hammer, LucideEdit, LucideTrash } from "lucide-react";
+import { FilePlus2, Hammer, LucideEdit, LucideTrash } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -24,6 +25,30 @@ interface Agent {
   id: string;
   name: string;
 }
+
+interface Template {
+  title: string;
+  description?: string;
+  agent_id: string;
+  triggers: string[];
+  task: string;
+}
+
+const templates = [
+  {
+    title: "PR Review Workflow",
+    description: "automatically review pull requests on creation",
+    triggers: ["github_pr_created"],
+    task: "For the newly created pull request, review the code changes and add the review as a comment",
+  },
+  // Add more templates as needed
+  {
+    title: "Fix Issue Workflow",
+    description: "automatically create a pull request to fix an issue",
+    triggers: ["github_issue_added"],
+    task: "For the newly created issue, analyze the issue. If it is a bug that is fixable, create a new branch add a commit with the fix and create a pull request",
+  },
+];
 
 const Workflows = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,6 +85,8 @@ const Workflows = () => {
     }
   };
 
+  const [openTemplateModal, setOpenTemplateModal] = useState(false);
+
   return (
     <div>
       {/* HEADER */}
@@ -70,6 +97,10 @@ const Workflows = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
+        <Button onClick={() => setOpenTemplateModal(true)} className="gap-2">
+          <FilePlus2 className="h-6 w-6" />
+          Create from Template
+        </Button>
         <Link href={"/workflows/create"}>
           <Button className="gap-2">
             <Hammer className="h-6 w-6" />
@@ -77,6 +108,46 @@ const Workflows = () => {
           </Button>
         </Link>
       </div>
+
+      {/* TEMPLATE MODAL */}
+      <Dialog open={openTemplateModal} onOpenChange={setOpenTemplateModal}>
+        <DialogContent className="sm:max-w-[600px]">
+          <div className="flex flex-col gap-4">
+            <h2 className="text-lg font-semibold">Create from Template</h2>
+            <p className="text-sm text-gray-500">
+              Select a template to create a new workflow. You can customize it
+            </p>
+          </div>
+          {templates.map((template, index) => (
+            <div
+              key={index}
+              className="flex flex-col gap-2 border p-4 rounded-md mt-4"
+            >
+              <h3 className="text-lg font-semibold">{template.title}</h3>
+              <p className="text-sm text-gray-500">
+                {template.description || "No description available"}
+              </p>
+              <div className="flex flex-col gap-2">
+                <h4 className="text-sm font-semibold">Triggers</h4>
+                <ul className="list-disc pl-5">
+                  {template.triggers.map((trigger, index) => (
+                    <li key={index} className="text-sm text-gray-700">
+                      {trigger}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href={`/workflows/create?template=${JSON.stringify(template)}`}
+                >
+                  <Button variant="outline" className="mt-2">
+                    Use this template
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ))}
+        </DialogContent>
+      </Dialog>
 
       {/* LIST WORKFLOWS */}
       <div className="w-full p-4">

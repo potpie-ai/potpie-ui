@@ -99,11 +99,13 @@ export default function UpdateWorkflowPage() {
       setLoading(true);
       const agents: any[] = await AgentService.getAgentTypes();
       setAvailableAgents(
-        agents.map((agent: any) => ({
-          id: agent.id,
-          name: agent.name,
-          description: agent.description,
-        }))
+        agents
+          .filter((agent: any) => agent.status != "SYSTEM")
+          .map((agent: any) => ({
+            id: agent.id,
+            name: agent.name,
+            description: agent.description,
+          }))
       );
       const _triggers = await WorkflowService.getAllTriggers();
       setTriggers(_triggers);

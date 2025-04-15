@@ -142,6 +142,19 @@ const WorkflowPage = () => {
     }
   };
 
+  const githubAppUrl =
+    "https://github.com/apps/" +
+    process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
+    "/installations/select_target?setup_action=install";
+  const popupRef = useRef<Window | null>(null);
+  const openPopup = () => {
+    popupRef.current = window.open(
+      githubAppUrl,
+      "_blank",
+      "width=1000,height=700"
+    );
+  };
+
   return (
     <div className="p-6">
       {loading ? (
@@ -295,6 +308,18 @@ const WorkflowPage = () => {
                                     <h2 className=""> Save the webhook</h2>
                                   </li>
                                 </ol>
+                                <h3 className="text-sm inline-flex text-gray-800 mt-4">
+                                  Make sure you install the github app if your
+                                  agent is taking actions of github (ex:
+                                  creating pr, branch, comments etc)
+                                  <Button
+                                    variant="outline"
+                                    className="mr-2"
+                                    onClick={openPopup}
+                                  >
+                                    Install Github App
+                                  </Button>{" "}
+                                </h3>
                               </CardContent>
                             </Card>
                           </CarouselItem>

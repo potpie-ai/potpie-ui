@@ -310,7 +310,7 @@ const WorkflowPage = () => {
                                 </ol>
                                 <h3 className="text-sm inline-flex text-gray-800 mt-4">
                                   Make sure you install the github app if your
-                                  agent is taking actions of github (ex:
+                                  agent is taking actions on github (ex:
                                   creating pr, branch, comments etc)
                                   <Button
                                     variant="outline"
@@ -363,6 +363,9 @@ const WorkflowPage = () => {
                   <TableHead className="w-[200px] text-primary">
                     Status
                   </TableHead>
+                  <TableHead className="w-[200px] text-primary">
+                    Agent Chat
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -408,6 +411,40 @@ const WorkflowPage = () => {
                             }`}
                           />
                           {log.status}
+                        </TableCell>
+                        <TableCell>
+                          {/* Check if any log has a conversation_id and display it */}
+                          {(() => {
+                            // Check if conversation_id exists in any log
+                            const conversationLog = log.logs.find(
+                              (singleLog: any) => {
+                                try {
+                                  const parsedLog = JSON.parse(singleLog.log);
+                                  return parsedLog && parsedLog.conversation_id;
+                                } catch (e) {
+                                  return false;
+                                }
+                              }
+                            );
+
+                            if (conversationLog) {
+                              try {
+                                const parsed = JSON.parse(conversationLog.log);
+                                return (
+                                  <Link
+                                    href={`/chat/${parsed.conversation_id}`}
+                                    className="text-blue-500 hover:text-blue-700 inline-flex items-center gap-1"
+                                    target="_blank"
+                                  >
+                                    Open
+                                    <ExternalLink className=" h-4 w-4" />
+                                  </Link>
+                                );
+                              } catch (e) {
+                                // Not a JSON string, do nothing
+                              }
+                            }
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))}

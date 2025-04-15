@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, Folder, GitBranch, Github, Plus } from "lucide-react";
+import { Bot, Folder, GitBranch, Github, Plus, RefreshCcw } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -114,24 +114,25 @@ export default function CreateWorkflowPage() {
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      const _triggers = await WorkflowService.getAllTriggers();
-      const agents = await AgentService.getAgentTypes();
-      setAvailableAgents(
-        agents
-          .filter((agent: any) => agent.status != "SYSTEM")
-          .map((agent: any) => ({
-            id: agent.id,
-            name: agent.name,
-            description: agent.description,
-          }))
-      );
-      setTriggers(_triggers);
-      setLoading(false);
-    }
 
+  async function fetchData() {
+    setLoading(true);
+    const _triggers = await WorkflowService.getAllTriggers();
+    const agents = await AgentService.getAgentTypes();
+    setAvailableAgents(
+      agents
+        .filter((agent: any) => agent.status != "SYSTEM")
+        .map((agent: any) => ({
+          id: agent.id,
+          name: agent.name,
+          description: agent.description,
+        }))
+    );
+    setTriggers(_triggers);
+    setLoading(false);
+  }
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -428,9 +429,13 @@ export default function CreateWorkflowPage() {
             name="agent_id"
             render={({ field }) => (
               <FormItem className="mt-8">
-                <FormLabel>
+                <FormLabel className="inline-flex items-center gap-2">
                   Choose an agent to use for the trigger:{" "}
                   <FormMessage className="text-red-500 italic" />
+                  <RefreshCcw
+                    className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
+                    onClick={() => fetchData()}
+                  />
                 </FormLabel>
                 <FormControl>
                   <Carousel

@@ -15,7 +15,7 @@ import AgentService from "@/services/AgentService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import WorkflowService, { Trigger } from "@/services/WorkflowService";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { promise, z } from "zod";
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, Folder, GitBranch, Github, Plus } from "lucide-react";
+import { Bot, Folder, GitBranch, Github, Plus, RefreshCcw } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -47,7 +47,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { resolve } from "path";
+import Link from "next/link";
 
 const formSchema = z.object({
   title: z.string().min(3, {
@@ -71,7 +71,37 @@ interface Agent {
   description: string;
 }
 
+interface Template {
+  title: string;
+  description?: string;
+  agent_id: string;
+  triggers: string[];
+  task: string;
+}
+
 export default function CreateWorkflowPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [template, setTemplate] = useState<Template | null>(null);
+
+  useEffect(() => {
+    const templateParam = searchParams.get("template");
+    if (templateParam) {
+      try {
+        // Parse the JSON string from the query parameter
+        const parsedTemplate: Template = JSON.parse(templateParam);
+        setTemplate(parsedTemplate);
+        form.setValue("title", parsedTemplate.title);
+        form.setValue("description", parsedTemplate.description);
+        // form.setValue("agent_id", _workflow.agent_id);
+        form.setValue("triggers", parsedTemplate.triggers);
+        form.setValue("task", parsedTemplate.task);
+      } catch (error) {
+        console.error("Failed to parse template:", error);
+      }
+    }
+  }, [searchParams]);
+
   const [repoOpen, setRepoOpen] = useState(false);
   const [repoName, setRepoName] = useState("");
   const [searchValue, setSearchValue] = useState("");
@@ -83,20 +113,26 @@ export default function CreateWorkflowPage() {
 
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
-  useEffect(() => {
-    async function fetchData() {
-      const _triggers = await WorkflowService.getAllTriggers();
-      const agents = await AgentService.getAgentTypes();
-      setAvailableAgents(
-        agents.map((agent: any) => ({
+  const [loading, setLoading] = useState(true);
+
+  async function fetchData() {
+    setLoading(true);
+    const _triggers = await WorkflowService.getAllTriggers();
+    const agents = await AgentService.getAgentTypes();
+    setAvailableAgents(
+      agents
+        .filter((agent: any) => agent.status != "SYSTEM")
+        .map((agent: any) => ({
           id: agent.id,
           name: agent.name,
           description: agent.description,
         }))
-      );
-      setTriggers(_triggers);
-    }
+    );
+    setTriggers(_triggers);
+    setLoading(false);
+  }
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -152,8 +188,6 @@ export default function CreateWorkflowPage() {
     form.setValue("repo_name", repoName);
     form.setValue("branch", branchName);
   }, [repoName, branchName, form]);
-
-  const router = useRouter();
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
@@ -395,9 +429,13 @@ export default function CreateWorkflowPage() {
             name="agent_id"
             render={({ field }) => (
               <FormItem className="mt-8">
-                <FormLabel>
+                <FormLabel className="inline-flex items-center gap-2">
                   Choose an agent to use for the trigger:{" "}
                   <FormMessage className="text-red-500 italic" />
+                  <RefreshCcw
+                    className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
+                    onClick={() => fetchData()}
+                  />
                 </FormLabel>
                 <FormControl>
                   <Carousel
@@ -409,7 +447,7 @@ export default function CreateWorkflowPage() {
                   >
                     <CarouselPrevious type="button" />
                     <CarouselNext type="button" />
-                    {availableAgents.length === 0 && (
+                    {availableAgents.length === 0 && loading && (
                       <div className="flex items-center justify-start gap-4 w-full h-full">
                         <Skeleton className="h-60 w-1/4 " />
                         <Skeleton className="h-60 w-1/4 " />
@@ -443,6 +481,36 @@ export default function CreateWorkflowPage() {
                           </Card>
                         </CarouselItem>
                       ))}
+                      {!loading && (
+                        <CarouselItem
+                          key={"create-agent"}
+                          className="basis-1/4 min-w-60"
+                        >
+                          <Link
+                            href={"/all-agents?createAgent=true"}
+                            target="_blank"
+                          >
+                            <Card
+                              className={cn(
+                                "h-60 p-2 border rounded-lg cursor-pointer shadow-md",
+                                field.value === "create-agent"
+                                  ? " bg-green-400/40 "
+                                  : "border-gray-300 hover:shadow-sm hover:scale-95 transition-all ease-out"
+                              )}
+                            >
+                              <CardHeader className="flex items-center space-x-3 p-2">
+                                <Bot className="flex-shrink-0" />
+                                <CardTitle className="text-lg font-medium text-center">
+                                  {"Create a new custom agent"}
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="p-2 flex items-center justify-center">
+                                <Plus className="h-10 w-10" />
+                              </CardContent>
+                            </Card>
+                          </Link>
+                        </CarouselItem>
+                      )}
                     </CarouselContent>
                   </Carousel>
                 </FormControl>

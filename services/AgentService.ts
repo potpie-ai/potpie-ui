@@ -86,34 +86,13 @@ export default class AgentService {
     }
   }
 
-  static async redeployAgent(
-    agentId: string,
-  ) {
-    const headers = await getHeaders();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    try {
-      const response = await axios.post(
-        `${baseUrl}/deployment/agents/${agentId}/redeploy`,{},{
-          headers
-        });
-      return response.data as AxiosResponse<
-        {
-          message: string;
-          status: string;
-        },
-        any
-      >;
-    } catch (error) {
-      throw new Error("Error redeploying agent");
-    }
-  }
 
   static async createAgentFromPrompt(prompt: string) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       const response = await axios.post(
-        `${baseUrl}/api/v1/custom-agents/agents/auto`,
+        `${baseUrl}/api/v1/custom-agents/agents/auto/`,
         { prompt },
         { headers }
       );
@@ -154,9 +133,12 @@ export default class AgentService {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       console.log(`Setting agent ${agentId} visibility to:`, visibility);
-      const response = await axios.put(
-        `${baseUrl}/api/v1/custom-agents/agents/${agentId}/visibility`,
-        { visibility },
+      const response = await axios.post(
+        `${baseUrl}/api/v1/custom-agents/agents/share`,
+        { 
+          agent_id: agentId,
+          visibility: visibility
+        },
         { headers }
       );
       console.log("Set visibility API response:", response.data);
@@ -167,18 +149,40 @@ export default class AgentService {
     }
   }
 
-  static async shareAgentWithEmail(agentId: string, email: string) {
+  static async shareAgentWithEmail(agentId: string, email: string, visibility?: "private" | "public" | "shared") {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       const response = await axios.post(
-        `${baseUrl}/api/v1/custom-agents/agents/${agentId}/share`,
-        { email },
+        `${baseUrl}/api/v1/custom-agents/agents/share`,
+        {
+          agent_id: agentId,
+          visibility: visibility,
+          shared_with_email: email
+        },
         { headers }
       );
       return response.data;
     } catch (error) {
-      throw new Error("Error sharing agent");
+      throw new Error("Error sharing agent with email");
+    }
+  }
+
+  static async changeAgentVisibility(agentId: string, visibility: "private" | "public" | "shared") {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    try {
+      const response = await axios.post(
+        `${baseUrl}/api/v1/custom-agents/agents/share`,
+        {
+          agent_id: agentId,
+          visibility: visibility
+        },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error("Error changing agent visibility");
     }
   }
 
@@ -186,12 +190,13 @@ export default class AgentService {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
-      const response = await axios.delete(
-        `${baseUrl}/api/v1/custom-agents/agents/${agentId}/share`,
+      const response = await axios.post(
+        `${baseUrl}/api/v1/custom-agents/agents/revoke-access`,
         {
-          headers,
-          data: { email },
-        }
+          agent_id: agentId,
+          user_email: email
+        },
+        { headers }
       );
       return response.data;
     } catch (error) {
@@ -205,7 +210,7 @@ export default class AgentService {
     try {
       console.log(`Fetching sharing details for agent ${agentId}`);
       const response = await axios.get(
-        `${baseUrl}/api/v1/custom-agents/agents/${agentId}/shared`,
+        `${baseUrl}/api/v1/custom-agents/agents/${agentId}/shares`,
         { headers }
       );
       console.log("Agent sharing details API response:", response.data);

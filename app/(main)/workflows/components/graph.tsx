@@ -330,6 +330,7 @@ const WorkflowDiagram: FC<WorkflowDiagramProps> = ({
         edges={edges}
         nodeTypes={nodeTypes}
         fitView
+        zoomOnDoubleClick={false}
         zoomOnScroll={false}
         zoomOnPinch={false}
         panOnScroll={false}

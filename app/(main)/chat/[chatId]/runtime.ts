@@ -32,6 +32,7 @@ export function PotpieRuntime(chatId: string) {
   const [extras, setExtras] = useState({
     loading: true,
     streaming: false,
+    error: false,
   });
 
   const initarray: ThreadMessageLike[] = [];
@@ -44,14 +45,14 @@ export function PotpieRuntime(chatId: string) {
       if (messagesLoaded) return;
       if (!chatId) return;
 
-      setExtras({ loading: true, streaming: false });
+      setExtras({ loading: true, streaming: false, error: false });
 
       const res = await ChatService.loadMessages(chatId, 0, 1000);
 
       setMessages(res.map((msg: any) => convertToThreadMessage(msg)));
 
       setMessagesLoaded(true);
-      setExtras({ loading: false, streaming: false });
+      setExtras({ loading: false, streaming: false, error: false });
 
       if (pendingMessage && pendingMessage != "") {
         onMessage(pendingMessage);
@@ -128,7 +129,7 @@ export function PotpieRuntime(chatId: string) {
       [], // @ts-ignore
       (message: string, tool_calls: any[]) => {
         setIsRunning(false);
-        setExtras({ loading: false, streaming: true });
+        setExtras({ loading: false, streaming: true, error: false });
 
         setMessages((currentMessages) => {
           return [
@@ -139,7 +140,7 @@ export function PotpieRuntime(chatId: string) {
       }
     );
     setIsRunning(false);
-    setExtras({ loading: false, streaming: false });
+    setExtras({ loading: false, streaming: false, error: false });
   };
 
   const onNew = async (message: AppendMessage) => {
@@ -156,44 +157,74 @@ export function PotpieRuntime(chatId: string) {
     setMessages((currentMessages) => {
       return [...currentMessages, getMessageFromText(undefined, "")];
     });
-    await ChatService.streamMessage(
-      chatId,
-      message.content[0].text,
-      (message.runConfig?.custom?.selectedNodes as any[]) || [], // @ts-ignore
-      (message: string, tool_calls: any[]) => {
-        setIsRunning(false);
-        setExtras({ loading: false, streaming: true });
+    try {
+      await ChatService.streamMessage(
+        chatId,
+        message.content[0].text,
+        (message.runConfig?.custom?.selectedNodes as any[]) || [], // @ts-ignore
+        (message: string, tool_calls: any[]) => {
+          setIsRunning(false);
+          setExtras({ loading: false, streaming: true, error: false });
 
-        setMessages((currentMessages) => {
-          return [
-            ...currentMessages.slice(0, -1),
-            getMessageFromText(currentMessages.at(-1)?.id, message, tool_calls),
-          ];
-        });
-      }
-    );
+          setMessages((currentMessages) => {
+            return [
+              ...currentMessages.slice(0, -1),
+              getMessageFromText(
+                currentMessages.at(-1)?.id,
+                message,
+                tool_calls
+              ),
+            ];
+          });
+        }
+      );
+    } catch (error) {
+      setIsRunning(false);
+      setExtras({
+        loading: false,
+        streaming: false,
+        error: true,
+      });
+      console.error("Error streaming message:", error);
+      return;
+    }
     setIsRunning(false);
-    setExtras({ loading: false, streaming: false });
+    setExtras({ loading: false, streaming: false, error: false });
   };
 
   const onReload = async (parentId: string | null) => {
     setIsRunning(true);
-    await ChatService.regenerateMessage(
-      chatId,
-      [],
-      (message: string, tool_calls: any[]) => {
-        setIsRunning(false);
-        setExtras({ loading: false, streaming: true });
-        setMessages((currentMessages) => {
-          return [
-            ...currentMessages.slice(0, -1),
-            getMessageFromText(currentMessages.at(-1)?.id, message, tool_calls),
-          ];
-        });
-      }
-    );
+    try {
+      await ChatService.regenerateMessage(
+        chatId,
+        [],
+        (message: string, tool_calls: any[]) => {
+          setIsRunning(false);
+          setExtras({ loading: false, streaming: true, error: false });
+          setMessages((currentMessages) => {
+            return [
+              ...currentMessages.slice(0, -1),
+              getMessageFromText(
+                currentMessages.at(-1)?.id,
+                message,
+                tool_calls
+              ),
+            ];
+          });
+        }
+      );
+    } catch (error) {
+      setIsRunning(false);
+      setExtras({
+        loading: false,
+        streaming: false,
+        error: true,
+      });
+      console.error("Error streaming message:", error);
+      return;
+    }
     setIsRunning(false);
-    setExtras({ loading: false, streaming: false });
+    setExtras({ loading: false, streaming: false, error: false });
   };
 
   return useExternalStoreRuntime<ThreadMessageLike>({

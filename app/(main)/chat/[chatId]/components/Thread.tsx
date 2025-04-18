@@ -50,7 +50,9 @@ export const Thread: FC<ThreadProps> = ({
 
   useEffect(() => {
     const unsubscribe = runtime.subscribe(() => {
-      setIsLoading((runtime.getState().extras as any)?.loading === true || false);
+      setIsLoading(
+        (runtime.getState().extras as any)?.loading === true || false
+      );
     });
     return () => unsubscribe();
   }, [runtime]);
@@ -238,7 +240,6 @@ const MarkdownComponent = (content: any) => {
   );
 };
 
-
 const ThreadWelcome: FC<{ showSuggestions: boolean }> = ({
   showSuggestions,
 }) => {
@@ -272,7 +273,7 @@ const ThreadWelcomeSuggestions: FC = () => {
       >
         <span className="line-clamp-2 text-ellipsis text-sm">
           What does this repo do?
-        </span> 
+        </span>
       </ThreadPrimitive.Suggestion>
       <ThreadPrimitive.Suggestion
         className="hover:bg-slate-300/20 flex max-w-sm min-w-fit basis-0 flex-col items-center justify-center rounded-full p-3 border border-neutral-400/20 transition-colors ease-in"
@@ -315,13 +316,16 @@ const Composer: FC<{
     return () => unsubscribe();
   }, [runtime]);
 
-  const setSelectedNodesInConfig = useCallback((selectedNodes: any[]) => {
-    composer.setRunConfig({
-      custom: {
-        selectedNodes: selectedNodes,
-      },
-    });
-  }, [composer]);
+  const setSelectedNodesInConfig = useCallback(
+    (selectedNodes: any[]) => {
+      composer.setRunConfig({
+        custom: {
+          selectedNodes: selectedNodes,
+        },
+      });
+    },
+    [composer]
+  );
 
   return (
     <ComposerPrimitive.Root
@@ -377,9 +381,9 @@ const ThreadScrollToBottom: FC = () => {
   const [isAtBottom, setIsAtBottom] = useState(true);
 
   const checkScrollPosition = useCallback(() => {
-    const viewport = document.querySelector('.thread-viewport');
+    const viewport = document.querySelector(".thread-viewport");
     if (!viewport) return;
-    
+
     const { scrollTop, scrollHeight, clientHeight } = viewport as HTMLElement;
     const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 20;
     setIsAtBottom(isBottom);
@@ -387,20 +391,20 @@ const ThreadScrollToBottom: FC = () => {
   }, []);
 
   useEffect(() => {
-    const viewport = document.querySelector('.thread-viewport');
+    const viewport = document.querySelector(".thread-viewport");
     if (!viewport) return;
-    
-    viewport.addEventListener('scroll', checkScrollPosition);
-    return () => viewport.removeEventListener('scroll', checkScrollPosition);
+
+    viewport.addEventListener("scroll", checkScrollPosition);
+    return () => viewport.removeEventListener("scroll", checkScrollPosition);
   }, [checkScrollPosition]);
 
   const scrollToBottom = () => {
-    const viewport = document.querySelector('.thread-viewport');
+    const viewport = document.querySelector(".thread-viewport");
     if (!viewport) return;
-    
+
     viewport.scrollTo({
       top: viewport.scrollHeight,
-      behavior: 'smooth'
+      behavior: "smooth",
     });
   };
 
@@ -432,6 +436,7 @@ const AssistantMessage: FC = () => {
   const [toolsState, setToolsState] = useState<
     { id: string; message: string; status: string; details_summary: string }[]
   >([]);
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     if (isStreaming && text.length < 1200) {
@@ -493,6 +498,7 @@ const AssistantMessage: FC = () => {
       setIsStreaming(
         (threadRuntime.getState().extras as any).streaming || false
       );
+      setIsError((threadRuntime.getState().extras as any).error || false);
       threadRuntime.getState().messages.at(-1)?.id === message.id &&
         setIsRunning(threadRuntime.getState().isRunning);
     });
@@ -598,7 +604,7 @@ const AssistantMessage: FC = () => {
               </Accordion>
             </motion.div>
           )}
-          {!isRunning && text ? (
+          {!isRunning && text && (
             <div>
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
@@ -612,7 +618,8 @@ const AssistantMessage: FC = () => {
                 <MarkdownComponent content={{ text: text }} />
               </motion.div>
             </div>
-          ) : (
+          )}
+          {(isRunning || !text) && !isError && (
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -626,6 +633,12 @@ const AssistantMessage: FC = () => {
               <Skeleton key={2} className="h-4 w-1/2 mb-2"></Skeleton>
               <Skeleton key={3} className="h-4 w-1/3"></Skeleton>
             </motion.div>
+          )}
+          {isError && (
+            <div className="text-red-400">
+              There was an error while serving your request. Please try again or
+              try with a different model
+            </div>
           )}
         </div>
         {!isRunning && <AssistantActionBar streaming={isStreaming} />}

@@ -17,7 +17,14 @@ import AgentService from "@/services/AgentService";
 
 import WorkflowService, { Trigger, Workflow } from "@/services/WorkflowService";
 import { TooltipTrigger } from "@radix-ui/react-tooltip";
-import { FilePlus2, Hammer, LucideEdit, LucideTrash } from "lucide-react";
+import {
+  FilePlus2,
+  Hammer,
+  LucideEdit,
+  LucideTrash,
+  Pause,
+  Play,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -57,21 +64,27 @@ const Workflows = () => {
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
 
+  async function fetchData() {
+    console.log("fetching...");
+    setLoading(true);
+    const workflows = await WorkflowService.getWorkflowsList();
+    setWorkflows(
+      workflows.sort(
+        (a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+    );
+
+    const agents = await AgentService.getAgentTypes();
+    setAvailableAgents(
+      agents.map((agent: any) => ({ id: agent.id, name: agent.name }))
+    );
+    const _triggers = await WorkflowService.getAllTriggers();
+    setTriggers(_triggers);
+    setLoading(false);
+  }
+
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      const workflows = await WorkflowService.getWorkflowsList();
-      setWorkflows(workflows);
-
-      const agents = await AgentService.getAgentTypes();
-      setAvailableAgents(
-        agents.map((agent: any) => ({ id: agent.id, name: agent.name }))
-      );
-      const _triggers = await WorkflowService.getAllTriggers();
-      setTriggers(_triggers);
-      setLoading(false);
-    }
-
     fetchData();
   }, []);
 
@@ -83,6 +96,20 @@ const Workflows = () => {
         );
       });
     }
+  };
+
+  const handlePause = async (workflow: Workflow, index: number) => {
+    if (workflow.is_paused) {
+      await WorkflowService.resumeWorkflow(workflow.id);
+    } else {
+      await WorkflowService.pauseWorkflow(workflow.id);
+    }
+
+    const updatedWorkflows = workflows.map((w, i) =>
+      i === index ? { ...w, is_paused: !w.is_paused } : w
+    );
+
+    setWorkflows(updatedWorkflows);
   };
 
   const [openTemplateModal, setOpenTemplateModal] = useState(false);
@@ -195,84 +222,91 @@ const Workflows = () => {
                 ))}
               </>
             ) : (
-              workflows
-                .sort(
-                  (a: any, b: any) =>
-                    new Date(b.created_at).getTime() -
-                    new Date(a.created_at).getTime()
-                ) // Sort by created_at in descending order
-                .map((workflow) => (
-                  <TableRow
-                    key={workflow.id}
-                    className="hover:bg-red border-b border-gray-200 text-black"
-                  >
-                    <TableCell>
-                      <Link
-                        href={`/workflows/${workflow.id}`}
-                        className="hover:text-blue-600"
+              workflows.map((workflow, index) => (
+                <TableRow
+                  key={workflow.id}
+                  className="hover:bg-red border-b border-gray-200 text-black"
+                >
+                  <TableCell>
+                    <Link
+                      href={`/workflows/${workflow.id}`}
+                      className="hover:text-blue-600"
+                    >
+                      {workflow.title}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    {workflow.repo_name || "<Deleted project>"}
+                  </TableCell>
+                  <TableCell>
+                    {availableAgents.find(
+                      (agent) => agent.id == workflow?.agent_id
+                    )?.name || "<Deleted Agent>"}
+                  </TableCell>
+                  <TableCell>
+                    <Tooltip>
+                      <TooltipTrigger className="space-y-2">
+                        {triggers.find(
+                          (trigger) => trigger.id == workflow?.triggers[0]
+                        )?.name || "<Unknown Trigger>"}{" "}
+                        {workflow.triggers.length > 1
+                          ? ` +${workflow.triggers.length - 1}`
+                          : ""}
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="space-y-2">
+                        {workflow.triggers.map(
+                          (current: string, index: number) => (
+                            <div key={index} className="">
+                              <span className="text-sm text-gray-700">
+                                {triggers.find(
+                                  (trigger) => trigger.id == current
+                                )?.name || "<Unknown Trigger>"}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell>
+                    {new Date(workflow.created_at).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        className=""
+                        onClick={() => {
+                          handlePause(workflow, index);
+                        }}
                       >
-                        {workflow.title}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {workflow.repo_name || "<Deleted project>"}
-                    </TableCell>
-                    <TableCell>
-                      {availableAgents.find(
-                        (agent) => agent.id == workflow?.agent_id
-                      )?.name || "<Deleted Agent>"}
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip>
-                        <TooltipTrigger className="space-y-2">
-                          {triggers.find(
-                            (trigger) => trigger.id == workflow?.triggers[0]
-                          )?.name || "<Unknown Trigger>"}{" "}
-                          {workflow.triggers.length > 1
-                            ? ` +${workflow.triggers.length - 1}`
-                            : ""}
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="space-y-2">
-                          {workflow.triggers.map(
-                            (current: string, index: number) => (
-                              <div key={index} className="">
-                                <span className="text-sm text-gray-700">
-                                  {triggers.find(
-                                    (trigger) => trigger.id == current
-                                  )?.name || "<Unknown Trigger>"}
-                                </span>
-                              </div>
-                            )
-                          )}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(workflow.created_at).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Link href={`/workflows/${workflow.id}/edit`}>
-                          <Button
-                            variant="link"
-                            className="configure-button hover:bg-gray-200"
-                          >
-                            <LucideEdit className="h-4 w-4" />
-                          </Button>
-                        </Link>
+                        {workflow.is_paused ? (
+                          <Play className="h-4 w-4 stroke-slate-500" />
+                        ) : (
+                          <Pause className="h-4 w-4 stroke-slate-500" />
+                        )}
+                      </Button>
+                      <Link href={`/workflows/${workflow.id}/edit`}>
                         <Button
-                          variant="destructive"
-                          className="text-red-600 hover:text-red-800 hover:bg-red-100"
-                          onClick={() => {
-                            handleDeleteWorkflow(workflow);
-                          }}
+                          variant="link"
+                          className="configure-button hover:bg-gray-200"
                         >
-                          <LucideTrash className="h-4 w-4" />
+                          <LucideEdit className="h-4 w-4" />
                         </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </Link>
+                      <Button
+                        variant="destructive"
+                        className="text-red-600 hover:text-red-800 hover:bg-red-100"
+                        onClick={() => {
+                          handleDeleteWorkflow(workflow);
+                        }}
+                      >
+                        <LucideTrash className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
             )}
             {workflows.length === 0 && !loading && (
               <TableRow>

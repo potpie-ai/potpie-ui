@@ -14,6 +14,7 @@ export interface Workflow {
   triggers: string[];
   hash: string;
   task: string;
+  is_paused: boolean;
 }
 
 export interface CreateWorkflowRequest {
@@ -168,6 +169,40 @@ export default class WorkflowService {
       return response.data.executions;
     } catch (error) {
       console.error("Error fetching workflows logs:", error);
+      throw error;
+    }
+  }
+
+  static async pauseWorkflow(workflowId: string): Promise<any> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post(
+        `${this.BASE_URL}/${workflowId}/pause`,
+        {},
+        {
+          headers,
+        }
+      );
+      return;
+    } catch (error) {
+      console.error("Error pausing workflow:", error);
+      throw error;
+    }
+  }
+
+  static async resumeWorkflow(workflowId: string): Promise<any> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post(
+        `${this.BASE_URL}/${workflowId}/resume`,
+        {},
+        {
+          headers,
+        }
+      );
+      return;
+    } catch (error) {
+      console.error("Error resuming workflow:", error);
       throw error;
     }
   }

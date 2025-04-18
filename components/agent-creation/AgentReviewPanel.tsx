@@ -1,7 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Edit, Save, X, ChevronDown, ChevronUp, Plus, Check, Trash2 } from "lucide-react";
+import {
+  Edit,
+  Save,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Check,
+  Trash2,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -9,7 +18,11 @@ import AgentService from "@/services/AgentService";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
@@ -44,14 +57,20 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
   footerHeight = 60,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedAgent, setEditedAgent] = useState<CustomAgentsFormValues>(generatedAgent);
+  const [editedAgent, setEditedAgent] =
+    useState<CustomAgentsFormValues>(generatedAgent);
   const [isSaving, setIsSaving] = useState(false);
-  
-  const [taskToolStates, setTaskToolStates] = useState<Record<number, TaskToolState>>({});
+
+  const [taskToolStates, setTaskToolStates] = useState<
+    Record<number, TaskToolState>
+  >({});
 
   // Log when the component receives props
   useEffect(() => {
-    console.log('[AgentReviewPanel] Generated agent tools:', generatedAgent.tools);
+    console.log(
+      "[AgentReviewPanel] Generated agent tools:",
+      generatedAgent.tools
+    );
   }, [generatedAgent]);
 
   const fetchTools = async () => {
@@ -60,6 +79,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     const response = await axios.get(`${baseUrl}/api/v1/tools/list_tools`, {
       headers: header,
     });
+    console.log("[AgentReviewPanel] Fetched tools:", response.data);
     return response.data;
   };
 
@@ -69,7 +89,8 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     enabled: isEditing,
   });
 
-  const availableTools = isEditing && toolsData ? toolsData : propAvailableTools;
+  const availableTools =
+    isEditing && toolsData ? toolsData : propAvailableTools;
   const isLoadingTools = isEditing ? toolsLoading : propIsLoadingTools;
 
   useEffect(() => {
@@ -77,7 +98,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
       const initialStates: Record<number, TaskToolState> = {};
       editedAgent.tasks.forEach((_: any, index: number) => {
         initialStates[index] = {
-          searchTerm: ""
+          searchTerm: "",
         };
       });
       setTaskToolStates(initialStates);
@@ -106,35 +127,41 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     setEditedAgent(generatedAgent);
   }, [generatedAgent]);
 
-  const handleInputChange = useCallback((field: keyof CustomAgentsFormValues, value: string) => {
-    setEditedAgent((prev: CustomAgentsFormValues) => ({
-      ...prev,
-      [field]: value,
-    }));
-  }, []);
-
-  const handleTaskChange = useCallback((index: number, field: string, value: any) => {
-    console.log('[AgentReviewPanel] Task change:', {
-      taskIndex: index,
-      field,
-      value,
-      currentTask: editedAgent.tasks[index]
-    });
-    
-    setEditedAgent((prev: CustomAgentsFormValues) => {
-      const updatedTasks = [...prev.tasks];
-      updatedTasks[index] = { ...updatedTasks[index], [field]: value };
-      return {
+  const handleInputChange = useCallback(
+    (field: keyof CustomAgentsFormValues, value: string) => {
+      setEditedAgent((prev: CustomAgentsFormValues) => ({
         ...prev,
-        tasks: updatedTasks
-      };
-    });
-  }, []);
+        [field]: value,
+      }));
+    },
+    []
+  );
+
+  const handleTaskChange = useCallback(
+    (index: number, field: string, value: any) => {
+      console.log("[AgentReviewPanel] Task change:", {
+        taskIndex: index,
+        field,
+        value,
+        currentTask: editedAgent.tasks[index],
+      });
+
+      setEditedAgent((prev: CustomAgentsFormValues) => {
+        const updatedTasks = [...prev.tasks];
+        updatedTasks[index] = { ...updatedTasks[index], [field]: value };
+        return {
+          ...prev,
+          tasks: updatedTasks,
+        };
+      });
+    },
+    []
+  );
 
   const handleToolToggle = useCallback((toolId: string) => {
-    console.log('[AgentReviewPanel] Toggling tool:', toolId);
-    console.log('[AgentReviewPanel] Current tools:', editedAgent.tools);
-    
+    console.log("[AgentReviewPanel] Toggling tool:", toolId);
+    console.log("[AgentReviewPanel] Current tools:", editedAgent.tools);
+
     setEditedAgent((prev: CustomAgentsFormValues) => {
       const currentTools = prev.tools || [];
       const updated = {
@@ -143,69 +170,67 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
           ? currentTools.filter((id: string) => id !== toolId)
           : [...currentTools, toolId],
       };
-      console.log('[AgentReviewPanel] Updated tools:', updated.tools);
+      console.log("[AgentReviewPanel] Updated tools:", updated.tools);
       return updated;
     });
   }, []);
 
-  const handleTaskToolChange = (taskIndex: number, toolName: string, checked: boolean) => {
-    console.log('[AgentReviewPanel] Task tool change:', {
-      taskIndex,
-      toolName,
-      checked,
-      currentTaskTools: editedAgent.tasks[taskIndex].tools
-    });
-    
+  const handleTaskToolChange = (
+    taskIndex: number,
+    toolName: string,
+    checked: boolean
+  ) => {
     const updatedTasks = [...editedAgent.tasks];
     const task = updatedTasks[taskIndex];
-    
+
     if (!task.tools) {
       task.tools = [];
     }
-    
+
     if (checked) {
       if (!task.tools.includes(toolName)) {
         task.tools.push(toolName);
       }
     } else {
-      task.tools = task.tools.filter(tool => tool !== toolName);
+      task.tools = task.tools.filter((tool) => tool !== toolName);
     }
-    
-    setEditedAgent(prev => ({
+
+    setEditedAgent((prev) => ({
       ...prev,
-      tasks: updatedTasks
+      tasks: updatedTasks,
     }));
   };
 
   const selectAllToolsForTask = (taskIndex: number) => {
-    console.log('[AgentReviewPanel] Selecting all tools for task:', taskIndex);
-    
     const updatedTasks = [...editedAgent.tasks];
     const task = updatedTasks[taskIndex];
-    
+
     if (!task.tools) {
       task.tools = [];
     }
-    
-    const newTools = [...new Set([...task.tools, ...availableTools.map((tool: { name: string }) => tool.name)])];
-    updatedTasks[taskIndex] = {...task, tools: newTools};
-    
-    setEditedAgent({...editedAgent, tasks: updatedTasks});
+
+    const newTools = [
+      ...new Set([
+        ...task.tools,
+        ...availableTools.map((tool: { name: string }) => tool.name),
+      ]),
+    ];
+    updatedTasks[taskIndex] = { ...task, tools: newTools };
+
+    setEditedAgent({ ...editedAgent, tasks: updatedTasks });
   };
 
   const deselectAllToolsForTask = (taskIndex: number) => {
-    console.log('[AgentReviewPanel] Deselecting all tools for task:', taskIndex);
-    
     const updatedTasks = [...editedAgent.tasks];
     const task = updatedTasks[taskIndex];
-    
+
     if (!task.tools) {
       task.tools = [];
     }
-    
-    updatedTasks[taskIndex] = {...task, tools: []};
-    
-    setEditedAgent({...editedAgent, tasks: updatedTasks});
+
+    updatedTasks[taskIndex] = { ...task, tools: [] };
+
+    setEditedAgent({ ...editedAgent, tasks: updatedTasks });
   };
 
   const updateTaskToolSearch = (taskIndex: number, searchTerm: string) => {
@@ -213,31 +238,27 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
       ...taskToolStates,
       [taskIndex]: {
         ...taskToolStates[taskIndex],
-        searchTerm
-      }
+        searchTerm,
+      },
     });
   };
 
   const getFilteredTools = (taskIndex: number) => {
-    const searchTerm = taskToolStates[taskIndex]?.searchTerm?.toLowerCase() || "";
-    const filtered = availableTools.filter((tool: { name: string; description: string }) => 
-      tool.name.toLowerCase().includes(searchTerm) || 
-      tool.description.toLowerCase().includes(searchTerm)
+    const searchTerm =
+      taskToolStates[taskIndex]?.searchTerm?.toLowerCase() || "";
+    const filtered = availableTools.filter(
+      (tool: { name: string; description: string }) =>
+        tool.name.toLowerCase().includes(searchTerm) ||
+        tool.description.toLowerCase().includes(searchTerm)
     );
-    
-    console.log('[AgentReviewPanel] Filtered tools for task:', {
-      taskIndex,
-      searchTerm,
-      filteredTools: filtered.map((tool: { name: string }) => tool.name)
-    });
-    
+
     return filtered;
   };
 
   const handleDeleteTask = useCallback((index: number) => {
-    setEditedAgent(prev => ({
+    setEditedAgent((prev) => ({
       ...prev,
-      tasks: prev.tasks.filter((_, i) => i !== index)
+      tasks: prev.tasks.filter((_, i) => i !== index),
     }));
   }, []);
 
@@ -247,13 +268,22 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
         <div className="flex-1 overflow-hidden flex flex-col">
           <Tabs defaultValue="system" className="h-full flex flex-col">
             <TabsList className="w-full flex-none flex justify-center gap-1 mb-6 p-1 bg-background border rounded-lg">
-              <TabsTrigger value="system" className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+              <TabsTrigger
+                value="system"
+                className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              >
                 System Configuration
               </TabsTrigger>
-              <TabsTrigger value="identity" className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+              <TabsTrigger
+                value="identity"
+                className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              >
                 Agent Identity
               </TabsTrigger>
-              <TabsTrigger value="tasks" className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+              <TabsTrigger
+                value="tasks"
+                className="flex-1 py-2.5 rounded-md text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              >
                 Tasks
               </TabsTrigger>
             </TabsList>
@@ -272,7 +302,9 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                       {isEditing ? (
                         <Textarea
                           value={editedAgent.system_prompt}
-                          onChange={(e) => handleInputChange('system_prompt', e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange("system_prompt", e.target.value)
+                          }
                           className="min-h-[250px] text-sm w-full resize-vertical"
                         />
                       ) : (
@@ -298,7 +330,9 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                       {isEditing ? (
                         <Textarea
                           value={editedAgent.role}
-                          onChange={(e) => handleInputChange('role', e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange("role", e.target.value)
+                          }
                           className="min-h-[120px] text-sm w-full resize-vertical"
                         />
                       ) : (
@@ -317,7 +351,9 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                       {isEditing ? (
                         <Textarea
                           value={editedAgent.goal}
-                          onChange={(e) => handleInputChange('goal', e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange("goal", e.target.value)
+                          }
                           className="min-h-[120px] text-sm w-full resize-vertical"
                         />
                       ) : (
@@ -336,7 +372,9 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                       {isEditing ? (
                         <Textarea
                           value={editedAgent.backstory}
-                          onChange={(e) => handleInputChange('backstory', e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange("backstory", e.target.value)
+                          }
                           className="min-h-[120px] text-sm w-full resize-vertical"
                         />
                       ) : (
@@ -356,7 +394,10 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                 <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar pb-16">
                   <div className="space-y-6">
                     {editedAgent.tasks?.map((task: any, index: number) => (
-                      <div key={index} className="bg-background rounded-lg border shadow-sm">
+                      <div
+                        key={index}
+                        className="bg-background rounded-lg border shadow-sm"
+                      >
                         <div className="p-6 border-b bg-background">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -379,7 +420,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                             )}
                           </div>
                         </div>
-                        
+
                         <div className="p-6">
                           <div className="space-y-6">
                             <div className="w-full">
@@ -390,7 +431,13 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                                 {isEditing ? (
                                   <Textarea
                                     value={task.description}
-                                    onChange={(e) => handleTaskChange(index, 'description', e.target.value)}
+                                    onChange={(e) =>
+                                      handleTaskChange(
+                                        index,
+                                        "description",
+                                        e.target.value
+                                      )
+                                    }
                                     className="min-h-[160px] text-sm w-full resize-vertical"
                                   />
                                 ) : (
@@ -414,24 +461,34 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                                       availableTools={availableTools}
                                       selectedTools={task.tools || []}
                                       isLoading={isLoadingTools}
-                                      onChange={(selectedTools) => handleTaskChange(index, 'tools', selectedTools)}
+                                      onChange={(selectedTools) =>
+                                        handleTaskChange(
+                                          index,
+                                          "tools",
+                                          selectedTools
+                                        )
+                                      }
                                       placeholderText="Select tools for this task..."
                                     />
                                   </div>
                                 ) : (
                                   <div className="flex flex-wrap gap-2">
                                     {task.tools && task.tools.length > 0 ? (
-                                      task.tools.map((tool: string, toolIndex: number) => (
-                                        <Badge
-                                          key={toolIndex}
-                                          variant="secondary"
-                                          className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full text-xs font-medium"
-                                        >
-                                          {tool}
-                                        </Badge>
-                                      ))
+                                      task.tools.map(
+                                        (tool: string, toolIndex: number) => (
+                                          <Badge
+                                            key={toolIndex}
+                                            variant="secondary"
+                                            className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full text-xs font-medium"
+                                          >
+                                            {tool}
+                                          </Badge>
+                                        )
+                                      )
                                     ) : (
-                                      <span className="text-sm text-muted-foreground">No tools assigned</span>
+                                      <span className="text-sm text-muted-foreground">
+                                        No tools assigned
+                                      </span>
                                     )}
                                   </div>
                                 )}
@@ -445,13 +502,31 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                               <div className="bg-muted/30 rounded-lg p-4 max-h-[200px] overflow-y-auto">
                                 {isEditing ? (
                                   <Textarea
-                                    value={typeof task.expected_output === 'string' ? task.expected_output : JSON.stringify(task.expected_output, null, 2)}
+                                    value={
+                                      typeof task.expected_output === "string"
+                                        ? task.expected_output
+                                        : JSON.stringify(
+                                            task.expected_output,
+                                            null,
+                                            2
+                                          )
+                                    }
                                     onChange={(e) => {
                                       try {
-                                        const parsedOutput = JSON.parse(e.target.value);
-                                        handleTaskChange(index, 'expected_output', parsedOutput);
+                                        const parsedOutput = JSON.parse(
+                                          e.target.value
+                                        );
+                                        handleTaskChange(
+                                          index,
+                                          "expected_output",
+                                          parsedOutput
+                                        );
                                       } catch (error) {
-                                        handleTaskChange(index, 'expected_output', e.target.value);
+                                        handleTaskChange(
+                                          index,
+                                          "expected_output",
+                                          e.target.value
+                                        );
                                       }
                                     }}
                                     className="min-h-[160px] text-sm font-mono w-full resize-vertical"
@@ -460,7 +535,13 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                                 ) : (
                                   <div className="overflow-y-auto max-h-full">
                                     <pre className="text-sm whitespace-pre-wrap overflow-x-auto max-w-full">
-                                      {typeof task.expected_output === 'string' ? task.expected_output : JSON.stringify(task.expected_output, null, 2)}
+                                      {typeof task.expected_output === "string"
+                                        ? task.expected_output
+                                        : JSON.stringify(
+                                            task.expected_output,
+                                            null,
+                                            2
+                                          )}
                                     </pre>
                                   </div>
                                 )}
@@ -477,16 +558,16 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                         type="button"
                         variant="outline"
                         onClick={() => {
-                          setEditedAgent(prev => ({
+                          setEditedAgent((prev) => ({
                             ...prev,
                             tasks: [
                               ...prev.tasks,
                               {
                                 description: "",
                                 tools: [],
-                                expected_output: "{}"
-                              }
-                            ]
+                                expected_output: "{}",
+                              },
+                            ],
                           }));
                         }}
                         className="flex items-center gap-2"
@@ -502,17 +583,25 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
           </Tabs>
         </div>
 
-        <div 
+        <div
           className="absolute bottom-0 left-0 right-0 p-4 border-t bg-background flex-none z-10"
           style={{ height: `${footerHeight}px` }}
         >
           {isEditing ? (
             <div className="flex gap-2 w-full">
-              <Button variant="outline" onClick={handleCancel} className="flex-1">
+              <Button
+                variant="outline"
+                onClick={handleCancel}
+                className="flex-1"
+              >
                 <X className="w-4 h-4 mr-2" />
                 Cancel
               </Button>
-              <Button onClick={handleSave} className="flex-1" disabled={isSaving}>
+              <Button
+                onClick={handleSave}
+                className="flex-1"
+                disabled={isSaving}
+              >
                 {isSaving ? (
                   <div className="flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />

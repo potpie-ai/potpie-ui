@@ -33,10 +33,13 @@ import {
   CircleStopIcon,
   X,
   Loader2Icon,
+  Crown,
 } from "lucide-react";
 import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
 import ChatService from "@/services/ChatService";
 import Image from "next/image";
+import MinorService from "@/services/minorService";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
@@ -55,6 +58,8 @@ interface NodeOption {
   node_id: string;
   relevance: number;
 }
+
+const free_models = ["openai/gpt-4.1", "openai/gpt-4o", "openai/gpt-4.1-mini"];
 
 const MessageComposer = ({
   projectId,
@@ -105,11 +110,11 @@ const MessageComposer = ({
   };
 
   const composer = useComposerRuntime();
-  composer.subscribe(()=>{
-    if (message != composer.getState().text){
-    setMessage(composer.getState().text)
-  }
-  })
+  composer.subscribe(() => {
+    if (message != composer.getState().text) {
+      setMessage(composer.getState().text);
+    }
+  });
 
   const handleNodeSelect = (node: NodeOption) => {
     const cursorPosition = messageRef.current?.selectionStart || 0;
@@ -248,12 +253,20 @@ const MessageComposer = ({
     setSelectedNodes([]);
   };
 
+  const [currPlan, setCurrPlan] = useState<string | undefined>(undefined);
+  const { user } = useAuthContext();
   const [currentModel, setCurrentModel] = useState<{
     provider: string;
     name: string;
     id: string;
   } | null>(null);
   const loadCurrentModel = async () => {
+    try {
+      const data = await MinorService.fetchUserSubscription(user?.uid);
+      setCurrPlan(data.plan_type);
+    } catch (error) {
+      console.error("Error fetching user plan: ", error);
+    }
     const res = await ModelService.getCurrentModel();
 
     res &&
@@ -273,6 +286,7 @@ const MessageComposer = ({
       <div className="flex flex-row w-full items-center justify-end space-x-4">
         <ModelSelection
           currentModel={currentModel}
+          currPlan={currPlan}
           loadCurrentModel={loadCurrentModel}
           disabled={disabled}
         />
@@ -395,8 +409,9 @@ const truncateFilePath = (filePath: string) => {
 const ModelSelection: FC<{
   currentModel: { provider: string; name: string } | null;
   disabled: boolean;
+  currPlan: string | undefined;
   loadCurrentModel: () => {};
-}> = ({ currentModel, disabled, loadCurrentModel }) => {
+}> = ({ currentModel, disabled, currPlan, loadCurrentModel }) => {
   // ModelService.listModels();
   const _models: {
     [key: string]: {
@@ -447,6 +462,9 @@ const ModelSelection: FC<{
   const [selectedId, setSelectedId] = useState("");
 
   const handleModelSelect = (id: string) => {
+    if (currPlan == "free" && !free_models.includes(id)) {
+      return;
+    }
     return async () => {
       setSelectedId(id);
       await ModelService.setCurrentModel(id);
@@ -529,15 +547,15 @@ const ModelSelection: FC<{
                           return (
                             <CommandItem
                               key={model.id}
-                              className={`flex flex-row items-start ${selectedId === model.id ? "animate-pulse" : ""}`}
+                              className={`flex flex-row items-start ${selectedId === model.id ? "animate-pulse" : ""} ${!free_models.includes(model.id) && currPlan == "free" ? "opacity-50" : ""}`}
                               onSelect={handleModelSelect(model.id)}
                               value={model.name + " " + model.provider}
                             >
-                              <Avatar className="overflow-hidden rounded-full w-8 h-8">
+                              <Avatar className="overflow-hidden rounded-full w-10 h-10">
                                 <AvatarImage
                                   src={model.provider + ".svg"}
                                   alt={model.provider}
-                                  className="w-8 h-8"
+                                  className="w-10 h-10"
                                 />
                                 <AvatarFallback>
                                   {model.provider.charAt(0)}
@@ -549,8 +567,16 @@ const ModelSelection: FC<{
                                   {selectedId === model.id && (
                                     <Loader2Icon className="ml-2 h-3 w-3 animate-spin" />
                                   )}
+                                  {!free_models.includes(model.id) &&
+                                    currPlan == "free" && (
+                                      <div className="text-xs shadow-sm flex items-center rounded-sm ml-2 p-0.5 px-1 bg-yellow-300">
+                                        {" "}
+                                        <Crown className="h-3 w-3 mr-1" />
+                                        Upgrade Plan
+                                      </div>
+                                    )}
                                 </div>
-                                <div className="text-xs italic ml-2">
+                                <div className="text-xs italic ml-2 mt-1">
                                   {model.description}
                                 </div>
                               </div>

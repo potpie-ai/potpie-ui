@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Loader, X, ChevronRight, ChevronLeft, Send, ChevronUp } from "lucide-react";
+import {
+  Loader,
+  X,
+  ChevronRight,
+  ChevronLeft,
+  Send,
+  ChevronUp,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useDispatch } from "react-redux";
 import { setChat } from "@/lib/state/Reducers/chat";
@@ -12,8 +19,19 @@ import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { ChatPanel } from "./ChatPanel";
 import AgentReviewPanel from "./AgentReviewPanel";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import ParsingProgress, { ParsingStatusEnum } from "./ParsingProgress";
 import { CustomAgentsFormValues } from "@/lib/Schema";
@@ -22,7 +40,7 @@ import { CustomAgentsFormValues } from "@/lib/Schema";
 enum PanelLayoutState {
   SPLIT = "split",
   LEFT_ONLY = "left-only",
-  RIGHT_ONLY = "right-only"
+  RIGHT_ONLY = "right-only",
 }
 
 interface AgentCreationChatPanelProps {
@@ -39,7 +57,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
   const { user } = useAuthContext();
   const userId = user?.uid || "";
   const dispatch = useDispatch();
-  
+
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<any>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
@@ -47,10 +65,14 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
   const [branchSearchTerm, setBranchSearchTerm] = useState<string>("");
   const [repoOpen, setRepoOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
-  const [parsingStatus, setParsingStatus] = useState<ParsingStatusEnum | null>(null);
+  const [parsingStatus, setParsingStatus] = useState<ParsingStatusEnum | null>(
+    null
+  );
   const [parsedProjectId, setParsedProjectId] = useState<string>("");
   const [isEditing, setIsEditing] = useState(false);
-  const [layoutState, setLayoutState] = useState<PanelLayoutState>(PanelLayoutState.SPLIT);
+  const [layoutState, setLayoutState] = useState<PanelLayoutState>(
+    PanelLayoutState.SPLIT
+  );
   const leftPanelRef = useRef<HTMLDivElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
 
@@ -82,7 +104,13 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
 
   // Create conversation with the newly created agent
   const createConversationMutation = useMutation({
-    mutationFn: async ({ projectId, agentId }: { projectId: string, agentId: string }) => {
+    mutationFn: async ({
+      projectId,
+      agentId,
+    }: {
+      projectId: string;
+      agentId: string;
+    }) => {
       if (!userId) throw new Error("User ID is missing");
       if (!projectId) throw new Error("Project ID is required");
 
@@ -96,24 +124,26 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
     },
     onSuccess: (data) => {
       setConversationId(data.conversation_id);
-      
+
       // Set chat context in Redux
       if (selectedRepo && selectedBranch) {
-        const chatContext = { 
-          chatFlow: "NEW_CHAT", 
+        const chatContext = {
+          chatFlow: "NEW_CHAT",
           temporaryContext: {
-            branch: selectedBranch, 
+            branch: selectedBranch,
             repo: selectedRepo.full_name,
-            projectId: data.project_id
-          }, 
-          agentId: generatedAgent.id
+            projectId: data.project_id,
+          },
+          agentId: generatedAgent.id,
         };
         dispatch(setChat(chatContext));
       }
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to start a conversation with the agent.");
-    }
+      toast.error(
+        error.message || "Failed to start a conversation with the agent."
+      );
+    },
   });
 
   // Add mutation for updating agent
@@ -130,7 +160,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update agent");
-    }
+    },
   });
 
   // Function to parse repository
@@ -147,11 +177,11 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
         selectedRepo.full_name,
         selectedBranch
       );
-      
+
       if (!parseResponse) {
         throw new Error("Invalid response from parse API");
       }
-      
+
       const projectId = parseResponse.project_id;
       const initialStatus = parseResponse.status;
 
@@ -169,7 +199,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
         // Create conversation with the project ID we just received
         await createConversationMutation.mutateAsync({
           projectId: projectId,
-          agentId: generatedAgent.id
+          agentId: generatedAgent.id,
         });
         return;
       }
@@ -188,7 +218,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
               // Create conversation with the project ID we received earlier
               await createConversationMutation.mutateAsync({
                 projectId: projectId,
-                agentId: generatedAgent.id
+                agentId: generatedAgent.id,
               });
             } catch (error) {
               toast.error("Failed to create conversation");
@@ -246,7 +276,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
   return (
     <div className="flex h-full w-full relative overflow-hidden">
       {/* Left Panel Content */}
-      <div 
+      <div
         className={`h-full transition-all duration-300 ${getLeftPanelWidth()} border-r relative flex flex-col overflow-hidden`}
       >
         {layoutState !== PanelLayoutState.RIGHT_ONLY && (
@@ -255,14 +285,10 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
             <div className="flex items-center justify-between p-4 border-b flex-shrink-0 h-[60px]">
               <h2 className="text-lg font-semibold">Agent Configuration</h2>
             </div>
-            
             {/* Scrollable content area with flex-1 to take remaining space */}
-            <div 
-              ref={leftPanelRef}
-              className="flex-1 overflow-hidden" 
-            >
-              <AgentReviewPanel 
-                generatedAgent={generatedAgent} 
+            <div ref={leftPanelRef} className="flex-1 overflow-hidden">
+              <AgentReviewPanel
+                generatedAgent={generatedAgent}
                 onEdit={() => setIsEditing(true)}
                 onSave={(agent) => {
                   updateAgentMutation.mutate(agent);
@@ -273,10 +299,10 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
             </div>
           </div>
         )}
-        
+
         {/* Toggle button to show right panel when in left-only mode */}
         {layoutState === PanelLayoutState.LEFT_ONLY && (
-          <Button 
+          <Button
             variant="secondary"
             size="icon"
             onClick={toggleToSplit}
@@ -289,7 +315,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
       </div>
 
       {/* Right Panel Content */}
-      <div 
+      <div
         className={`h-full transition-all duration-300 ${getRightPanelWidth()} relative flex flex-col overflow-hidden`}
       >
         {layoutState !== PanelLayoutState.LEFT_ONLY && (
@@ -298,15 +324,12 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
             <div className="flex items-center justify-between p-4 border-b flex-shrink-0 h-[60px]">
               <h2 className="text-lg font-semibold">Test your agent</h2>
             </div>
-            
+
             {/* Scrollable content area with flex-1 to take remaining space */}
-            <div 
-              ref={rightPanelRef}
-              className="flex-1 overflow-hidden" 
-            >
+            <div ref={rightPanelRef} className="flex-1 overflow-hidden">
               {conversationId ? (
-                <ChatPanel 
-                  conversationId={conversationId} 
+                <ChatPanel
+                  conversationId={conversationId}
                   agentId={generatedAgent?.id}
                   agentName={generatedAgent?.name || "Agent"}
                   // Pass fixed footer height to ensure alignment
@@ -317,18 +340,33 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                   <div className="text-center mb-6">
                     <div className="flex justify-center mb-4">
                       <div className="p-3 bg-blue-50 rounded-full">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM5 19V5H19V19H5Z" fill="#4F86FF"/>
-                          <path d="M7 12H9V17H7V12ZM11 7H13V17H11V7ZM15 9H17V17H15V9Z" fill="#4F86FF"/>
+                        <svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM5 19V5H19V19H5Z"
+                            fill="#4F86FF"
+                          />
+                          <path
+                            d="M7 12H9V17H7V12ZM11 7H13V17H11V7ZM15 9H17V17H15V9Z"
+                            fill="#4F86FF"
+                          />
                         </svg>
                       </div>
                     </div>
-                    <h3 className="text-xl font-medium mb-2">Connect to a Repository</h3>
+                    <h3 className="text-xl font-medium mb-2">
+                      Connect to a Repository
+                    </h3>
                     <p className="text-muted-foreground">
-                      Select a repository and branch to test your agent with real code.
+                      Select a repository and branch to test your agent with
+                      real code.
                     </p>
                   </div>
-                  
+
                   <div className="space-y-6">
                     {/* Repository selection form... */}
                     <div className="space-y-2">
@@ -360,7 +398,9 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                               onValueChange={setRepoSearchTerm}
                             />
                             <CommandList className="custom-scrollbar max-h-60 overflow-y-auto">
-                              <CommandEmpty>No repositories found.</CommandEmpty>
+                              <CommandEmpty>
+                                No repositories found.
+                              </CommandEmpty>
                               <CommandGroup>
                                 {repositories?.map((repo: any) => (
                                   <CommandItem
@@ -413,18 +453,19 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                             <CommandList className="custom-scrollbar max-h-60 overflow-y-auto">
                               <CommandEmpty>No branches found.</CommandEmpty>
                               <CommandGroup>
-                                {Array.isArray(branches) && branches.map((branch: string) => (
-                                  <CommandItem
-                                    key={branch}
-                                    value={branch}
-                                    onSelect={() => {
-                                      setSelectedBranch(branch);
-                                      setBranchOpen(false);
-                                    }}
-                                  >
-                                    {branch}
-                                  </CommandItem>
-                                ))}
+                                {Array.isArray(branches) &&
+                                  branches.map((branch: string) => (
+                                    <CommandItem
+                                      key={branch}
+                                      value={branch}
+                                      onSelect={() => {
+                                        setSelectedBranch(branch);
+                                        setBranchOpen(false);
+                                      }}
+                                    >
+                                      {branch}
+                                    </CommandItem>
+                                  ))}
                               </CommandGroup>
                             </CommandList>
                           </Command>
@@ -434,8 +475,8 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
 
                     {/* Parsing Status */}
                     {parsingStatus && (
-                      <ParsingProgress 
-                        status={parsingStatus} 
+                      <ParsingProgress
+                        status={parsingStatus}
                         projectId={parsedProjectId}
                         onRetry={parseRepo}
                       />
@@ -444,13 +485,24 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                     {/* Parse Button */}
                     <Button
                       className="w-full"
-                      disabled={!selectedRepo || !selectedBranch || 
-                                [ParsingStatusEnum.SUBMITTED, ParsingStatusEnum.PROCESSING, 
-                                 ParsingStatusEnum.CLONED, ParsingStatusEnum.PARSED].includes(parsingStatus as ParsingStatusEnum)}
+                      disabled={
+                        !selectedRepo ||
+                        !selectedBranch ||
+                        [
+                          ParsingStatusEnum.SUBMITTED,
+                          ParsingStatusEnum.PROCESSING,
+                          ParsingStatusEnum.CLONED,
+                          ParsingStatusEnum.PARSED,
+                        ].includes(parsingStatus as ParsingStatusEnum)
+                      }
                       onClick={parseRepo}
                     >
-                      {[ParsingStatusEnum.SUBMITTED, ParsingStatusEnum.PROCESSING, 
-                        ParsingStatusEnum.CLONED, ParsingStatusEnum.PARSED].includes(parsingStatus as ParsingStatusEnum) ? (
+                      {[
+                        ParsingStatusEnum.SUBMITTED,
+                        ParsingStatusEnum.PROCESSING,
+                        ParsingStatusEnum.CLONED,
+                        ParsingStatusEnum.PARSED,
+                      ].includes(parsingStatus as ParsingStatusEnum) ? (
                         <>
                           <Loader className="mr-2 h-4 w-4 animate-spin" />
                           Parsing...
@@ -467,10 +519,10 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
             </div>
           </div>
         )}
-        
+
         {/* Toggle button to show left panel when in right-only mode */}
         {layoutState === PanelLayoutState.RIGHT_ONLY && (
-          <Button 
+          <Button
             variant="secondary"
             size="icon"
             onClick={toggleToSplit}
@@ -493,11 +545,11 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
           width: 8px;
           height: 8px;
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background: #d1d5db;
           border-radius: 4px;

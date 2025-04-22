@@ -163,7 +163,7 @@ const Onboarding = () => {
   };
 
   return (
-    <section className="flex items-center justify-between w-full h-screen relative">
+    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative">
       <div className="flex items-center justify-center w-1/2 h-full p-6">
         <div className="relative h-full w-full rounded-lg overflow-hidden">
           <Image

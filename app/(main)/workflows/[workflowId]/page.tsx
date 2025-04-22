@@ -230,10 +230,87 @@ const WorkflowPage = () => {
                         align: "start",
                       }}
                       className="w-full max-w-full"
+                      orientation="vertical"
                     >
                       {/* <CarouselPrevious />
                   <CarouselNext /> */}
                       <CarouselContent className="overflow-y-hidden">
+                        {currentTriggers.find(
+                          (trigger) => trigger.group === "linear"
+                        ) && (
+                          <CarouselItem className="">
+                            <Card className="w-full p-4">
+                              <CardHeader className="p-2 font-semibold">
+                                <span>
+                                  <Github className="h-5 w-5 inline mr-2" />
+                                  To trigger on{" "}
+                                  {currentTriggers
+                                    .filter(
+                                      (trigger) => trigger.group === "linear"
+                                    )
+                                    .map((trigger) => `${trigger.name}`)
+                                    .join(" or ")}
+                                  {":"}
+                                </span>
+                              </CardHeader>
+                              <CardContent>
+                                <ol className="list-decimal">
+                                  <li key={1}>
+                                    <h2 className=""> Copy the webhook URL</h2>
+                                  </li>
+                                  <li key={2}>
+                                    {" "}
+                                    <h2 className="inline">
+                                      {" "}
+                                      Add a new webhook by navigating to linear
+                                      settings{">"}api
+                                    </h2>
+                                  </li>
+                                  <li key={4}>
+                                    {" "}
+                                    <h2 className="">
+                                      {" "}
+                                      Add Payload URL you just copied
+                                    </h2>
+                                  </li>
+                                  <li key={5}>
+                                    {" "}
+                                    <h2 className="">
+                                      {" "}
+                                      Select{" "}
+                                      <span className="italic">
+                                        Issues
+                                      </span> in{" "}
+                                      <span className="font-semibold">
+                                        Data Change Events
+                                      </span>
+                                    </h2>
+                                  </li>
+                                  <li key={6}>
+                                    {" "}
+                                    <h2 className=""> Save the webhook</h2>
+                                  </li>
+                                </ol>
+                                <div className="mt-4">
+                                  <h3 className="text-sm text-gray-800 mt-4">
+                                    Make sure you integrate with linear in{" "}
+                                    <Link
+                                      href={`/key-management`}
+                                      className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-700"
+                                      target="_blank"
+                                    >
+                                      {" "}
+                                      key management{" "}
+                                    </Link>{" "}
+                                    if you want to setup your agents to update
+                                    linear issues. Make sure necessary tools are
+                                    selected in custom agents tool selection
+                                  </h3>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </CarouselItem>
+                        )}
                         {currentTriggers.find(
                           (trigger) => trigger.group === "github"
                         ) && (
@@ -244,6 +321,9 @@ const WorkflowPage = () => {
                                   <Github className="h-5 w-5 inline mr-2" />
                                   To trigger on{" "}
                                   {currentTriggers
+                                    .filter(
+                                      (trigger) => trigger.group === "github"
+                                    )
                                     .map((trigger) => `${trigger.name}`)
                                     .join(" or ")}
                                   {":"}

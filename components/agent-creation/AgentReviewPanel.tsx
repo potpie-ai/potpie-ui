@@ -265,7 +265,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex flex-col h-full relative">
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col p-8">
           <Tabs defaultValue="system" className="h-full flex flex-col">
             <TabsList className="w-full flex-none flex justify-center gap-1 mb-6 p-1 bg-background border rounded-lg">
               <TabsTrigger

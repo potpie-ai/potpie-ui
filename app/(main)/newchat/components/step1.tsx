@@ -69,6 +69,12 @@ interface Step1Props {
   setChatStep: (step: number) => void;
 }
 
+interface ParsedRepo {
+  id: string;
+  repo_name: string;
+  status: string;
+}
+
 const Step1: React.FC<Step1Props> = ({
   setProjectId,
   setChatStep,
@@ -187,6 +193,20 @@ const Step1: React.FC<Step1Props> = ({
     }
   };
 
+
+  const getParsedRepos = async () => {
+    try {
+      const parsedRepos = await axios.get(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/projects/list`
+      );
+      return parsedRepos.data.filter((repo: ParsedRepo) => repo.status === ParsingStatusEnum.READY);
+    } catch (error) {
+      console.error("Error getting parsed repos:", error);
+      toast.error("Error getting parsed repositories");
+      return [];
+    }
+  };
+
   const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery(
     {
       queryKey: ["user-repository"],
@@ -234,6 +254,11 @@ const Step1: React.FC<Step1Props> = ({
     enabled: !!repoName && repoName !== "",
   });
 
+  // Add this query to fetch parsed repos
+  const { data: parsedRepositories } = useQuery({
+    queryKey: ["parsed-repositories"],
+    queryFn: getParsedRepos,
+  });
 
   const {
     data: PublicRepo,
@@ -290,7 +315,7 @@ const Step1: React.FC<Step1Props> = ({
 
   const [showTooltip, setShowTooltip] = useState(false);
   const handleRepoSelect = (repo: string) => {
-     dispatch(setRepoName(repo));
+    dispatch(setRepoName(repo));
     setInputValue(repo);
     setLinkedRepoName(null);
   };
@@ -336,6 +361,14 @@ const Step1: React.FC<Step1Props> = ({
       return;
     }
     setIsPublicRepoDailog(value);
+  };
+
+  const handleParsedRepoSelect = (repo: ParsedRepo) => {
+    dispatch(setRepoName(repo.repo_name));
+    setRepoOpen(false);
+    setParsingStatus(ParsingStatusEnum.READY);
+    setProjectId(repo.id);
+    setChatStep(2);
   };
 
   return (
@@ -417,6 +450,28 @@ const Step1: React.FC<Step1Props> = ({
                       "No results found."
                     )}
                   </CommandEmpty>
+
+                  {/* Add parsed repositories section */}
+                  {process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && parsedRepositories?.length > 0 && (
+                    <CommandGroup heading="Previously Parsed">
+                      {parsedRepositories
+                        .filter((repo: ParsedRepo) => 
+                          !searchValue || repo.repo_name.toLowerCase().includes(searchValue.toLowerCase())
+                        )
+                        .map((repo: ParsedRepo) => (
+                          <CommandItem
+                            key={repo.id}
+                            value={`parsed-${repo.repo_name}-${repo.id}`}
+                            onSelect={() => handleParsedRepoSelect(repo)}
+                          >
+                            <div className="flex items-center">
+                              <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                              {repo.repo_name}
+                            </div>
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  )}
 
                   <CommandGroup>
                   {isValidLink && linkedRepoName && (

@@ -13,7 +13,7 @@ export enum ParsingStatusEnum {
 }
 
 interface ParsingProgressProps {
-  status: ParsingStatusEnum;
+  status: ParsingStatusEnum | null;
   projectId: string;
   onRetry: () => void;
 }
@@ -25,6 +25,8 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
 }) => {
   // Get status message based on current status
   const getStatusMessage = () => {
+    if (!status) return "Unknown status";
+    
     switch (status) {
       case ParsingStatusEnum.SUBMITTED:
         return "Repository parsing request submitted";
@@ -45,6 +47,8 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
 
   // Get status icon based on current status
   const getStatusIcon = () => {
+    if (!status) return null;
+    
     switch (status) {
       case ParsingStatusEnum.READY:
         return <CheckCircle className="h-5 w-5 text-green-500" />;
@@ -59,6 +63,8 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
         return null;
     }
   };
+
+  if (!status) return null;
 
   return (
     <div className="p-4 border rounded-md bg-muted/20">

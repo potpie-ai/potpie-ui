@@ -208,7 +208,22 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
       await BranchAndRepositoryService.pollParsingStatus(
         projectId,
         initialStatus,
-        (status) => setParsingStatus(status as ParsingStatusEnum),
+        (status) => {
+          console.log("Backend parsing status:", status);
+          if (status === "error") {
+            setParsingStatus(ParsingStatusEnum.ERROR);
+          } else if (
+            status === "submitted" ||
+            status === "processing" ||
+            status === "cloned" ||
+            status === "parsed" ||
+            status === "ready"
+          ) {
+            setParsingStatus(status as ParsingStatusEnum);
+          } else {
+            setParsingStatus(ParsingStatusEnum.PROCESSING);
+          }
+        },
         async () => {
           // Only create conversation when parsing is complete and we have a project ID
           if (generatedAgent?.id) {

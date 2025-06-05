@@ -50,13 +50,13 @@ const NewChat = () => {
         {steps.map((step, index) => (
           <div
             key={index}
-            className={`flex items-start mb-4 w-full relative ${chatStep === step.label ? "" : "pointer-events-none"}`}
+            className={`flex items-start mb-4 w-full relative ${chatStep === step.label ? "" : "pointer-events-none opacity-50"}`}
           >
             <div
               className={`absolute left-[15px] top-8 h-full border-l-2 border-gray-300 z-0 ${index === steps.length - 1 ? "hidden" : "top-10"}`}
             ></div>
             <div
-              className={`flex items-center justify-center w-8 h-8 rounded-full z-5 ${
+              className={`flex items-center justify-center w-8 h-8 rounded-full z-5 flex-shrink-0 ${
                 step.label === 3 && chatStep === 3 
                   ? "bg-green-100 text-green-600 border-2 border-green-500" 
                   : step.label <= chatStep 

@@ -41,6 +41,22 @@ jobs:
           curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
           sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
 
+      # Create Artifact Registry repository if it doesn't exist
+      - name: Create Artifact Registry repository if needed
+        run: |-
+          # Check if repository exists
+          if ! gcloud artifacts repositories describe $GAR_REPO --location=$GAR_ZONE --project=$PROJECT_ID >/dev/null 2>&1; then
+            echo "Repository $GAR_REPO does not exist. Creating..."
+            gcloud artifacts repositories create $GAR_REPO \
+              --repository-format=docker \
+              --location=$GAR_ZONE \
+              --project=$PROJECT_ID \
+              --description="Docker repository for potpie frontend"
+            echo "Repository $GAR_REPO created successfully"
+          else
+            echo "Repository $GAR_REPO already exists"
+          fi
+
       # Configure Docker to use the gcloud command-line tool as a credential
       # helper for authentication
       - name: Docker configuration

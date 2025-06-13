@@ -1,0 +1,99 @@
+name: Build and Deploy to Staging Artifact and Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}
+  IMAGE: potpie-ui-aws # updated image name
+  GAR_ZONE: us-central1 # artifact registry zone
+  GAR_REPO: potpie-frontend-aws # updated artifact registry repository
+  CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: false
+
+      # Setup gcloud CLI
+      - id: "auth"
+        uses: "google-github-actions/auth@v1"
+        with:
+          credentials_json: "${{ secrets.STAGE_GKE_SA_KEY }}"
+
+      # Install gke-gcloud-auth-plugin
+      - name: Install gke-gcloud-auth-plugin
+        run: |-
+          sudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates gnupg
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+          sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
+
+      # Configure Docker to use the gcloud command-line tool as a credential
+      # helper for authentication
+      - name: Docker configuration
+        run: |-
+          gcloud auth configure-docker $GAR_ZONE-docker.pkg.dev
+
+      # Extract variables and set them as environment variables
+      - name: Extract and set environment variables
+        run: |
+          echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_API_KEY }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_APP_ID }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SKIP_PRO_CHECK=${{ secrets.STAGE_NEXT_PUBLIC_SKIP_PRO_CHECK }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_GITHUB_APP_NAME=${{ secrets.STAGE_NEXT_PUBLIC_GITHUB_APP_NAME }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_KEY }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_HOST }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_POTPIE_PLUS_URL=${{ secrets.STAGE_NEXT_PUBLIC_POTPIE_PLUS_URL }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUBSCRIPTION_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_SUBSCRIPTION_BASE_URL }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_HMAC_SECRET_KEY=${{ secrets.STAGE_NEXT_PUBLIC_HMAC_SECRET_KEY }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FORMBRICKS_API_HOST=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_API_HOST }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_WORKFLOWS_URL=${{ secrets.STAGE_NEXT_PUBLIC_WORKFLOWS_URL }}" >> $GITHUB_ENV
+
+      # Build the Docker image
+      - name: Build
+        run: |-
+          SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+          IMAGE_TAG="$GAR_ZONE-docker.pkg.dev/$PROJECT_ID/$GAR_REPO/$IMAGE:$SHORT_SHA"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          docker build \
+            --tag "$IMAGE_TAG" \
+            --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="${{ env.NEXT_PUBLIC_FIREBASE_API_KEY }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ env.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ env.NEXT_PUBLIC_FIREBASE_APP_ID }}" \
+            --build-arg NEXT_PUBLIC_SKIP_PRO_CHECK="${{ env.NEXT_PUBLIC_SKIP_PRO_CHECK }}" \
+            --build-arg NEXT_PUBLIC_GITHUB_APP_NAME="${{ env.NEXT_PUBLIC_GITHUB_APP_NAME }}" \
+            --build-arg NEXT_PUBLIC_POSTHOG_KEY="${{ env.NEXT_PUBLIC_POSTHOG_KEY }}" \
+            --build-arg NEXT_PUBLIC_POSTHOG_HOST="${{ env.NEXT_PUBLIC_POSTHOG_HOST }}" \
+            --build-arg NEXT_PUBLIC_POTPIE_PLUS_URL="${{ env.NEXT_PUBLIC_POTPIE_PLUS_URL }}" \
+            --build-arg NEXT_PUBLIC_SUBSCRIPTION_BASE_URL="${{ env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL }}" \
+            --build-arg NEXT_PUBLIC_HMAC_SECRET_KEY="${{ env.NEXT_PUBLIC_HMAC_SECRET_KEY }}" \
+            --build-arg NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID="${{ env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" \
+            --build-arg NEXT_PUBLIC_FORMBRICKS_API_HOST="${{ env.NEXT_PUBLIC_FORMBRICKS_API_HOST }}" \
+            --build-arg NEXT_PUBLIC_WORKFLOWS_URL="${{ env.NEXT_PUBLIC_WORKFLOWS_URL }}" \
+            -f Dockerfile .
+
+      # Push the Docker image to Google Artifact Registry
+      - name: Publish
+        run: |-
+          docker push "$IMAGE_TAG"

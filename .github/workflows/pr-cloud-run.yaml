@@ -1,22 +1,24 @@
-name: Build, Deploy, and Cleanup Cloud Run on PR
+name: Build and Deploy to Staging Artifact and Cloud Run
 
 on:
-  pull_request:
-    types: [opened, synchronize, closed]
+  push:
+    branches:
+      - main
 
 env:
   PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}
+  IMAGE: potpie-ui-aws # updated image name
   GAR_ZONE: us-central1 # artifact registry zone
-  GAR_REPO: momentum-frontend # artifact registry repository
+  GAR_REPO: potpie-frontend-aws # updated artifact registry repository
+  CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
 
 jobs:
-  build-deploy-comment:
-    if: github.event.action != 'closed'
-    name: Build, Deploy, and Comment
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
     runs-on: ubuntu-latest
+    environment: staging
     permissions:
       contents: "read"
-      pull-requests: "write"
       id-token: "write"
 
     steps:
@@ -54,31 +56,25 @@ jobs:
           echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_APP_ID }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_BASE_URL }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_BASE_URL=http://a37389733380347c286892f22ecf52db-914104767.us-east-1.elb.amazonaws.com" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SKIP_PRO_CHECK=${{ secrets.STAGE_NEXT_PUBLIC_SKIP_PRO_CHECK }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GITHUB_APP_NAME=${{ secrets.STAGE_NEXT_PUBLIC_GITHUB_APP_NAME }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_CONVERSATION_BASE_URL }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=http://a37389733380347c286892f22ecf52db-914104767.us-east-1.elb.amazonaws.com" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_KEY }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_HOST }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POTPIE_PLUS_URL=${{ secrets.STAGE_NEXT_PUBLIC_POTPIE_PLUS_URL }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_APP_URL=${{ secrets.STAGE_NEXT_PUBLIC_APP_URL }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_APP_URL=https://2hphtgrwgm.us-east-1.awsapprunner.com" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUBSCRIPTION_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_SUBSCRIPTION_BASE_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_HMAC_SECRET_KEY=${{ secrets.STAGE_NEXT_PUBLIC_HMAC_SECRET_KEY }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FORMBRICKS_API_HOST=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_API_HOST }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_WORKFLOWS_URL=${{ secrets.STAGE_NEXT_PUBLIC_WORKFLOWS_URL }}" >> $GITHUB_ENV
 
-          # Convert branch name to valid service name (replace underscores with dashes and ensure it's lowercase)
-          BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
-          BRANCH_NAME=${BRANCH_NAME//_/-}
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
-          echo "SANITIZED_BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-
       # Build the Docker image
       - name: Build
         run: |-
-          BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
-          IMAGE_TAG="$GAR_ZONE-docker.pkg.dev/$PROJECT_ID/$GAR_REPO/nextjs-app-pr:$BRANCH_NAME-$GITHUB_SHA"
+          SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+          IMAGE_TAG="$GAR_ZONE-docker.pkg.dev/$PROJECT_ID/$GAR_REPO/$IMAGE:$SHORT_SHA"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
           docker build \
             --tag "$IMAGE_TAG" \
@@ -107,56 +103,3 @@ jobs:
       - name: Publish
         run: |-
           docker push "$IMAGE_TAG"
-
-      # Deploy to Cloud Run
-      - name: Deploy to Cloud Run
-        run: |-
-          gcloud run deploy "pr-${SANITIZED_BRANCH_NAME}" \
-            --image "$IMAGE_TAG" \
-            --region $GAR_ZONE \
-            --platform managed \
-            --allow-unauthenticated \
-            --port 3000 \
-            --memory 2Gi \
-            --cpu 2
-
-          SERVICE_URL=$(gcloud run services describe "pr-${SANITIZED_BRANCH_NAME}" --region $GAR_ZONE --format 'value(status.url)')
-          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
-
-      # Post a comment on the pull request with the Cloud Run URL
-      - name: Comment on PR
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const pr_number = context.issue.number;
-            const url = process.env.SERVICE_URL;
-            const comment = `Cloud Run service deployed: [${url}](${url})`;
-            github.rest.issues.createComment({
-              ...context.repo,
-              issue_number: pr_number,
-              body: comment
-            });
-
-  cleanup:
-    if: github.event.action == 'closed'
-    name: Cleanup Cloud Run Service
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: false
-
-      # Setup gcloud CLI
-      - id: "auth"
-        uses: "google-github-actions/auth@v1"
-        with:
-          credentials_json: "${{ secrets.STAGE_GKE_SA_KEY }}"
-
-      # Sanitize branch name and delete Cloud Run Service
-      - name: Delete Cloud Run Service
-        run: |-
-          BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
-          BRANCH_NAME=${BRANCH_NAME//_/-}
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
-          gcloud run services delete "pr-${BRANCH_NAME}" --region $GAR_ZONE --platform managed --quiet

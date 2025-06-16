@@ -107,7 +107,7 @@ jobs:
             --build-arg NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID="${{ env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" \
             --build-arg NEXT_PUBLIC_FORMBRICKS_API_HOST="${{ env.NEXT_PUBLIC_FORMBRICKS_API_HOST }}" \
             --build-arg NEXT_PUBLIC_WORKFLOWS_URL="${{ env.NEXT_PUBLIC_WORKFLOWS_URL }}" \
-            -f Dockerfile .
+            -f Dockerfile.Portable .
 
       # Push the Docker image to Google Artifact Registry
       - name: Publish

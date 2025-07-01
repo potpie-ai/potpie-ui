@@ -242,18 +242,20 @@ export default class ChatService {
   ): Promise<{ message: string; citations: string[]; tool_calls: any[] }> {
     try {
       const headers = await getHeaders();
-      const formData = new FormData();
-      
-      formData.append('node_ids', JSON.stringify(selectedNodes));
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/regenerate/`,
         {
           method: "POST",
-          headers: Object.fromEntries(
-            Object.entries(headers).filter(([_, value]) => value !== undefined)
-          ) as HeadersInit,
-          body: formData,
+          headers: {
+            ...Object.fromEntries(
+              Object.entries(headers).filter(([_, value]) => value !== undefined)
+            ),
+            'Content-Type': 'application/json',
+          } as HeadersInit,
+          body: JSON.stringify({
+            node_ids: selectedNodes
+          }),
         }
       );
 

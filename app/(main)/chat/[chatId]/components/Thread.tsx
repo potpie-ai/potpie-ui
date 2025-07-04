@@ -355,6 +355,12 @@ const UserMessageWithURL = (userPhotoURL: string) => {
 };
 
 const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
+  const message = useMessage();
+  
+  // Separate text and image content
+  const textContent = message.content.find(c => c.type === "text");
+  const imageContent = message.content.filter(c => c.type === "image");
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -364,7 +370,30 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          <MessagePrimitive.Content />
+          {/* Render image previews first if they exist */}
+          {imageContent.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {imageContent.map((img: any, index: number) => (
+                <div key={index} className="relative">
+                  <img
+                    src={img.image}
+                    alt={`Uploaded ${index + 1}`}
+                    className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Render text content */}
+          {textContent && (
+            <div className="break-words">{(textContent as any).text}</div>
+          )}
+          
+          {/* Fallback: if no custom content, use original */}
+          {imageContent.length === 0 && !textContent && (
+            <MessagePrimitive.Content />
+          )}
         </div>
       </MessagePrimitive.Root>
       <Avatar className="mr-4 rounded-md bg-transparent">

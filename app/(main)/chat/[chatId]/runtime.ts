@@ -14,15 +14,35 @@ const convertMessage = (message: ThreadMessageLike) => {
 };
 
 const convertToThreadMessage = (message: any): ThreadMessageLike => {
+  const content: any[] = [
+    {
+      type: "text",
+      text: message.text,
+    },
+  ];
+
+  // Process attachments if they exist
+  if (message.has_attachments && message.attachments && message.attachments.length > 0) {
+    const imageAttachments = message.attachments.filter(
+      (attachment: any) => attachment.attachment_type === "image"
+    );
+    
+    // Add image content for each image attachment
+    imageAttachments.forEach((attachment: any) => {
+      // Use the signed download URL provided by the API
+      if (attachment.download_url) {
+        content.push({
+          type: "image",
+          image: attachment.download_url,
+        });
+      }
+    });
+  }
+
   return {
     id: message.id,
     role: message.sender == "user" ? "user" : "assistant",
-    content: [
-      {
-        type: "text",
-        text: message.text,
-      },
-    ],
+    content,
   };
 };
 
@@ -127,6 +147,7 @@ export function PotpieRuntime(chatId: string) {
       chatId,
       message,
       [], // @ts-ignore
+      [], // No images for this function
       (message: string, tool_calls: any[]) => {
         setIsRunning(false);
         setExtras({ loading: false, streaming: true, error: false });
@@ -144,12 +165,28 @@ export function PotpieRuntime(chatId: string) {
   };
 
   const onNew = async (message: AppendMessage) => {
-    if (message.content.length !== 1 || message.content[0]?.type !== "text")
-      throw new Error("Only text content is supported");
+    // Extract text content
+    const textContent = message.content.find(c => c.type === "text");
+    if (!textContent) {
+      throw new Error("Message must contain text content");
+    }
 
+    // Get images from run config
+    const images: File[] = (message.runConfig?.custom?.images as File[]) || [];
+    
+    // Create image content for display purposes
+    const imageContent = images.map(image => ({
+      type: "image" as const,
+      image: URL.createObjectURL(image)
+    }));
+
+    // Create user message with both text and images
     const userMessage: ThreadMessageLike = {
       role: "user",
-      content: [{ type: "text", text: message.content[0].text }],
+      content: [
+        { type: "text", text: textContent.text },
+        ...imageContent
+      ],
     };
     setIsRunning(true);
     setMessages((currentMessages) => [...currentMessages, userMessage]);
@@ -160,8 +197,9 @@ export function PotpieRuntime(chatId: string) {
     try {
       await ChatService.streamMessage(
         chatId,
-        message.content[0].text,
-        (message.runConfig?.custom?.selectedNodes as any[]) || [], // @ts-ignore
+        textContent.text,
+        (message.runConfig?.custom?.selectedNodes as any[]) || [],
+        images, // Pass images to the service
         (message: string, tool_calls: any[]) => {
           setIsRunning(false);
           setExtras({ loading: false, streaming: true, error: false });

@@ -31,6 +31,8 @@ import Link from "next/link";
 import posthog from "posthog-js";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { isFirebaseEnabled } from "@/lib/utils";
 
 export function NavUser({
   user,
@@ -43,6 +45,8 @@ export function NavUser({
   };
 }) {
   const router = useRouter();
+  const { setUser } = useAuthContext();
+  const isFirebaseActive = isFirebaseEnabled();
   const [isSendingVerification, setIsSendingVerification] = useState(false);
 
   const handleOpenPlainChat = () => {
@@ -172,7 +176,6 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuGroup>
-
               <DropdownMenuItem
                 className="hover:bg-stone-100 cursor-pointer"
                 onClick={() => router.push("/settings")}
@@ -203,8 +206,15 @@ export function NavUser({
               className="hover:bg-stone-100 cursor-pointer"
               onClick={() => {
                 posthog.reset();
-                signOut(auth);
-                router.push("/sign-in");
+                if (isFirebaseActive) {
+                  signOut(auth);
+                } else {
+                  localStorage.removeItem("user");
+                  localStorage.removeItem("token");
+                  setUser(null);
+                }
+                router.replace("/sign-in");
+                router.refresh && router.refresh();
               }}
             >
               <Image

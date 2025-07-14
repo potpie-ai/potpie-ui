@@ -29,6 +29,8 @@ import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import posthog from "posthog-js";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { isFirebaseEnabled } from "@/lib/utils";
 
 export function NavUser({
   user,
@@ -40,6 +42,8 @@ export function NavUser({
   };
 }) {
   const router = useRouter();
+  const { setUser } = useAuthContext();
+  const isFirebaseActive = isFirebaseEnabled();
 
   return (
     <SidebarMenu>
@@ -81,7 +85,7 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="hover:bg-accent cursor-pointer"
                 onClick={() => router.push("/key-management")}
               >
@@ -111,8 +115,15 @@ export function NavUser({
               className="hover:bg-accent cursor-pointer"
               onClick={() => {
                 posthog.reset();
-                signOut(auth);
-                router.push("/sign-in");
+                if (isFirebaseActive) {
+                  signOut(auth);
+                } else {
+                  localStorage.removeItem("user");
+                  localStorage.removeItem("token");
+                  setUser(null);
+                }
+                router.replace("/sign-in");
+                router.refresh && router.refresh();
               }}
             >
               <LogOut />

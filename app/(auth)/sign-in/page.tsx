@@ -5,7 +5,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   GithubAuthProvider,
-  signInWithEmailAndPassword,
+  // signInWithEmailAndPassword, // Removed
   signInWithPopup,
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
@@ -43,7 +43,9 @@ export default function Signin() {
 
   const formSchema = z.object({
     email: z.string().email(),
-    password: z.string().min(6, { message: "Password is required" }),
+    password: z
+      .string()
+      .min(6, { message: "Password must be at least 6 characters" }),
   });
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -66,32 +68,23 @@ export default function Signin() {
   };
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    signInWithEmailAndPassword(auth, data.email, data.password)
-      .then(async (userCredential) => {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-        const user = userCredential.user;
-        const headers = await getHeaders();
-        const userSignup = await axios
-          .post(`${baseUrl}/api/v1/signup`, user, { headers: headers })
-          .then((res) => {
-            if (source === "vscode") {
-              console.log("res.data", res.data);
-              handleExternalRedirect(res.data.token);
-            } else if (finalAgent_id) {
-              handleExternalRedirect("");
-            }
-            return res.data;
-          })
-          .catch((e) => {
-            toast.error("Signup call unsuccessful");
-          });
-        toast.success("Logged in successfully as " + user.displayName);
-      })
-      .catch((error) => {
-        const errorCode = error.code;
-        const errorMessage = error.message;
-        toast.error(errorMessage);
+    try {
+      const response = await axios.post("/api/login", {
+        email: data.email,
+        password: data.password,
       });
+      // Save token, redirect, etc.
+      const { token, user } = response.data;
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      toast.success("Logged in successfully!");
+      // Redirect as needed
+      window.location.href = "/newchat";
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || "Login failed. Please try again.";
+      toast.error(errorMessage);
+    }
   };
 
   const onGithub = async () => {
@@ -195,31 +188,77 @@ export default function Signin() {
           />
           <h1 className="text-7xl font-bold text-gray-700">potpie</h1>
         </div>
-        <div className="flex items-center justify-center flex-col text-border">
-          {/* <h3 className="text-2xl font-bold text-black">Get Started!</h3> */}
-          {/* <div className="flex items-start justify-start flex-col mt-10 gap-4">
-          <p className="flex items-center justify-center text-start gap-4">
-            <LucideCheck
-              size={20}
-              className="bg-primary rounded-full p-[0.5px] text-white"
-            />
-            Select the repositories you want to build your AI agents on.
-          </p>
-          <p className="flex items-center justify-center text-start gap-4">
-            <LucideCheck
-              size={20}
-              className="bg-primary rounded-full p-[0.5px] text-white"
-            />
-            You can choose to add more repositories later on from the
-            dashboard
-          </p>
-        </div> */}
+        <div className="flex items-center justify-center flex-col text-border w-full max-w-xs">
+          {/* Email/Password Login Form */}
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex flex-col gap-4 w-full bg-white p-6 rounded-lg shadow-md mb-6"
+          >
+            <h3 className="text-xl font-bold text-black mb-2 text-center">
+              Sign in to your account
+            </h3>
+            <div className="flex flex-col gap-2">
+              <label
+                htmlFor="email"
+                className="text-sm font-medium text-gray-700"
+              >
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                {...form.register("email")}
+                className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                autoComplete="email"
+              />
+              {form.formState.errors.email && (
+                <span className="text-xs text-red-500">
+                  {form.formState.errors.email.message as string}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <label
+                htmlFor="password"
+                className="text-sm font-medium text-gray-700"
+              >
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                {...form.register("password")}
+                className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary text-black"
+                autoComplete="current-password"
+              />
+              {form.formState.errors.password && (
+                <span className="text-xs text-red-500">
+                  {form.formState.errors.password.message as string}
+                </span>
+              )}
+            </div>
+            <Button
+              type="submit"
+              className="w-full mt-2 bg-primary text-white hover:bg-primary/90"
+            >
+              Sign in
+            </Button>
+          </form>
+          {/* Divider */}
+          <div className="flex items-center w-full max-w-xs mb-6">
+            <div className="flex-grow border-t border-gray-300" />
+            <span className="mx-2 text-gray-400 text-xs">or</span>
+            <div className="flex-grow border-t border-gray-300" />
+          </div>
+          {/* GitHub Signin Button */}
           <Button
             onClick={() => onGithub()}
-            className="mt-14 gap-2 w-60 hover:bg-black bg-gray-800"
+            className="gap-2 w-60 hover:bg-black bg-gray-800"
           >
             <LucideGithub className=" rounded-full border border-white p-1" />
-            Signin with GitHub
+            Sign in with GitHub
           </Button>
           <div className="mt-4 text-center text-sm text-black">
             Don&apos;t have an account?{" "}

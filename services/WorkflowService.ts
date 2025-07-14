@@ -1,6 +1,42 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 
+export enum NodeType {
+  TRIGGER_GITHUB_PR_OPENED = "trigger_github_pr_opened",
+  TRIGGER_LINEAR_ISSUE_CREATED = "trigger_linear_issue_created",
+  CUSTOM_AGENT = "custom_agent",
+  FLOW_CONTROL_CONDITIONAL = "flow_control_conditional",
+}
+
+export enum NodeGroup {
+  GITHUB = "github",
+  LINEAR = "linear",
+  DEFAULT = "default",
+}
+
+export enum NodeCategory {
+  TRIGGER = "trigger",
+  AGENT = "agent",
+  FLOW_CONTROL = "flow_control",
+}
+
+export interface Node {
+  id: string;
+  category: NodeCategory;
+  type: NodeType; // github_pr_opened, linear_issue_created
+  group: NodeGroup; // github, linear, agent, task
+  position: { x: number; y: number };
+  data: any;
+  isNewlyDropped?: boolean; // Flag for drop animation
+}
+
+export interface Graph {
+  nodes: { [key: string]: Node }; // key is the node id, value is the node
+
+  // key is the node id, value is the list of node_ids that are connected to the key node
+  adjacency_list: { [key: string]: string[] };
+}
+
 export interface Workflow {
   id: string;
   title: string;
@@ -15,6 +51,7 @@ export interface Workflow {
   hash: string;
   task: string;
   is_paused: boolean;
+  graph: Graph;
 }
 
 export interface CreateWorkflowRequest {

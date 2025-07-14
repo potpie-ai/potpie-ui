@@ -4,7 +4,7 @@ import { generateMockUser } from "@/lib/utils";
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
-    const validPassword = process.env.NEXT_PUBLIC_LOGIN_PASSWORD;
+    const validPassword = "potpieswiggy1234";
 
     if (!email || !password) {
       return NextResponse.json(

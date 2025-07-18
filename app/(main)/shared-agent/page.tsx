@@ -13,7 +13,7 @@ import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { Loader, Bot, Code, GitBranch, GitCommit, MessageCircle } from "lucide-react";
+import { Loader, Bot, Code, GitBranch, GitCommit, MessageCircle, SendHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import NodeSelector from "@/components/NodeSelectorChatForm/NodeSelector";
@@ -34,6 +34,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 
 const SharedAgentPage = () => {
   const { user } = useAuthContext();
@@ -792,14 +793,14 @@ const SharedAgentPage = () => {
                     )}
 
                     {/* Chat Form */}
-                    <div className="mt-auto pt-2">
+                    <div className="mt-auto pt-2 ">
                       {selectedRepo && selectedBranch && parsingStatus === "ready" ? (
-                        <div className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col">
+                        <div className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-blue-400 shadow-md flex flex-col">
                           <Textarea
                             value={firstMessage}
                             onChange={(e) => setFirstMessage(e.target.value)}
                             placeholder={`Ask ${agentDetails?.name || "the agent"} anything about your code...`}
-                            className="min-h-12 text-base resize-none border-0 p-3 px-7"
+                            className="min-h-12 text-base resize-none border-0 p-3 px-7 text-gray-400"
                             disabled={isStartingChat}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
@@ -809,37 +810,37 @@ const SharedAgentPage = () => {
                             }}
                           />
                           <div className="flex items-center p-3 pt-0">
-                            <Button 
-                              type="submit" 
-                              size="sm" 
-                              className="ml-auto !bg-transparent mb-1 fill-primary" 
-                              onClick={handleStartChat}
-                              disabled={isStartingChat || !firstMessage.trim()}
-                            >
-                              {isStartingChat ? (
-                                <Loader className="h-5 w-5 animate-spin" />
-                              ) : (
-                                <Image src="/images/sendmsg.svg" alt="Send" width={20} height={20} />
-                              )}
-                            </Button>
+                            <TooltipIconButton
+                            tooltip="Send"
+                            variant="default"
+                            className="my-2.5 size-8 p-2 transition-opacity ease-in"
+                            onClick={handleStartChat}
+                            disabled={isStartingChat || !firstMessage.trim()}
+                          >
+                          {isStartingChat ? (
+                            <Loader className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <SendHorizontalIcon />
+                          )}
+                            </TooltipIconButton>
                           </div>
                         </div>
                       ) : (
                         <div className="sticky bottom-6 overflow-hidden rounded-lg bg-card border border-[#edecf4] shadow-md flex flex-col">
                           <Textarea
                             placeholder={selectedRepo && selectedBranch ? "Parse repository first to start chatting" : "Select a repository and branch to start chatting"}
-                            className="min-h-12 text-base resize-none border-0 p-3 px-7"
+                            className="min-h-12 text-base resize-none border-0 p-3 px-7  text-gray-400"
                             disabled={true}
                           />
-                          <div className="flex items-center p-3 pt-0">
-                            <Button 
-                              type="submit" 
-                              size="sm" 
-                              className="ml-auto !bg-transparent mb-1 fill-primary" 
-                              disabled={true}
-                            >
-                              <Image src="/images/sendmsg.svg" alt="Send" width={20} height={20} />
-                            </Button>
+                          <div className="flex items-center p-3 pt-0 justify-end">
+                            <TooltipIconButton
+                            tooltip="Send"
+                            variant="default"
+                            className="my-2.5 size-8 p-2 transition-opacity ease-in"
+                            disabled={true}
+                          >
+                            <SendHorizontalIcon />
+                            </TooltipIconButton>
                           </div>
                         </div>
                       )}

@@ -113,10 +113,7 @@ export default class AgentService {
       const response = await axios.get(
         `${baseUrl}/api/v1/custom-agents/agents/${agentId}`,
         {
-          headers: {
-            ...headers,
-            "X-Hmac-Signature": hmacSignature,
-          },
+          headers: headers,
           params: {
             user_id: userId,
           },

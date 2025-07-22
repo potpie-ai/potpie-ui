@@ -1,9 +1,10 @@
 import { FC, useState, useMemo } from "react";
-import { NodeType, NodeCategory } from "@/services/WorkflowService";
+// NodeType and NodeCategory are now just string types
+// import { NodeType, NodeCategory } from "@/services/WorkflowService";
 import { getNodeColors } from "../nodes/color_utils";
 import { availableNodes } from "../nodes";
 import type { NodeInfo } from "../nodes";
-import { Search, GripVertical } from "lucide-react";
+import { Search, GripVertical, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +18,9 @@ import { DragPreview } from "./DragPreview";
  */
 interface NodePaletteProps {
   /** Callback when node dragging starts */
-  onNodeDragStart?: (nodeType: NodeType) => void;
+  onNodeDragStart?: (nodeType: string) => void;
+  /** Callback when the palette should be closed */
+  onClose?: () => void;
 }
 
 /**
@@ -46,16 +49,39 @@ const DraggableNode: FC<DraggableNodeProps> = ({
   IconComponent,
   onDragStart,
 }) => {
+  // Runtime check for node type
+  const validNodeTypes: Set<string> = new Set([
+    "trigger_github_pr_opened",
+    "trigger_github_pr_closed",
+    "trigger_github_pr_reopened",
+    "trigger_github_pr_merged",
+    "trigger_github_issue_opened",
+    "trigger_linear_issue_created",
+    "custom_agent",
+    "flow_control_conditional",
+    "flow_control_collect",
+    "flow_control_selector",
+    "manual_step_approval",
+    "manual_step_input",
+  ]);
+  if (!validNodeTypes.has(nodeInfo.type)) {
+    throw new Error(`Invalid node type in palette: ${nodeInfo.type}`);
+  }
   const { isDragging, drag } = useNodeDrag({
-    type: nodeInfo.type,
-    category: nodeInfo.category,
-    group: nodeInfo.group,
+    type: nodeInfo.type as import("@/services/WorkflowService").NodeType,
+    category:
+      nodeInfo.category as import("@/services/WorkflowService").NodeCategory,
+    group: nodeInfo.group as import("@/services/WorkflowService").NodeGroup,
     name: nodeInfo.name,
     description: nodeInfo.description,
     icon: nodeInfo.icon,
   });
 
-  const handleDragStart = () => {
+  const handleDragStart = (e?: React.MouseEvent) => {
+    if (e) {
+      // @ts-ignore
+      window.__lastDragEvent = e.nativeEvent;
+    }
     onDragStart(nodeInfo);
   };
 
@@ -101,7 +127,7 @@ const DraggableNode: FC<DraggableNodeProps> = ({
             zIndex: 1000,
           }}
         >
-          <DragPreview nodeInfo={nodeInfo} />
+          <DragPreview nodeInfo={nodeInfo as any} />
         </div>
       )}
     </div>
@@ -121,11 +147,14 @@ const DraggableNode: FC<DraggableNodeProps> = ({
  * @param props - Component props
  * @returns JSX element
  */
-export const NodePalette: FC<NodePaletteProps> = ({ onNodeDragStart }) => {
+export const NodePalette: FC<NodePaletteProps> = ({
+  onNodeDragStart,
+  onClose,
+}) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<
-    NodeCategory | "ALL"
-  >("ALL");
+  const [selectedCategory, setSelectedCategory] = useState<string | "ALL">(
+    "ALL"
+  );
 
   const handleNodeDragStart = (nodeInfo: NodeInfo) => {
     if (onNodeDragStart) {
@@ -145,6 +174,7 @@ export const NodePalette: FC<NodePaletteProps> = ({ onNodeDragStart }) => {
     });
   }, [searchQuery, selectedCategory]);
 
+  // Group nodes by category (string)
   const groupedNodes = filteredNodes.reduce(
     (acc, node) => {
       if (!acc[node.category]) {
@@ -153,7 +183,7 @@ export const NodePalette: FC<NodePaletteProps> = ({ onNodeDragStart }) => {
       acc[node.category].push(node);
       return acc;
     },
-    {} as Record<NodeCategory, NodeInfo[]>
+    {} as Record<string, NodeInfo[]>
   );
 
   const clearFilters = () => {
@@ -162,6 +192,11 @@ export const NodePalette: FC<NodePaletteProps> = ({ onNodeDragStart }) => {
   };
 
   const hasActiveFilters = searchQuery || selectedCategory !== "ALL";
+
+  // Get unique categories from availableNodes
+  const uniqueCategories = Array.from(
+    new Set(availableNodes.map((node) => node.category))
+  );
 
   return (
     <div className="h-full flex flex-col">
@@ -221,7 +256,7 @@ export const NodePalette: FC<NodePaletteProps> = ({ onNodeDragStart }) => {
               >
                 All
               </Badge>
-              {Object.values(NodeCategory).map((category) => (
+              {uniqueCategories.map((category) => (
                 <Badge
                   key={category}
                   variant={
@@ -273,9 +308,9 @@ export const NodePalette: FC<NodePaletteProps> = ({ onNodeDragStart }) => {
                 <h4 className="text-sm font-medium text-gray-700 mb-3 capitalize">
                   {category.replace("_", " ")}s
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   {nodes.map((nodeInfo) => {
-                    const colors = getNodeColors(nodeInfo.group);
+                    const colors = getNodeColors(nodeInfo.group as any);
                     const IconComponent = nodeInfo.icon;
 
                     return (

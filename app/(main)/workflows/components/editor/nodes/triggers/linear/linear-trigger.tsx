@@ -1,9 +1,4 @@
-import {
-  Node,
-  NodeCategory,
-  NodeType,
-  NodeGroup,
-} from "@/services/WorkflowService";
+import { WorkflowNode } from "@/services/WorkflowService";
 import { getNodeColors } from "../../color_utils";
 import { AlertTriangle, CircleDot, MessageSquare } from "lucide-react";
 import { SourceHandle } from "../../../handles";
@@ -23,13 +18,18 @@ import { Switch } from "@/components/ui/switch";
 interface LinearTriggerConfigProps {
   config: any;
   onConfigChange: (config: any) => void;
+  readOnly?: boolean;
+  workflow?: any;
 }
 
 export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
   config,
   onConfigChange,
+  readOnly = false,
+  workflow,
 }) => {
   const handleChange = (key: string, value: any) => {
+    if (readOnly) return;
     onConfigChange({ ...config, [key]: value });
   };
 
@@ -42,6 +42,7 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
           value={config.name || ""}
           onChange={(e) => handleChange("name", e.target.value)}
           placeholder="Enter trigger name"
+          disabled={readOnly}
         />
       </div>
 
@@ -53,6 +54,7 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
           onChange={(e) => handleChange("description", e.target.value)}
           placeholder="Enter trigger description"
           rows={3}
+          disabled={readOnly}
         />
       </div>
 
@@ -63,6 +65,7 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
           value={config.team || ""}
           onChange={(e) => handleChange("team", e.target.value)}
           placeholder="Enter team name"
+          disabled={readOnly}
         />
       </div>
 
@@ -71,6 +74,7 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
         <Select
           value={config.eventType || "issue_created"}
           onValueChange={(value) => handleChange("eventType", value)}
+          disabled={readOnly}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select event type" />
@@ -90,6 +94,7 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
         <Select
           value={config.priority || "all"}
           onValueChange={(value) => handleChange("priority", value)}
+          disabled={readOnly}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select priority" />
@@ -112,6 +117,7 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
           onCheckedChange={(checked) =>
             handleChange("includeSubtasks", checked)
           }
+          disabled={readOnly}
         />
         <Label htmlFor="include-subtasks">Include Subtasks</Label>
       </div>
@@ -121,6 +127,7 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
           id="auto-assign"
           checked={config.autoAssign || false}
           onCheckedChange={(checked) => handleChange("autoAssign", checked)}
+          disabled={readOnly}
         />
         <Label htmlFor="auto-assign">Auto-assign to creator</Label>
       </div>
@@ -130,16 +137,16 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
 
 // Node metadata for the palette
 export const linearTriggerNodeMetadata = {
-  type: NodeType.TRIGGER_LINEAR_ISSUE_CREATED,
-  category: NodeCategory.TRIGGER,
-  group: NodeGroup.LINEAR,
+  type: "trigger_linear_issue_created",
+  category: "trigger",
+  group: "linear",
   name: "Linear Issue Created",
   description: "Triggers when an issue is created in Linear",
   icon: MessageSquare,
   configComponent: LinearTriggerConfigComponent,
 };
 
-export const LinearTriggerNode = ({ data }: { data: Node }) => {
+export const LinearTriggerNode = ({ data }: { data: WorkflowNode }) => {
   const colors = getNodeColors(data.group);
   return (
     <div className="w-full">

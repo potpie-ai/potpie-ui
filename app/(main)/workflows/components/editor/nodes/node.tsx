@@ -1,26 +1,25 @@
-import { Node, NodeCategory, NodeType } from "@/services/WorkflowService";
+import { WorkflowNode } from "@/services/WorkflowService";
 import { TriggerNode } from "./triggers/trigger";
-import { GitHubTriggerNode } from "./triggers/github/github-trigger";
 import { LinearTriggerNode } from "./triggers/linear/linear-trigger";
 import { AgentNode } from "./agents/agent";
-import { FlowControlNode } from "./flow-controls/flow-control";
+import { IfConditionNode } from "./flow-controls/if-condition";
 
-export const SwitchComponent = ({ data }: { data: Node }) => {
+export const SwitchComponent = ({ data }: { data: WorkflowNode }) => {
   switch (data.category) {
-    case NodeCategory.TRIGGER:
+    case "trigger":
       // Handle different trigger types
       switch (data.type) {
-        case NodeType.TRIGGER_GITHUB_PR_OPENED:
-          return <GitHubTriggerNode data={data} />;
-        case NodeType.TRIGGER_LINEAR_ISSUE_CREATED:
+        case "trigger_github_pr_opened":
+          return <TriggerNode data={data} />;
+        case "trigger_linear_issue_created":
           return <LinearTriggerNode data={data} />;
         default:
           return <TriggerNode data={data} />;
       }
-    case NodeCategory.AGENT:
+    case "agent":
       return <AgentNode data={data} />;
-    case NodeCategory.FLOW_CONTROL:
-      return <FlowControlNode data={data} />;
+    case "flow_control":
+      return <IfConditionNode data={data} />;
   }
 };
 
@@ -28,7 +27,7 @@ export const NodeComponent = ({
   data,
   selected,
 }: {
-  data: Node;
+  data: WorkflowNode & { isNewlyDropped?: boolean };
   selected?: boolean;
 }) => {
   return (

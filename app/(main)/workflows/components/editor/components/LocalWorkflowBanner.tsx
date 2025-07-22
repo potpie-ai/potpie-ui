@@ -1,10 +1,10 @@
-import { FC } from "react";
+import { FC, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 interface LocalWorkflowBannerProps {
   show: boolean;
   onLoadLocalWorkflow: () => void;
-  onDiscardLocalWorkflow: () => void;
+  onDiscardLocalWorkflow: () => Promise<void>;
 }
 
 export const LocalWorkflowBanner: FC<LocalWorkflowBannerProps> = ({
@@ -12,7 +12,20 @@ export const LocalWorkflowBanner: FC<LocalWorkflowBannerProps> = ({
   onLoadLocalWorkflow,
   onDiscardLocalWorkflow,
 }) => {
+  const [isLoading, setIsLoading] = useState(false);
+
   if (!show) return null;
+
+  const handleDiscardLocalWorkflow = async () => {
+    setIsLoading(true);
+    try {
+      await onDiscardLocalWorkflow();
+    } catch (error) {
+      console.error("Error loading last saved copy:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-0">
@@ -34,7 +47,7 @@ export const LocalWorkflowBanner: FC<LocalWorkflowBannerProps> = ({
           <div className="ml-3">
             <p className="text-sm text-blue-700">
               You have unsaved changes from a previous session. Would you like
-              to continue editing or start fresh?
+              to continue editing or load the latest version from the server?
             </p>
           </div>
         </div>
@@ -42,10 +55,11 @@ export const LocalWorkflowBanner: FC<LocalWorkflowBannerProps> = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={onDiscardLocalWorkflow}
+            onClick={handleDiscardLocalWorkflow}
+            disabled={isLoading}
             className="text-blue-700 border-blue-300 hover:bg-blue-100"
           >
-            Load Last Saved Copy
+            {isLoading ? "Loading..." : "Load Last Saved Copy"}
           </Button>
           <Button
             variant="default"

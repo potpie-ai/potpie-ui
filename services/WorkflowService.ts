@@ -1,77 +1,91 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 
-export enum NodeType {
-  TRIGGER_GITHUB_PR_OPENED = "trigger_github_pr_opened",
-  TRIGGER_LINEAR_ISSUE_CREATED = "trigger_linear_issue_created",
-  CUSTOM_AGENT = "custom_agent",
-  FLOW_CONTROL_CONDITIONAL = "flow_control_conditional",
+// --- NEW TYPES BASED ON BACKEND DOCS ---
+export interface Position {
+  x: number;
+  y: number;
 }
 
-export enum NodeGroup {
-  GITHUB = "github",
-  LINEAR = "linear",
-  DEFAULT = "default",
-}
+export type NodeType =
+  | "trigger_github_pr_opened"
+  | "trigger_github_pr_closed"
+  | "trigger_github_pr_reopened"
+  | "trigger_github_pr_merged"
+  | "trigger_github_issue_opened"
+  | "trigger_linear_issue_created"
+  | "custom_agent"
+  | "flow_control_conditional"
+  | "flow_control_collect"
+  | "flow_control_selector"
+  | "manual_step_approval"
+  | "manual_step_input";
 
-export enum NodeCategory {
-  TRIGGER = "trigger",
-  AGENT = "agent",
-  FLOW_CONTROL = "flow_control",
-}
+export type NodeGroup = "github" | "linear" | "default";
+export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step";
 
-export interface Node {
+export interface WorkflowNode {
   id: string;
+  type: NodeType;
+  group: NodeGroup;
   category: NodeCategory;
-  type: NodeType; // github_pr_opened, linear_issue_created
-  group: NodeGroup; // github, linear, agent, task
-  position: { x: number; y: number };
-  data: any;
-  isNewlyDropped?: boolean; // Flag for drop animation
+  position: Position;
+  data: Record<string, any>;
 }
 
-export interface Graph {
-  nodes: { [key: string]: Node }; // key is the node id, value is the node
+export interface CreateWorkflowRequest {
+  title: string;
+  description: string;
+  nodes: Record<string, WorkflowNode>;
+  adjacency_list?: Record<string, string[]>;
+  variables?: Record<string, string>;
+}
 
-  // key is the node id, value is the list of node_ids that are connected to the key node
-  adjacency_list: { [key: string]: string[] };
+export interface WorkflowGraph {
+  id: string;
+  workflow_id: string;
+  nodes: Record<string, WorkflowNode>;
+  adjacency_list: Record<string, string[]>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Workflow {
   id: string;
   title: string;
   description: string;
-  repo_name: string;
-  branch: string;
-  agent_id: string;
   created_by: string;
   created_at: string;
   updated_at: string;
-  triggers: string[];
-  hash: string;
-  task: string;
   is_paused: boolean;
-  graph: Graph;
+  version: string;
+  graph: WorkflowGraph;
+  variables: Record<string, string>;
 }
 
-export interface CreateWorkflowRequest {
-  title: string;
-  description: string;
-  repo_name: string;
-  branch: string;
-  agent_id: string;
-  triggers: string[];
-  task: string;
+// Execution types
+export interface WorkflowExecution {
+  id: string;
+  workflow_id: string;
+  status: "running" | "completed" | "failed" | "cancelled";
+  started_at: string;
+  completed_at?: string;
+  error_message?: string;
+  trigger_data?: Record<string, any>;
+  execution_logs?: ExecutionLog[];
 }
 
-export interface UpdateWorkflowRequest {
-  title: string;
-  description: string;
-  repo_name: string;
-  branch: string;
-  agent_id: string;
-  triggers: string[];
-  task: string;
+export interface ExecutionLog {
+  id: string;
+  execution_id: string;
+  node_id: string;
+  node_type: string;
+  status: "pending" | "running" | "completed" | "failed";
+  started_at: string;
+  completed_at?: string;
+  error_message?: string;
+  input_data?: Record<string, any>;
+  output_data?: Record<string, any>;
 }
 
 // Enum for trigger groups
@@ -147,7 +161,10 @@ export default class WorkflowService {
     try {
       const headers = await getHeaders();
       const response = await axios.post(this.BASE_URL, workflow, { headers });
-      return response.data.workflow;
+
+      // Handle both response structures: direct workflow or nested in workflow property
+      const createdWorkflow = response.data.workflow || response.data;
+      return createdWorkflow;
     } catch (error) {
       console.error("Error creating workflow:", error);
       throw error;
@@ -156,7 +173,7 @@ export default class WorkflowService {
 
   static async updateWorkflow(
     workflowId: string,
-    workflow: UpdateWorkflowRequest
+    workflow: CreateWorkflowRequest // Changed to CreateWorkflowRequest
   ): Promise<Workflow | undefined> {
     try {
       const headers = await getHeaders();
@@ -197,7 +214,9 @@ export default class WorkflowService {
     }
   }
 
-  static async getWorkflowLogs(workflowId: string): Promise<Workflow[]> {
+  static async getWorkflowLogs(
+    workflowId: string
+  ): Promise<WorkflowExecution[]> {
     try {
       const headers = await getHeaders();
       const response = await axios.get(`${this.BASE_URL}/${workflowId}/logs`, {
@@ -205,7 +224,7 @@ export default class WorkflowService {
       });
       return response.data.executions;
     } catch (error) {
-      console.error("Error fetching workflows logs:", error);
+      console.error("Error fetching workflow logs:", error);
       throw error;
     }
   }
@@ -240,6 +259,39 @@ export default class WorkflowService {
       return;
     } catch (error) {
       console.error("Error resuming workflow:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Refreshes the trigger hash for a given node type.
+   * Deactivates any existing hash for the user and node type, and returns a new one.
+   * Returns: { trigger_hash, node_type, created_at, webhook_url }
+   */
+  static async refreshTriggerHash(
+    nodeType: string // e.g., "github", "linear", etc.
+  ): Promise<{
+    trigger_hash: string;
+    node_type: string;
+    created_at: string;
+    webhook_url: string;
+  }> {
+    try {
+      const headers = await getHeaders();
+      const baseUrl = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/integrations`;
+
+      const requestBody = {
+        node_type: nodeType,
+      };
+
+      const response = await axios.put(`${baseUrl}/trigger-hash`, requestBody, {
+        headers,
+      });
+
+      // Return the full response object as per the new API
+      return response.data;
+    } catch (error) {
+      console.error("Error refreshing trigger hash:", error);
       throw error;
     }
   }

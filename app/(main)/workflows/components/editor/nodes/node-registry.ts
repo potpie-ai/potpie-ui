@@ -1,13 +1,33 @@
-import { NodeType, NodeCategory, NodeGroup } from "@/services/WorkflowService";
-import { githubTriggerNodeMetadata } from "./triggers/github/github-trigger";
+// Remove NodeType, NodeCategory, NodeGroup imports and define as string unions
+export type NodeType =
+  | "trigger_github_pr_opened"
+  | "trigger_github_pr_closed"
+  | "trigger_github_pr_reopened"
+  | "trigger_github_pr_merged"
+  | "trigger_github_issue_opened"
+  | "trigger_linear_issue_created"
+  | "custom_agent"
+  | "flow_control_conditional"
+  | "flow_control_collect"
+  | "flow_control_selector"
+  | "manual_step_approval"
+  | "manual_step_input";
+export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step";
+export type NodeGroup = "github" | "linear" | "default" | "flow_control";
+
 import { agentNodeMetadata } from "./agents/agent";
-import { flowControlNodeMetadata } from "./flow-controls/flow-control";
+import { ifConditionNodeMetadata } from "./flow-controls/if-condition";
 import { linearTriggerNodeMetadata } from "./triggers/linear/linear-trigger";
+import { prOpenedTriggerNodeMetadata } from "./triggers/github/pr-opened-trigger";
+import { prClosedTriggerNodeMetadata } from "./triggers/github/pr-closed-trigger";
+import { prReopenedTriggerNodeMetadata } from "./triggers/github/pr-reopened-trigger";
+import { prMergedTriggerNodeMetadata } from "./triggers/github/pr-merged-trigger";
+import { issueAddedTriggerNodeMetadata } from "./triggers/github/issue-added-trigger";
 
 export interface NodeInfo {
-  type: NodeType;
-  category: NodeCategory;
-  group: NodeGroup;
+  type: string;
+  category: string;
+  group: string;
   name: string;
   description: string;
   icon: React.ComponentType<{
@@ -17,21 +37,31 @@ export interface NodeInfo {
   configComponent?: React.ComponentType<{
     config: any;
     onConfigChange: (config: any) => void;
+    readOnly?: boolean;
+    workflowId?: string;
   }>;
 }
 
 // Registry of all available nodes
 export const availableNodes: NodeInfo[] = [
-  githubTriggerNodeMetadata,
+  prOpenedTriggerNodeMetadata,
+  prClosedTriggerNodeMetadata,
+  prReopenedTriggerNodeMetadata,
+  prMergedTriggerNodeMetadata,
+  issueAddedTriggerNodeMetadata,
   linearTriggerNodeMetadata,
   agentNodeMetadata,
-  flowControlNodeMetadata,
+  ifConditionNodeMetadata,
 ];
 
 // Export individual metadata for direct access if needed
 export {
-  githubTriggerNodeMetadata,
+  prOpenedTriggerNodeMetadata,
+  prClosedTriggerNodeMetadata,
+  prReopenedTriggerNodeMetadata,
+  prMergedTriggerNodeMetadata,
+  issueAddedTriggerNodeMetadata,
   linearTriggerNodeMetadata,
   agentNodeMetadata,
-  flowControlNodeMetadata,
+  ifConditionNodeMetadata,
 };

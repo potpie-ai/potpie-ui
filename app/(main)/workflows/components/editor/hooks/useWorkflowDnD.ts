@@ -1,5 +1,23 @@
 import { useDrag, useDrop } from "react-dnd";
 import { NodeType, NodeCategory, NodeGroup } from "@/services/WorkflowService";
+// Helper: runtime type guard for NodeType
+const validNodeTypes: Set<string> = new Set([
+  "trigger_github_pr_opened",
+  "trigger_github_pr_closed",
+  "trigger_github_pr_reopened",
+  "trigger_github_pr_merged",
+  "trigger_github_issue_opened",
+  "trigger_linear_issue_created",
+  "custom_agent",
+  "flow_control_conditional",
+  "flow_control_collect",
+  "flow_control_selector",
+  "manual_step_approval",
+  "manual_step_input",
+]);
+function isValidNodeType(type: any): type is NodeType {
+  return typeof type === "string" && validNodeTypes.has(type);
+}
 
 // DnD Item Types
 export const ItemTypes = {
@@ -17,6 +35,7 @@ export interface DragNodeItem {
     description: string;
     icon?: React.ComponentType<any>;
   };
+  cursorOffset?: { x: number; y: number };
 }
 
 // Drop result interface
@@ -25,17 +44,47 @@ export interface DropResult {
   position?: { x: number; y: number };
 }
 
+// Extend the Window interface to include __lastDragEvent
+declare global {
+  interface Window {
+    __lastDragEvent?: MouseEvent;
+  }
+}
+
 // Hook for drag sources (node palette items)
 export const useNodeDrag = (nodeInfo: DragNodeItem["nodeInfo"]) => {
+  if (!isValidNodeType(nodeInfo.type)) {
+    throw new Error(`Invalid node type for drag: ${nodeInfo.type}`);
+  }
+  // We'll attach the offset dynamically in the drag start event
   const [{ isDragging }, drag, dragPreview] = useDrag<
     DragNodeItem,
     DropResult,
     { isDragging: boolean }
   >({
     type: ItemTypes.NODE,
-    item: {
-      type: ItemTypes.NODE,
-      nodeInfo,
+    item: () => {
+      // Get the current mouse position and the node's bounding rect
+      const event = window.__lastDragEvent;
+      let cursorOffset = undefined;
+      if (
+        event &&
+        "target" in event &&
+        event.target &&
+        typeof (event.target as HTMLElement).getBoundingClientRect ===
+          "function"
+      ) {
+        const rect = (event.target as HTMLElement).getBoundingClientRect();
+        cursorOffset = {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        };
+      }
+      return {
+        type: ItemTypes.NODE,
+        nodeInfo,
+        cursorOffset,
+      };
     },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
@@ -49,7 +98,8 @@ export const useNodeDrag = (nodeInfo: DragNodeItem["nodeInfo"]) => {
 export const useCanvasDrop = (
   onNodeDrop: (
     nodeInfo: DragNodeItem["nodeInfo"],
-    position: { x: number; y: number }
+    position: { x: number; y: number },
+    cursorOffset?: { x: number; y: number }
   ) => void
 ) => {
   const [{ isOver }, drop] = useDrop<
@@ -61,9 +111,8 @@ export const useCanvasDrop = (
     drop: (item, monitor) => {
       const offset = monitor.getClientOffset();
       if (offset) {
-        // Pass the raw client offset to the ReactFlowCanvas
-        // The ReactFlowCanvas will handle the coordinate transformation
-        onNodeDrop(item.nodeInfo, offset);
+        // Pass the raw client offset and cursorOffset to the ReactFlowCanvas
+        onNodeDrop(item.nodeInfo, offset, item.cursorOffset);
         return { dropped: true, position: offset };
       }
       return { dropped: false };

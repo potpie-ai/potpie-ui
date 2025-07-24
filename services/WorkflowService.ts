@@ -86,6 +86,13 @@ export interface ExecutionLog {
   error_message?: string;
   input_data?: Record<string, any>;
   output_data?: Record<string, any>;
+  // Additional fields from the new API structure
+  iteration?: number;
+  logs?: Array<{
+    status: string;
+    timestamp: string;
+    details: string;
+  }>;
 }
 
 // Enum for trigger groups
@@ -111,15 +118,18 @@ export interface Trigger {
 }
 
 export default class WorkflowService {
+  private static readonly BASE_URL = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1`;
+  private static readonly WORKFLOWS_URL = `${this.BASE_URL}/workflows`;
+  private static readonly EXECUTION_URL = `${this.BASE_URL}/execution`;
+
+  // --- TRIGGER METHODS ---
+
   static async getAllTriggers(): Promise<Trigger[]> {
     try {
       const headers = await getHeaders();
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/triggers`,
-        {
-          headers,
-        }
-      );
+      const response = await axios.get(`${this.BASE_URL}/triggers`, {
+        headers,
+      });
       return response.data.available_triggers;
     } catch (error) {
       console.error("Error fetching triggers:", error);
@@ -127,12 +137,12 @@ export default class WorkflowService {
     }
   }
 
-  private static readonly BASE_URL = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/workflows`;
+  // --- WORKFLOW MANAGEMENT METHODS ---
 
   static async getWorkflowsList(): Promise<Workflow[]> {
     try {
       const headers = await getHeaders();
-      const response = await axios.get(this.BASE_URL, { headers });
+      const response = await axios.get(this.WORKFLOWS_URL, { headers });
       return response.data.workflows;
     } catch (error) {
       console.error("Error fetching workflows:", error);
@@ -145,7 +155,7 @@ export default class WorkflowService {
   ): Promise<Workflow | undefined> {
     try {
       const headers = await getHeaders();
-      const response = await axios.get(`${this.BASE_URL}/${workflowId}`, {
+      const response = await axios.get(`${this.WORKFLOWS_URL}/${workflowId}`, {
         headers,
       });
       return response.data.workflow;
@@ -160,7 +170,9 @@ export default class WorkflowService {
   ): Promise<Workflow | undefined> {
     try {
       const headers = await getHeaders();
-      const response = await axios.post(this.BASE_URL, workflow, { headers });
+      const response = await axios.post(this.WORKFLOWS_URL, workflow, {
+        headers,
+      });
 
       // Handle both response structures: direct workflow or nested in workflow property
       const createdWorkflow = response.data.workflow || response.data;
@@ -173,12 +185,12 @@ export default class WorkflowService {
 
   static async updateWorkflow(
     workflowId: string,
-    workflow: CreateWorkflowRequest // Changed to CreateWorkflowRequest
+    workflow: CreateWorkflowRequest
   ): Promise<Workflow | undefined> {
     try {
       const headers = await getHeaders();
       const response = await axios.put(
-        `${this.BASE_URL}/${workflowId}`,
+        `${this.WORKFLOWS_URL}/${workflowId}`,
         workflow,
         { headers }
       );
@@ -192,7 +204,7 @@ export default class WorkflowService {
   static async deleteWorkflow(workflowId: string): Promise<boolean> {
     try {
       const headers = await getHeaders();
-      await axios.delete(`${this.BASE_URL}/${workflowId}`, { headers });
+      await axios.delete(`${this.WORKFLOWS_URL}/${workflowId}`, { headers });
       return true;
     } catch (error) {
       console.error("Error deleting workflow:", error);
@@ -204,7 +216,7 @@ export default class WorkflowService {
     try {
       const headers = await getHeaders();
       const response = await axios.get(
-        `${this.BASE_URL}/triggers/${triggerId}`,
+        `${this.WORKFLOWS_URL}/triggers/${triggerId}`,
         { headers }
       );
       return response.data.workflows;
@@ -214,63 +226,168 @@ export default class WorkflowService {
     }
   }
 
-  static async getWorkflowLogs(
-    workflowId: string
+  // --- EXECUTION MANAGEMENT METHODS ---
+
+  /**
+   * Get all executions for the authenticated user
+   * @param workflowId Optional workflow ID to filter executions
+   * @returns Promise<WorkflowExecution[]> Array of workflow executions
+   */
+  static async getAllExecutions(
+    workflowId?: string
   ): Promise<WorkflowExecution[]> {
     try {
       const headers = await getHeaders();
-      const response = await axios.get(`${this.BASE_URL}/${workflowId}/logs`, {
-        headers,
-      });
-      return response.data.executions;
+      const url = workflowId
+        ? `${this.EXECUTION_URL}/?workflow_id=${workflowId}`
+        : this.EXECUTION_URL;
+
+      const response = await axios.get(url, { headers });
+      console.log("API Response:", response.data);
+      console.log("Executions array:", response.data.executions);
+
+      // Map the API response to our expected interface structure
+      const mappedExecutions: WorkflowExecution[] =
+        response.data.executions.map((execution: any) => ({
+          id: execution.wf_exec_id,
+          workflow_id: execution.wf_id,
+          status: execution.status,
+          started_at: execution.start_time,
+          completed_at: execution.end_time,
+          error_message: execution.error_message,
+          trigger_data: execution.event,
+          execution_logs:
+            execution.node_executions?.map((nodeExec: any) => ({
+              id: nodeExec.node_exec_id || `node-${Math.random()}`,
+              execution_id: execution.wf_exec_id,
+              node_id: nodeExec.node_id || "unknown",
+              node_type: nodeExec.node_id?.split("_")[0] || "unknown", // Extract type from node_id
+              status: nodeExec.status || "unknown",
+              started_at: nodeExec.start_time || execution.start_time,
+              completed_at: nodeExec.end_time,
+              error_message:
+                nodeExec.logs?.find((log: any) => log.status === "failed")
+                  ?.details || null,
+              input_data: nodeExec.input_data,
+              output_data: nodeExec.output_data,
+              // Add additional fields from the new API structure
+              iteration: nodeExec.iteration,
+              logs: nodeExec.logs || [],
+            })) || [],
+        }));
+
+      return mappedExecutions;
     } catch (error) {
-      console.error("Error fetching workflow logs:", error);
+      console.error("Error fetching executions:", error);
       throw error;
     }
   }
 
-  static async pauseWorkflow(workflowId: string): Promise<any> {
+  /**
+   * Get detailed logs for a specific execution
+   * @param executionId The ID of the execution to get logs for
+   * @returns Promise<WorkflowExecution> Detailed execution with logs
+   */
+  static async getExecutionLogs(
+    executionId: string
+  ): Promise<WorkflowExecution> {
     try {
       const headers = await getHeaders();
-      const response = await axios.post(
-        `${this.BASE_URL}/${workflowId}/pause`,
-        {},
+      const response = await axios.get(
+        `${this.EXECUTION_URL}/logs?execution_id=${executionId}`,
         {
           headers,
         }
       );
-      return;
+
+      const execution = response.data.execution;
+
+      // Map the API response to our expected interface structure
+      const mappedExecution: WorkflowExecution = {
+        id: execution.wf_exec_id,
+        workflow_id: execution.wf_id,
+        status: execution.status,
+        started_at: execution.start_time,
+        completed_at: execution.end_time,
+        error_message: execution.error_message,
+        trigger_data: execution.event,
+        execution_logs:
+          execution.node_executions?.map((nodeExec: any) => ({
+            id: nodeExec.id || `node-${Math.random()}`,
+            execution_id: execution.wf_exec_id,
+            node_id: nodeExec.node_id || "unknown",
+            node_type: nodeExec.node_type || "unknown",
+            status: nodeExec.status || "unknown",
+            started_at: nodeExec.start_time || execution.start_time,
+            completed_at: nodeExec.end_time,
+            error_message: nodeExec.error_message,
+            input_data: nodeExec.input_data,
+            output_data: nodeExec.output_data,
+          })) || [],
+      };
+
+      return mappedExecution;
+    } catch (error) {
+      console.error("Error fetching execution logs:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get executions for a specific workflow
+   * @param workflowId The ID of the workflow to get executions for
+   * @returns Promise<WorkflowExecution[]> Array of workflow executions
+   */
+  static async getWorkflowExecutions(
+    workflowId: string
+  ): Promise<WorkflowExecution[]> {
+    try {
+      return await this.getAllExecutions(workflowId);
+    } catch (error) {
+      console.error("Error fetching workflow executions:", error);
+      throw error;
+    }
+  }
+
+  // --- WORKFLOW CONTROL METHODS ---
+
+  static async pauseWorkflow(workflowId: string): Promise<void> {
+    try {
+      const headers = await getHeaders();
+      await axios.post(
+        `${this.WORKFLOWS_URL}/${workflowId}/pause`,
+        {},
+        { headers }
+      );
     } catch (error) {
       console.error("Error pausing workflow:", error);
       throw error;
     }
   }
 
-  static async resumeWorkflow(workflowId: string): Promise<any> {
+  static async resumeWorkflow(workflowId: string): Promise<void> {
     try {
       const headers = await getHeaders();
-      const response = await axios.post(
-        `${this.BASE_URL}/${workflowId}/resume`,
+      await axios.post(
+        `${this.WORKFLOWS_URL}/${workflowId}/resume`,
         {},
-        {
-          headers,
-        }
+        { headers }
       );
-      return;
     } catch (error) {
       console.error("Error resuming workflow:", error);
       throw error;
     }
   }
 
+  // --- INTEGRATION METHODS ---
+
   /**
    * Refreshes the trigger hash for a given node type.
    * Deactivates any existing hash for the user and node type, and returns a new one.
-   * Returns: { trigger_hash, node_type, created_at, webhook_url }
+   * @param nodeType The node type (e.g., "github", "linear", etc.)
+   * @returns Promise with trigger hash details
    */
-  static async refreshTriggerHash(
-    nodeType: string // e.g., "github", "linear", etc.
-  ): Promise<{
+  static async refreshTriggerHash(nodeType: string): Promise<{
     trigger_hash: string;
     node_type: string;
     created_at: string;
@@ -278,7 +395,7 @@ export default class WorkflowService {
   }> {
     try {
       const headers = await getHeaders();
-      const baseUrl = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/integrations`;
+      const baseUrl = `${this.BASE_URL}/integrations`;
 
       const requestBody = {
         node_type: nodeType,
@@ -288,7 +405,6 @@ export default class WorkflowService {
         headers,
       });
 
-      // Return the full response object as per the new API
       return response.data;
     } catch (error) {
       console.error("Error refreshing trigger hash:", error);

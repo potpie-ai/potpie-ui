@@ -35,6 +35,7 @@ import {
   Bot,
   Zap,
   History,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -191,28 +192,36 @@ const Workflows = () => {
   });
 
   return (
-    <div>
-      {/* HEADER */}
-      <div className="flex w-full mx-auto items-center space-x-2 p-4 mt-6">
-        <Input
-          type="text"
-          placeholder="Search your Workflows..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        {/* <Button onClick={() => setOpenTemplateModal(true)} className="gap-2">
-          <FilePlus2 className="h-6 w-6" />
-          Create from Template
-        </Button> */}
-        <Link href={"/workflows/create"}>
-          <Button className="gap-2">
-            <Hammer className="h-6 w-6" />
-            Create Workflow
-          </Button>
-        </Link>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header Section */}
+      <div className="bg-gray-50 border-b border-gray-200 px-4 py-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex-1 max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search workflows..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-white"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link href={"/workflows/create"}>
+                <Button className="gap-2">
+                  <Hammer className="h-4 w-4" />
+                  Create Workflow
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* TEMPLATE MODAL */}
+      {/* Template Modal */}
       <Dialog open={openTemplateModal} onOpenChange={setOpenTemplateModal}>
         <DialogContent className="sm:max-w-[600px]">
           <div className="flex flex-col gap-4">
@@ -252,8 +261,8 @@ const Workflows = () => {
         </DialogContent>
       </Dialog>
 
-      {/* LIST WORKFLOWS */}
-      <div className="w-full p-4">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-6">
         {loading ? (
           <div className="space-y-4">
             {[...Array(5)].map((_, index) => (
@@ -279,11 +288,12 @@ const Workflows = () => {
             {filteredWorkflows.map((workflow, index) => (
               <AccordionItem key={workflow.id} value={workflow.id}>
                 <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                  <AccordionTrigger className="px-8 py-8 hover:bg-gray-50 transition-colors [&[data-state=open]>svg]:rotate-180">
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center w-full space-x-6">
-                        <div className="w-1/4 text-left flex-shrink-0">
-                          <h3 className="text-xl font-semibold text-gray-900 mb-3 text-left">
+                  <AccordionTrigger className="px-6 py-6 hover:bg-gray-50 transition-colors [&[data-state=open]>svg]:rotate-180">
+                    <div className="w-full">
+                      {/* Top Row: Title, Description, and Date */}
+                      <div className="flex items-start justify-between mb-6">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1 text-left">
                             <Link
                               href={`/workflows/${workflow.id}`}
                               className="hover:text-blue-600 transition-colors"
@@ -296,201 +306,211 @@ const Workflows = () => {
                             {workflow.description || "No description"}
                           </p>
                         </div>
-                        <div className="flex items-center space-x-6 flex-1 min-w-0">
-                          <div className="flex items-center space-x-3 text-left w-64 flex-shrink-0 overflow-hidden">
-                            <Bot className="h-8 w-8 text-gray-500 flex-shrink-0" />
-                            <div className="text-left min-w-0 flex-1 overflow-hidden">
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide text-left mb-1">
-                                Agent
-                              </p>
-                              <Tooltip>
-                                <TooltipTrigger className="text-sm text-gray-700 font-medium text-left truncate block w-full overflow-hidden">
-                                  {getAgentNames(workflow)[0] || "No Agent"}{" "}
-                                  {getAgentNames(workflow).length > 1
-                                    ? ` +${getAgentNames(workflow).length - 1}`
-                                    : ""}
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="right"
-                                  className="space-y-2"
-                                >
-                                  {getAgentNames(workflow).map(
-                                    (agentName, index) => (
-                                      <div key={index} className="">
-                                        <span className="text-sm text-gray-700">
-                                          {agentName}
-                                        </span>
-                                      </div>
-                                    )
-                                  )}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3 text-left w-64 flex-shrink-0 overflow-hidden">
-                            <Zap className="h-8 w-8 text-gray-500 flex-shrink-0" />
-                            <div className="text-left min-w-0 flex-1 overflow-hidden">
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide text-left mb-1">
-                                Triggers
-                              </p>
-                              <Tooltip>
-                                <TooltipTrigger className="text-sm text-gray-700 font-medium text-left truncate block w-full overflow-hidden">
-                                  {getTriggerNames(workflow)[0] ||
-                                    "No triggers"}{" "}
-                                  {getTriggerNames(workflow).length > 1
-                                    ? ` +${getTriggerNames(workflow).length - 1}`
-                                    : ""}
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="right"
-                                  className="space-y-2"
-                                >
-                                  {getTriggerNames(workflow).map(
-                                    (triggerName, index) => (
-                                      <div key={index} className="">
-                                        <span className="text-sm text-gray-700">
-                                          {triggerName}
-                                        </span>
-                                      </div>
-                                    )
-                                  )}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3 text-left w-40 flex-shrink-0 overflow-hidden">
-                            <GitBranch className="h-8 w-8 text-gray-500 flex-shrink-0" />
-                            <div className="text-left min-w-0 flex-1 overflow-hidden">
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide text-left mb-1">
-                                Status
-                              </p>
-                              <div className="flex items-center space-x-2">
-                                <div
-                                  className={`w-2 h-2 rounded-full ${workflow.is_paused ? "bg-red-500" : "bg-green-500"} ${!workflow.is_paused ? "animate-pulse" : ""}`}
-                                ></div>
-                                <p className="text-sm text-gray-700 font-medium text-left truncate w-full overflow-hidden">
-                                  {workflow.is_paused ? "Paused" : "Active"}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3 text-left w-40 flex-shrink-0 overflow-hidden">
-                            <History className="h-8 w-8 text-gray-500 flex-shrink-0" />
-                            <div className="text-left min-w-0 flex-1 overflow-hidden">
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide text-left mb-1">
-                                Executions
-                              </p>
-                              <Link
-                                href={`/workflows/${workflow.id}/executions`}
-                                className="text-sm text-blue-600 hover:text-blue-800 font-medium text-left truncate block w-full overflow-hidden"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View History
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4 ml-6 flex-shrink-0">
-                        <div className="flex items-center space-x-2 text-sm text-gray-600 bg-gray-100 px-4 py-2 rounded-full">
-                          <Calendar className="h-4 w-4" />
+                        <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full ml-4 flex-shrink-0">
+                          <Calendar className="h-3 w-3" />
                           <span className="font-medium">
                             {new Date(workflow.created_at).toLocaleDateString()}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-10 w-10 p-0 hover:bg-gray-200 flex items-center justify-center"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePause(workflow, index);
-                                }}
-                              >
-                                {workflow.is_paused ? (
-                                  <Play className="h-4 w-4 stroke-slate-500" />
-                                ) : (
-                                  <Pause className="h-4 w-4 stroke-slate-500" />
+                      </div>
+
+                      {/* Bottom Row: Metadata Grid */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                        {/* Agent */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <Bot className="h-4 w-4 text-gray-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 text-left">
+                              Agent
+                            </p>
+                            <Tooltip>
+                              <TooltipTrigger className="text-sm text-gray-700 font-medium truncate block w-full text-left">
+                                {getAgentNames(workflow)[0] || "No Agent"}
+                                {getAgentNames(workflow).length > 1 &&
+                                  ` +${getAgentNames(workflow).length - 1}`}
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="space-y-1">
+                                {getAgentNames(workflow).map(
+                                  (agentName, index) => (
+                                    <div key={index}>
+                                      <span className="text-sm text-gray-700">
+                                        {agentName}
+                                      </span>
+                                    </div>
+                                  )
                                 )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                {workflow.is_paused
-                                  ? "Resume workflow"
-                                  : "Pause workflow"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
 
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Link
-                                href={`/workflows/${workflow.id}?mode=edit`}
-                              >
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-10 w-10 p-0 hover:bg-gray-200 flex items-center justify-center"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <LucideEdit className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Edit workflow</p>
-                            </TooltipContent>
-                          </Tooltip>
+                        {/* Triggers */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <Zap className="h-4 w-4 text-gray-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 text-left">
+                              Triggers
+                            </p>
+                            <Tooltip>
+                              <TooltipTrigger className="text-sm text-gray-700 font-medium truncate block w-full text-left">
+                                {getTriggerNames(workflow)[0] || "No triggers"}
+                                {getTriggerNames(workflow).length > 1 &&
+                                  ` +${getTriggerNames(workflow).length - 1}`}
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="space-y-1">
+                                {getTriggerNames(workflow).map(
+                                  (triggerName, index) => (
+                                    <div key={index}>
+                                      <span className="text-sm text-gray-700">
+                                        {triggerName}
+                                      </span>
+                                    </div>
+                                  )
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
 
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-10 w-10 p-0 text-red-600 hover:text-red-800 hover:bg-red-100 flex items-center justify-center"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteWorkflow(workflow);
-                                }}
-                              >
-                                <LucideTrash className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Delete workflow</p>
-                            </TooltipContent>
-                          </Tooltip>
+                        {/* Status */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <GitBranch className="h-4 w-4 text-gray-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 text-left">
+                              Status
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`w-2 h-2 rounded-full ${workflow.is_paused ? "bg-red-500" : "bg-green-500"} ${!workflow.is_paused ? "animate-pulse" : ""}`}
+                              />
+                              <span className="text-sm text-gray-700 font-medium text-left">
+                                {workflow.is_paused ? "Paused" : "Active"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <History className="h-4 w-4 text-gray-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 text-left ml-1">
+                              Actions
+                            </p>
+                            <div className="flex items-center gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 hover:bg-gray-200"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePause(workflow, index);
+                                    }}
+                                  >
+                                    {workflow.is_paused ? (
+                                      <Play className="h-3 w-3" />
+                                    ) : (
+                                      <Pause className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>
+                                    {workflow.is_paused
+                                      ? "Resume workflow"
+                                      : "Pause workflow"}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Link
+                                    href={`/workflows/${workflow.id}?mode=edit`}
+                                  >
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 hover:bg-gray-200"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <LucideEdit className="h-3 w-3" />
+                                    </Button>
+                                  </Link>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Edit workflow</p>
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-800 hover:bg-red-100"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteWorkflow(workflow);
+                                    }}
+                                  >
+                                    <LucideTrash className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Delete workflow</p>
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Link
+                                    href={`/workflows/${workflow.id}/executions`}
+                                  >
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 hover:bg-gray-200"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <History className="h-3 w-3" />
+                                    </Button>
+                                  </Link>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>View executions</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </AccordionTrigger>
+
                   <AccordionContent>
                     <div className="px-6 pb-6 border-t border-gray-100 bg-gray-50">
                       <div className="pt-4 space-y-6">
                         {/* Workflow Details Section */}
                         <div>
-                          <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center justify-between mb-4">
                             <h4 className="text-sm font-semibold text-gray-700">
                               Workflow Details
                             </h4>
-                            <Link href={`/workflows/${workflow.id}/executions`}>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-2"
-                              >
-                                <History className="h-4 w-4" />
-                                View Executions
-                              </Button>
-                            </Link>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="bg-white p-4 rounded-lg border">
-                              <h5 className="text-sm font-medium text-gray-700 mb-2">
+                              <h5 className="text-sm font-medium text-gray-700 mb-3">
                                 Configuration
                               </h5>
                               <div className="space-y-2">
@@ -525,7 +545,7 @@ const Workflows = () => {
                               </div>
                             </div>
                             <div className="bg-white p-4 rounded-lg border">
-                              <h5 className="text-sm font-medium text-gray-700 mb-2">
+                              <h5 className="text-sm font-medium text-gray-700 mb-3">
                                 Nodes
                               </h5>
                               <div className="space-y-2">
@@ -589,17 +609,18 @@ const Workflows = () => {
             ))}
           </Accordion>
         )}
+
         {filteredWorkflows.length === 0 && !loading && (
           <Card>
             <CardContent className="text-center py-12">
-              <div>
+              <div className="text-gray-600 mb-4">
                 {searchTerm.trim()
                   ? `No workflows found matching "${searchTerm}". Try a different search term.`
                   : "No workflows found. Create your first workflow"}
               </div>
               <Link href={"/workflows/create"}>
-                <Button className="gap-2 mt-4">
-                  <Hammer className="h-6 w-6" />
+                <Button className="gap-2">
+                  <Hammer className="h-4 w-4" />
                   Create Workflow
                 </Button>
               </Link>

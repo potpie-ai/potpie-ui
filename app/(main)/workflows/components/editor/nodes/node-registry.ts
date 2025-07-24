@@ -39,6 +39,7 @@ export interface NodeInfo {
     onConfigChange: (config: any) => void;
     readOnly?: boolean;
     workflowId?: string;
+    workflow?: any;
   }>;
 }
 

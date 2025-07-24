@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Plus, RefreshCcw } from "lucide-react";
+import { RepoBranchSelector } from "../triggers/github/RepoBranchSelector";
 
 interface AgentConfigProps {
   config: any;
@@ -72,6 +73,18 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
   const handleTaskChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (readOnly) return;
     onConfigChange({ ...config, task: e.target.value });
+  };
+
+  // Handle repository change
+  const handleRepoChange = (repo: string) => {
+    if (readOnly) return;
+    onConfigChange({ ...config, repoName: repo });
+  };
+
+  // Handle branch change
+  const handleBranchChange = (branch: string) => {
+    if (readOnly) return;
+    onConfigChange({ ...config, branchName: branch });
   };
 
   return (
@@ -172,6 +185,20 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
           </CarouselContent>
         </Carousel>
       </div>
+      {/* Repository and Branch Selection */}
+      <div className="mt-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Repository & Branch
+        </label>
+        <RepoBranchSelector
+          repoName={config.repoName || ""}
+          branchName={config.branchName || ""}
+          onRepoChange={handleRepoChange}
+          onBranchChange={handleBranchChange}
+          readOnly={readOnly}
+        />
+      </div>
+
       {/* Task input field */}
       <div className="mt-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -204,6 +231,8 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
   const colors = getNodeColors(data.group);
   const agentName = data.data?.agentName;
   const task = data.data?.task;
+  const repoName = data.data?.repoName;
+  const branchName = data.data?.branchName;
   return (
     <div className="w-full">
       <div
@@ -223,6 +252,19 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
           >
             {agentName ? agentName : "No agent selected"}
           </p>
+          {repoName && (
+            <p className="mt-1 text-xs text-gray-600 truncate" title={repoName}>
+              📁 {repoName}
+            </p>
+          )}
+          {branchName && (
+            <p
+              className="mt-1 text-xs text-gray-600 truncate"
+              title={branchName}
+            >
+              🌿 {branchName}
+            </p>
+          )}
           <p
             className="mt-2 text-xs text-gray-700 line-clamp-2 max-w-full break-words"
             title={task || undefined}

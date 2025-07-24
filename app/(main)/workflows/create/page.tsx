@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 export default function CreateWorkflowPage() {
   const router = useRouter();
+
   const handleSave = async (workflow: Workflow, isNewWorkflow: boolean) => {
     if (
       workflow &&
@@ -32,9 +33,28 @@ export default function CreateWorkflowPage() {
       }
     }
   };
+
+  const handleCancel = () => {
+    // Navigate back to workflows list
+    router.push("/workflows");
+  };
+
+  const handleModeChange = (newMode: "view_only" | "edit" | "preview") => {
+    // In create mode, we only support edit mode
+    if (newMode !== "edit") {
+      return;
+    }
+  };
+
   return (
-    <div className="h-screen w-full">
-      <WorkflowEditor mode="edit" debugMode={true} onSave={handleSave} />
+    <div className="h-[100vh] w-full overflow-hidden">
+      <WorkflowEditor
+        mode="edit"
+        debugMode={true}
+        onSave={handleSave}
+        onCancel={handleCancel}
+        onModeChange={handleModeChange}
+      />
     </div>
   );
 }

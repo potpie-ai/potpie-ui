@@ -10,12 +10,14 @@ interface IfConditionConfigProps {
   config: any;
   onConfigChange: (config: any) => void;
   readOnly?: boolean;
+  workflow?: any;
 }
 
 export const IfConditionConfigComponent: FC<IfConditionConfigProps> = ({
   config,
   onConfigChange,
   readOnly = false,
+  workflow,
 }) => {
   const handleChange = (key: string, value: any) => {
     if (readOnly) return;

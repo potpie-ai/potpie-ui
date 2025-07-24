@@ -185,6 +185,7 @@ export const NodeConfigPanel: FC<NodeConfigPanelProps> = ({
                 onConfigChange={handleConfigChange}
                 readOnly={readOnly}
                 workflowId={workflowId}
+                workflow={workflow}
               />
             </div>
           ) : (

@@ -1,5 +1,6 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { parseApiError } from "@/lib/utils";
 
 // --- NEW TYPES BASED ON BACKEND DOCS ---
 export interface Position {
@@ -93,6 +94,28 @@ export interface ExecutionLog {
     timestamp: string;
     details: string;
   }>;
+  // New field for predecessor relationship
+  predecessor_node_id?: string;
+}
+
+// New interfaces for execution trees
+export interface ExecutionTreeNode {
+  node_id: string;
+  predecessor: string | null;
+  children: string[];
+  status: "pending" | "running" | "completed" | "failed";
+  start_time: string;
+  end_time?: string;
+  iteration: number;
+  logs: Array<{
+    status: string;
+    timestamp: string;
+    details: string;
+  }>;
+}
+
+export interface ExecutionTree {
+  execution_tree: Record<string, ExecutionTreeNode>;
 }
 
 // Enum for trigger groups
@@ -131,8 +154,15 @@ export default class WorkflowService {
         headers,
       });
       return response.data.available_triggers;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching triggers:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to fetch triggers", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -144,8 +174,15 @@ export default class WorkflowService {
       const headers = await getHeaders();
       const response = await axios.get(this.WORKFLOWS_URL, { headers });
       return response.data.workflows;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching workflows:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to fetch workflows", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -159,8 +196,15 @@ export default class WorkflowService {
         headers,
       });
       return response.data.workflow;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching workflow:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to fetch workflow", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -177,8 +221,11 @@ export default class WorkflowService {
       // Handle both response structures: direct workflow or nested in workflow property
       const createdWorkflow = response.data.workflow || response.data;
       return createdWorkflow;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating workflow:", error);
+      const errorMessage = parseApiError(error);
+
+      // Don't show toast here - let the calling component handle error display
       throw error;
     }
   }
@@ -195,8 +242,11 @@ export default class WorkflowService {
         { headers }
       );
       return response.data.workflow;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating workflow:", error);
+      const errorMessage = parseApiError(error);
+
+      // Don't show toast here - let the calling component handle error display
       throw error;
     }
   }
@@ -206,8 +256,15 @@ export default class WorkflowService {
       const headers = await getHeaders();
       await axios.delete(`${this.WORKFLOWS_URL}/${workflowId}`, { headers });
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting workflow:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to delete workflow", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -220,8 +277,15 @@ export default class WorkflowService {
         { headers }
       );
       return response.data.workflows;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching workflows by trigger:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to fetch workflows by trigger", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -238,53 +302,135 @@ export default class WorkflowService {
   ): Promise<WorkflowExecution[]> {
     try {
       const headers = await getHeaders();
-      const url = workflowId
-        ? `${this.EXECUTION_URL}/?workflow_id=${workflowId}`
-        : this.EXECUTION_URL;
 
-      const response = await axios.get(url, { headers });
-      console.log("API Response:", response.data);
-      console.log("Executions array:", response.data.executions);
+      if (!workflowId) {
+        // If no workflowId provided, use the general execution endpoint
+        const response = await axios.get(this.EXECUTION_URL, { headers });
+        console.log("API Response:", response.data);
+        console.log("Executions array:", response.data.executions);
 
-      // Map the API response to our expected interface structure
-      const mappedExecutions: WorkflowExecution[] =
-        response.data.executions.map((execution: any) => ({
-          id: execution.wf_exec_id,
-          workflow_id: execution.wf_id,
-          status: execution.status,
-          started_at: execution.start_time,
-          completed_at: execution.end_time,
-          error_message: execution.error_message,
-          trigger_data: execution.event,
-          execution_logs:
-            execution.node_executions?.map((nodeExec: any) => ({
-              id: nodeExec.node_exec_id || `node-${Math.random()}`,
-              execution_id: execution.wf_exec_id,
-              node_id: nodeExec.node_id || "unknown",
-              node_type: nodeExec.node_id?.split("_")[0] || "unknown", // Extract type from node_id
-              status: nodeExec.status || "unknown",
-              started_at: nodeExec.start_time || execution.start_time,
-              completed_at: nodeExec.end_time,
-              error_message:
-                nodeExec.logs?.find((log: any) => log.status === "failed")
-                  ?.details || null,
-              input_data: nodeExec.input_data,
-              output_data: nodeExec.output_data,
-              // Add additional fields from the new API structure
-              iteration: nodeExec.iteration,
-              logs: nodeExec.logs || [],
-            })) || [],
-        }));
+        // Map the API response to our expected interface structure
+        const mappedExecutions: WorkflowExecution[] =
+          response.data.executions.map((execution: any) => ({
+            id: execution.wf_exec_id,
+            workflow_id: execution.wf_id,
+            status: execution.status,
+            started_at: execution.start_time,
+            completed_at: execution.end_time,
+            error_message: execution.error_message,
+            trigger_data: execution.event,
+            execution_logs:
+              execution.node_executions?.map((nodeExec: any) => ({
+                id: nodeExec.node_exec_id || `node-${Math.random()}`,
+                execution_id: execution.wf_exec_id,
+                node_id: nodeExec.node_id || "unknown",
+                node_type: nodeExec.node_id?.split("_")[0] || "unknown", // Extract type from node_id
+                status: nodeExec.status || "unknown",
+                started_at: nodeExec.start_time || execution.start_time,
+                completed_at: nodeExec.end_time,
+                error_message:
+                  nodeExec.logs?.find((log: any) => log.status === "failed")
+                    ?.details || null,
+                input_data: nodeExec.input_data,
+                output_data: nodeExec.output_data,
+                // Add additional fields from the new API structure
+                iteration: nodeExec.iteration,
+                logs: nodeExec.logs || [],
+                predecessor_node_id: nodeExec.predecessor_node_id,
+              })) || [],
+          }));
 
-      return mappedExecutions;
-    } catch (error) {
+        return mappedExecutions;
+      } else {
+        // Use the new workflow logs endpoint for specific workflow
+        const response = await axios.get(
+          `${this.WORKFLOWS_URL}/${workflowId}/logs`,
+          { headers }
+        );
+        console.log("Workflow Logs API Response:", response.data);
+        console.log("Executions array:", response.data.executions);
+
+        // Map the API response to our expected interface structure
+        const mappedExecutions: WorkflowExecution[] =
+          response.data.executions.map((execution: any) => ({
+            id: execution.wf_exec_id,
+            workflow_id: execution.wf_id,
+            status: execution.status,
+            started_at: execution.start_time,
+            completed_at: execution.end_time,
+            error_message: execution.error_message,
+            trigger_data: execution.event,
+            execution_logs:
+              execution.node_executions?.map((nodeExec: any) => ({
+                id: nodeExec.node_exec_id || `node-${Math.random()}`,
+                execution_id: execution.wf_exec_id,
+                node_id: nodeExec.node_id || "unknown",
+                node_type: nodeExec.node_id?.split("_")[0] || "unknown", // Extract type from node_id
+                status: nodeExec.status || "unknown",
+                started_at: nodeExec.start_time || execution.start_time,
+                completed_at: nodeExec.end_time,
+                error_message:
+                  nodeExec.logs?.find((log: any) => log.status === "failed")
+                    ?.details || null,
+                input_data: nodeExec.input_data,
+                output_data: nodeExec.output_data,
+                // Add additional fields from the new API structure
+                iteration: nodeExec.iteration,
+                logs: nodeExec.logs || [],
+                predecessor_node_id: nodeExec.predecessor_node_id,
+              })) || [],
+          }));
+
+        return mappedExecutions;
+      }
+    } catch (error: any) {
       console.error("Error fetching executions:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to fetch executions", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
 
   /**
-   * Get detailed logs for a specific execution
+   * Get execution tree for a specific execution
+   * @param workflowId The ID of the workflow
+   * @param executionId The ID of the execution to get tree for
+   * @returns Promise<ExecutionTree> Execution tree structure
+   */
+  static async getExecutionTree(
+    workflowId: string,
+    executionId: string
+  ): Promise<ExecutionTree> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.get(
+        `${this.WORKFLOWS_URL}/${workflowId}/logs/${executionId}/tree`,
+        {
+          headers,
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error("Error fetching execution tree:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to fetch execution tree", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed logs for a specific execution (legacy method - now returns tree)
    * @param executionId The ID of the execution to get logs for
    * @returns Promise<WorkflowExecution> Detailed execution with logs
    */
@@ -323,12 +469,20 @@ export default class WorkflowService {
             error_message: nodeExec.error_message,
             input_data: nodeExec.input_data,
             output_data: nodeExec.output_data,
+            predecessor_node_id: nodeExec.predecessor_node_id,
           })) || [],
       };
 
       return mappedExecution;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching execution logs:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to fetch execution logs", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -342,9 +496,53 @@ export default class WorkflowService {
     workflowId: string
   ): Promise<WorkflowExecution[]> {
     try {
+      // Use the new workflow logs endpoint which doesn't include execution trees
       return await this.getAllExecutions(workflowId);
     } catch (error) {
       console.error("Error fetching workflow executions:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get executions for a specific workflow with their execution trees
+   * @param workflowId The ID of the workflow to get executions for
+   * @returns Promise<Array<{execution: WorkflowExecution, tree: ExecutionTree}>> Array of executions with their trees
+   */
+  static async getWorkflowExecutionsWithTrees(
+    workflowId: string
+  ): Promise<Array<{ execution: WorkflowExecution; tree: ExecutionTree }>> {
+    try {
+      // First get all executions
+      const executions = await this.getWorkflowExecutions(workflowId);
+
+      // Then get the tree for each execution
+      const executionsWithTrees = await Promise.all(
+        executions.map(async (execution) => {
+          try {
+            const tree = await this.getExecutionTree(workflowId, execution.id);
+            return { execution, tree };
+          } catch (error) {
+            console.error(
+              `Error fetching tree for execution ${execution.id}:`,
+              error
+            );
+            // Return execution without tree if tree fetch fails
+            return { execution, tree: { execution_tree: {} } };
+          }
+        })
+      );
+
+      return executionsWithTrees;
+    } catch (error: any) {
+      console.error("Error fetching workflow executions with trees:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to fetch workflow executions", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -359,8 +557,15 @@ export default class WorkflowService {
         {},
         { headers }
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error pausing workflow:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to pause workflow", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -373,8 +578,15 @@ export default class WorkflowService {
         {},
         { headers }
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error resuming workflow:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to resume workflow", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }
@@ -406,8 +618,15 @@ export default class WorkflowService {
       });
 
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error refreshing trigger hash:", error);
+      const errorMessage = parseApiError(error);
+
+      // toast.error("Failed to refresh trigger hash", {
+      //   description: errorMessage,
+      //   duration: 3000,
+      // });
+
       throw error;
     }
   }

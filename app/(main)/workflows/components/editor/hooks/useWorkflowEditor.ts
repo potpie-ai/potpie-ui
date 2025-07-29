@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Workflow } from "@/services/WorkflowService";
 import WorkflowService from "@/services/WorkflowService";
 import type {
@@ -25,6 +25,8 @@ import {
   generateEdges,
   createUpdatedWorkflow,
 } from "../utils/workflowUtils";
+import { parseApiError } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface UseWorkflowEditorProps {
   workflow: Workflow;
@@ -61,7 +63,17 @@ export const useWorkflowEditor = ({
   });
 
   // Always use the latest localWorkflow.id for workflowId
-  const workflowId = localWorkflow.id || "default";
+  // For new workflows, use a unique identifier to avoid conflicts
+  // Use a stable ID that doesn't change when switching modes
+  const stableWorkflowId = useMemo(() => {
+    const baseId =
+      workflow.id && workflow.id !== "" && workflow.id !== "default"
+        ? workflow.id
+        : `new-workflow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return baseId;
+  }, [workflow.id]);
+
+  const workflowId = stableWorkflowId;
 
   // Ref to prevent infinite loops in useEffect
   const isUpdatingRef = useRef(false);
@@ -177,11 +189,47 @@ export const useWorkflowEditor = ({
     try {
       const localWorkflowData = getLocalWorkflow(workflowId);
       const localWorkflowInfo = getLocalWorkflowInfo(workflowId);
+      const isNewWorkflow =
+        !workflow.id ||
+        workflow.id === "" ||
+        workflow.id === "default" ||
+        workflowId.startsWith("new-workflow-");
 
+      // Handle non-edit modes (view_only and preview)
+      if (mode === "view_only" || mode === "preview") {
+        setLocalWorkflow(workflow);
+        currentWorkflowRef.current = workflow;
+        setOriginalWorkflow(workflow);
+        setHasUnsavedChanges(false);
+        setShowLocalWorkflowBanner(false);
+
+        const nodes = generateNodes(workflow, debugMode);
+        const edges = generateEdges(workflow, true, debugMode);
+        setEditingNodes(nodes);
+        setEditingEdges(edges);
+
+        setDebugInfo((prev) => ({
+          ...prev,
+          isInitialized: true,
+          nodesCount: nodes.length,
+          edgesCount: edges.length,
+          workflowId,
+          hasLocalWorkflow: false,
+          hasUnsavedChanges: false,
+          mode,
+          error: null,
+        }));
+        setIsInitialized(true);
+        return;
+      }
+
+      // In edit mode, check for local copy
       if (localWorkflowData && localWorkflowInfo) {
-        // Show banner if there's a local copy with unsaved changes
-        if (localWorkflowInfo.hasUnsavedChanges) {
+        // Show banner if there's a local copy with unsaved changes and we're in edit mode
+        if (localWorkflowInfo.hasUnsavedChanges && mode === "edit") {
           setShowLocalWorkflowBanner(true);
+        } else {
+          setShowLocalWorkflowBanner(false);
         }
 
         // Load local workflow if it exists
@@ -193,7 +241,8 @@ export const useWorkflowEditor = ({
         const nodes = generateNodes(localWorkflowData, debugMode);
         const edges = generateEdges(
           localWorkflowData,
-          mode === "view_only" || mode === "preview",
+          (mode as "view_only" | "edit" | "preview") === "view_only" ||
+            (mode as "view_only" | "edit" | "preview") === "preview",
           debugMode
         );
         setEditingNodes(nodes);
@@ -218,7 +267,11 @@ export const useWorkflowEditor = ({
         setHasUnsavedChanges(false);
 
         const nodes = generateNodes(workflow, debugMode);
-        const edges = generateEdges(workflow, mode === "view_only", debugMode);
+        const edges = generateEdges(
+          workflow,
+          (mode as "view_only" | "edit" | "preview") === "view_only",
+          debugMode
+        );
         setEditingNodes(nodes);
         setEditingEdges(edges);
 
@@ -245,19 +298,67 @@ export const useWorkflowEditor = ({
     }
   }, [workflow, mode, debugMode]);
 
+  // Update banner visibility when mode changes
+  useEffect(() => {
+    // In view mode, always use saved copy and hide banner
+    if (mode !== "edit") {
+      setShowLocalWorkflowBanner(false);
+      // Reload the saved copy from the server
+      setLocalWorkflow(workflow);
+      currentWorkflowRef.current = workflow;
+      setOriginalWorkflow(workflow);
+      setHasUnsavedChanges(false);
+
+      const nodes = generateNodes(workflow, debugMode);
+      const edges = generateEdges(workflow, true, debugMode);
+      setEditingNodes(nodes);
+      setEditingEdges(edges);
+      return;
+    }
+
+    // In edit mode, check for local copy and load it if it exists
+    const localWorkflowData = getLocalWorkflow(workflowId);
+    const localWorkflowInfo = getLocalWorkflowInfo(workflowId);
+
+    if (
+      localWorkflowData &&
+      localWorkflowInfo &&
+      localWorkflowInfo.hasUnsavedChanges
+    ) {
+      // Load local copy
+      setLocalWorkflow(localWorkflowData);
+      currentWorkflowRef.current = localWorkflowData;
+      setHasUnsavedChanges(true);
+      setShowLocalWorkflowBanner(true);
+
+      const nodes = generateNodes(localWorkflowData, debugMode);
+      const edges = generateEdges(localWorkflowData, false, debugMode);
+      setEditingNodes(nodes);
+      setEditingEdges(edges);
+    } else {
+      // No local copy, use saved copy
+      setLocalWorkflow(workflow);
+      currentWorkflowRef.current = workflow;
+      setOriginalWorkflow(workflow);
+      setHasUnsavedChanges(false);
+      setShowLocalWorkflowBanner(false);
+
+      const nodes = generateNodes(workflow, debugMode);
+      const edges = generateEdges(workflow, false, debugMode);
+      setEditingNodes(nodes);
+      setEditingEdges(edges);
+    }
+  }, [mode, workflowId, workflow, debugMode]);
+
   // Save to local storage whenever workflow changes
   const updateLocalWorkflow = useCallback(
     (updatedWorkflow: Workflow, hasChanges: boolean = true) => {
       setLocalWorkflow(updatedWorkflow);
       currentWorkflowRef.current = updatedWorkflow;
       setHasUnsavedChanges(hasChanges);
-      saveLocalWorkflow(
-        updatedWorkflow.id || "default",
-        updatedWorkflow,
-        hasChanges
-      );
+      saveLocalWorkflow(workflowId, updatedWorkflow, hasChanges);
     },
-    []
+    [workflowId]
   );
 
   // Update local workflow when nodes or edges change
@@ -597,68 +698,74 @@ export const useWorkflowEditor = ({
     debugMode: boolean = false,
     convertEdgesToAdjacencyList: any
   ) {
-    const savedWorkflow = await WorkflowService.createWorkflow(payload);
-    if (savedWorkflow && savedWorkflow.id) {
-      // Debug logging to understand the API response
-      if (debugMode) {
-        console.log("API response from createWorkflow:", savedWorkflow);
-        console.log("Saved workflow graph:", savedWorkflow.graph);
-        console.log(
-          "Saved workflow adjacency_list:",
-          savedWorkflow.graph?.adjacency_list
-        );
-      }
+    try {
+      const savedWorkflow = await WorkflowService.createWorkflow(payload);
+      if (savedWorkflow && savedWorkflow.id) {
+        // Debug logging to understand the API response
+        if (debugMode) {
+          console.log("API response from createWorkflow:", savedWorkflow);
+          console.log("Saved workflow graph:", savedWorkflow.graph);
+          console.log(
+            "Saved workflow adjacency_list:",
+            savedWorkflow.graph?.adjacency_list
+          );
+        }
 
-      const safeWorkflow = {
-        ...savedWorkflow,
-        title: savedWorkflow.title || "",
-        id: savedWorkflow.id,
-        graph: savedWorkflow.graph || { nodes: {}, adjacency_list: {} },
-      };
-
-      if (debugMode) {
-        console.log("Safe workflow after fallback:", safeWorkflow);
-        console.log(
-          "Safe workflow adjacency_list:",
-          safeWorkflow.graph.adjacency_list
-        );
-      }
-
-      // Check if the workflow has adjacency_list in a different format and convert them
-      const processedWorkflow = convertEdgesToAdjacencyList(
-        safeWorkflow,
-        debugMode
-      );
-
-      // Fallback: If the processed workflow still doesn't have adjacency_list, use the original
-      let finalWorkflow = processedWorkflow;
-      if (
-        !processedWorkflow.graph?.adjacency_list ||
-        Object.keys(processedWorkflow.graph.adjacency_list).length === 0
-      ) {
-        console.log(
-          "WARNING: Processed workflow has no adjacency_list, using original workflow"
-        );
-        console.log(
-          "Original workflow adjacency_list:",
-          originalWorkflow.graph?.adjacency_list
-        );
-        finalWorkflow = {
-          ...processedWorkflow,
-          graph: {
-            ...processedWorkflow.graph,
-            adjacency_list: originalWorkflow.graph?.adjacency_list || {},
-          },
+        const safeWorkflow = {
+          ...savedWorkflow,
+          title: savedWorkflow.title || "",
+          id: savedWorkflow.id,
+          graph: savedWorkflow.graph || { nodes: {}, adjacency_list: {} },
         };
-      }
 
-      setOriginalWorkflow(finalWorkflow);
-      setLocalWorkflow(finalWorkflow);
-      currentWorkflowRef.current = finalWorkflow;
-      onSave(finalWorkflow, true);
-      clearLocalWorkflow(finalWorkflow.id);
-      setHasUnsavedChanges(false);
-      setShowLocalWorkflowBanner(false);
+        if (debugMode) {
+          console.log("Safe workflow after fallback:", safeWorkflow);
+          console.log(
+            "Safe workflow adjacency_list:",
+            safeWorkflow.graph.adjacency_list
+          );
+        }
+
+        // Check if the workflow has adjacency_list in a different format and convert them
+        const processedWorkflow = convertEdgesToAdjacencyList(
+          safeWorkflow,
+          debugMode
+        );
+
+        // Fallback: If the processed workflow still doesn't have adjacency_list, use the original
+        let finalWorkflow = processedWorkflow;
+        if (
+          !processedWorkflow.graph?.adjacency_list ||
+          Object.keys(processedWorkflow.graph.adjacency_list).length === 0
+        ) {
+          console.log(
+            "WARNING: Processed workflow has no adjacency_list, using original workflow"
+          );
+          console.log(
+            "Original workflow adjacency_list:",
+            originalWorkflow.graph?.adjacency_list
+          );
+          finalWorkflow = {
+            ...processedWorkflow,
+            graph: {
+              ...processedWorkflow.graph,
+              adjacency_list: originalWorkflow.graph?.adjacency_list || {},
+            },
+          };
+        }
+
+        setOriginalWorkflow(finalWorkflow);
+        setLocalWorkflow(finalWorkflow);
+        currentWorkflowRef.current = finalWorkflow;
+        onSave(finalWorkflow, true);
+        clearLocalWorkflow(finalWorkflow.id);
+        setHasUnsavedChanges(false);
+        setShowLocalWorkflowBanner(false);
+      }
+    } catch (error) {
+      console.error("Error creating workflow:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -676,68 +783,74 @@ export const useWorkflowEditor = ({
     debugMode: boolean = false,
     convertEdgesToAdjacencyList: any
   ) {
-    const savedWorkflow = await WorkflowService.updateWorkflow(id, payload);
-    if (savedWorkflow) {
-      // Debug logging to understand the API response
-      if (debugMode) {
-        console.log("API response from updateWorkflow:", savedWorkflow);
-        console.log("Saved workflow graph:", savedWorkflow.graph);
-        console.log(
-          "Saved workflow adjacency_list:",
-          savedWorkflow.graph?.adjacency_list
-        );
-      }
+    try {
+      const savedWorkflow = await WorkflowService.updateWorkflow(id, payload);
+      if (savedWorkflow) {
+        // Debug logging to understand the API response
+        if (debugMode) {
+          console.log("API response from updateWorkflow:", savedWorkflow);
+          console.log("Saved workflow graph:", savedWorkflow.graph);
+          console.log(
+            "Saved workflow adjacency_list:",
+            savedWorkflow.graph?.adjacency_list
+          );
+        }
 
-      const safeWorkflow = {
-        ...savedWorkflow,
-        title: savedWorkflow.title || "",
-        id: savedWorkflow.id,
-        graph: savedWorkflow.graph || { nodes: {}, adjacency_list: {} },
-      };
-
-      if (debugMode) {
-        console.log("Safe workflow after fallback:", safeWorkflow);
-        console.log(
-          "Safe workflow adjacency_list:",
-          safeWorkflow.graph.adjacency_list
-        );
-      }
-
-      // Check if the workflow has adjacency_list in a different format and convert them
-      const processedWorkflow = convertEdgesToAdjacencyList(
-        safeWorkflow,
-        debugMode
-      );
-
-      // Fallback: If the processed workflow still doesn't have adjacency_list, use the original
-      let finalWorkflow = processedWorkflow;
-      if (
-        !processedWorkflow.graph?.adjacency_list ||
-        Object.keys(processedWorkflow.graph.adjacency_list).length === 0
-      ) {
-        console.log(
-          "WARNING: Processed workflow has no adjacency_list, using original workflow"
-        );
-        console.log(
-          "Original workflow adjacency_list:",
-          originalWorkflow.graph?.adjacency_list
-        );
-        finalWorkflow = {
-          ...processedWorkflow,
-          graph: {
-            ...processedWorkflow.graph,
-            adjacency_list: originalWorkflow.graph?.adjacency_list || {},
-          },
+        const safeWorkflow = {
+          ...savedWorkflow,
+          title: savedWorkflow.title || "",
+          id: savedWorkflow.id,
+          graph: savedWorkflow.graph || { nodes: {}, adjacency_list: {} },
         };
-      }
 
-      setOriginalWorkflow(finalWorkflow);
-      setLocalWorkflow(finalWorkflow);
-      currentWorkflowRef.current = finalWorkflow;
-      onSave(finalWorkflow, false);
-      clearLocalWorkflow(finalWorkflow.id);
-      setHasUnsavedChanges(false);
-      setShowLocalWorkflowBanner(false);
+        if (debugMode) {
+          console.log("Safe workflow after fallback:", safeWorkflow);
+          console.log(
+            "Safe workflow adjacency_list:",
+            safeWorkflow.graph.adjacency_list
+          );
+        }
+
+        // Check if the workflow has adjacency_list in a different format and convert them
+        const processedWorkflow = convertEdgesToAdjacencyList(
+          safeWorkflow,
+          debugMode
+        );
+
+        // Fallback: If the processed workflow still doesn't have adjacency_list, use the original
+        let finalWorkflow = processedWorkflow;
+        if (
+          !processedWorkflow.graph?.adjacency_list ||
+          Object.keys(processedWorkflow.graph.adjacency_list).length === 0
+        ) {
+          console.log(
+            "WARNING: Processed workflow has no adjacency_list, using original workflow"
+          );
+          console.log(
+            "Original workflow adjacency_list:",
+            originalWorkflow.graph?.adjacency_list
+          );
+          finalWorkflow = {
+            ...processedWorkflow,
+            graph: {
+              ...processedWorkflow.graph,
+              adjacency_list: originalWorkflow.graph?.adjacency_list || {},
+            },
+          };
+        }
+
+        setOriginalWorkflow(finalWorkflow);
+        setLocalWorkflow(finalWorkflow);
+        currentWorkflowRef.current = finalWorkflow;
+        onSave(finalWorkflow, false);
+        clearLocalWorkflow(finalWorkflow.id);
+        setHasUnsavedChanges(false);
+        setShowLocalWorkflowBanner(false);
+      }
+    } catch (error) {
+      console.error("Error updating workflow:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -801,8 +914,36 @@ export const useWorkflowEditor = ({
         );
       }
     } catch (error) {
-      // Optionally, handle error (e.g., show toast)
       console.error("Error saving workflow:", error);
+      const errorMessage = parseApiError(error);
+      console.log("Showing toast notification for error:", errorMessage);
+
+      // Show a more user-friendly error message
+      let userFriendlyMessage = "Save failed";
+      if (errorMessage.includes("Validation errors:")) {
+        userFriendlyMessage =
+          "Please complete all required fields in your workflow nodes";
+      } else if (errorMessage.includes("repo_name is required")) {
+        userFriendlyMessage =
+          "Please configure repository settings for your trigger nodes";
+      } else if (errorMessage.includes("agent id is required")) {
+        userFriendlyMessage =
+          "Please configure agent settings for your workflow";
+      } else if (errorMessage.includes("condition is required")) {
+        userFriendlyMessage =
+          "Please configure conditions for your conditional nodes";
+      }
+
+      toast.error(userFriendlyMessage, {
+        duration: 4000,
+        style: {
+          backgroundColor: "#ef4444",
+          color: "white",
+          border: "2px solid #dc2626",
+        },
+      });
+      // Re-throw the error with the parsed message so the parent component can handle it
+      throw new Error(errorMessage);
     }
   }, [editingNodes, editingEdges, localWorkflow, onSave, debugMode]);
 
@@ -843,17 +984,38 @@ export const useWorkflowEditor = ({
       setEditingEdges(edges);
       setHasUnsavedChanges(true);
     }
-    setShowLocalWorkflowBanner(false);
+    setShowLocalWorkflowBanner(mode === "edit");
   }, [workflowId, mode, debugMode]);
 
   // Discard local workflow and load latest from API (for banner action)
   const handleDiscardLocalWorkflow = useCallback(async () => {
+    const isNewWorkflow =
+      !workflow.id ||
+      workflow.id === "" ||
+      workflow.id === "default" ||
+      workflowId.startsWith("new-workflow-");
+
     clearLocalWorkflow(workflowId);
     setShowLocalWorkflowBanner(false);
 
+    // For new workflows, just clear local storage and start fresh
+    if (isNewWorkflow) {
+      setLocalWorkflow(workflow);
+      currentWorkflowRef.current = workflow;
+      setOriginalWorkflow(workflow);
+      setHasUnsavedChanges(false);
+
+      const nodes = generateNodes(workflow, debugMode);
+      const edges = generateEdges(workflow, mode === "view_only", debugMode);
+      setEditingNodes(nodes);
+      setEditingEdges(edges);
+      setSelectedNode(null);
+      return;
+    }
+
     try {
-      // Only fetch from API if we have a valid workflow ID
-      if (workflowId && workflowId !== "default") {
+      // Only fetch from API if we have a valid workflow ID (not a new workflow ID)
+      if (workflowId && !workflowId.startsWith("new-workflow-")) {
         console.log("Fetching workflow from API with ID:", workflowId);
         const latestWorkflow =
           await WorkflowService.getWorkflowById(workflowId);
@@ -988,6 +1150,7 @@ export const useWorkflowEditor = ({
     mode,
     debugMode,
     convertEdgesToAdjacencyList,
+    workflow,
   ]);
 
   return {

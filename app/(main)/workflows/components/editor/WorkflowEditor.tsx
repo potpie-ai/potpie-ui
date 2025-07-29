@@ -117,9 +117,15 @@ export const WorkflowEditor: FC<WorkflowEditorProps> = ({
 
         {/* Local workflow banner */}
         <LocalWorkflowBanner
-          show={showLocalWorkflowBanner && mode !== "preview"}
+          show={showLocalWorkflowBanner && mode === "edit"}
           onLoadLocalWorkflow={handleLoadLocalWorkflow}
           onDiscardLocalWorkflow={handleDiscardLocalWorkflow}
+          isNewWorkflow={
+            !localWorkflow.id ||
+            localWorkflow.id === "" ||
+            localWorkflow.id === "default" ||
+            (!!localWorkflow.id && localWorkflow.id.startsWith("new-workflow-"))
+          }
         />
 
         {/* Editor Controls */}

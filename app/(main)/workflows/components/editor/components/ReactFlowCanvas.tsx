@@ -6,6 +6,7 @@ import {
   MiniMap,
   useReactFlow,
   ReactFlowProvider,
+  BackgroundVariant,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import type { Node as RFNode, Edge as RFEdge } from "reactflow";
@@ -141,7 +142,7 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
         zoomOnPinch={true}
         proOptions={{ hideAttribution: true }}
       >
-        <Background />
+        <Background variant={BackgroundVariant.Cross} size={5} gap={40} />
         <Controls className="z-20" />
         {mode !== "preview" && <MiniMap className="z-20" />}
       </ReactFlow>

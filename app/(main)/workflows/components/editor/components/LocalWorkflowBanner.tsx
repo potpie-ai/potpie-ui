@@ -5,12 +5,14 @@ interface LocalWorkflowBannerProps {
   show: boolean;
   onLoadLocalWorkflow: () => void;
   onDiscardLocalWorkflow: () => Promise<void>;
+  isNewWorkflow?: boolean;
 }
 
 export const LocalWorkflowBanner: FC<LocalWorkflowBannerProps> = ({
   show,
   onLoadLocalWorkflow,
   onDiscardLocalWorkflow,
+  isNewWorkflow = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -46,8 +48,9 @@ export const LocalWorkflowBanner: FC<LocalWorkflowBannerProps> = ({
           </div>
           <div className="ml-3">
             <p className="text-sm text-blue-700">
-              You have unsaved changes from a previous session. Would you like
-              to continue editing or load the latest version from the server?
+              {isNewWorkflow
+                ? "You have unsaved changes from a previous session. Would you like to continue editing or start fresh?"
+                : "You have unsaved changes from a previous session. Would you like to continue editing or load the latest version from the server?"}
             </p>
           </div>
         </div>
@@ -59,7 +62,11 @@ export const LocalWorkflowBanner: FC<LocalWorkflowBannerProps> = ({
             disabled={isLoading}
             className="text-blue-700 border-blue-300 hover:bg-blue-100"
           >
-            {isLoading ? "Loading..." : "Load Last Saved Copy"}
+            {isLoading
+              ? "Loading..."
+              : isNewWorkflow
+                ? "Start Fresh"
+                : "Load Last Saved Copy"}
           </Button>
           <Button
             variant="default"

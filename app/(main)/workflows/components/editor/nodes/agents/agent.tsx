@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Plus, RefreshCcw } from "lucide-react";
 import { RepoBranchSelector } from "../triggers/github/RepoBranchSelector";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface AgentConfigProps {
   config: any;
@@ -64,8 +66,12 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
   const handleSelectAgent = (agentId: string) => {
     if (readOnly) return;
     const selectedAgent = availableAgents.find((a) => a.id === agentId);
-    if (config.agentId !== agentId) {
-      onConfigChange({ ...config, agentId, agentName: selectedAgent?.name });
+    if (config.agent_id !== agentId) {
+      onConfigChange({
+        ...config,
+        agent_id: agentId,
+        name: selectedAgent?.name,
+      });
     }
   };
 
@@ -78,13 +84,24 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
   // Handle repository change
   const handleRepoChange = (repo: string) => {
     if (readOnly) return;
-    onConfigChange({ ...config, repoName: repo });
+    onConfigChange({ ...config, repo_name: repo });
   };
 
   // Handle branch change
   const handleBranchChange = (branch: string) => {
     if (readOnly) return;
-    onConfigChange({ ...config, branchName: branch });
+    onConfigChange({ ...config, branch_name: branch });
+  };
+
+  // Handle use current branch toggle
+  const handleUseCurrentBranchChange = (useCurrentBranch: boolean) => {
+    if (readOnly) return;
+    onConfigChange({
+      ...config,
+      use_current_branch: useCurrentBranch,
+      // Clear branch_name if using current branch
+      branch_name: useCurrentBranch ? "" : config.branch_name,
+    });
   };
 
   return (
@@ -133,7 +150,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
                 <Card
                   className={cn(
                     "h-40 p-3 border rounded-lg cursor-pointer shadow-sm flex flex-col justify-between transition-all text-left",
-                    config.agentId === agent.id
+                    config.agent_id === agent.id
                       ? "bg-green-400/30 border-green-500"
                       : "border-gray-200 hover:shadow-md hover:scale-105"
                   )}
@@ -152,7 +169,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
                   <p className="text-xs text-gray-600 line-clamp-3 flex-1 mb-2">
                     {agent.description}
                   </p>
-                  {config.agentId === agent.id && (
+                  {config.agent_id === agent.id && (
                     <span className="text-xs text-green-700 font-medium">
                       Selected
                     </span>
@@ -169,7 +186,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
                   <Card
                     className={cn(
                       "h-40 p-3 border rounded-lg cursor-pointer shadow-sm flex flex-col justify-center items-center transition-all text-left",
-                      config.agentId === "create-agent"
+                      config.agent_id === "create-agent"
                         ? "bg-green-400/30 border-green-500"
                         : "border-gray-200 hover:shadow-md hover:scale-105"
                     )}
@@ -185,17 +202,43 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
           </CarouselContent>
         </Carousel>
       </div>
+
       {/* Repository and Branch Selection */}
       <div className="mt-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Repository & Branch
         </label>
+
+        {/* Use Current Branch Toggle */}
+        <div className="flex items-center space-x-2 mb-3">
+          <Checkbox
+            id="useCurrentBranch"
+            checked={config.use_current_branch || false}
+            onCheckedChange={handleUseCurrentBranchChange}
+            disabled={readOnly}
+          />
+          <Label
+            htmlFor="useCurrentBranch"
+            className="text-sm font-medium text-gray-700 cursor-pointer"
+          >
+            Use current branch from execution variables
+          </Label>
+        </div>
+        {config.use_current_branch && (
+          <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-md p-2 mb-3">
+            ℹ️ The branch will be automatically determined based on the
+            trigger's branch data. If the trigger isn't branch-related (e.g.,
+            manual trigger), it will default to the "main" branch.
+          </div>
+        )}
+
         <RepoBranchSelector
-          repoName={config.repoName || ""}
-          branchName={config.branchName || ""}
+          repoName={config.repo_name || ""}
+          branchName={config.use_current_branch ? "" : config.branch_name || ""}
           onRepoChange={handleRepoChange}
           onBranchChange={handleBranchChange}
           readOnly={readOnly}
+          repoOnly={config.use_current_branch}
         />
       </div>
 
@@ -229,10 +272,12 @@ export const agentNodeMetadata = {
 
 export const AgentNode = ({ data }: { data: WorkflowNode }) => {
   const colors = getNodeColors(data.group);
-  const agentName = data.data?.agentName;
+  const agentName = data.data?.name;
   const task = data.data?.task;
-  const repoName = data.data?.repoName;
-  const branchName = data.data?.branchName;
+  const repoName = data.data?.repo_name;
+  const branchName = data.data?.branch_name;
+  const useCurrentBranch = data.data?.use_current_branch;
+
   return (
     <div className="w-full">
       <div
@@ -257,13 +302,19 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
               📁 {repoName}
             </p>
           )}
-          {branchName && (
-            <p
-              className="mt-1 text-xs text-gray-600 truncate"
-              title={branchName}
-            >
-              🌿 {branchName}
+          {useCurrentBranch ? (
+            <p className="mt-1 text-xs text-blue-600 truncate">
+              🌿 Current Branch (from execution)
             </p>
+          ) : (
+            branchName && (
+              <p
+                className="mt-1 text-xs text-gray-600 truncate"
+                title={branchName}
+              >
+                🌿 {branchName}
+              </p>
+            )
           )}
           <p
             className="mt-2 text-xs text-gray-700 line-clamp-2 max-w-full break-words"

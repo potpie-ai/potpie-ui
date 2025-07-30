@@ -350,7 +350,7 @@ const Workflows = () => {
                       </div>
 
                       {/* Bottom Row: Metadata Grid */}
-                      <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                         {/* Agent */}
                         <div className="flex items-start gap-3">
                           <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -436,29 +436,6 @@ const Workflows = () => {
                                     ? "Inactive"
                                     : "Active"}
                               </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Validation Status */}
-                        <div className="flex items-start gap-3">
-                          <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <ValidationStatus
-                              isValid={workflow.validation?.is_valid ?? true}
-                              errors={workflow.validation?.errors ?? []}
-                              warnings={workflow.validation?.warnings ?? []}
-                              size="sm"
-                              className="!gap-1"
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 text-left">
-                              Validation
-                            </p>
-                            <div className="text-sm text-gray-700 font-medium text-left">
-                              {workflow.validation?.is_valid
-                                ? "Valid"
-                                : "Invalid"}
                             </div>
                           </div>
                         </div>

@@ -149,7 +149,7 @@ export default function ExecutionDetailPage() {
         <div className="text-center">
           <h2 className="text-xl font-semibold mb-2">Execution not found</h2>
           <p className="text-gray-600">
-            The execution you're looking for doesn't exist.
+            The execution you&apos;re looking for doesn&apos;t exist.
           </p>
         </div>
       </div>

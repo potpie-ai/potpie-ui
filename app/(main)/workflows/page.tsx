@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ValidationStatus } from "@/components/ui/validation-status";
 import AgentService from "@/services/AgentService";
 
 import WorkflowService, { Trigger, Workflow } from "@/services/WorkflowService";
@@ -80,8 +81,37 @@ const Workflows = () => {
   async function fetchData() {
     setLoading(true);
     const workflows = await WorkflowService.getWorkflowsList();
+
+    // Fetch validation data for each workflow
+    const workflowsWithValidation = await Promise.all(
+      workflows.map(async (workflow) => {
+        try {
+          const validation = await WorkflowService.validateWorkflow(
+            workflow.id
+          );
+          return {
+            ...workflow,
+            validation,
+          };
+        } catch (error) {
+          console.error(
+            `Error fetching validation for workflow ${workflow.id}:`,
+            error
+          );
+          return {
+            ...workflow,
+            validation: {
+              is_valid: true, // Default to valid if validation fails
+              errors: [],
+              warnings: [],
+            },
+          };
+        }
+      })
+    );
+
     setWorkflows(
-      workflows.sort(
+      workflowsWithValidation.sort(
         (a: any, b: any) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
@@ -112,6 +142,11 @@ const Workflows = () => {
   };
 
   const handlePause = async (workflow: Workflow, index: number) => {
+    // Don't allow pause/resume if workflow is invalid
+    if (!workflow.validation?.is_valid) {
+      return;
+    }
+
     if (workflow.is_paused) {
       await WorkflowService.resumeWorkflow(workflow.id);
     } else {
@@ -315,7 +350,7 @@ const Workflows = () => {
                       </div>
 
                       {/* Bottom Row: Metadata Grid */}
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
                         {/* Agent */}
                         <div className="flex items-start gap-3">
                           <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -387,11 +422,43 @@ const Workflows = () => {
                             </p>
                             <div className="flex items-center gap-2">
                               <div
-                                className={`w-2 h-2 rounded-full ${workflow.is_paused ? "bg-red-500" : "bg-green-500"} ${!workflow.is_paused ? "animate-pulse" : ""}`}
+                                className={`w-2 h-2 rounded-full ${
+                                  workflow.is_paused ||
+                                  !workflow.validation?.is_valid
+                                    ? "bg-red-500"
+                                    : "bg-green-500"
+                                } ${!workflow.is_paused && workflow.validation?.is_valid ? "animate-pulse" : ""}`}
                               />
                               <span className="text-sm text-gray-700 font-medium text-left">
-                                {workflow.is_paused ? "Paused" : "Active"}
+                                {workflow.is_paused
+                                  ? "Paused"
+                                  : !workflow.validation?.is_valid
+                                    ? "Inactive"
+                                    : "Active"}
                               </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Validation Status */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <ValidationStatus
+                              isValid={workflow.validation?.is_valid ?? true}
+                              errors={workflow.validation?.errors ?? []}
+                              warnings={workflow.validation?.warnings ?? []}
+                              size="sm"
+                              className="!gap-1"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 text-left">
+                              Validation
+                            </p>
+                            <div className="text-sm text-gray-700 font-medium text-left">
+                              {workflow.validation?.is_valid
+                                ? "Valid"
+                                : "Invalid"}
                             </div>
                           </div>
                         </div>
@@ -411,11 +478,12 @@ const Workflows = () => {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-7 w-7 p-0 hover:bg-gray-200"
+                                    className="h-7 w-7 p-0 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handlePause(workflow, index);
                                     }}
+                                    disabled={!workflow.validation?.is_valid}
                                   >
                                     {workflow.is_paused ? (
                                       <Play className="h-3 w-3" />
@@ -426,9 +494,11 @@ const Workflows = () => {
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p>
-                                    {workflow.is_paused
-                                      ? "Resume workflow"
-                                      : "Pause workflow"}
+                                    {!workflow.validation?.is_valid
+                                      ? "Workflow is invalid"
+                                      : workflow.is_paused
+                                        ? "Resume workflow"
+                                        : "Pause workflow"}
                                   </p>
                                 </TooltipContent>
                               </Tooltip>

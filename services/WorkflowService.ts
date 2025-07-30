@@ -8,6 +8,17 @@ export interface Position {
   y: number;
 }
 
+export interface WorkflowValidation {
+  is_valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface WorkflowResponse {
+  workflow: Workflow;
+  validation: WorkflowValidation;
+}
+
 export type NodeType =
   | "trigger_github_pr_opened"
   | "trigger_github_pr_closed"
@@ -62,6 +73,7 @@ export interface Workflow {
   version: string;
   graph: WorkflowGraph;
   variables: Record<string, string>;
+  validation?: WorkflowValidation;
 }
 
 // Execution types
@@ -195,7 +207,16 @@ export default class WorkflowService {
       const response = await axios.get(`${this.WORKFLOWS_URL}/${workflowId}`, {
         headers,
       });
-      return response.data.workflow;
+
+      // Handle both old and new response formats
+      const workflow = response.data.workflow || response.data;
+
+      // If the response includes validation data, use it
+      if (response.data.validation) {
+        workflow.validation = response.data.validation;
+      }
+
+      return workflow;
     } catch (error: any) {
       console.error("Error fetching workflow:", error);
       const errorMessage = parseApiError(error);
@@ -211,16 +232,14 @@ export default class WorkflowService {
 
   static async createWorkflow(
     workflow: CreateWorkflowRequest
-  ): Promise<Workflow | undefined> {
+  ): Promise<WorkflowResponse> {
     try {
       const headers = await getHeaders();
       const response = await axios.post(this.WORKFLOWS_URL, workflow, {
         headers,
       });
 
-      // Handle both response structures: direct workflow or nested in workflow property
-      const createdWorkflow = response.data.workflow || response.data;
-      return createdWorkflow;
+      return response.data;
     } catch (error: any) {
       console.error("Error creating workflow:", error);
       const errorMessage = parseApiError(error);
@@ -233,7 +252,7 @@ export default class WorkflowService {
   static async updateWorkflow(
     workflowId: string,
     workflow: CreateWorkflowRequest
-  ): Promise<Workflow | undefined> {
+  ): Promise<WorkflowResponse> {
     try {
       const headers = await getHeaders();
       const response = await axios.put(
@@ -241,7 +260,7 @@ export default class WorkflowService {
         workflow,
         { headers }
       );
-      return response.data.workflow;
+      return response.data;
     } catch (error: any) {
       console.error("Error updating workflow:", error);
       const errorMessage = parseApiError(error);
@@ -587,6 +606,24 @@ export default class WorkflowService {
       //   duration: 3000,
       // });
 
+      throw error;
+    }
+  }
+
+  static async validateWorkflow(
+    workflowId: string
+  ): Promise<WorkflowValidation> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post(
+        `${this.WORKFLOWS_URL}/${workflowId}/validate`,
+        {},
+        { headers }
+      );
+      return response.data.validation;
+    } catch (error: any) {
+      console.error("Error validating workflow:", error);
+      const errorMessage = parseApiError(error);
       throw error;
     }
   }

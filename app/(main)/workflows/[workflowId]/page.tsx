@@ -52,7 +52,8 @@ export default function WorkflowPage() {
 
   const handleSave = async (
     updatedWorkflow: Workflow,
-    isNewWorkflow: boolean
+    isNewWorkflow: boolean,
+    validation?: any
   ) => {
     try {
       if (isNewWorkflow) {
@@ -108,7 +109,7 @@ export default function WorkflowPage() {
       <WorkflowEditor
         workflow={workflow}
         mode={initialMode}
-        debugMode={true}
+        debugMode={false}
         onSave={handleSave}
         onCancel={handleCancel}
         onModeChange={handleModeChange}

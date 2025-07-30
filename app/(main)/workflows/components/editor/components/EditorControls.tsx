@@ -2,6 +2,7 @@ import { FC, useRef, useLayoutEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { ValidationStatus } from "@/components/ui/validation-status";
 import { ArrowLeft, History } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -15,6 +16,11 @@ interface EditorControlsProps {
   onTitleChange: (newTitle: string) => void;
   isNewWorkflow?: boolean;
   onExecutionsClick?: () => void;
+  validation?: {
+    is_valid: boolean;
+    errors: string[];
+    warnings: string[];
+  };
 }
 
 export const EditorControls: FC<EditorControlsProps> = ({
@@ -27,6 +33,7 @@ export const EditorControls: FC<EditorControlsProps> = ({
   onTitleChange,
   isNewWorkflow = false,
   onExecutionsClick,
+  validation,
 }) => {
   const router = useRouter();
   // Dynamic width logic - moved to top level
@@ -130,6 +137,17 @@ export const EditorControls: FC<EditorControlsProps> = ({
         )}
       </div>
       <div className="flex items-center gap-6">
+        {/* Validation Status */}
+        {validation && (
+          <div className="flex items-center gap-2">
+            <ValidationStatus
+              isValid={validation.is_valid}
+              errors={validation.errors}
+              warnings={validation.warnings}
+              size="sm"
+            />
+          </div>
+        )}
         {/* Unsaved changes indicator */}
         <span
           className={`text-sm text-orange-600 transition-opacity duration-200 ${

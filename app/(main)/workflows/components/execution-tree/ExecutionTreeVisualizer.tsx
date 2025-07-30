@@ -43,6 +43,42 @@ import { formatLocalTime, formatRelativeTime } from "@/lib/utils";
 import dayjs from "dayjs";
 import { getNodeColors } from "../editor/nodes/color_utils";
 
+// Custom hook for live duration updates
+const useLiveDuration = (startedAt: string, status: string) => {
+  const [currentTime, setCurrentTime] = useState(dayjs());
+
+  useEffect(() => {
+    if (status !== "running") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setCurrentTime(dayjs());
+    }, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, [status]);
+
+  const formatLiveDuration = (startedAt: string) => {
+    // Parse UTC time and convert to local timezone, same as formatLocalTime
+    const start = dayjs.utc(startedAt).local();
+    const durationMs = currentTime.diff(start, "millisecond");
+    const durationSeconds = Math.round(durationMs / 1000);
+
+    if (durationSeconds < 60) {
+      return `${durationSeconds}s`;
+    } else if (durationSeconds < 3600) {
+      return `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s`;
+    } else {
+      const hours = Math.floor(durationSeconds / 3600);
+      const minutes = Math.floor((durationSeconds % 3600) / 60);
+      return `${hours}h ${minutes}m`;
+    }
+  };
+
+  return status === "running" ? formatLiveDuration(startedAt) : null;
+};
+
 // Helper function to generate node positions with minimal edge crossings
 const generateNodePositions = (executionTree: ExecutionTree) => {
   const treeNodes = executionTree.execution_tree;
@@ -291,6 +327,9 @@ const ExecutionNode: FC<{ data: ExecutionNodeData; selected?: boolean }> = ({
   data,
   selected,
 }) => {
+  // Use live duration hook for running nodes
+  const liveDuration = useLiveDuration(data.startedAt, data.status);
+
   // Simple debug log
   if (selected) {
     console.log(`🎯 NODE SELECTED: ${data.nodeId}`);
@@ -543,7 +582,13 @@ const ExecutionNode: FC<{ data: ExecutionNodeData; selected?: boolean }> = ({
             <span>Started: {formatLocalTime(data.startedAt, "h:mm:ss")}</span>
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {formatDuration(data.logs)}
+              {data.status === "running" && liveDuration ? (
+                <span className="text-blue-600 font-medium animate-pulse">
+                  {liveDuration}
+                </span>
+              ) : (
+                formatDuration(data.logs)
+              )}
             </span>
             {data.iteration > 0 && <span>Iteration: {data.iteration}</span>}
           </div>
@@ -663,9 +708,13 @@ const NodeDetailsPanel: FC<{
   node: RFNode | null;
   onClose: () => void;
 }> = ({ node, onClose }) => {
-  if (!node) return null;
+  const data = node?.data as ExecutionNodeData;
+  const liveDuration = useLiveDuration(
+    data?.startedAt || "",
+    data?.status || ""
+  );
 
-  const data = node.data as ExecutionNodeData;
+  if (!node) return null;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -882,7 +931,13 @@ const NodeDetailsPanel: FC<{
                 Duration
               </h4>
               <p className="text-sm text-gray-900">
-                {formatDuration(data.logs)}
+                {data.status === "running" && liveDuration ? (
+                  <span className="text-blue-600 font-medium">
+                    {liveDuration} (live)
+                  </span>
+                ) : (
+                  formatDuration(data.logs)
+                )}
               </p>
             </div>
           </CardContent>

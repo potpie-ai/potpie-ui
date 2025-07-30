@@ -227,8 +227,9 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
         {config.use_current_branch && (
           <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-md p-2 mb-3">
             ℹ️ The branch will be automatically determined based on the
-            trigger's branch data. If the trigger isn't branch-related (e.g.,
-            manual trigger), it will default to the "main" branch.
+            trigger&apos;s branch data. If the trigger isn&apos;t branch-related
+            (e.g., manual trigger), it will default to the &quot;main&quot;
+            branch.
           </div>
         )}
 

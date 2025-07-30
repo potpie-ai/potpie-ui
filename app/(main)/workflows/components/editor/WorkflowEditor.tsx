@@ -11,11 +11,20 @@ import { WorkflowDnDProvider } from "./components/WorkflowDnDProvider";
 interface WorkflowEditorProps {
   workflow?: Workflow;
   mode?: "view_only" | "edit" | "preview";
-  onSave?: (updatedWorkflow: Workflow, isNewWorkflow: boolean) => void;
+  onSave?: (
+    updatedWorkflow: Workflow,
+    isNewWorkflow: boolean,
+    validation?: any
+  ) => void;
   onCancel?: () => void;
   onModeChange?: (mode: "view_only" | "edit" | "preview") => void;
   onExecutionsClick?: () => void;
   debugMode?: boolean;
+  validation?: {
+    is_valid: boolean;
+    errors: string[];
+    warnings: string[];
+  };
 }
 
 function createEmptyWorkflow(): Workflow {
@@ -49,6 +58,7 @@ export const WorkflowEditor: FC<WorkflowEditorProps> = ({
   onModeChange,
   onExecutionsClick,
   debugMode = false,
+  validation,
 }) => {
   const workflow = useMemo(
     () => workflowProp ?? createEmptyWorkflow(),
@@ -78,6 +88,7 @@ export const WorkflowEditor: FC<WorkflowEditorProps> = ({
     showLocalWorkflowBanner,
     selectedNode,
     debugInfo,
+    isLoading,
 
     // Handlers
     onNodesChange,
@@ -139,12 +150,13 @@ export const WorkflowEditor: FC<WorkflowEditorProps> = ({
           onTitleChange={onTitleChange}
           isNewWorkflow={!localWorkflow.id || localWorkflow.id === ""}
           onExecutionsClick={onExecutionsClick}
+          validation={validation}
         />
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
           {/* ReactFlow Canvas */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden relative">
             <ReactFlowCanvas
               nodes={editingNodes}
               edges={editingEdges}
@@ -161,6 +173,18 @@ export const WorkflowEditor: FC<WorkflowEditorProps> = ({
               onNodeSelect={onNodeSelect}
               onNodeDrop={onNodeDrop}
             />
+
+            {/* Loading Overlay */}
+            {isLoading && (
+              <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center z-50">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Loading workflow...
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
           {/* Node Palette & Config Panel */}
           {mode !== "preview" && (

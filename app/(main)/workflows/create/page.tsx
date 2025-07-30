@@ -73,7 +73,6 @@ export default function CreateWorkflowPage() {
     <div className="h-[100vh] w-full overflow-hidden">
       <WorkflowEditor
         mode="edit"
-        debugMode={true}
         onSave={handleSave}
         onCancel={handleCancel}
         onModeChange={handleModeChange}

@@ -2,6 +2,63 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { parseApiError } from "@/lib/utils";
 
+// Helper function to convert camelCase fields to snake_case and prioritize snake_case
+const normalizeWorkflowData = (data: any): any => {
+  if (!data || typeof data !== "object") return data;
+
+  const normalized: any = {};
+
+  for (const [key, value] of Object.entries(data)) {
+    // Skip if we already have the snake_case version
+    const snakeCaseKey = key.replace(
+      /[A-Z]/g,
+      (letter) => `_${letter.toLowerCase()}`
+    );
+
+    if (key === snakeCaseKey) {
+      // Already snake_case, keep as is
+      normalized[key] = value;
+    } else if (data[snakeCaseKey] !== undefined) {
+      // We have both camelCase and snake_case, prioritize snake_case
+      normalized[snakeCaseKey] = data[snakeCaseKey];
+    } else {
+      // Only have camelCase, convert to snake_case
+      normalized[snakeCaseKey] = value;
+    }
+  }
+
+  return normalized;
+};
+
+// Helper function to clean up agent node data specifically
+const cleanAgentNodeData = (nodeData: any): any => {
+  if (!nodeData || typeof nodeData !== "object") return nodeData;
+
+  const cleaned: any = {};
+
+  // Map of camelCase to snake_case for agent fields
+  const fieldMappings = {
+    agentId: "agent_id",
+    agentName: "name",
+    repoName: "repo_name",
+    branchName: "branch_name",
+    useCurrentBranch: "use_current_branch",
+  };
+
+  for (const [key, value] of Object.entries(nodeData)) {
+    if (fieldMappings[key as keyof typeof fieldMappings]) {
+      // Convert camelCase to snake_case
+      const snakeCaseKey = fieldMappings[key as keyof typeof fieldMappings];
+      cleaned[snakeCaseKey] = value;
+    } else {
+      // Keep other fields as is
+      cleaned[key] = value;
+    }
+  }
+
+  return cleaned;
+};
+
 // --- NEW TYPES BASED ON BACKEND DOCS ---
 export interface Position {
   x: number;
@@ -211,12 +268,34 @@ export default class WorkflowService {
       // Handle both old and new response formats
       const workflow = response.data.workflow || response.data;
 
+      // Normalize the workflow data to prioritize snake_case fields
+      const normalizedWorkflow = {
+        ...workflow,
+        graph: {
+          ...workflow.graph,
+          nodes: Object.fromEntries(
+            Object.entries(workflow.graph.nodes || {}).map(
+              ([nodeId, node]: [string, any]) => [
+                nodeId,
+                {
+                  ...node,
+                  data:
+                    node.type === "custom_agent"
+                      ? cleanAgentNodeData(node.data)
+                      : normalizeWorkflowData(node.data),
+                },
+              ]
+            )
+          ),
+        },
+      };
+
       // If the response includes validation data, use it
       if (response.data.validation) {
-        workflow.validation = response.data.validation;
+        normalizedWorkflow.validation = response.data.validation;
       }
 
-      return workflow;
+      return normalizedWorkflow;
     } catch (error: any) {
       console.error("Error fetching workflow:", error);
       const errorMessage = parseApiError(error);
@@ -235,9 +314,33 @@ export default class WorkflowService {
   ): Promise<WorkflowResponse> {
     try {
       const headers = await getHeaders();
-      const response = await axios.post(this.WORKFLOWS_URL, workflow, {
-        headers,
-      });
+
+      // Normalize the workflow data to prioritize snake_case fields
+      const normalizedWorkflow = {
+        ...workflow,
+        nodes: Object.fromEntries(
+          Object.entries(workflow.nodes).map(
+            ([nodeId, node]: [string, WorkflowNode]) => [
+              nodeId,
+              {
+                ...node,
+                data:
+                  node.type === "custom_agent"
+                    ? cleanAgentNodeData(node.data)
+                    : normalizeWorkflowData(node.data),
+              },
+            ]
+          )
+        ),
+      };
+
+      const response = await axios.post(
+        this.WORKFLOWS_URL,
+        normalizedWorkflow,
+        {
+          headers,
+        }
+      );
 
       return response.data;
     } catch (error: any) {
@@ -255,9 +358,29 @@ export default class WorkflowService {
   ): Promise<WorkflowResponse> {
     try {
       const headers = await getHeaders();
+
+      // Normalize the workflow data to prioritize snake_case fields
+      const normalizedWorkflow = {
+        ...workflow,
+        nodes: Object.fromEntries(
+          Object.entries(workflow.nodes).map(
+            ([nodeId, node]: [string, WorkflowNode]) => [
+              nodeId,
+              {
+                ...node,
+                data:
+                  node.type === "custom_agent"
+                    ? cleanAgentNodeData(node.data)
+                    : normalizeWorkflowData(node.data),
+              },
+            ]
+          )
+        ),
+      };
+
       const response = await axios.put(
         `${this.WORKFLOWS_URL}/${workflowId}`,
-        workflow,
+        normalizedWorkflow,
         { headers }
       );
       return response.data;

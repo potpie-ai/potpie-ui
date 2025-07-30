@@ -244,6 +244,11 @@ export default function ExecutionDetailPage() {
                 embedded={true}
                 onRefresh={refreshExecutionTree}
                 isRunning={execution.status === "running"}
+                isPending={
+                  !["completed", "failed", "cancelled"].includes(
+                    execution.status
+                  )
+                }
               />
             </div>
           </CardContent>

@@ -72,6 +72,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
     const currentConfig = config || {};
     const newConfig = {
       ...currentConfig,
+      // Set the correct snake_case fields
       agent_id: agentId,
       name: selectedAgent?.name,
     };

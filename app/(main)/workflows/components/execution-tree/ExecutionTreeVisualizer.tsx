@@ -305,6 +305,7 @@ interface ExecutionTreeVisualizerProps {
   embedded?: boolean; // New prop for embedded mode
   onRefresh?: () => Promise<void>; // Function to refresh execution tree data
   isRunning?: boolean; // Whether the workflow is currently running
+  isPending?: boolean; // Whether the workflow is currently pending
 }
 
 interface ExecutionNodeData {
@@ -1156,6 +1157,7 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
   embedded = false,
   onRefresh,
   isRunning = false,
+  isPending = false,
 }) => {
   const [selectedNode, setSelectedNode] = useState<RFNode | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -1230,9 +1232,9 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
     []
   );
 
-  // Polling effect for running workflows
+  // Polling effect for running and pending workflows
   useEffect(() => {
-    if (!isRunning || !onRefresh) return;
+    if ((!isRunning && !isPending) || !onRefresh) return;
 
     const interval = setInterval(async () => {
       try {
@@ -1246,7 +1248,7 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
     }, 3000); // Poll every 3 seconds
 
     return () => clearInterval(interval);
-  }, [isRunning, onRefresh]);
+  }, [isRunning, isPending, onRefresh]);
 
   useEffect(() => {
     // Set initialized after a short delay to ensure proper rendering
@@ -1298,8 +1300,10 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
                 <RefreshCw
                   className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
                 />
-                {isRunning && (
-                  <span className="text-xs text-blue-600">Auto-refreshing</span>
+                {(isRunning || isPending) && (
+                  <span className="text-xs text-blue-600">
+                    {isRunning ? "Running" : "Pending"} - Auto-refreshing
+                  </span>
                 )}
               </Button>
             )}

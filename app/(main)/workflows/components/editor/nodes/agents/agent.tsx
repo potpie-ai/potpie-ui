@@ -65,42 +65,47 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
   // Only update config on click, don't re-fetch agents
   const handleSelectAgent = (agentId: string) => {
     if (readOnly) return;
+
     const selectedAgent = availableAgents.find((a) => a.id === agentId);
-    if (config.agent_id !== agentId) {
-      onConfigChange({
-        ...config,
-        agent_id: agentId,
-        name: selectedAgent?.name,
-      });
-    }
+
+    // Ensure config exists and create a new config object
+    const currentConfig = config || {};
+    const newConfig = {
+      ...currentConfig,
+      agent_id: agentId,
+      name: selectedAgent?.name,
+    };
+
+    // Always call onConfigChange to ensure the update happens
+    onConfigChange(newConfig);
   };
 
   // Handle task change
   const handleTaskChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (readOnly) return;
-    onConfigChange({ ...config, task: e.target.value });
+    onConfigChange({ ...(config || {}), task: e.target.value });
   };
 
   // Handle repository change
   const handleRepoChange = (repo: string) => {
     if (readOnly) return;
-    onConfigChange({ ...config, repo_name: repo });
+    onConfigChange({ ...(config || {}), repo_name: repo });
   };
 
   // Handle branch change
   const handleBranchChange = (branch: string) => {
     if (readOnly) return;
-    onConfigChange({ ...config, branch_name: branch });
+    onConfigChange({ ...(config || {}), branch_name: branch });
   };
 
   // Handle use current branch toggle
   const handleUseCurrentBranchChange = (useCurrentBranch: boolean) => {
     if (readOnly) return;
     onConfigChange({
-      ...config,
+      ...(config || {}),
       use_current_branch: useCurrentBranch,
       // Clear branch_name if using current branch
-      branch_name: useCurrentBranch ? "" : config.branch_name,
+      branch_name: useCurrentBranch ? "" : config?.branch_name || "",
     });
   };
 
@@ -150,7 +155,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
                 <Card
                   className={cn(
                     "h-40 p-3 border rounded-lg cursor-pointer shadow-sm flex flex-col justify-between transition-all text-left",
-                    config.agent_id === agent.id
+                    (config?.agent_id || "") === agent.id
                       ? "bg-green-400/30 border-green-500"
                       : "border-gray-200 hover:shadow-md hover:scale-105"
                   )}
@@ -169,7 +174,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
                   <p className="text-xs text-gray-600 line-clamp-3 flex-1 mb-2">
                     {agent.description}
                   </p>
-                  {config.agent_id === agent.id && (
+                  {(config?.agent_id || "") === agent.id && (
                     <span className="text-xs text-green-700 font-medium">
                       Selected
                     </span>
@@ -186,7 +191,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
                   <Card
                     className={cn(
                       "h-40 p-3 border rounded-lg cursor-pointer shadow-sm flex flex-col justify-center items-center transition-all text-left",
-                      config.agent_id === "create-agent"
+                      (config?.agent_id || "") === "create-agent"
                         ? "bg-green-400/30 border-green-500"
                         : "border-gray-200 hover:shadow-md hover:scale-105"
                     )}
@@ -213,7 +218,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
         <div className="flex items-center space-x-2 mb-3">
           <Checkbox
             id="useCurrentBranch"
-            checked={config.use_current_branch || false}
+            checked={config?.use_current_branch || false}
             onCheckedChange={handleUseCurrentBranchChange}
             disabled={readOnly}
           />
@@ -224,7 +229,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
             Use current branch from execution variables
           </Label>
         </div>
-        {config.use_current_branch && (
+        {(config?.use_current_branch || false) && (
           <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-md p-2 mb-3">
             ℹ️ The branch will be automatically determined based on the
             trigger&apos;s branch data. If the trigger isn&apos;t branch-related
@@ -234,12 +239,14 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
         )}
 
         <RepoBranchSelector
-          repoName={config.repo_name || ""}
-          branchName={config.use_current_branch ? "" : config.branch_name || ""}
+          repoName={config?.repo_name || ""}
+          branchName={
+            config?.use_current_branch || false ? "" : config?.branch_name || ""
+          }
           onRepoChange={handleRepoChange}
           onBranchChange={handleBranchChange}
           readOnly={readOnly}
-          repoOnly={config.use_current_branch}
+          repoOnly={config?.use_current_branch || false}
         />
       </div>
 
@@ -251,7 +258,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
         <textarea
           className="w-full min-h-[60px] max-h-[160px] border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition resize-y"
           placeholder="Describe the main task for this agent..."
-          value={config.task || ""}
+          value={config?.task || ""}
           onChange={handleTaskChange}
           disabled={readOnly}
         />

@@ -36,7 +36,6 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { planTypesEnum } from "@/lib/Constants";
 import AgentService from "@/services/AgentService";
-import { generateHmacSignature } from "@/app/utils/hmac.util";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();

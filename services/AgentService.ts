@@ -1,7 +1,6 @@
 import axios, { AxiosResponse } from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { CustomAgentsFormValues } from "@/lib/Schema";
-import { generateHmacSignature } from "@/app/utils/hmac.util";
 import { parseApiError } from "@/lib/utils";
 
 export default class AgentService {
@@ -114,16 +113,12 @@ export default class AgentService {
   static async getAgentDetails(agentId: string, userId: string) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    const hmacSignature = generateHmacSignature(userId);
 
     try {
       const response = await axios.get(
         `${baseUrl}/api/v1/custom-agents/agents/${agentId}`,
         {
-          headers: {
-            ...headers,
-            "X-Hmac-Signature": hmacSignature,
-          },
+          headers: headers,
           params: {
             user_id: userId,
           },

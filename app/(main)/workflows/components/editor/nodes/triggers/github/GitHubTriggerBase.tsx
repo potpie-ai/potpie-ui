@@ -82,7 +82,7 @@ function GitHubTriggerConfigComponentImpl<
   };
 
   const generateWebhook = async () => {
-    if (!workflowId || isGenerating) return;
+    if (isGenerating) return;
     setIsGenerating(true);
     try {
       const result = await WorkflowService.refreshTriggerHash(nodeType);
@@ -102,7 +102,7 @@ function GitHubTriggerConfigComponentImpl<
   };
 
   const refreshWebhook = () => {
-    if (!workflowId || isGenerating) return;
+    if (isGenerating) return;
     setShowRefreshConfirm(true);
   };
 

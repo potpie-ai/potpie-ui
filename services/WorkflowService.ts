@@ -738,9 +738,8 @@ export default class WorkflowService {
   ): Promise<WorkflowValidation> {
     try {
       const headers = await getHeaders();
-      const response = await axios.post(
+      const response = await axios.get(
         `${this.WORKFLOWS_URL}/${workflowId}/validate`,
-        {},
         { headers }
       );
       return response.data.validation;

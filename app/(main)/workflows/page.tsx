@@ -82,33 +82,15 @@ const Workflows = () => {
     setLoading(true);
     const workflows = await WorkflowService.getWorkflowsList();
 
-    // Fetch validation data for each workflow
-    const workflowsWithValidation = await Promise.all(
-      workflows.map(async (workflow) => {
-        try {
-          const validation = await WorkflowService.validateWorkflow(
-            workflow.id
-          );
-          return {
-            ...workflow,
-            validation,
-          };
-        } catch (error) {
-          console.error(
-            `Error fetching validation for workflow ${workflow.id}:`,
-            error
-          );
-          return {
-            ...workflow,
-            validation: {
-              is_valid: true, // Default to valid if validation fails
-              errors: [],
-              warnings: [],
-            },
-          };
-        }
-      })
-    );
+    // Skip validation flow - set all workflows as valid by default
+    const workflowsWithValidation = workflows.map((workflow) => ({
+      ...workflow,
+      validation: {
+        is_valid: true, // Skip validation - assume all workflows are valid
+        errors: [],
+        warnings: [],
+      },
+    }));
 
     setWorkflows(
       workflowsWithValidation.sort(
@@ -142,11 +124,6 @@ const Workflows = () => {
   };
 
   const handlePause = async (workflow: Workflow, index: number) => {
-    // Don't allow pause/resume if workflow is invalid
-    if (!workflow.validation?.is_valid) {
-      return;
-    }
-
     if (workflow.is_paused) {
       await WorkflowService.resumeWorkflow(workflow.id);
     } else {
@@ -423,18 +400,13 @@ const Workflows = () => {
                             <div className="flex items-center gap-2">
                               <div
                                 className={`w-2 h-2 rounded-full ${
-                                  workflow.is_paused ||
-                                  !workflow.validation?.is_valid
+                                  workflow.is_paused
                                     ? "bg-red-500"
                                     : "bg-green-500"
-                                } ${!workflow.is_paused && workflow.validation?.is_valid ? "animate-pulse" : ""}`}
+                                } ${!workflow.is_paused ? "animate-pulse" : ""}`}
                               />
                               <span className="text-sm text-gray-700 font-medium text-left">
-                                {workflow.is_paused
-                                  ? "Paused"
-                                  : !workflow.validation?.is_valid
-                                    ? "Inactive"
-                                    : "Active"}
+                                {workflow.is_paused ? "Paused" : "Active"}
                               </span>
                             </div>
                           </div>
@@ -455,12 +427,11 @@ const Workflows = () => {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-7 w-7 p-0 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="h-7 w-7 p-0 hover:bg-gray-200"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handlePause(workflow, index);
                                     }}
-                                    disabled={!workflow.validation?.is_valid}
                                   >
                                     {workflow.is_paused ? (
                                       <Play className="h-3 w-3" />
@@ -471,11 +442,9 @@ const Workflows = () => {
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p>
-                                    {!workflow.validation?.is_valid
-                                      ? "Workflow is invalid"
-                                      : workflow.is_paused
-                                        ? "Resume workflow"
-                                        : "Pause workflow"}
+                                    {workflow.is_paused
+                                      ? "Resume workflow"
+                                      : "Pause workflow"}
                                   </p>
                                 </TooltipContent>
                               </Tooltip>

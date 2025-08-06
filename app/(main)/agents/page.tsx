@@ -16,7 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { InfoIcon, Plus, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { MultiSelect } from "@/components/ui/multi-select";
+import ToolSelector from "@/components/agent-creation/ToolSelector";
 import { Skeleton } from "@/components/ui/skeleton";
 import getHeaders from "@/app/utils/headers.util";
 import { useEffect, useLayoutEffect, useState } from "react";
@@ -407,30 +407,14 @@ const CustomAgent: React.FC = () => {
                                   </Tooltip>
                                 </FormLabel>
                                 {!toolsLoading && toolsData ? (
-                                  <MultiSelect
-                                    options={toolsData.map(
-                                      (tool: {
-                                        id: string;
-                                        name: string;
-                                        description: string;
-                                      }) => ({
-                                        value: tool.id,
-                                        label: tool.name,
-                                        description: tool.description,
-                                      })
-                                    )}
-                                    defaultValue={
-                                      Array.isArray(field.value) &&
-                                      field.value.length === 1 &&
-                                      field.value[0] === ""
-                                        ? []
-                                        : field.value
-                                    }
-                                    value={selectedTools[idx] || []}
-                                    onValueChange={(tools) =>
+                                  <ToolSelector
+                                    availableTools={toolsData}
+                                    selectedTools={selectedTools[idx] || []}
+                                    isLoading={toolsLoading}
+                                    onChange={(tools: string[]) =>
                                       handleToolChange(idx, tools)
                                     }
-                                    placeholder="Select tools"
+                                    placeholderText="Select tools"
                                   />
                                 ) : (
                                   <Skeleton className="w-full h-10" />

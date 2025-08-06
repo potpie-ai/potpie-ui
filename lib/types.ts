@@ -55,12 +55,15 @@ type AgentType = {
   description: string;
 };
 
-
 interface TaskType {
   description: string;
   tools: string[];
   expected_output: string;
   id: number;
+  mcp_servers?: Array<{
+    name: string;
+    link: string;
+  }>;
 }
 
 interface CustomAgentType {

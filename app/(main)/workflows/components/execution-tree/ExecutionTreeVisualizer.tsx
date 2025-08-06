@@ -93,6 +93,12 @@ const generateNodePositions = (executionTree: ExecutionTree) => {
   const nodeHeight = 375; // Vertical spacing between nodes (increased by 50% from 250)
   const subtreeSpacing = 150; // Extra spacing between different subtrees (increased by 50% from 100)
 
+  // For single node, center it
+  if (nodeIds.length === 1) {
+    nodePositions.set(nodeIds[0], { x: 0, y: 0 });
+    return nodePositions;
+  }
+
   // Build the tree structure
   const tree = new Map<
     string,
@@ -1057,6 +1063,7 @@ interface ReactFlowWrapperProps {
   nodeTypes: Record<string, any>;
   onNodeSelect?: (node: RFNode | null) => void;
   selectedNodeId?: string | null;
+  executionTreeHash?: string;
 }
 
 const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
@@ -1065,6 +1072,7 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
   nodeTypes,
   onNodeSelect,
   selectedNodeId,
+  executionTreeHash,
 }) => {
   const handleNodeClick = useCallback(
     (event: any, node: RFNode) => {
@@ -1080,18 +1088,21 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
     [onNodeSelect]
   );
 
-  // Update nodes with selected state
-  const nodesWithSelection = nodes.map((node) => ({
-    ...node,
-    selected: node.id === selectedNodeId, // ReactFlow's built-in selected prop
-    data: {
-      ...node.data,
-      selected: node.id === selectedNodeId,
-    },
-  }));
+  // Update nodes with selected state - use useMemo to prevent unnecessary re-renders
+  const nodesWithSelection = useMemo(() => {
+    return nodes.map((node) => ({
+      ...node,
+      selected: node.id === selectedNodeId, // ReactFlow's built-in selected prop
+      data: {
+        ...node.data,
+        selected: node.id === selectedNodeId,
+      },
+    }));
+  }, [nodes, selectedNodeId]);
 
-  return (
-    <div className="relative w-full h-full">
+  // Memoize the ReactFlow component to prevent unnecessary re-renders
+  const reactFlowComponent = useMemo(
+    () => (
       <ReactFlow
         nodes={nodesWithSelection}
         edges={edges}
@@ -1115,13 +1126,25 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
         }}
         snapToGrid={false}
         nodesFocusable={true}
+        // Add key to force re-render when nodes/edges change significantly
+        key={`flow-${executionTreeHash || "default"}-${nodes.length}-${edges.length}`}
       >
         <Background />
         <Controls className="z-20" />
         <MiniMap className="z-20" />
       </ReactFlow>
-    </div>
+    ),
+    [
+      nodesWithSelection,
+      edges,
+      nodeTypes,
+      handleNodeClick,
+      handlePaneClick,
+      executionTreeHash,
+    ]
   );
+
+  return <div className="relative w-full h-full">{reactFlowComponent}</div>;
 };
 
 const LoadingSpinner: FC = () => (
@@ -1162,68 +1185,117 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
   const [selectedNode, setSelectedNode] = useState<RFNode | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastExecutionTreeHash, setLastExecutionTreeHash] =
+    useState<string>("");
 
-  // Convert execution tree to ReactFlow nodes and edges
-  const { nodes, edges } = useMemo(() => {
+  // Create a stable hash of the execution tree to detect meaningful changes
+  const executionTreeHash = useMemo(() => {
+    if (!executionTree || !executionTree.execution_tree) return "";
+
     const treeNodes = executionTree.execution_tree;
-    const nodeIds = Object.keys(treeNodes);
+    const nodeIds = Object.keys(treeNodes).sort();
 
-    if (nodeIds.length === 0) {
+    // Create a hash based on node count, statuses, and timestamps
+    const hashData = nodeIds
+      .map((id) => {
+        const node = treeNodes[id];
+        return `${id}:${node.status}:${node.start_time}:${node.logs?.length || 0}`;
+      })
+      .join("|");
+
+    return btoa(hashData).slice(0, 32); // Simple hash
+  }, [executionTree]);
+
+  // Convert execution tree to ReactFlow nodes and edges with better memoization
+  const { nodes, edges } = useMemo(() => {
+    try {
+      const treeNodes = executionTree.execution_tree;
+      const nodeIds = Object.keys(treeNodes);
+
+      if (nodeIds.length === 0) {
+        console.log(
+          "ExecutionTreeVisualizer: No nodes found in execution tree"
+        );
+        return { nodes: [], edges: [] };
+      }
+
+      // Always generate positions - the hash check is for optimization but we need positions
+      const nodePositions = generateNodePositions(executionTree);
+
+      // Debug position generation
+      console.log(
+        "ExecutionTreeVisualizer: Generated positions:",
+        Array.from(nodePositions.entries()).map(
+          ([id, pos]) => `${id}: (${pos.x}, ${pos.y})`
+        )
+      );
+
+      // Create ReactFlow nodes
+      const rfNodes: RFNode[] = nodeIds.map((nodeId) => {
+        const node = treeNodes[nodeId];
+        const position = nodePositions.get(nodeId) || { x: 0, y: 0 };
+
+        return {
+          id: nodeId,
+          type: "executionNode",
+          position,
+          data: {
+            nodeId: node.node_id,
+            status: node.status,
+            startedAt: node.start_time,
+            endTime: node.end_time,
+            iteration: node.iteration,
+            logs: node.logs,
+            predecessor: node.predecessor,
+            children: node.children,
+          },
+        };
+      });
+
+      // Create ReactFlow edges with improved styling
+      const rfEdges: RFEdge[] = [];
+      nodeIds.forEach((nodeId) => {
+        const node = treeNodes[nodeId];
+        if (node.predecessor && nodePositions.has(node.predecessor)) {
+          const sourcePos = nodePositions.get(node.predecessor)!;
+          const targetPos = nodePositions.get(nodeId)!;
+
+          // Determine edge style based on relationship
+          const isDirectChild = true; // All edges in execution tree are direct parent-child
+          const edgeStyle = {
+            stroke: "#2563eb",
+            strokeWidth: 2,
+          };
+
+          rfEdges.push({
+            id: `${node.predecessor}-${nodeId}`,
+            source: node.predecessor,
+            target: nodeId,
+            style: edgeStyle,
+            type: "default", // Use default for more curved edges
+          });
+        }
+      });
+
+      console.log(
+        `ExecutionTreeVisualizer: Generated ${rfNodes.length} nodes and ${rfEdges.length} edges`
+      );
+      return { nodes: rfNodes, edges: rfEdges };
+    } catch (error) {
+      console.error(
+        "ExecutionTreeVisualizer: Error generating nodes and edges:",
+        error
+      );
       return { nodes: [], edges: [] };
     }
+  }, [executionTree, executionTreeHash, lastExecutionTreeHash]);
 
-    // Generate node positions using the helper function
-    const nodePositions = generateNodePositions(executionTree);
-
-    // Create ReactFlow nodes
-    const rfNodes: RFNode[] = nodeIds.map((nodeId) => {
-      const node = treeNodes[nodeId];
-      const position = nodePositions.get(nodeId) || { x: 0, y: 0 };
-
-      return {
-        id: nodeId,
-        type: "executionNode",
-        position,
-        data: {
-          nodeId: node.node_id,
-          status: node.status,
-          startedAt: node.start_time,
-          endTime: node.end_time,
-          iteration: node.iteration,
-          logs: node.logs,
-          predecessor: node.predecessor,
-          children: node.children,
-        },
-      };
-    });
-
-    // Create ReactFlow edges with improved styling
-    const rfEdges: RFEdge[] = [];
-    nodeIds.forEach((nodeId) => {
-      const node = treeNodes[nodeId];
-      if (node.predecessor && nodePositions.has(node.predecessor)) {
-        const sourcePos = nodePositions.get(node.predecessor)!;
-        const targetPos = nodePositions.get(nodeId)!;
-
-        // Determine edge style based on relationship
-        const isDirectChild = true; // All edges in execution tree are direct parent-child
-        const edgeStyle = {
-          stroke: "#2563eb",
-          strokeWidth: 2,
-        };
-
-        rfEdges.push({
-          id: `${node.predecessor}-${nodeId}`,
-          source: node.predecessor,
-          target: nodeId,
-          style: edgeStyle,
-          type: "default", // Use default for more curved edges
-        });
-      }
-    });
-
-    return { nodes: rfNodes, edges: rfEdges };
-  }, [executionTree]);
+  // Update the hash when tree changes
+  useEffect(() => {
+    if (executionTreeHash && executionTreeHash !== lastExecutionTreeHash) {
+      setLastExecutionTreeHash(executionTreeHash);
+    }
+  }, [executionTreeHash, lastExecutionTreeHash]);
 
   const nodeTypes = useMemo(
     () => ({
@@ -1232,29 +1304,67 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
     []
   );
 
-  // Polling effect for running and pending workflows
+  // Improved polling effect with better error handling and state management
   useEffect(() => {
     if ((!isRunning && !isPending) || !onRefresh) return;
 
-    const interval = setInterval(async () => {
+    let isMounted = true;
+    let refreshTimeout: NodeJS.Timeout;
+
+    const performRefresh = async () => {
+      if (!isMounted) return;
+
       try {
         setIsRefreshing(true);
         await onRefresh();
       } catch (error) {
         console.error("Failed to refresh execution tree:", error);
+        // Don't show error toast for polling failures to avoid spam
       } finally {
-        setIsRefreshing(false);
+        if (isMounted) {
+          setIsRefreshing(false);
+        }
       }
-    }, 3000); // Poll every 3 seconds
+    };
 
-    return () => clearInterval(interval);
+    const scheduleNextRefresh = () => {
+      if (!isMounted) return;
+      refreshTimeout = setTimeout(() => {
+        performRefresh().then(() => {
+          if (isMounted && (isRunning || isPending)) {
+            scheduleNextRefresh();
+          }
+        });
+      }, 3000);
+    };
+
+    // Start the refresh cycle
+    scheduleNextRefresh();
+
+    return () => {
+      isMounted = false;
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+    };
   }, [isRunning, isPending, onRefresh]);
 
+  // Ensure initialization happens after tree data is available
   useEffect(() => {
-    // Set initialized after a short delay to ensure proper rendering
-    const timer = setTimeout(() => setIsInitialized(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
+    if (executionTree && Object.keys(executionTree.execution_tree).length > 0) {
+      const timer = setTimeout(() => setIsInitialized(true), 100);
+      return () => clearTimeout(timer);
+    } else {
+      setIsInitialized(false);
+    }
+  }, [executionTree]);
+
+  // Reset selected node when tree changes significantly
+  useEffect(() => {
+    if (executionTreeHash !== lastExecutionTreeHash) {
+      setSelectedNode(null);
+    }
+  }, [executionTreeHash, lastExecutionTreeHash]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -1317,6 +1427,31 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
         <div className="flex-1 min-h-0 overflow-hidden">
           {!isInitialized ? (
             <LoadingSpinner />
+          ) : nodes.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="text-gray-400 mb-4">
+                  <Workflow className="h-12 w-12 mx-auto" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No Execution Nodes
+                </h3>
+                <p className="text-gray-600">
+                  {executionTree &&
+                  Object.keys(executionTree.execution_tree).length > 0
+                    ? "Execution tree data is available but could not be rendered."
+                    : "No execution tree data available."}
+                </p>
+                {debugMode && (
+                  <div className="mt-4 text-xs text-gray-500">
+                    <div>Tree Hash: {executionTreeHash}</div>
+                    <div>Last Hash: {lastExecutionTreeHash}</div>
+                    <div>Nodes Count: {nodes.length}</div>
+                    <div>Edges Count: {edges.length}</div>
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
             <ReactFlowProvider>
               <ReactFlowWrapper
@@ -1325,13 +1460,18 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
                 nodeTypes={nodeTypes}
                 onNodeSelect={setSelectedNode}
                 selectedNodeId={selectedNode?.id || null}
+                executionTreeHash={executionTreeHash}
               />
 
               {/* Debug info */}
               {debugMode && (
                 <div className="absolute bottom-2 left-2 bg-black bg-opacity-75 text-white p-2 rounded text-xs font-mono z-20">
                   <div>Selected Node: {selectedNode?.id || "None"}</div>
-                  <div>Selected Node ID: {selectedNode?.id || "None"}</div>
+                  <div>Tree Hash: {executionTreeHash}</div>
+                  <div>Nodes: {nodes.length}</div>
+                  <div>Edges: {edges.length}</div>
+                  <div>Initialized: {isInitialized ? "Yes" : "No"}</div>
+                  <div>Refreshing: {isRefreshing ? "Yes" : "No"}</div>
                 </div>
               )}
 

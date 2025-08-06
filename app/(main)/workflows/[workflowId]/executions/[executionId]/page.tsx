@@ -95,11 +95,24 @@ export default function ExecutionDetailPage() {
         params.workflowId,
         params.executionId
       );
-      setExecutionTree(_tree);
+
+      // Only update if we got valid data
+      if (
+        _tree &&
+        _tree.execution_tree &&
+        Object.keys(_tree.execution_tree).length > 0
+      ) {
+        setExecutionTree(_tree);
+      } else {
+        console.warn("Received empty execution tree data");
+      }
     } catch (error) {
       console.error("Error refreshing execution tree:", error);
       const errorMessage = parseApiError(error);
-      toast.error(errorMessage);
+      // Don't show error toast for polling failures to avoid spam
+      if (!refreshing) {
+        toast.error(errorMessage);
+      }
     } finally {
       setRefreshing(false);
     }

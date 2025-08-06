@@ -281,11 +281,37 @@ export const agentNodeMetadata = {
 
 export const AgentNode = ({ data }: { data: WorkflowNode }) => {
   const colors = getNodeColors(data.group);
+  const [resolvedAgentName, setResolvedAgentName] = useState<string | null>(
+    null
+  );
   const agentName = data.data?.name;
+  const agentId = data.data?.agent_id;
   const task = data.data?.task;
   const repoName = data.data?.repo_name;
   const branchName = data.data?.branch_name;
   const useCurrentBranch = data.data?.use_current_branch;
+
+  // Fetch agent name if we have agent_id but no agentName
+  useEffect(() => {
+    const fetchAgentName = async () => {
+      if (agentId && !agentName && !resolvedAgentName) {
+        try {
+          const agents = await AgentService.getAgentTypes();
+          const agent = agents.find((a: any) => a.id === agentId);
+          if (agent) {
+            setResolvedAgentName(agent.name);
+          }
+        } catch (error) {
+          console.error("Failed to fetch agent name:", error);
+        }
+      }
+    };
+
+    fetchAgentName();
+  }, [agentId, agentName, resolvedAgentName]);
+
+  // Use resolved name if available, otherwise fall back to stored name
+  const displayName = resolvedAgentName || agentName;
 
   return (
     <div className="w-full">
@@ -302,9 +328,9 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
         <div className="w-full">
           <p
             className="font-semibold text-gray-900 truncate"
-            title={agentName || undefined}
+            title={displayName || undefined}
           >
-            {agentName ? agentName : "No agent selected"}
+            {displayName ? displayName : "No agent selected"}
           </p>
           {repoName && (
             <p className="mt-1 text-xs text-gray-600 truncate" title={repoName}>

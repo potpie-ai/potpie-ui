@@ -1,6 +1,7 @@
 name: Build and Deploy to Staging Artifact and Cloud Run
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main

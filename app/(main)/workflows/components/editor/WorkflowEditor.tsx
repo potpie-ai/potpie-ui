@@ -1,5 +1,5 @@
 import { Workflow } from "@/services/WorkflowService";
-import { FC, useState, useMemo, useEffect } from "react";
+import { FC, useState, useMemo, useEffect, useCallback } from "react";
 import { useWorkflowEditor } from "./hooks/useWorkflowEditor";
 import { DebugPanel } from "./components/DebugPanel";
 import { LocalWorkflowBanner } from "./components/LocalWorkflowBanner";
@@ -7,6 +7,7 @@ import { EditorControls } from "./components/EditorControls";
 import { ReactFlowCanvas } from "./components/ReactFlowCanvas";
 import { NodePaletteContainer } from "./components/NodePaletteContainer";
 import { WorkflowDnDProvider } from "./components/WorkflowDnDProvider";
+import { AgentDataProvider } from "./contexts/AgentDataContext";
 
 interface WorkflowEditorProps {
   workflow?: Workflow;
@@ -113,100 +114,118 @@ export const WorkflowEditor: FC<WorkflowEditorProps> = ({
     onCancel,
   });
 
+  // Handle node deletion
+  const handleNodeDelete = useCallback(
+    (nodeId: string) => {
+      const deleteChanges = [
+        {
+          type: "remove" as const,
+          id: nodeId,
+        },
+      ];
+      onNodesChange(deleteChanges);
+    },
+    [onNodesChange]
+  );
+
   return (
     <WorkflowDnDProvider>
-      <div className="flex flex-col h-full overflow-hidden">
-        {/* Debug Panel */}
-        <DebugPanel
-          debugMode={debugMode}
-          debugInfo={debugInfo}
-          workflow={workflow}
-          localWorkflow={localWorkflow}
-          editingNodes={editingNodes}
-          editingEdges={editingEdges}
-        />
+      <AgentDataProvider>
+        <div className="flex flex-col h-full overflow-hidden">
+          {/* Debug Panel */}
+          <DebugPanel
+            debugMode={debugMode}
+            debugInfo={debugInfo}
+            workflow={workflow}
+            localWorkflow={localWorkflow}
+            editingNodes={editingNodes}
+            editingEdges={editingEdges}
+          />
 
-        {/* Local workflow banner */}
-        <LocalWorkflowBanner
-          show={showLocalWorkflowBanner && mode === "edit"}
-          onLoadLocalWorkflow={handleLoadLocalWorkflow}
-          onDiscardLocalWorkflow={handleDiscardLocalWorkflow}
-          isNewWorkflow={
-            !localWorkflow.id ||
-            localWorkflow.id === "" ||
-            localWorkflow.id === "default" ||
-            (!!localWorkflow.id && localWorkflow.id.startsWith("new-workflow-"))
-          }
-        />
+          {/* Local workflow banner */}
+          <LocalWorkflowBanner
+            show={showLocalWorkflowBanner && mode === "edit"}
+            onLoadLocalWorkflow={handleLoadLocalWorkflow}
+            onDiscardLocalWorkflow={handleDiscardLocalWorkflow}
+            isNewWorkflow={
+              !localWorkflow.id ||
+              localWorkflow.id === "" ||
+              localWorkflow.id === "default" ||
+              (!!localWorkflow.id &&
+                localWorkflow.id.startsWith("new-workflow-"))
+            }
+          />
 
-        {/* Editor Controls */}
-        <EditorControls
-          mode={mode}
-          hasUnsavedChanges={hasUnsavedChanges}
-          onModeChange={handleModeChange}
-          onSave={handleSave}
-          onCancel={handleCancel}
-          workflowTitle={localWorkflow.title || ""}
-          onTitleChange={onTitleChange}
-          isNewWorkflow={!localWorkflow.id || localWorkflow.id === ""}
-          onExecutionsClick={onExecutionsClick}
-          validation={validation}
-        />
+          {/* Editor Controls */}
+          <EditorControls
+            mode={mode}
+            hasUnsavedChanges={hasUnsavedChanges}
+            onModeChange={handleModeChange}
+            onSave={handleSave}
+            onCancel={handleCancel}
+            workflowTitle={localWorkflow.title || ""}
+            onTitleChange={onTitleChange}
+            isNewWorkflow={!localWorkflow.id || localWorkflow.id === ""}
+            onExecutionsClick={onExecutionsClick}
+            validation={validation}
+          />
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
-          {/* ReactFlow Canvas */}
-          <div className="flex-1 min-h-0 overflow-hidden relative">
-            <ReactFlowCanvas
-              nodes={editingNodes}
-              edges={editingEdges}
-              mode={mode}
-              isInitialized={isInitialized}
-              debugMode={debugMode}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onEdgeUpdate={onEdgeUpdate}
-              onEdgeUpdateStart={onEdgeUpdateStart}
-              onEdgeUpdateEnd={onEdgeUpdateEnd}
-              selectedNode={selectedNode}
-              onNodeSelect={onNodeSelect}
-              onNodeDrop={onNodeDrop}
-            />
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+            {/* ReactFlow Canvas */}
+            <div className="flex-1 min-h-0 overflow-hidden relative">
+              <ReactFlowCanvas
+                nodes={editingNodes}
+                edges={editingEdges}
+                mode={mode}
+                isInitialized={isInitialized}
+                debugMode={debugMode}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onEdgeUpdate={onEdgeUpdate}
+                onEdgeUpdateStart={onEdgeUpdateStart}
+                onEdgeUpdateEnd={onEdgeUpdateEnd}
+                selectedNode={selectedNode}
+                onNodeSelect={onNodeSelect}
+                onNodeDrop={onNodeDrop}
+                onNodeDelete={handleNodeDelete}
+              />
 
-            {/* Loading Overlay */}
-            {isLoading && (
-              <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center z-50">
-                <div className="flex flex-col items-center space-y-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Loading workflow...
-                  </p>
+              {/* Loading Overlay */}
+              {isLoading && (
+                <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center z-50">
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Loading workflow...
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
+            </div>
+            {/* Node Palette & Config Panel */}
+            {mode !== "preview" && (
+              <NodePaletteContainer
+                selectedNode={selectedNode}
+                onNodeConfigChange={onNodeConfigChange}
+                onNodeDragStart={
+                  mode === "edit"
+                    ? (nodeType) => {
+                        // Optional: Add any additional logic when dragging starts
+                        console.log("Dragging node:", nodeType);
+                      }
+                    : undefined
+                }
+                readOnly={mode !== "edit"}
+                visible={true}
+                workflowId={workflow.id}
+                workflow={workflow}
+              />
             )}
           </div>
-          {/* Node Palette & Config Panel */}
-          {mode !== "preview" && (
-            <NodePaletteContainer
-              selectedNode={selectedNode}
-              onNodeConfigChange={onNodeConfigChange}
-              onNodeDragStart={
-                mode === "edit"
-                  ? (nodeType) => {
-                      // Optional: Add any additional logic when dragging starts
-                      console.log("Dragging node:", nodeType);
-                    }
-                  : undefined
-              }
-              readOnly={mode !== "edit"}
-              visible={true}
-              workflowId={workflow.id}
-              workflow={workflow}
-            />
-          )}
         </div>
-      </div>
+      </AgentDataProvider>
     </WorkflowDnDProvider>
   );
 };

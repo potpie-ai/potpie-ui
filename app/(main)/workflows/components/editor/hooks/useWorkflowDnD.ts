@@ -1,23 +1,6 @@
 import { useDrag, useDrop } from "react-dnd";
 import { NodeType, NodeCategory, NodeGroup } from "@/services/WorkflowService";
-// Helper: runtime type guard for NodeType
-const validNodeTypes: Set<string> = new Set([
-  "trigger_github_pr_opened",
-  "trigger_github_pr_closed",
-  "trigger_github_pr_reopened",
-  "trigger_github_pr_merged",
-  "trigger_github_issue_opened",
-  "trigger_linear_issue_created",
-  "custom_agent",
-  "flow_control_conditional",
-  "flow_control_collect",
-  "flow_control_selector",
-  "manual_step_approval",
-  "manual_step_input",
-]);
-function isValidNodeType(type: any): type is NodeType {
-  return typeof type === "string" && validNodeTypes.has(type);
-}
+import { isValidNodeType } from "../utils/nodeValidation";
 
 // DnD Item Types
 export const ItemTypes = {

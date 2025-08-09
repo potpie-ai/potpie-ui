@@ -480,6 +480,11 @@ export const useWorkflowEditor = ({
     }
   }, [mode, isInitialized]);
 
+  // Handle node selection
+  const onNodeSelect = useCallback((node: RFNode | null) => {
+    setSelectedNode(node);
+  }, []);
+
   // Handle node changes
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -497,8 +502,44 @@ export const useWorkflowEditor = ({
 
       setEditingNodes((nds) => applyNodeChanges(changes, nds));
       setHasUnsavedChanges(true);
+
+      // Update the local workflow when nodes are deleted
+      if (removedNodeIds.length > 0) {
+        setLocalWorkflow((prevWorkflow) => {
+          const updatedNodes = { ...prevWorkflow.graph.nodes };
+          const updatedAdjacencyList = { ...prevWorkflow.graph.adjacency_list };
+
+          // Remove deleted nodes from the workflow
+          removedNodeIds.forEach((nodeId) => {
+            delete updatedNodes[nodeId];
+            delete updatedAdjacencyList[nodeId];
+          });
+
+          // Remove edges that reference deleted nodes
+          Object.keys(updatedAdjacencyList).forEach((sourceId) => {
+            updatedAdjacencyList[sourceId] = updatedAdjacencyList[
+              sourceId
+            ].filter((targetId) => !removedNodeIds.includes(targetId));
+          });
+
+          const updatedWorkflow = {
+            ...prevWorkflow,
+            graph: {
+              ...prevWorkflow.graph,
+              nodes: updatedNodes,
+              adjacency_list: updatedAdjacencyList,
+            },
+          };
+
+          // Save to localStorage
+          saveLocalWorkflow(workflowId, updatedWorkflow, true);
+          currentWorkflowRef.current = updatedWorkflow;
+
+          return updatedWorkflow;
+        });
+      }
     },
-    [mode, selectedNode]
+    [mode, selectedNode, workflowId]
   );
 
   // Handle edge changes (selection, deletion, etc.)
@@ -598,11 +639,6 @@ export const useWorkflowEditor = ({
     },
     []
   );
-
-  // Handle node selection
-  const onNodeSelect = useCallback((node: RFNode | null) => {
-    setSelectedNode(node);
-  }, []);
 
   // Handle node configuration changes
   const onNodeConfigChange = useCallback(

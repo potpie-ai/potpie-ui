@@ -6,6 +6,8 @@ export type NodeType =
   | "trigger_github_pr_merged"
   | "trigger_github_issue_opened"
   | "trigger_linear_issue_created"
+  | "trigger_sentry_issue_created"
+  | "trigger_webhook"
   | "custom_agent"
   | "flow_control_conditional"
   | "flow_control_collect"
@@ -13,7 +15,12 @@ export type NodeType =
   | "manual_step_approval"
   | "manual_step_input";
 export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step";
-export type NodeGroup = "github" | "linear" | "default" | "flow_control";
+export type NodeGroup =
+  | "github"
+  | "linear"
+  | "sentry"
+  | "default"
+  | "flow_control";
 
 import { agentNodeMetadata } from "./agents/agent";
 import { ifConditionNodeMetadata } from "./flow-controls/if-condition";
@@ -23,6 +30,8 @@ import { prClosedTriggerNodeMetadata } from "./triggers/github/pr-closed-trigger
 import { prReopenedTriggerNodeMetadata } from "./triggers/github/pr-reopened-trigger";
 import { prMergedTriggerNodeMetadata } from "./triggers/github/pr-merged-trigger";
 import { issueAddedTriggerNodeMetadata } from "./triggers/github/issue-added-trigger";
+import { issueCreatedTriggerNodeMetadata } from "./triggers/sentry/issue-created-trigger";
+import { webhookTriggerNodeMetadata } from "./triggers/webhook";
 
 export interface NodeInfo {
   type: string;
@@ -51,6 +60,8 @@ export const availableNodes: NodeInfo[] = [
   prMergedTriggerNodeMetadata,
   issueAddedTriggerNodeMetadata,
   linearTriggerNodeMetadata,
+  issueCreatedTriggerNodeMetadata,
+  webhookTriggerNodeMetadata,
   agentNodeMetadata,
   ifConditionNodeMetadata,
 ];
@@ -63,6 +74,8 @@ export {
   prMergedTriggerNodeMetadata,
   issueAddedTriggerNodeMetadata,
   linearTriggerNodeMetadata,
+  issueCreatedTriggerNodeMetadata,
+  webhookTriggerNodeMetadata,
   agentNodeMetadata,
   ifConditionNodeMetadata,
 };

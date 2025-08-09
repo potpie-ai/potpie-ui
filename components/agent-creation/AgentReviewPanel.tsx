@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   Plus,
   Check,
   Trash2,
+  Server,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +30,15 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
@@ -38,14 +48,19 @@ import { CustomAgentsFormValues } from "@/lib/Schema";
 interface AgentReviewPanelProps {
   generatedAgent: CustomAgentsFormValues;
   onEdit: () => void;
-  onSave: (agent: CustomAgentsFormValues) => void;
-  availableTools: Array<{ name: string; description: string }>;
+  onSave: (agent: CustomAgentsFormValues) => Promise<void>;
+  availableTools: Array<{ id: string; name: string; description: string }>;
   isLoadingTools?: boolean;
   footerHeight?: number;
 }
 
 interface TaskToolState {
   searchTerm: string;
+}
+
+interface MCPServer {
+  name: string;
+  link: string;
 }
 
 const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
@@ -65,13 +80,12 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     Record<number, TaskToolState>
   >({});
 
-  // Log when the component receives props
-  useEffect(() => {
-    console.log(
-      "[AgentReviewPanel] Generated agent tools:",
-      generatedAgent.tools
-    );
-  }, [generatedAgent]);
+  // MCP Servers state
+  const [mcpServerModalOpen, setMcpServerModalOpen] = useState(false);
+  const [newServerName, setNewServerName] = useState("");
+  const [newServerLink, setNewServerLink] = useState("");
+  const [currentTaskIndex, setCurrentTaskIndex] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchTools = async () => {
     const header = await getHeaders();
@@ -79,7 +93,6 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     const response = await axios.get(`${baseUrl}/api/v1/tools/list_tools`, {
       headers: header,
     });
-    console.log("[AgentReviewPanel] Fetched tools:", response.data);
     return response.data;
   };
 
@@ -115,11 +128,19 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     setIsEditing(true);
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     setIsSaving(true);
-    onSave(editedAgent);
-    setIsSaving(false);
-    setIsEditing(false);
+    try {
+      await onSave(editedAgent);
+      toast.success("Agent saved successfully");
+      // Refresh the page to ensure all state is updated
+      window.location.reload();
+    } catch (error) {
+      console.error("Save error:", error);
+      toast.error("Failed to save agent");
+    } finally {
+      setIsSaving(false);
+    }
   }, [editedAgent, onSave]);
 
   const handleCancel = useCallback(() => {
@@ -139,13 +160,6 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
 
   const handleTaskChange = useCallback(
     (index: number, field: string, value: any) => {
-      console.log("[AgentReviewPanel] Task change:", {
-        taskIndex: index,
-        field,
-        value,
-        currentTask: editedAgent.tasks[index],
-      });
-
       setEditedAgent((prev: CustomAgentsFormValues) => {
         const updatedTasks = [...prev.tasks];
         updatedTasks[index] = { ...updatedTasks[index], [field]: value };
@@ -159,9 +173,6 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
   );
 
   const handleToolToggle = useCallback((toolId: string) => {
-    console.log("[AgentReviewPanel] Toggling tool:", toolId);
-    console.log("[AgentReviewPanel] Current tools:", editedAgent.tools);
-
     setEditedAgent((prev: CustomAgentsFormValues) => {
       const currentTools = prev.tools || [];
       const updated = {
@@ -170,7 +181,6 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
           ? currentTools.filter((id: string) => id !== toolId)
           : [...currentTools, toolId],
       };
-      console.log("[AgentReviewPanel] Updated tools:", updated.tools);
       return updated;
     });
   }, []);
@@ -243,6 +253,22 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
     });
   };
 
+  // Helper function to resolve tool names from IDs or names
+  const resolveToolName = (toolRef: string): string => {
+    // First try to find by ID
+    const toolById = availableTools.find((tool: any) => tool.id === toolRef);
+    if (toolById) return toolById.name;
+
+    // If not found by ID, try to find by name (for backward compatibility)
+    const toolByName = availableTools.find(
+      (tool: any) => tool.name.toLowerCase() === toolRef.toLowerCase()
+    );
+    if (toolByName) return toolByName.name;
+
+    // If not found, return the original reference (could be a name or ID)
+    return toolRef;
+  };
+
   const getFilteredTools = (taskIndex: number) => {
     const searchTerm =
       taskToolStates[taskIndex]?.searchTerm?.toLowerCase() || "";
@@ -261,6 +287,32 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
       tasks: prev.tasks.filter((_, i) => i !== index),
     }));
   }, []);
+
+  // MCP Server functions
+  const openAddServerModal = (taskIndex: number) => {
+    setCurrentTaskIndex(taskIndex);
+    setNewServerName("");
+    setNewServerLink("");
+    setMcpServerModalOpen(true);
+  };
+
+  const deleteMCPServer = (taskIndex: number, serverIndex: number) => {
+    setEditedAgent((prev) => {
+      const updatedTasks = [...prev.tasks];
+      const task = updatedTasks[taskIndex];
+
+      if (task.mcp_servers) {
+        task.mcp_servers.splice(serverIndex, 1);
+      }
+
+      return {
+        ...prev,
+        tasks: updatedTasks,
+      };
+    });
+
+    toast.success("MCP server removed successfully");
+  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -461,13 +513,13 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                                       availableTools={availableTools}
                                       selectedTools={task.tools || []}
                                       isLoading={isLoadingTools}
-                                      onChange={(selectedTools) =>
+                                      onChange={(selectedTools) => {
                                         handleTaskChange(
                                           index,
                                           "tools",
                                           selectedTools
-                                        )
-                                      }
+                                        );
+                                      }}
                                       placeholderText="Select tools for this task..."
                                     />
                                   </div>
@@ -481,13 +533,120 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                                             variant="secondary"
                                             className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full text-xs font-medium"
                                           >
-                                            {tool}
+                                            {resolveToolName(tool)}
                                           </Badge>
                                         )
                                       )
                                     ) : (
                                       <span className="text-sm text-muted-foreground">
                                         No tools assigned
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* MCP Servers Section */}
+                            <div className="w-full">
+                              <h4 className="text-sm font-medium mb-2 text-foreground">
+                                MCP Servers
+                              </h4>
+                              <div className="bg-muted/30 rounded-lg p-4 max-h-[200px] overflow-y-auto">
+                                {isEditing ? (
+                                  <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm text-muted-foreground">
+                                        Model Context Protocol servers for this
+                                        task
+                                      </span>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          openAddServerModal(index)
+                                        }
+                                        className="flex items-center gap-2"
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                        Add Server
+                                      </Button>
+                                    </div>
+
+                                    {task.mcp_servers &&
+                                    task.mcp_servers.length > 0 ? (
+                                      <div className="space-y-2">
+                                        {task.mcp_servers.map(
+                                          (
+                                            server: MCPServer,
+                                            serverIndex: number
+                                          ) => (
+                                            <div
+                                              key={serverIndex}
+                                              className="flex items-center justify-between p-3 bg-background rounded-md border w-full"
+                                            >
+                                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <Server className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                <div className="min-w-0 flex-1 overflow-hidden">
+                                                  <div className="font-medium text-sm truncate">
+                                                    {server.name}
+                                                  </div>
+                                                  <div className="text-xs text-muted-foreground truncate">
+                                                    {server.link}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  deleteMCPServer(
+                                                    index,
+                                                    serverIndex
+                                                  )
+                                                }
+                                                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                          )
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="text-center py-4 text-sm text-muted-foreground">
+                                        No MCP servers configured
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {task.mcp_servers &&
+                                    task.mcp_servers.length > 0 ? (
+                                      task.mcp_servers.map(
+                                        (
+                                          server: MCPServer,
+                                          serverIndex: number
+                                        ) => (
+                                          <div
+                                            key={serverIndex}
+                                            className="flex items-center gap-3 p-3 bg-background rounded-md border w-full"
+                                          >
+                                            <Server className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                            <div className="min-w-0 flex-1 overflow-hidden">
+                                              <div className="font-medium text-sm truncate">
+                                                {server.name}
+                                              </div>
+                                              <div className="text-xs text-muted-foreground truncate">
+                                                {server.link}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )
+                                      )
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">
+                                        No MCP servers configured
                                       </span>
                                     )}
                                   </div>
@@ -565,6 +724,7 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
                               {
                                 description: "",
                                 tools: [],
+                                mcp_servers: [],
                                 expected_output: "{}",
                               },
                             ],
@@ -622,6 +782,166 @@ const AgentReviewPanel: React.FC<AgentReviewPanelProps> = ({
             </Button>
           )}
         </div>
+
+        {/* MCP Server Add Modal */}
+        <Dialog
+          open={mcpServerModalOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              // Only reset when closing
+              setMcpServerModalOpen(false);
+              setCurrentTaskIndex(null);
+              setNewServerName("");
+              setNewServerLink("");
+            } else {
+              setMcpServerModalOpen(true);
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Add MCP Server</DialogTitle>
+              <DialogDescription>
+                Add a Model Context Protocol server for this task. The server
+                will be available to the agent when performing this task.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+
+                // Prevent duplicate submissions
+                if (isSubmitting) {
+                  return;
+                }
+
+                setIsSubmitting(true);
+
+                const formData = new FormData(e.currentTarget);
+                const name = formData.get("server-name") as string;
+                const link = formData.get("server-link") as string;
+
+                // Use form values or fall back to state values
+                const finalName = name?.trim() || newServerName.trim();
+                const finalLink = link?.trim() || newServerLink.trim();
+
+                const taskIndex = currentTaskIndex;
+                if (taskIndex === null) {
+                  setIsSubmitting(false);
+                  return;
+                }
+
+                // Validate URL format
+                try {
+                  new URL(finalLink);
+                } catch {
+                  toast.error("Please provide a valid URL for the MCP server");
+                  return;
+                }
+
+                const newServer: MCPServer = {
+                  name: finalName,
+                  link: finalLink,
+                };
+
+                setEditedAgent((prev) => {
+                  const updatedTasks = prev.tasks.map((task, index) => {
+                    if (index === taskIndex) {
+                      const updatedTask = { ...task };
+                      if (!updatedTask.mcp_servers) {
+                        updatedTask.mcp_servers = [];
+                      }
+                      updatedTask.mcp_servers = [
+                        ...updatedTask.mcp_servers,
+                        newServer,
+                      ];
+                      return updatedTask;
+                    }
+                    return task;
+                  });
+
+                  return {
+                    ...prev,
+                    tasks: updatedTasks,
+                  };
+                });
+
+                setMcpServerModalOpen(false);
+                setCurrentTaskIndex(null);
+                setIsSubmitting(false);
+                toast.success("MCP server added successfully");
+              }}
+            >
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <label htmlFor="server-name" className="text-sm font-medium">
+                    Server Name
+                  </label>
+                  <Input
+                    id="server-name"
+                    name="server-name"
+                    placeholder="e.g., Database Server"
+                    value={newServerName}
+                    onChange={(e) => setNewServerName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        (!newServerName.trim() || !newServerLink.trim())
+                      ) {
+                        e.preventDefault();
+                        toast.error(
+                          "Please provide both name and link for the MCP server"
+                        );
+                      }
+                    }}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="server-link" className="text-sm font-medium">
+                    Server URL
+                  </label>
+                  <Input
+                    id="server-link"
+                    name="server-link"
+                    placeholder="e.g., https://api.example.com/mcp"
+                    value={newServerLink}
+                    onChange={(e) => setNewServerLink(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        (!newServerName.trim() || !newServerLink.trim())
+                      ) {
+                        e.preventDefault();
+                        toast.error(
+                          "Please provide both name and link for the MCP server"
+                        );
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setMcpServerModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    !newServerName.trim() ||
+                    !newServerLink.trim() ||
+                    isSubmitting
+                  }
+                >
+                  {isSubmitting ? "Adding..." : "Add Server"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );

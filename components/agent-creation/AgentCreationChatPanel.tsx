@@ -154,7 +154,7 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
       }
       return await AgentService.updateAgent(generatedAgent.id, agentData);
     },
-    onSuccess: () => {
+    onSuccess: (updatedAgent) => {
       toast.success("Agent updated successfully");
       setIsEditing(false);
     },
@@ -305,8 +305,8 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
               <AgentReviewPanel
                 generatedAgent={generatedAgent}
                 onEdit={() => setIsEditing(true)}
-                onSave={(agent) => {
-                  updateAgentMutation.mutate(agent);
+                onSave={async (agent) => {
+                  await updateAgentMutation.mutateAsync(agent);
                 }}
                 availableTools={[]}
                 footerHeight={60}

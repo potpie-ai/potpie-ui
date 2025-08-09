@@ -1,6 +1,7 @@
 import axios, { AxiosResponse } from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { CustomAgentsFormValues } from "@/lib/Schema";
+import { parseApiError } from "@/lib/utils";
 
 export default class AgentService {
   static async getAgentTypes() {
@@ -15,7 +16,8 @@ export default class AgentService {
       );
       return response.data;
     } catch (error) {
-      throw new Error("Error fetching agent types");
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -51,7 +53,8 @@ export default class AgentService {
 
       return response.data;
     } catch (error) {
-      throw new Error("Error fetching agent types");
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -69,7 +72,8 @@ export default class AgentService {
       );
       return response.data as AxiosResponse<CustomAgentType, any>;
     } catch (error) {
-      throw new Error("Error updating agent");
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -86,7 +90,8 @@ export default class AgentService {
       );
       return response.data as AxiosResponse<CustomAgentType, any>;
     } catch (error) {
-      throw new Error("Error creating agent");
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 

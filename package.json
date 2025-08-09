@@ -42,6 +42,7 @@
     "ai": "^4.1.61",
     "axios": "^1.8.3",
     "class-variance-authority": "^0.7.1",
+    "claude": "^0.1.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.0",
     "dayjs": "^1.11.13",

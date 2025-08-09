@@ -40,6 +40,7 @@ export const NodePaletteContainer: FC<NodePaletteContainerProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [manualView, setManualView] = useState<PanelView | null>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
+  const lastSelectedNodeId = useRef<string | null>(null);
 
   // Determine the current panel view
   const currentView = useMemo((): PanelView => {
@@ -50,6 +51,45 @@ export const NodePaletteContainer: FC<NodePaletteContainerProps> = ({
   }, [visible, selectedNode, readOnly]);
 
   const effectiveView = manualView || currentView;
+
+  // Enhanced node selection handling
+  useEffect(() => {
+    if (selectedNode) {
+      const nodeId = selectedNode.id;
+
+      // Only update if the selected node has actually changed
+      if (lastSelectedNodeId.current !== nodeId) {
+        lastSelectedNodeId.current = nodeId;
+
+        // Force config view when a node is selected
+        if (manualView === "collapsed" || manualView === "palette") {
+          setManualView("config");
+        }
+
+        // Ensure the panel is expanded when a node is selected
+        if (panelHeight < 200) {
+          setPanelHeight(300);
+        }
+
+        // Add a fallback timeout to ensure config view is shown
+        const timeoutId = setTimeout(() => {
+          if (selectedNode && effectiveView !== "config") {
+            setManualView("config");
+          }
+        }, 100);
+
+        return () => clearTimeout(timeoutId);
+      }
+    } else {
+      // Clear the last selected node when no node is selected
+      lastSelectedNodeId.current = null;
+
+      // Reset manual view when no node is selected and we're not in edit mode
+      if (readOnly && manualView === "config") {
+        setManualView("collapsed");
+      }
+    }
+  }, [selectedNode, manualView, readOnly, panelHeight, effectiveView]);
 
   // Calculate panel height with viewport constraints
   const isExpanded = effectiveView === "palette" || effectiveView === "config";
@@ -63,7 +103,7 @@ export const NodePaletteContainer: FC<NodePaletteContainerProps> = ({
   const handleBackToPalette = () => setManualView("palette");
   const handleCollapse = () => setManualView("collapsed");
 
-  // Reset manual view when node is selected
+  // Reset manual view when node is selected (legacy logic - kept for compatibility)
   useEffect(() => {
     if (selectedNode && manualView === "collapsed") {
       setManualView(null);

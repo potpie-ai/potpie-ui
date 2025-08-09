@@ -3,7 +3,6 @@ import { getNodeColors } from "../color_utils";
 import { SourceHandle, TargetHandle } from "../../handles";
 import { Bot, Code } from "lucide-react";
 import { FC, useEffect, useState } from "react";
-import AgentService from "@/services/AgentService";
 import { Card } from "@/components/ui/card";
 import {
   Carousel,
@@ -19,6 +18,7 @@ import { Plus, RefreshCcw } from "lucide-react";
 import { RepoBranchSelector } from "../triggers/github/RepoBranchSelector";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { useAgentData } from "../../contexts/AgentDataContext";
 
 interface AgentConfigProps {
   config: any;
@@ -27,40 +27,27 @@ interface AgentConfigProps {
   workflow?: any;
 }
 
-// Simple in-memory cache for agents
-let cachedAgents: any[] | null = null;
-
 export const AgentConfigComponent: FC<AgentConfigProps> = ({
   config,
   onConfigChange,
   readOnly = false,
   workflow,
 }) => {
-  const [availableAgents, setAvailableAgents] = useState<any[]>(
-    cachedAgents || []
-  );
-  const [loading, setLoading] = useState(!cachedAgents);
+  const {
+    agents: availableAgents,
+    loading,
+    error,
+    refreshAgents,
+  } = useAgentData();
 
-  async function fetchAgents() {
-    setLoading(true);
-    const agents = await AgentService.getAgentTypes();
-    const filtered = agents
-      .filter((agent: any) => agent.status !== "SYSTEM")
-      .map((agent: any) => ({
-        id: agent.id,
-        name: agent.name,
-        description: agent.description,
-      }));
-    cachedAgents = filtered;
-    setAvailableAgents(filtered);
-    setLoading(false);
-  }
-
+  // Log when using shared agent data
   useEffect(() => {
-    if (!cachedAgents) {
-      fetchAgents();
+    if (availableAgents.length > 0) {
+      console.log(
+        `[AgentConfigComponent] Using shared agent data with ${availableAgents.length} agents`
+      );
     }
-  }, []);
+  }, [availableAgents.length]);
 
   // Only update config on click, don't re-fetch agents
   const handleSelectAgent = (agentId: string) => {
@@ -116,7 +103,7 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
         <span className="font-medium">Choose an agent:</span>
         <RefreshCcw
           className={`h-4 w-4 cursor-pointer ${loading ? "animate-spin" : ""}`}
-          onClick={readOnly ? undefined : fetchAgents}
+          onClick={readOnly ? undefined : refreshAgents}
         />
       </div>
       <div className="relative w-full px-12">
@@ -281,9 +268,7 @@ export const agentNodeMetadata = {
 
 export const AgentNode = ({ data }: { data: WorkflowNode }) => {
   const colors = getNodeColors(data.group);
-  const [resolvedAgentName, setResolvedAgentName] = useState<string | null>(
-    null
-  );
+  const { agents } = useAgentData();
   const agentName = data.data?.name;
   const agentId = data.data?.agent_id;
   const task = data.data?.task;
@@ -291,27 +276,9 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
   const branchName = data.data?.branch_name;
   const useCurrentBranch = data.data?.use_current_branch;
 
-  // Fetch agent name if we have agent_id but no agentName
-  useEffect(() => {
-    const fetchAgentName = async () => {
-      if (agentId && !agentName && !resolvedAgentName) {
-        try {
-          const agents = await AgentService.getAgentTypes();
-          const agent = agents.find((a: any) => a.id === agentId);
-          if (agent) {
-            setResolvedAgentName(agent.name);
-          }
-        } catch (error) {
-          console.error("Failed to fetch agent name:", error);
-        }
-      }
-    };
-
-    fetchAgentName();
-  }, [agentId, agentName, resolvedAgentName]);
-
-  // Use resolved name if available, otherwise fall back to stored name
-  const displayName = resolvedAgentName || agentName;
+  // Find agent name from shared data if we have agent_id but no agentName
+  const resolvedAgent = agentId ? agents.find((a) => a.id === agentId) : null;
+  const displayName = resolvedAgent?.name || agentName;
 
   return (
     <div className="w-full">
@@ -321,7 +288,7 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
       >
         <div className="flex items-center">
           <Bot className="w-5 h-5 mr-2" style={{ color: colors.primary }} />
-          <h3 className="font-semibold text-gray-800">Agent</h3>
+          <h3 className="font-semibold text-gray-800">Custom Agent</h3>
         </div>
       </div>
       <div className="p-4 flex flex-col items-start gap-2">

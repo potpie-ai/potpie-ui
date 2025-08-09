@@ -29,6 +29,7 @@ interface ReactFlowCanvasProps {
   onNodeDrop?: (nodeInfo: any, position: { x: number; y: number }) => void;
   selectedNode?: RFNode | null;
   onNodeSelect?: (node: RFNode | null) => void;
+  onNodeDelete?: (nodeId: string) => void;
 }
 
 interface ReactFlowWrapperProps {
@@ -45,13 +46,23 @@ interface ReactFlowWrapperProps {
   onEdgeUpdateEnd: (event: MouseEvent | TouchEvent, edge: RFEdge) => void;
   onNodeDrop?: (nodeInfo: any, position: { x: number; y: number }) => void;
   onNodeSelect?: (node: RFNode | null) => void;
+  onNodeDelete?: (nodeId: string) => void;
 }
 
-const WorkflowNode: FC<{ data: any; selected?: boolean }> = ({
-  data,
-  selected,
-}) => {
-  return <NodeComponent data={data} selected={selected} />;
+const WorkflowNode: FC<{
+  data: any;
+  selected?: boolean;
+  onDelete?: (nodeId: string) => void;
+  mode?: "view_only" | "edit" | "preview";
+}> = ({ data, selected, onDelete, mode }) => {
+  return (
+    <NodeComponent
+      data={data}
+      selected={selected}
+      onDelete={onDelete}
+      mode={mode}
+    />
+  );
 };
 
 const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
@@ -68,6 +79,7 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
   onEdgeUpdateEnd,
   onNodeDrop,
   onNodeSelect,
+  onNodeDelete,
 }) => {
   const { project } = useReactFlow();
 
@@ -96,16 +108,44 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
 
   const handleNodeClick = useCallback(
     (event: any, node: RFNode) => {
-      onNodeSelect?.(node);
+      // Don't prevent default - let ReactFlow handle the selection
+      if (onNodeSelect) {
+        onNodeSelect(node);
+      }
     },
     [onNodeSelect]
   );
 
   const handlePaneClick = useCallback(
     (event: any) => {
-      onNodeSelect?.(null);
+      // Don't prevent default - let ReactFlow handle the deselection
+      if (onNodeSelect) {
+        onNodeSelect(null);
+      }
     },
     [onNodeSelect]
+  );
+
+  // Add keyboard event handler to ensure delete events are captured
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      // If delete key is pressed and we're in edit mode
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        mode === "edit"
+      ) {
+        // Manual fallback: if ReactFlow's delete isn't working, manually trigger it
+        const selectedNodes = nodes.filter((node) => node.selected);
+        if (selectedNodes.length > 0) {
+          const deleteChanges = selectedNodes.map((node) => ({
+            type: "remove" as const,
+            id: node.id,
+          }));
+          onNodesChange(deleteChanges);
+        }
+      }
+    },
+    [mode, nodes, onNodesChange]
   );
 
   return (
@@ -116,6 +156,8 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
       className={`relative w-full h-full transition-all duration-200 ${
         isOver ? "bg-blue-50 border-2 border-blue-300 border-dashed" : ""
       }`}
+      onKeyDown={handleKeyDown}
+      tabIndex={0} // Make the container focusable
     >
       <ReactFlow
         nodes={nodes}
@@ -130,6 +172,7 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
         onEdgeUpdateEnd={onEdgeUpdateEnd}
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
+        onKeyDown={handleKeyDown}
         fitView={true}
         fitViewOptions={{ padding: 0.1, maxZoom: 0.7 }}
         attributionPosition="bottom-left"
@@ -141,6 +184,14 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
         zoomOnScroll={true}
         zoomOnPinch={true}
         proOptions={{ hideAttribution: true }}
+        multiSelectionKeyCode="Shift"
+        deleteKeyCode="Backspace"
+        selectionKeyCode="Shift"
+        snapToGrid={false}
+        snapGrid={[15, 15]}
+        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+        minZoom={0.1}
+        maxZoom={1.5}
       >
         <Background variant={BackgroundVariant.Cross} size={5} gap={40} />
         <Controls className="z-20" />
@@ -195,12 +246,15 @@ export const ReactFlowCanvas: FC<ReactFlowCanvasProps> = ({
   onNodeDrop,
   selectedNode,
   onNodeSelect,
+  onNodeDelete,
 }) => {
   const nodeTypes = useMemo(
     () => ({
-      workflowNode: WorkflowNode,
+      workflowNode: (props: any) => (
+        <WorkflowNode {...props} onDelete={onNodeDelete} mode={mode} />
+      ),
     }),
-    []
+    [onNodeDelete, mode]
   );
 
   const edgeTypes = useMemo(
@@ -230,17 +284,17 @@ export const ReactFlowCanvas: FC<ReactFlowCanvasProps> = ({
             onEdgeUpdateEnd={onEdgeUpdateEnd}
             onNodeDrop={onNodeDrop}
             onNodeSelect={onNodeSelect}
+            onNodeDelete={onNodeDelete}
           />
-
-          {debugMode && (
-            <DebugOverlay
-              nodes={nodes}
-              edges={edges}
-              mode={mode}
-              selectedNode={selectedNode}
-            />
-          )}
         </ReactFlowProvider>
+      )}
+      {debugMode && (
+        <DebugOverlay
+          nodes={nodes}
+          edges={edges}
+          mode={mode}
+          selectedNode={selectedNode}
+        />
       )}
     </div>
   );

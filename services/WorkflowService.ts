@@ -83,6 +83,8 @@ export type NodeType =
   | "trigger_github_pr_merged"
   | "trigger_github_issue_opened"
   | "trigger_linear_issue_created"
+  | "trigger_sentry_issue_created"
+  | "trigger_webhook"
   | "custom_agent"
   | "flow_control_conditional"
   | "flow_control_collect"
@@ -90,7 +92,7 @@ export type NodeType =
   | "manual_step_approval"
   | "manual_step_input";
 
-export type NodeGroup = "github" | "linear" | "default";
+export type NodeGroup = "github" | "linear" | "sentry" | "default";
 export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step";
 
 export interface WorkflowNode {

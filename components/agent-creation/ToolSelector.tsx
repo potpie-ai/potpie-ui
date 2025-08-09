@@ -200,15 +200,25 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
   };
 
   const getFilteredTools = () => {
-    if (!searchTerm) return availableTools;
+    let filtered = availableTools;
 
-    const searchLower = searchTerm.toLowerCase();
-    return availableTools.filter((tool) => {
-      return (
-        tool.name.toLowerCase().includes(searchLower) ||
-        tool.description.toLowerCase().includes(searchLower)
-      );
+    // Filter by search term if provided
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter((tool) => {
+        return (
+          tool.name.toLowerCase().includes(searchLower) ||
+          tool.description.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+
+    // Filter out already selected tools
+    filtered = filtered.filter((tool) => {
+      return !allSelectedTools.some((selected) => selected.id === tool.id);
     });
+
+    return filtered;
   };
 
   const filteredTools = getFilteredTools();

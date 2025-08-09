@@ -2,6 +2,7 @@ import { Workflow, WorkflowNode } from "@/services/WorkflowService";
 import type { Node as RFNode, Edge as RFEdge } from "reactflow";
 import { MarkerType } from "reactflow";
 import type { NodeType, NodeGroup } from "@/services/WorkflowService";
+import { isValidNodeType } from "./nodeValidation";
 
 export const generateNodes = (
   workflow: Workflow,
@@ -32,6 +33,7 @@ export const generateNodes = (
       data: node,
       draggable: true,
       selectable: true,
+      deletable: true,
     });
   }
 
@@ -129,24 +131,8 @@ export const edgesToAdjacencyList = (
   return adjacencyList;
 };
 
-// Helper: runtime type guard for NodeType
-const validNodeTypes: Set<string> = new Set([
-  "trigger_github_pr_opened",
-  "trigger_github_pr_closed",
-  "trigger_github_pr_reopened",
-  "trigger_github_pr_merged",
-  "trigger_github_issue_opened",
-  "trigger_linear_issue_created",
-  "custom_agent",
-  "flow_control_conditional",
-  "flow_control_collect",
-  "flow_control_selector",
-  "manual_step_approval",
-  "manual_step_input",
-]);
-function isValidNodeType(type: any): type is NodeType {
-  return typeof type === "string" && validNodeTypes.has(type);
-}
+// Helper: runtime type guard for NodeType - use centralized validation
+// (isValidNodeType is now imported from nodeValidation.ts)
 
 // Helper function to convert ReactFlow nodes back to workflow nodes
 export const nodesToWorkflowNodes = (

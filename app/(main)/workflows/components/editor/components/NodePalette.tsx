@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNodeDrag } from "../hooks/useWorkflowDnD";
 import { DragPreview } from "./DragPreview";
+import { getValidNodeTypes } from "../utils/nodeValidation";
 
 /**
  * Props for the NodePalette component
@@ -30,7 +31,7 @@ interface DraggableNodeProps {
   /** Node information */
   nodeInfo: NodeInfo;
   /** Color scheme for the node */
-  colors: { primary: string; secondary: string };
+  colors: { primary: string; secondary: string; text: string };
   /** Icon component for the node */
   IconComponent: React.ComponentType<any>;
   /** Callback when dragging starts */
@@ -49,21 +50,8 @@ const DraggableNode: FC<DraggableNodeProps> = ({
   IconComponent,
   onDragStart,
 }) => {
-  // Runtime check for node type
-  const validNodeTypes: Set<string> = new Set([
-    "trigger_github_pr_opened",
-    "trigger_github_pr_closed",
-    "trigger_github_pr_reopened",
-    "trigger_github_pr_merged",
-    "trigger_github_issue_opened",
-    "trigger_linear_issue_created",
-    "custom_agent",
-    "flow_control_conditional",
-    "flow_control_collect",
-    "flow_control_selector",
-    "manual_step_approval",
-    "manual_step_input",
-  ]);
+  // Runtime check for node type - use centralized validation
+  const validNodeTypes = getValidNodeTypes();
   if (!validNodeTypes.has(nodeInfo.type)) {
     throw new Error(`Invalid node type in palette: ${nodeInfo.type}`);
   }
@@ -103,7 +91,12 @@ const DraggableNode: FC<DraggableNodeProps> = ({
               >
                 <IconComponent
                   className="w-4 h-4"
-                  style={{ color: colors.primary }}
+                  style={{
+                    color:
+                      nodeInfo.group === "linear" || nodeInfo.group === "sentry"
+                        ? "#6b7280" // gray-500 for linear and sentry
+                        : colors.text,
+                  }}
                 />
               </div>
               <span className="text-sm font-medium text-gray-800 flex-1">

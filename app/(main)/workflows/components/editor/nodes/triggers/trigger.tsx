@@ -23,6 +23,11 @@ import {
   IssueAddedTriggerNodeData,
 } from "./github/issue-added-trigger";
 import { LinearTriggerNode } from "./linear/linear-trigger";
+import {
+  IssueCreatedTriggerNode,
+  IssueCreatedTriggerNodeData,
+} from "./sentry/issue-created-trigger";
+import { WebhookTriggerNode } from "./webhook";
 
 // Generic trigger node for unhandled trigger types
 export const TriggerNode = ({ data }: { data: WorkflowNode }) => {
@@ -60,6 +65,14 @@ export const TriggerNode = ({ data }: { data: WorkflowNode }) => {
       );
     case "trigger_linear_issue_created":
       return <LinearTriggerNode data={data} />;
+    case "trigger_sentry_issue_created":
+      return (
+        <IssueCreatedTriggerNode
+          data={data as WorkflowNode & { data: IssueCreatedTriggerNodeData }}
+        />
+      );
+    case "trigger_webhook":
+      return <WebhookTriggerNode data={data} />;
     default:
       break;
   }

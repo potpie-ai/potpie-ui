@@ -1,4 +1,9 @@
-export type NodeGroup = "default" | "github" | "linear" | "flow_control";
+export type NodeGroup =
+  | "default"
+  | "github"
+  | "linear"
+  | "sentry"
+  | "flow_control";
 
 export interface NodeColorPalette {
   primary: string;
@@ -24,6 +29,12 @@ export const getNodeColors = (group: NodeGroup): NodeColorPalette => {
       return {
         primary: "#5f6ad2", // Linear purple
         secondary: "#b4b9f8", // Linear light purple
+        text: "#111", // black for contrast
+      };
+    case "sentry":
+      return {
+        primary: "#f43f5e", // Sentry red
+        secondary: "#fecdd3", // Sentry light red
         text: "#111", // black for contrast
       };
     case "flow_control":

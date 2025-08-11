@@ -49,25 +49,120 @@ interface Agent {
 interface Template {
   title: string;
   description?: string;
-  agent_id: string;
+  agent_id?: string;
   triggers: string[];
-  task: string;
+  task?: string;
+  graph?: {
+    nodes: Record<string, any>;
+    adjacency_list: Record<string, string[]>;
+  };
 }
 
 const templates = [
   {
     title: "PR Review Workflow",
     description: "automatically review pull requests on creation",
-    triggers: ["github_pr_created"],
+    triggers: ["github_pr_opened"],
     task: "For the newly created pull request, review the code changes and add the review as a comment",
+    graph: {
+      nodes: {
+        custom_agent_review: {
+          id: "custom_agent_review",
+          type: "custom_agent",
+          group: "default",
+          category: "agent",
+          position: { x: 79.56, y: -702.44 },
+          data: {
+            agent_id: "",
+            task: "Please review the current PR.\nList detailed review of the code changes one by one. Mention full file path + line numbers aswell as exact line and start_line in the diff blob (this will be used later for commenting on the pr) etc. Review each blob one by one. Also give out code recommendation on changes to request. Focus on reviewing file by file and make sure to list all the reviews for each changes. Only review the changes and affected code, do not review existing code. Output line and start_line where line is the start line of the review and line is where the comment will be placed for each review include full file path",
+            repo_name: "",
+            branch_name: "",
+            use_current_repo: true,
+            use_current_branch: true,
+          },
+          timeout_seconds: 600,
+          retry_count: 3,
+        },
+        trigger_github_pr_opened: {
+          id: "trigger_github_pr_opened",
+          type: "trigger_github_pr_opened",
+          group: "github",
+          category: "trigger",
+          position: { x: -363.82, y: -896.27 },
+          data: {
+            repo_name: "",
+            hash: "",
+          },
+        },
+        custom_agent_add_comments: {
+          id: "custom_agent_add_comments",
+          type: "custom_agent",
+          group: "default",
+          category: "agent",
+          position: { x: 479.57, y: -517.36 },
+          data: {
+            agent_id: "",
+            task: "Add the review as comments. Add it one by one.  Only add reviews not status etc.\n\nAdd comment as review on exact line + recommend changes if necessary. Highlight line numbers in the PR comment (basically i want it to show the code with the comments and recommended changes). Highlight the line using line and start_line and exact full path for the review comment\n\nDescribe which tool you used including the parameters you sent and the tool schema in the output",
+            repo_name: "",
+            branch_name: "",
+            use_current_repo: true,
+            use_current_branch: true,
+          },
+          timeout_seconds: 600,
+          retry_count: 3,
+        },
+        custom_agent_starting_comment: {
+          id: "custom_agent_starting_comment",
+          type: "custom_agent",
+          group: "default",
+          category: "agent",
+          position: { x: -10.7, y: -1033.71 },
+          data: {
+            agent_id: "",
+            task: 'Add a comment in github for the given PR. Comment to describe the Current PR and say "Starting Review, should be available shortly"',
+            repo_name: "",
+            branch_name: "",
+            use_current_repo: true,
+            use_current_branch: true,
+          },
+          timeout_seconds: 600,
+          retry_count: 3,
+        },
+        custom_agent_update_description: {
+          id: "custom_agent_update_description",
+          type: "custom_agent",
+          group: "default",
+          category: "agent",
+          position: { x: 409.06, y: -943.26 },
+          data: {
+            agent_id: "",
+            task: "Update the PR details and description. Go through the code and understand what the PR is trying to achieve, Update the description with relevant details. Description should be concise",
+            repo_name: "",
+            branch_name: "",
+            use_current_repo: true,
+            use_current_branch: true,
+          },
+          timeout_seconds: 600,
+          retry_count: 3,
+        },
+      },
+      adjacency_list: {
+        custom_agent_review: ["custom_agent_add_comments"],
+        trigger_github_pr_opened: [
+          "custom_agent_review",
+          "custom_agent_starting_comment",
+        ],
+        custom_agent_starting_comment: ["custom_agent_update_description"],
+      },
+    },
   },
   // Add more templates as needed
-  {
-    title: "Fix Issue Workflow",
-    description: "automatically create a pull request to fix an issue",
-    triggers: ["github_issue_added"],
-    task: "For the newly created issue, analyze the issue. If it is a bug that is fixable, create a new branch add a commit with the fix and create a pull request",
-  },
+  // {
+  //   title: "Fix Issue Workflow",
+  //   description: "automatically create a pull request to fix an issue",
+  //   triggers: ["github_issue_added"],
+  //   task: "For the newly created issue, analyze the issue. If it is a bug that is fixable, create a new branch add a commit with the fix and create a pull request",
+  // },
 ];
 
 const Workflows = () => {
@@ -222,6 +317,14 @@ const Workflows = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setOpenTemplateModal(true)}
+              >
+                <FilePlus2 className="h-4 w-4" />
+                Templates
+              </Button>
               <Link href={"/workflows/create"}>
                 <Button className="gap-2">
                   <Hammer className="h-4 w-4" />

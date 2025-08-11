@@ -109,7 +109,7 @@ export default function WorkflowPage() {
       <WorkflowEditor
         workflow={workflow}
         mode={initialMode}
-        debugMode={true}
+        debugMode={false}
         onSave={handleSave}
         onCancel={handleCancel}
         onModeChange={handleModeChange}

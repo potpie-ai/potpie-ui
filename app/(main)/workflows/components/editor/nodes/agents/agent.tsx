@@ -97,6 +97,17 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
     });
   };
 
+  // Handle use current repo toggle
+  const handleUseCurrentRepoChange = (useCurrentRepo: boolean) => {
+    if (readOnly) return;
+    onConfigChange({
+      ...(config || {}),
+      use_current_repo: useCurrentRepo,
+      // Clear repo_name if using current repo
+      repo_name: useCurrentRepo ? "" : config?.repo_name || "",
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
@@ -202,6 +213,30 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
           Repository & Branch
         </label>
 
+        {/* Use Current Repo Toggle */}
+        <div className="flex items-center space-x-2 mb-3">
+          <Checkbox
+            id="useCurrentRepo"
+            checked={config?.use_current_repo || false}
+            onCheckedChange={handleUseCurrentRepoChange}
+            disabled={readOnly}
+          />
+          <Label
+            htmlFor="useCurrentRepo"
+            className="text-sm font-medium text-gray-700 cursor-pointer"
+          >
+            Use current repository from execution variables
+          </Label>
+        </div>
+        {(config?.use_current_repo || false) && (
+          <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-md p-2 mb-3">
+            ℹ️ The repository will be automatically determined based on the
+            trigger&apos;s repository data. If the trigger isn&apos;t
+            repository-related (e.g., manual trigger), it will use the
+            workflow&apos;s default repository.
+          </div>
+        )}
+
         {/* Use Current Branch Toggle */}
         <div className="flex items-center space-x-2 mb-3">
           <Checkbox
@@ -226,16 +261,20 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
           </div>
         )}
 
-        <RepoBranchSelector
-          repoName={config?.repo_name || ""}
-          branchName={
-            config?.use_current_branch || false ? "" : config?.branch_name || ""
-          }
-          onRepoChange={handleRepoChange}
-          onBranchChange={handleBranchChange}
-          readOnly={readOnly}
-          repoOnly={config?.use_current_branch || false}
-        />
+        {!(config?.use_current_repo || false) && (
+          <RepoBranchSelector
+            repoName={config?.repo_name || ""}
+            branchName={
+              config?.use_current_branch || false
+                ? ""
+                : config?.branch_name || ""
+            }
+            onRepoChange={handleRepoChange}
+            onBranchChange={handleBranchChange}
+            readOnly={readOnly}
+            repoOnly={config?.use_current_branch || false}
+          />
+        )}
       </div>
 
       {/* Task input field */}
@@ -275,6 +314,7 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
   const repoName = data.data?.repo_name;
   const branchName = data.data?.branch_name;
   const useCurrentBranch = data.data?.use_current_branch;
+  const useCurrentRepo = data.data?.use_current_repo;
 
   // Find agent name from shared data if we have agent_id but no agentName
   const resolvedAgent = agentId ? agents.find((a) => a.id === agentId) : null;
@@ -294,19 +334,30 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
       <div className="p-4 flex flex-col items-start gap-2">
         <div className="w-full">
           <p
-            className="font-semibold text-gray-900 truncate"
+            className={`font-semibold truncate ${
+              displayName ? "text-gray-900" : "text-red-600"
+            }`}
             title={displayName || undefined}
           >
             {displayName ? displayName : "No agent selected"}
           </p>
-          {repoName && (
-            <p className="mt-1 text-xs text-gray-600 truncate" title={repoName}>
-              📁 {repoName}
+          {useCurrentRepo ? (
+            <p className="mt-1 text-xs text-blue-600 truncate">
+              📁 Current Repository
             </p>
+          ) : (
+            repoName && (
+              <p
+                className="mt-1 text-xs text-gray-600 truncate"
+                title={repoName}
+              >
+                📁 {repoName}
+              </p>
+            )
           )}
           {useCurrentBranch ? (
             <p className="mt-1 text-xs text-blue-600 truncate">
-              🌿 Current Branch (from execution)
+              🌿 Current Branch
             </p>
           ) : (
             branchName && (

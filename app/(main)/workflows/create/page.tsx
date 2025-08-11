@@ -3,15 +3,56 @@
 import { z } from "zod";
 import { WorkflowEditor } from "../components/editor/WorkflowEditor";
 import { Workflow } from "@/services/WorkflowService";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { LucideLoader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { parseApiError } from "@/lib/utils";
 
 export default function CreateWorkflowPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  const [templateWorkflow, setTemplateWorkflow] = useState<Workflow | null>(
+    null
+  );
+
+  // Handle template parameter from URL
+  useEffect(() => {
+    const templateParam = searchParams.get("template");
+    if (templateParam) {
+      try {
+        const template = JSON.parse(templateParam);
+        if (template.graph) {
+          // Create a workflow from template
+          const now = new Date().toISOString();
+          const workflowFromTemplate: Workflow = {
+            id: "",
+            title: template.title || "New Workflow from Template",
+            description: template.description || "",
+            created_by: "",
+            created_at: now,
+            updated_at: now,
+            is_paused: false,
+            version: "1.0.0",
+            graph: {
+              id: "graph-" + Math.random().toString(36).substr(2, 9),
+              workflow_id: "",
+              nodes: template.graph.nodes || {},
+              adjacency_list: template.graph.adjacency_list || {},
+              created_at: now,
+              updated_at: now,
+            },
+            variables: {},
+          };
+          setTemplateWorkflow(workflowFromTemplate);
+        }
+      } catch (error) {
+        console.error("Error parsing template:", error);
+        toast.error("Failed to load template");
+      }
+    }
+  }, [searchParams]);
 
   const handleSave = async (workflow: Workflow, isNewWorkflow: boolean) => {
     try {
@@ -72,6 +113,7 @@ export default function CreateWorkflowPage() {
   return (
     <div className="h-[100vh] w-full overflow-hidden">
       <WorkflowEditor
+        workflow={templateWorkflow || undefined}
         mode="edit"
         onSave={handleSave}
         onCancel={handleCancel}

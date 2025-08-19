@@ -9,6 +9,7 @@ export type NodeType =
   | "trigger_sentry_issue_created"
   | "trigger_webhook"
   | "custom_agent"
+  | "action_agent"
   | "flow_control_conditional"
   | "flow_control_collect"
   | "flow_control_selector"
@@ -23,6 +24,7 @@ export type NodeGroup =
   | "flow_control";
 
 import { agentNodeMetadata } from "./agents/agent";
+import { actionAgentNodeMetadata } from "./agents/action-agent";
 import { ifConditionNodeMetadata } from "./flow-controls/if-condition";
 import { linearTriggerNodeMetadata } from "./triggers/linear/linear-trigger";
 import { prOpenedTriggerNodeMetadata } from "./triggers/github/pr-opened-trigger";
@@ -63,6 +65,7 @@ export const availableNodes: NodeInfo[] = [
   issueCreatedTriggerNodeMetadata,
   webhookTriggerNodeMetadata,
   agentNodeMetadata,
+  actionAgentNodeMetadata,
   ifConditionNodeMetadata,
 ];
 
@@ -77,5 +80,6 @@ export {
   issueCreatedTriggerNodeMetadata,
   webhookTriggerNodeMetadata,
   agentNodeMetadata,
+  actionAgentNodeMetadata,
   ifConditionNodeMetadata,
 };

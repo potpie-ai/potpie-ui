@@ -86,6 +86,7 @@ export type NodeType =
   | "trigger_sentry_issue_created"
   | "trigger_webhook"
   | "custom_agent"
+  | "action_agent"
   | "flow_control_conditional"
   | "flow_control_collect"
   | "flow_control_selector"

@@ -2,6 +2,7 @@ import { WorkflowNode } from "@/services/WorkflowService";
 import { TriggerNode } from "./triggers/trigger";
 import { LinearTriggerNode } from "./triggers/linear/linear-trigger";
 import { AgentNode } from "./agents/agent";
+import { ActionAgentNode } from "./agents/action-agent";
 import { IfConditionNode } from "./flow-controls/if-condition";
 import { X } from "lucide-react";
 
@@ -18,7 +19,13 @@ export const SwitchComponent = ({ data }: { data: WorkflowNode }) => {
           return <TriggerNode data={data} />;
       }
     case "agent":
-      return <AgentNode data={data} />;
+      // Handle different agent types
+      switch (data.type) {
+        case "action_agent":
+          return <ActionAgentNode data={data} />;
+        default:
+          return <AgentNode data={data} />;
+      }
     case "flow_control":
       return <IfConditionNode data={data} />;
   }

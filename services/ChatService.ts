@@ -40,6 +40,7 @@ export default class ChatService {
     conversationId: string,
     message: string,
     selectedNodes: any[],
+    images: File[] = [],
     onMessageUpdate: (
       message: string,
       tool_calls: any[],
@@ -47,15 +48,25 @@ export default class ChatService {
     ) => void
   ): Promise<{ message: string; citations: string[] }> {
     try {
+      const headers = await getHeaders();
+      const formData = new FormData();
+      
+      formData.append('content', message);
+      formData.append('node_ids', JSON.stringify(selectedNodes));
+      
+      // Add images to form data
+      images.forEach((image, index) => {
+        formData.append('images', image);
+      });
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message/`,
         {
           method: "POST",
-          headers: {
-            ...(await getHeaders()),
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ content: message, node_ids: selectedNodes }),
+          headers: Object.fromEntries(
+            Object.entries(headers).filter(([_, value]) => value !== undefined)
+          ) as HeadersInit,
+          body: formData,
         }
       );
 
@@ -147,11 +158,20 @@ export default class ChatService {
     );
 
     return response.data.map(
-      (message: { id: any; content: any; type: string; citations: any }) => ({
+      (message: { 
+        id: any; 
+        content: any; 
+        type: string; 
+        citations: any;
+        has_attachments?: boolean;
+        attachments?: any[];
+      }) => ({
         id: message.id,
         text: message.content,
         sender: message.type === "HUMAN" ? "user" : "agent",
         citations: message.citations || [],
+        has_attachments: message.has_attachments || false,
+        attachments: message.attachments || [],
       })
     );
   }
@@ -221,15 +241,21 @@ export default class ChatService {
     ) => void
   ): Promise<{ message: string; citations: string[]; tool_calls: any[] }> {
     try {
+      const headers = await getHeaders();
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/regenerate/`,
         {
           method: "POST",
           headers: {
-            ...(await getHeaders()),
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ node_ids: selectedNodes }),
+            ...Object.fromEntries(
+              Object.entries(headers).filter(([_, value]) => value !== undefined)
+            ),
+            'Content-Type': 'application/json',
+          } as HeadersInit,
+          body: JSON.stringify({
+            node_ids: selectedNodes
+          }),
         }
       );
 

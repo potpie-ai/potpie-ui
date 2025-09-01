@@ -9,6 +9,7 @@ import {
   LucideFileText,
   MessagesSquare,
   Zap,
+  Plug,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -125,6 +126,17 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         icons: <Zap size={20} strokeWidth={1.5} />,
         title: "Workflows",
         href: "/workflows",
+        disabled: false,
+      },
+    ],
+  },
+  {
+    title: "Integrations",
+    links: [
+      {
+        icons: <Plug size={20} strokeWidth={1.5} />,
+        title: "Integrations",
+        href: "/integrations",
         disabled: false,
       },
     ],

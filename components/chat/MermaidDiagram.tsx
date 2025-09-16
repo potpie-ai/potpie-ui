@@ -13,6 +13,161 @@ interface MermaidDiagramProps {
   chart: string;
 }
 
+// Intelligent preprocessing to fix common mermaid syntax issues
+const preprocessMermaidChart = (chart: string): string => {
+  try {
+    let processedChart = chart;
+
+    console.log('Original chart:', chart);
+
+    // Extract all defined nodes and subgraphs more comprehensively
+    const definedNodes = new Set<string>();
+    const subgraphs = new Map<string, string[]>();
+    const lines = processedChart.split('\n');
+    let currentSubgraph: string | null = null;
+
+    // First pass: identify all nodes and subgraphs
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+
+      if (!trimmedLine || trimmedLine.startsWith('%%')) continue;
+
+      // Track subgraph boundaries
+      const subgraphMatch = trimmedLine.match(/^subgraph\s+(\w+)(?:\[.*?\])?/);
+      if (subgraphMatch) {
+        currentSubgraph = subgraphMatch[1];
+        subgraphs.set(currentSubgraph, []);
+        continue;
+      }
+
+      if (trimmedLine === 'end') {
+        currentSubgraph = null;
+        continue;
+      }
+
+      // Find all node definitions (more comprehensive patterns)
+      const nodePatterns = [
+        /(\w+)\[.*?\]/g,  // Node with label: NodeName[Label]
+        /(\w+)\(".*?"\)/g, // Node with round brackets: NodeName("Label")
+        /(\w+)\{.*?\}/g,   // Node with curly brackets: NodeName{Label}
+        /(\w+)\>.*?\]/g,   // Flag node: NodeName>Label]
+        /(\w+)\((.*?)\)/g, // Round node: NodeName(Label)
+      ];
+
+      for (const pattern of nodePatterns) {
+        let match;
+        while ((match = pattern.exec(trimmedLine)) !== null) {
+          const nodeName = match[1];
+          definedNodes.add(nodeName);
+          if (currentSubgraph) {
+            subgraphs.get(currentSubgraph)?.push(nodeName);
+          }
+        }
+      }
+
+      // Also extract nodes from connections
+      const connectionPatterns = [
+        /(\w+)\s*(?:--.*?-->|-->|--.*?--)\s*(\w+)/g,
+        /(\w+)\s*--.*?-->\s*(\w+)/g,
+      ];
+
+      for (const pattern of connectionPatterns) {
+        let match;
+        while ((match = pattern.exec(trimmedLine)) !== null) {
+          definedNodes.add(match[1]);
+          definedNodes.add(match[2]);
+          if (currentSubgraph) {
+            subgraphs.get(currentSubgraph)?.push(match[1]);
+            subgraphs.get(currentSubgraph)?.push(match[2]);
+          }
+        }
+      }
+    }
+
+    console.log('Defined nodes:', Array.from(definedNodes));
+    console.log('Subgraphs:', Object.fromEntries(subgraphs));
+
+    // Second pass: fix undefined references
+    let fixedChart = processedChart;
+    const fixedLines: string[] = [];
+
+    for (const line of lines) {
+      let fixedLine = line;
+      const trimmedLine = line.trim();
+
+      // Skip non-connection lines
+      if (!trimmedLine.includes('-->') && !trimmedLine.includes('--') || trimmedLine.startsWith('%%')) {
+        fixedLines.push(fixedLine);
+        continue;
+      }
+
+      // Handle specific problematic patterns
+
+      // Fix: "SDKClient -- HTTP CRUD Calls --> API" where API is a subgraph
+      if (trimmedLine.includes('-- HTTP CRUD Calls -->') && trimmedLine.includes('API')) {
+        if (subgraphs.has('API')) {
+          const nodesInAPI = subgraphs.get('API') || [];
+          if (nodesInAPI.length > 0) {
+            // Replace with first node in API subgraph
+            fixedLine = fixedLine.replace(/--\s*HTTP\s+CRUD\s+Calls\s*-->\s*API/, `-- "HTTP CRUD Calls" --> ${nodesInAPI[0]}`);
+            console.log(`Auto-fixed: Replaced API subgraph reference with ${nodesInAPI[0]} and quoted label`);
+          }
+        }
+      }
+
+      // Fix: Multi-word labels in connections should be quoted
+      fixedLine = fixedLine.replace(/--\s*([A-Z][A-Za-z\s]+[A-Za-z])\s*-->/g, '-- "$1" -->');
+
+      // Fix: "A0 -- uses -->|"verify_id_token"| firebase_py["firebase.py"]"
+      // where firebase_py isn't defined
+      const undefinedNodeMatch = fixedLine.match(/-->\|[^|]*\|\s*(\w+)\[/);
+      if (undefinedNodeMatch) {
+        const undefinedNode = undefinedNodeMatch[1];
+        if (!definedNodes.has(undefinedNode)) {
+          const nodeDefLine = `    ${undefinedNode}["${undefinedNode}"]`;
+          fixedLines.push(nodeDefLine);
+          definedNodes.add(undefinedNode);
+          console.log(`Auto-fixed: Added missing node definition for '${undefinedNode}'`);
+        }
+      }
+
+      // General cleanup: Find isolated words that might be undefined nodes
+      // But skip common mermaid keywords and already processed patterns
+      const connectionPattern = /(\w+)\s*(?:--.*?-->|-->)\s*(\w+)/;
+      const match = connectionPattern.exec(trimmedLine);
+
+      if (match) {
+        const [, fromNode, toNode] = match;
+
+        // Check if target is a subgraph name instead of node
+        if (subgraphs.has(toNode) && !definedNodes.has(toNode)) {
+          const nodesInSubgraph = subgraphs.get(toNode) || [];
+          if (nodesInSubgraph.length > 0) {
+            const replacement = nodesInSubgraph[0];
+            fixedLine = fixedLine.replace(new RegExp(`\\b${toNode}\\b`, 'g'), replacement);
+            console.log(`Auto-fixed: Replaced subgraph '${toNode}' with node '${replacement}'`);
+          }
+        }
+      }
+
+      fixedLines.push(fixedLine);
+    }
+
+    const result = fixedLines.join('\n');
+
+    if (result !== chart) {
+      console.log('Chart was auto-fixed');
+      console.log('Fixed chart:', result);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error in preprocessing:', error);
+    return chart; // Return original if preprocessing fails
+  }
+};
+
 export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -44,113 +199,96 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
         // Use a simple, unique ID without special characters
         const simpleId = `diagram${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-        // Initialize with minimal, safe configuration
+        // Initialize with minimal, safe configuration and better error handling
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: 'loose',
-          theme: 'base',
-          themeVariables: {
-            fontFamily: 'Arial, sans-serif',
-            fontSize: '14px',
-            primaryColor: '#ffffff',
-            primaryTextColor: '#000000',
-            primaryBorderColor: '#000000',
-            lineColor: '#000000',
-            secondaryColor: '#ffffff',
-            tertiaryColor: '#ffffff',
-            background: '#ffffff',
-            mainBkg: '#ffffff',
-            secondBkg: '#ffffff'
-          },
-          darkMode: false,
-          htmlLabels: false,
-          deterministicIds: false,
+          theme: 'default',
           flowchart: {
-            htmlLabels: false,
             useMaxWidth: true,
-            curve: 'basis'
-          }
+            htmlLabels: false
+          },
+          logLevel: 'fatal', // Minimize console output
+          suppressErrorRendering: true // Suppress mermaid's built-in error display since we handle errors
         });
 
-        // Clean the chart content and fix specific parsing issues
+        // Clean the chart content and apply intelligent fixes
         let cleanChart = chart.trim();
 
-        // Fix specific issue with (Depends) in node labels that causes parse errors
-        // Only target this specific problematic pattern
-        cleanChart = cleanChart.replace(/\(Depends\)/g, 'Depends');
+        // Validate basic mermaid syntax before attempting render
+        if (!cleanChart.match(/^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart)/)) {
+          throw new Error('Invalid mermaid diagram type. Must start with graph, flowchart, etc.');
+        }
 
-        // Fix the specific problematic edge syntax
-        // The pattern: A0 -- uses -->|"verify_id_token"| firebase_py["firebase.py"]
-        // Simplify to: A0 --> firebase_py
-        cleanChart = cleanChart.replace(
-          /A0 -- uses -->|"verify_id_token"| firebase_py\["firebase\.py"\]/g,
-          'A0 --> firebase_py["firebase.py"]'
-        );
+        // Apply intelligent preprocessing to fix common syntax issues
+        cleanChart = preprocessMermaidChart(cleanChart);
 
-        // Fix custom edge labels that Mermaid doesn't recognize
-        // Replace --calls--> with standard -->
-        cleanChart = cleanChart.replace(/--calls-->/g, '-->');
+        // Use the modern render API with better error handling
+        const renderResult = await mermaid.render(simpleId, cleanChart);
 
-        // Replace --authenticates via--> with standard -->
-        cleanChart = cleanChart.replace(/--authenticates via-->/g, '-->');
-
-        // Fix complex edge syntax with labels
-        // Pattern: A -- text -->|"label"| B["text"]
-        // Replace with: A -->|"label"| B["text"]
-        cleanChart = cleanChart.replace(/(\w+)\s*--\s*[^-]+\s*-->(\|[^|]*\|)/g, '$1 -->$2');
-
-        // Fix edge patterns with custom text between dashes
-        // Pattern: A0 -- uses -->|"verify_id_token"| firebase_py["firebase.py"]
-        cleanChart = cleanChart.replace(/(\w+)\s*--\s*[^-]*\s*-->/g, '$1 -->');
-
-        // Remove this overly aggressive regex that might break valid syntax
-        // cleanChart = cleanChart.replace(/[^\w\s\[\]"'`(){}|:;.,<>\-=_]/g, '');
-
-        // Ensure proper subgraph syntax
-        cleanChart = cleanChart.replace(/subgraph\s+"([^"]*)"([^\n]*)/g, 'subgraph $1$2');
-
-        // Fix any remaining edge syntax issues
-        cleanChart = cleanChart.replace(/-->[^-\w\[\]"|]*-->/g, '-->');
-
-        // Use the modern render API without container dependency
-        const { svg: renderedSvg } = await mermaid.render(simpleId, cleanChart);
+        if (!renderResult || !renderResult.svg) {
+          throw new Error('Mermaid render returned empty result');
+        }
 
         if (isMounted) {
           // Clean up any problematic elements in the SVG
-          const cleanedSvg = renderedSvg
+          const cleanedSvg = renderResult.svg
             .replace(/<a[^>]*>/g, '<span>')
             .replace(/<\/a>/g, '</span>')
             .replace(/onclick="[^"]*"/g, '')
             .replace(/onmouseover="[^"]*"/g, '')
             .replace(/onmouseout="[^"]*"/g, '')
             .replace(/href="[^"]*"/g, '');
+
+          // Verify we have a valid SVG
+          if (!cleanedSvg.includes('<svg')) {
+            throw new Error('Rendered result is not a valid SVG');
+          }
+
           setSvg(cleanedSvg);
           setError(null);
         }
 
       } catch (err) {
+        console.error('Mermaid render error:', err);
+        console.error('Chart content that failed:', chart);
+        console.error('Error type:', typeof err, err?.constructor?.name);
+
         if (isMounted) {
-          let errorMessage = 'Failed to render diagram';
+          let errorMessage = 'Failed to render mermaid diagram';
+          let detailedError = '';
 
           if (err instanceof Error) {
+            detailedError = err.message;
+
             // Handle specific Mermaid parsing errors more gracefully
-            if (err.message.includes('Parse error')) {
-              errorMessage = 'Mermaid diagram contains invalid syntax. Please check the diagram format.';
-            } else if (err.message.includes('Cannot read properties of null')) {
-              errorMessage = 'Mermaid diagram could not be rendered due to DOM issues.';
+            if (err.message.includes('Parse error') || err.message.includes('Syntax error')) {
+              errorMessage = 'Invalid mermaid syntax - check node references and connections';
+            } else if (err.message.includes('Cannot read properties of null') || err.message.includes('Cannot read properties of undefined')) {
+              errorMessage = 'Mermaid parsing error - likely undefined node or edge reference';
+            } else if (err.message.includes('Invalid mermaid diagram type')) {
+              errorMessage = 'Diagram must start with: graph, flowchart, sequenceDiagram, etc.';
+            } else if (err.message.includes('Rendered result is not a valid SVG')) {
+              errorMessage = 'Mermaid failed to generate valid SVG output';
+            } else if (err.message.includes('Mermaid render returned empty result')) {
+              errorMessage = 'Mermaid returned empty result - check diagram syntax';
             } else {
-              errorMessage = err.message;
+              errorMessage = `Mermaid error: ${err.message}`;
             }
+          } else {
+            // Handle non-Error objects
+            errorMessage = 'Unknown mermaid rendering error';
+            detailedError = String(err);
           }
 
+          console.warn('Setting error state:', errorMessage);
           setError(errorMessage);
-          console.error('Mermaid render error:', err);
         }
       }
     };
 
     // Render immediately when component mounts
-    const timeoutId = setTimeout(renderDiagram, 10);
+    const timeoutId = setTimeout(renderDiagram, 100);
 
     return () => {
       isMounted = false;
@@ -193,62 +331,20 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
       const simpleId = `modal-diagram${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
       // Configure for larger modal rendering with explicit sizing
-      mermaid.initialize({
+      await mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'loose',
-        theme: 'base',
-        themeVariables: {
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '18px', // Larger font for modal
-          primaryColor: '#ffffff',
-          primaryTextColor: '#000000',
-          primaryBorderColor: '#000000',
-          lineColor: '#000000',
-          secondaryColor: '#ffffff',
-          tertiaryColor: '#ffffff',
-          background: '#ffffff',
-          mainBkg: '#ffffff',
-          secondBkg: '#ffffff'
-        },
-        darkMode: false,
-        htmlLabels: false,
-        deterministicIds: false,
+        theme: 'default',
         flowchart: {
           htmlLabels: false,
-          useMaxWidth: false, // Don't constrain width
-          curve: 'basis',
-          nodeSpacing: 80, // Increase node spacing
-          rankSpacing: 100, // Increase rank spacing
-          padding: 40 // Add more padding
-        },
-        class: {
           useMaxWidth: false
         },
-        sequence: {
-          useMaxWidth: false,
-          boxMargin: 20,
-          boxTextMargin: 10,
-          noteMargin: 20,
-          messageMargin: 50
-        },
-        gantt: {
-          useMaxWidth: false
-        }
+        logLevel: 'fatal',
+        suppressErrorRendering: true
       });
 
-      // Use the same cleaned chart logic
-      let cleanChart = chart.trim();
-      cleanChart = cleanChart.replace(/\(Depends\)/g, 'Depends');
-      cleanChart = cleanChart.replace(
-        /A0 -- uses -->|"verify_id_token"| firebase_py\["firebase\.py"\]/g,
-        'A0 --> firebase_py["firebase.py"]'
-      );
-      cleanChart = cleanChart.replace(/--calls-->/g, '-->');
-      cleanChart = cleanChart.replace(/--authenticates via-->/g, '-->');
-      cleanChart = cleanChart.replace(/(\w+)\s*--\s*[^-]+\s*-->(\|[^|]*\|)/g, '$1 -->$2');
-      cleanChart = cleanChart.replace(/(\w+)\s*--\s*[^-]*\s*-->/g, '$1 -->');
-      cleanChart = cleanChart.replace(/subgraph\s+"([^"]*)"([^\n]*)/g, 'subgraph $1$2');
-      cleanChart = cleanChart.replace(/-->[^-\w\[\]"|]*-->/g, '-->');
+      // Use the same cleaned chart logic with preprocessing
+      let cleanChart = preprocessMermaidChart(chart.trim());
 
       const { svg: renderedSvg } = await mermaid.render(simpleId, cleanChart);
 
@@ -276,20 +372,37 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
 
   if (error) {
     return (
-      <div className="relative bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+      <div className="relative bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-red-800">Mermaid Diagram Error</span>
-          <div
+          <span className="text-sm font-semibold text-yellow-800">Mermaid Diagram - Fallback View</span>
+          <button
             onClick={handleCopy}
             className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors"
           >
             Copy Source
-          </div>
+          </button>
         </div>
-        <p className="text-red-700 text-sm mb-2">{error}</p>
-        <pre className="text-xs text-red-600 bg-red-100 p-2 rounded overflow-x-auto">
-          {chart}
-        </pre>
+        <div className="text-yellow-700 text-sm mb-3">
+          <p className="font-medium mb-1">Unable to render diagram:</p>
+          <p className="mb-2">{error}</p>
+          <details className="cursor-pointer">
+            <summary className="text-xs font-medium hover:text-yellow-800">View diagram source</summary>
+            <pre className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded overflow-x-auto mt-2 whitespace-pre-wrap">
+              {chart}
+            </pre>
+          </details>
+        </div>
+
+        {/* Helpful suggestions */}
+        <div className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded">
+          <p className="font-medium mb-1">Common fixes:</p>
+          <ul className="list-disc list-inside space-y-1">
+            <li>Check that all node names are defined before referencing them</li>
+            <li>Verify arrows point to existing nodes (not subgraph names)</li>
+            <li>Ensure diagram starts with: graph, flowchart, sequenceDiagram, etc.</li>
+            <li>Check for typos in node names and connections</li>
+          </ul>
+        </div>
       </div>
     );
   }
@@ -299,30 +412,27 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
       <div className="flex justify-between items-center bg-gray-300 px-4 py-1 rounded-t-lg">
         <span className="text-sm font-semibold text-gray-800">Mermaid Diagram</span>
         <div className="flex gap-2">
-          <div
+          <button
             onClick={handleModalOpen}
-            onKeyDown={(e) => e.key === 'Enter' && handleModalOpen()}
-            role="button"
-            tabIndex={0}
             aria-label="Expand diagram to full screen"
             className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <Maximize2 className="size-4"/>
-          </div>
-          <div
+          </button>
+          <button
             onClick={handleCopy}
             className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors text-gray-800"
           >
             {copied ? (
-              <div className="flex gap-2 items-center">
-                <LucideCopyCheck className="size-4"/> Copied!
-              </div>
+              <>
+                <LucideCopyCheck className="size-4"/> <span className="ml-1">Copied!</span>
+              </>
             ) : (
-              <div className="flex gap-2 items-center">
-                <LucideCopy className="size-4"/> Copy
-              </div>
+              <>
+                <LucideCopy className="size-4"/> <span className="ml-1">Copy</span>
+              </>
             )}
-          </div>
+          </button>
         </div>
       </div>
       <div
@@ -333,7 +443,6 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent
           className="max-w-[98vw] max-h-[98vh] w-[98vw] h-[98vh] p-0 overflow-hidden"
-          showX={true}
         >
           <div className="flex flex-col h-full min-h-[80vh] sm:min-h-[70vh]">
             <div className="flex justify-between items-center bg-gray-300 px-3 sm:px-4 py-2 flex-shrink-0 relative">
@@ -341,7 +450,7 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
                 Mermaid Diagram - Full Screen
               </span>
               <div className="flex items-center gap-2">
-                <div
+                <button
                   onClick={handleCopy}
                   className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors text-gray-800"
                 >
@@ -356,7 +465,7 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
                       <span className="hidden sm:inline">Copy</span>
                     </div>
                   )}
-                </div>
+                </button>
               </div>
             </div>
             <div

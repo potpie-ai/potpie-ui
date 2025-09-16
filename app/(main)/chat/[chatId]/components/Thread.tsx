@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
+import { MermaidDiagram } from "@/components/chat/MermaidDiagram";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
 import { motion } from "motion/react";
@@ -177,7 +178,17 @@ const MarkdownComponent = (content: any) => {
             {section.type === "text" && (
               <CustomMarkdown content={section.content} />
             )}
-            {section.type === "code" && (
+            {section.type === "code" && section.language === "mermaid" && (
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: "backInOut", stiffness: 50 }}
+                className="pb-4 text-xs max-w-4xl"
+              >
+                <MermaidDiagram chart={section.content} />
+              </motion.div>
+            )}
+            {section.type === "code" && section.language !== "mermaid" && (
               <motion.div
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}

@@ -572,12 +572,10 @@ const AssistantMessage: FC = () => {
                                   </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-12 max-h-96 overflow-y-scroll">
-                                  <ReactMarkdown
+                                  <SharedMarkdown
+                                    content={toolState.details_summary}
                                     className="markdown-content break-words break-before-avoid stroke-red-600 text-xs"
-                                    remarkPlugins={[remarkGfm]}
-                                  >
-                                    {toolState.details_summary}
-                                  </ReactMarkdown>
+                                  />
                                 </AccordionContent>
                               </AccordionItem>
                             </Accordion>

@@ -23,10 +23,9 @@ import {
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import ReactMarkdown from "react-markdown";
+import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
-import remarkGfm from "remark-gfm";
 import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Accordion, AccordionTrigger } from "@/components/ui/accordion";
@@ -164,49 +163,7 @@ const parseMessage = (message: string) => {
 };
 
 const CustomMarkdown = ({ content }: { content: string }) => {
-  const markdownContent = content;
-
-  return (
-    <ReactMarkdown
-      className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
-      components={{
-        p: ({ children }) => <p className="text-slate-900">{children}</p>,
-        code: ({ children, className }) => {
-          const language = className
-            ? className.replace("language-", "")
-            : "plaintext";
-
-          if (language === "plaintext") {
-            return (
-              <code className="bg-green-200 rounded text-sm font-medium text-slate-900">
-                {children}
-              </code>
-            );
-          }
-
-          return (
-            <MyCodeBlock
-              code={String(children).replace(/\n$/, "")}
-              language={language}
-            />
-          );
-        },
-        a: ({ href, children }) => (
-          <a
-            className="underline inline-flex transition-all text-blue-600 hover:text-blue-800"
-            href={href}
-            target="_blank"
-          >
-            {children}
-            <ExternalLinkIcon className="h-4 w-4 ml-1" />
-          </a>
-        ),
-      }}
-      remarkPlugins={[remarkGfm]}
-    >
-      {markdownContent}
-    </ReactMarkdown>
-  );
+  return <SharedMarkdown content={content} />;
 };
 
 const MarkdownComponent = (content: any) => {

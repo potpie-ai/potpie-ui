@@ -329,7 +329,7 @@ export default function IntegrationModal({ params }: PageProps) {
                 Coming Soon!
               </h3>
               <p className="text-gray-600 mb-4">
-                We're working hard to bring you the{" "}
+                We&apos;re working hard to bring you the{" "}
                 {selectedIntegrationType.name} integration. Stay tuned for
                 updates!
               </p>

@@ -8,35 +8,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Plug,
-  Plus,
   Search,
-  Edit,
   Trash2,
-  ExternalLink,
   CheckCircle,
   AlertCircle,
+  Edit2,
+  Check,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
+import IntegrationService, {
+  ConnectedIntegration,
+} from "@/services/IntegrationService";
 
 // Available integration types
 const availableIntegrationTypes = [
@@ -120,27 +107,6 @@ const availableIntegrationTypes = [
       <Image src="/images/linear.svg" alt="Linear" width={24} height={24} />
     ),
     category: "Project Management",
-    fields: [
-      {
-        id: "instanceName",
-        label: "Instance Name",
-        placeholder: "e.g., Company Linear",
-        required: true,
-      },
-      {
-        id: "workspace",
-        label: "Workspace",
-        placeholder: "e.g., company",
-        required: true,
-      },
-      {
-        id: "apiKey",
-        label: "API Key",
-        placeholder: "lin_api_...",
-        required: true,
-        type: "password",
-      },
-    ],
   },
   {
     id: "sentry",
@@ -151,33 +117,6 @@ const availableIntegrationTypes = [
       <Image src="/images/sentry-3.svg" alt="Sentry" width={24} height={24} />
     ),
     category: "Monitoring",
-    fields: [
-      {
-        id: "instanceName",
-        label: "Instance Name",
-        placeholder: "e.g., Company Sentry",
-        required: true,
-      },
-      {
-        id: "organization",
-        label: "Organization",
-        placeholder: "e.g., company-name",
-        required: true,
-      },
-      {
-        id: "project",
-        label: "Project",
-        placeholder: "e.g., web-app",
-        required: true,
-      },
-      {
-        id: "authToken",
-        label: "Auth Token",
-        placeholder: "sntrys_...",
-        required: true,
-        type: "password",
-      },
-    ],
   },
   {
     id: "jira",
@@ -661,89 +600,45 @@ const availableIntegrationTypes = [
   },
 ];
 
-// Connected integration interface
-interface ConnectedIntegration {
-  id: string;
-  type: string;
-  instanceName: string;
-  status: "active" | "error" | "connecting";
-  lastSync?: string;
-  errorMessage?: string;
-  config: Record<string, string>;
-}
+// Connected integration interface is now imported from IntegrationService
 
 const Integrations = () => {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
-  const [showIntegrationModal, setShowIntegrationModal] = useState(false);
-  const [selectedIntegrationType, setSelectedIntegrationType] =
-    useState<any>(null);
-  const [integrationForm, setIntegrationForm] = useState<
-    Record<string, string>
-  >({});
-  const [isConnecting, setIsConnecting] = useState(false);
-
-  // Mock connected integrations - in real app this would come from API
   const [connectedIntegrations, setConnectedIntegrations] = useState<
     ConnectedIntegration[]
-  >([
-    {
-      id: "1",
-      type: "github",
-      instanceName: "Company GitHub",
-      status: "active",
-      lastSync: "2 minutes ago",
-      config: { organization: "company-name" },
-    },
-    {
-      id: "2",
-      type: "github",
-      instanceName: "Personal GitHub",
-      status: "active",
-      lastSync: "1 hour ago",
-      config: { organization: "personal-projects" },
-    },
-    {
-      id: "3",
-      type: "notion",
-      instanceName: "Product Team Notion",
-      status: "active",
-      lastSync: "30 minutes ago",
-      config: { workspaceId: "product-team-workspace" },
-    },
-    {
-      id: "4",
-      type: "notion",
-      instanceName: "Engineering Docs",
-      status: "active",
-      lastSync: "15 minutes ago",
-      config: { workspaceId: "engineering-docs" },
-    },
-    {
-      id: "5",
-      type: "jira",
-      instanceName: "Product Jira",
-      status: "active",
-      lastSync: "5 minutes ago",
-      config: { domain: "product.atlassian.net" },
-    },
-    {
-      id: "6",
-      type: "jira",
-      instanceName: "Support Jira",
-      status: "error",
-      lastSync: "2 hours ago",
-      errorMessage: "Authentication failed",
-      config: { domain: "support.atlassian.net" },
-    },
-    {
-      id: "7",
-      type: "sentry",
-      instanceName: "Web App Sentry",
-      status: "active",
-      lastSync: "1 minute ago",
-      config: { organization: "web-app", project: "frontend" },
-    },
-  ]);
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingIntegrations, setDeletingIntegrations] = useState<Set<string>>(
+    new Set()
+  );
+  const [editingIntegrations, setEditingIntegrations] = useState<Set<string>>(
+    new Set()
+  );
+  const [editingNames, setEditingNames] = useState<Record<string, string>>({});
+
+  // Fetch connected integrations from API
+  useEffect(() => {
+    const fetchConnectedIntegrations = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const integrations =
+          await IntegrationService.getConnectedIntegrations();
+        setConnectedIntegrations(integrations);
+      } catch (err) {
+        console.error("Error fetching connected integrations:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch integrations"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchConnectedIntegrations();
+  }, []);
 
   // Filter available integrations based on search
   const filteredIntegrationTypes = availableIntegrationTypes.filter(
@@ -759,66 +654,93 @@ const Integrations = () => {
   );
 
   const handleAddIntegration = (integrationType: any) => {
-    setSelectedIntegrationType(integrationType);
-    setIntegrationForm({});
-    setShowIntegrationModal(true);
+    // Navigate to the integration setup page
+    router.push(`/integrations/${integrationType.id}`);
   };
 
-  const handleFormChange = (fieldId: string, value: string) => {
-    setIntegrationForm((prev) => ({ ...prev, [fieldId]: value }));
+  const handleDeleteIntegration = async (integrationId: string) => {
+    if (confirm("Are you sure you want to delete this integration?")) {
+      // Add to deleting state
+      setDeletingIntegrations((prev) => new Set(prev).add(integrationId));
+
+      try {
+        // Call backend API to delete integration
+        await IntegrationService.deleteIntegration(integrationId);
+
+        // Remove from local state on success
+        setConnectedIntegrations((prev) =>
+          prev.filter((i) => i.integration_id !== integrationId)
+        );
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to delete integration";
+        alert(`Failed to delete integration: ${errorMessage}`);
+      } finally {
+        // Remove from deleting state
+        setDeletingIntegrations((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(integrationId);
+          return newSet;
+        });
+      }
+    }
   };
 
-  const handleConnect = async () => {
-    if (!selectedIntegrationType) return;
+  const handleStartEdit = (integrationId: string, currentName: string) => {
+    setEditingIntegrations((prev) => new Set(prev).add(integrationId));
+    setEditingNames((prev) => ({ ...prev, [integrationId]: currentName }));
+  };
 
-    // Validate required fields
-    const requiredFields = selectedIntegrationType.fields.filter(
-      (f: { required: boolean; id: string; label: string }) => f.required
-    );
-    const missingFields = requiredFields.filter(
-      (f: { id: string; label: string }) => !integrationForm[f.id]
-    );
+  const handleCancelEdit = (integrationId: string) => {
+    setEditingIntegrations((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(integrationId);
+      return newSet;
+    });
+    setEditingNames((prev) => {
+      const newNames = { ...prev };
+      delete newNames[integrationId];
+      return newNames;
+    });
+  };
 
-    if (missingFields.length > 0) {
-      alert(
-        `Please fill in: ${missingFields.map((f: { label: string }) => f.label).join(", ")}`
-      );
+  const handleSaveEdit = async (integrationId: string) => {
+    const newName = editingNames[integrationId];
+    if (!newName || newName.trim() === "") {
+      alert("Integration name cannot be empty");
       return;
     }
 
-    setIsConnecting(true);
-
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await IntegrationService.updateIntegrationName(
+        integrationId,
+        newName.trim()
+      );
 
-      // Add new integration
-      const newIntegration: ConnectedIntegration = {
-        id: Date.now().toString(),
-        type: selectedIntegrationType.id,
-        instanceName: integrationForm.instanceName,
-        status: "active",
-        lastSync: "Just now",
-        config: integrationForm,
-      };
+      // Update local state
+      setConnectedIntegrations((prev) =>
+        prev.map((integration) =>
+          integration.integration_id === integrationId
+            ? { ...integration, instanceName: newName.trim() }
+            : integration
+        )
+      );
 
-      setConnectedIntegrations((prev) => [...prev, newIntegration]);
-      setShowIntegrationModal(false);
-      setIntegrationForm({});
-      setSelectedIntegrationType(null);
+      // Exit edit mode
+      handleCancelEdit(integrationId);
     } catch (error) {
-      console.error("Failed to connect integration:", error);
-    } finally {
-      setIsConnecting(false);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to update integration name";
+      alert(`Failed to update integration name: ${errorMessage}`);
     }
   };
 
-  const handleDeleteIntegration = (integrationId: string) => {
-    if (confirm("Are you sure you want to delete this integration?")) {
-      setConnectedIntegrations((prev) =>
-        prev.filter((i) => i.id !== integrationId)
-      );
-    }
+  const handleNameChange = (integrationId: string, value: string) => {
+    setEditingNames((prev) => ({ ...prev, [integrationId]: value }));
   };
 
   const getStatusIcon = (status: string) => {
@@ -886,8 +808,235 @@ const Integrations = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-4">
+        {/* Connected Integrations */}
+        {loading && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">
+              Connected Integrations
+            </h2>
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="border border-gray-200 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-gray-200 rounded animate-pulse" />
+                        <div>
+                          <div className="w-32 h-4 bg-gray-200 rounded animate-pulse mb-1" />
+                          <div className="w-24 h-3 bg-gray-200 rounded animate-pulse" />
+                        </div>
+                      </div>
+                      <div className="w-16 h-6 bg-gray-200 rounded animate-pulse" />
+                    </div>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-8">
+            <Card className="border border-red-200 bg-red-50">
+              <CardContent className="text-center py-6">
+                <div className="text-red-600 mb-2">
+                  <AlertCircle className="w-6 h-6 mx-auto mb-2" />
+                  <p className="font-medium">Failed to load integrations</p>
+                  <p className="text-sm">{error}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.location.reload()}
+                  className="mt-3"
+                >
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {!loading && !error && connectedIntegrations.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">
+              Connected Integrations ({connectedIntegrations.length})
+            </h2>
+            <div className="space-y-3">
+              {connectedIntegrations.map((integration) => {
+                const integrationType = availableIntegrationTypes.find(
+                  (t) => t.id === integration.type
+                );
+                return (
+                  <Card
+                    key={integration.id}
+                    className="border border-gray-200 shadow-sm group"
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-shrink-0">
+                            {integrationType?.icon}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              {editingIntegrations.has(
+                                integration.integration_id
+                              ) ? (
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    value={
+                                      editingNames[
+                                        integration.integration_id
+                                      ] || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleNameChange(
+                                        integration.integration_id,
+                                        e.target.value
+                                      )
+                                    }
+                                    className="h-6 text-sm px-2 py-1 min-w-[300px]"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        handleSaveEdit(
+                                          integration.integration_id
+                                        );
+                                      } else if (e.key === "Escape") {
+                                        handleCancelEdit(
+                                          integration.integration_id
+                                        );
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0"
+                                    onClick={() =>
+                                      handleSaveEdit(integration.integration_id)
+                                    }
+                                  >
+                                    <Check className="h-3 w-3 text-green-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0"
+                                    onClick={() =>
+                                      handleCancelEdit(
+                                        integration.integration_id
+                                      )
+                                    }
+                                  >
+                                    <X className="h-3 w-3 text-red-600" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <CardTitle className="text-base">
+                                    {integration.instanceName}
+                                  </CardTitle>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() =>
+                                      handleStartEdit(
+                                        integration.integration_id,
+                                        integration.instanceName
+                                      )
+                                    }
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              {integrationType?.name} •{" "}
+                              {integration.orgSlug ||
+                                integration.config.org_slug ||
+                                integration.config.installation_id ||
+                                integration.config.organization ||
+                                integration.config.workspace ||
+                                integration.config.domain ||
+                                integration.config.bucketName ||
+                                integration.config.projectId ||
+                                integration.config.instanceUrl ||
+                                integration.config.workspaceId ||
+                                "Connected"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(integration.status)}`}
+                          >
+                            <div className="flex items-center gap-1">
+                              {getStatusIcon(integration.status)}
+                              {getStatusText(integration.status)}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            disabled={deletingIntegrations.has(
+                              integration.integration_id
+                            )}
+                            onClick={() =>
+                              handleDeleteIntegration(
+                                integration.integration_id
+                              )
+                            }
+                          >
+                            {deletingIntegrations.has(
+                              integration.integration_id
+                            ) ? (
+                              <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="text-xs text-gray-600">
+                        <div className="flex flex-col gap-1">
+                          <span>Last sync: {integration.lastSync}</span>
+                          {integration.errorMessage && (
+                            <span className="text-red-600 font-medium">
+                              Error: {integration.errorMessage}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && connectedIntegrations.length === 0 && (
+          <Card className="mb-8">
+            <CardContent className="text-center py-12">
+              <div className="text-gray-600 mb-4">
+                {searchTerm.trim()
+                  ? `No integrations found matching "${searchTerm}". Try a different search term.`
+                  : "No integrations connected yet. Start by adding your first integration below."}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Available Integrations */}
-        <div className="mb-6">
+        <div>
           <h2 className="text-lg font-semibold text-gray-900 mb-3">
             Available Integrations
           </h2>
@@ -927,186 +1076,7 @@ const Integrations = () => {
             ))}
           </div>
         </div>
-
-        {/* Connected Integrations */}
-        {connectedIntegrations.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">
-              Connected Integrations ({connectedIntegrations.length})
-            </h2>
-            <div className="space-y-3">
-              {connectedIntegrations.map((integration) => {
-                const integrationType = availableIntegrationTypes.find(
-                  (t) => t.id === integration.type
-                );
-                return (
-                  <Card
-                    key={integration.id}
-                    className="border border-gray-200 shadow-sm"
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-shrink-0">
-                            {integrationType?.icon}
-                          </div>
-                          <div>
-                            <CardTitle className="text-base">
-                              {integration.instanceName}
-                            </CardTitle>
-                            <p className="text-xs text-gray-500">
-                              {integrationType?.name} •{" "}
-                              {integration.config.organization ||
-                                integration.config.workspace ||
-                                integration.config.domain ||
-                                integration.config.bucketName ||
-                                integration.config.projectId ||
-                                integration.config.instanceUrl ||
-                                integration.config.workspaceId ||
-                                "Connected"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(integration.status)}`}
-                          >
-                            <div className="flex items-center gap-1">
-                              {getStatusIcon(integration.status)}
-                              {getStatusText(integration.status)}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={() =>
-                              handleDeleteIntegration(integration.id)
-                            }
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="flex items-center justify-between text-xs text-gray-600">
-                        <div className="flex flex-col gap-1">
-                          <span>Last sync: {integration.lastSync}</span>
-                          {integration.errorMessage && (
-                            <span className="text-red-600 font-medium">
-                              Error: {integration.errorMessage}
-                            </span>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 h-7"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          Manage
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {connectedIntegrations.length === 0 && (
-          <Card>
-            <CardContent className="text-center py-12">
-              <div className="text-gray-600 mb-4">
-                {searchTerm.trim()
-                  ? `No integrations found matching "${searchTerm}". Try a different search term.`
-                  : "No integrations connected yet. Start by adding your first integration above."}
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
-
-      {/* Integration Modal */}
-      <Dialog
-        open={showIntegrationModal}
-        onOpenChange={setShowIntegrationModal}
-      >
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedIntegrationType?.icon}
-              Add {selectedIntegrationType?.name} Integration
-            </DialogTitle>
-            <DialogDescription>
-              Configure your {selectedIntegrationType?.name} integration. You
-              can add multiple instances of the same service.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {selectedIntegrationType?.fields.map((field: any) => (
-              <div key={field.id} className="space-y-2">
-                <Label htmlFor={field.id}>
-                  {field.label}
-                  {field.required && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
-                </Label>
-                {field.type === "textarea" ? (
-                  <textarea
-                    id={field.id}
-                    placeholder={field.placeholder}
-                    value={integrationForm[field.id] || ""}
-                    onChange={(e) => handleFormChange(field.id, e.target.value)}
-                    required={field.required}
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  />
-                ) : (
-                  <Input
-                    id={field.id}
-                    type={field.type || "text"}
-                    placeholder={field.placeholder}
-                    value={integrationForm[field.id] || ""}
-                    onChange={(e) => handleFormChange(field.id, e.target.value)}
-                    required={field.required}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowIntegrationModal(false)}
-              disabled={isConnecting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConnect}
-              disabled={isConnecting}
-              className="gap-2"
-            >
-              {isConnecting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <Plug className="h-4 w-4" />
-                  Connect Integration
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

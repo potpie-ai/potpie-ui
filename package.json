@@ -47,6 +47,7 @@
     "cmdk": "1.0.0",
     "dayjs": "^1.11.13",
     "debounce": "^2.2.0",
+    "dompurify": "^3.2.6",
     "elkjs": "^0.9.3",
     "embla-carousel-react": "^8.6.0",
     "firebase": "^10.14.1",
@@ -54,6 +55,7 @@
     "lucide-react": "^0.363.0",
     "markdown-to-jsx": "^7.7.4",
     "marked": "^14.1.4",
+    "mermaid": "^11.11.0",
     "motion": "^12.5.0",
     "next": "15.2.1",
     "next-themes": "^0.3.0",
@@ -83,6 +85,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.2.0",
     "@types/node": "^20.17.24",
     "@types/prismjs": "^1.26.5",
     "@types/react": "^18.3.20",

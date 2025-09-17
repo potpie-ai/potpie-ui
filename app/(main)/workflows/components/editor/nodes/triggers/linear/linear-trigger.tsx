@@ -3,17 +3,8 @@ import { getNodeColors } from "../../color_utils";
 import { AlertTriangle, CircleDot, MessageSquare } from "lucide-react";
 import { SourceHandle } from "../../../handles";
 import { FC } from "react";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { LinearIntegrationSelector } from "./LinearIntegrationSelector";
 
 interface LinearTriggerConfigProps {
   config: any;
@@ -28,108 +19,37 @@ export const LinearTriggerConfigComponent: FC<LinearTriggerConfigProps> = ({
   readOnly = false,
   workflow,
 }) => {
+  console.log("LinearTriggerConfigComponent render with config:", config);
+
   const handleChange = (key: string, value: any) => {
     if (readOnly) return;
+    console.log("LinearTriggerConfigComponent handleChange:", key, value);
     onConfigChange({ ...config, [key]: value });
   };
 
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="trigger-name">Trigger Name</Label>
-        <Input
-          id="trigger-name"
-          value={config.name || ""}
-          onChange={(e) => handleChange("name", e.target.value)}
-          placeholder="Enter trigger name"
-          disabled={readOnly}
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="trigger-description">Description</Label>
-        <Textarea
-          id="trigger-description"
-          value={config.description || ""}
-          onChange={(e) => handleChange("description", e.target.value)}
-          placeholder="Enter trigger description"
-          rows={3}
-          disabled={readOnly}
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="team">Team</Label>
-        <Input
-          id="team"
-          value={config.team || ""}
-          onChange={(e) => handleChange("team", e.target.value)}
-          placeholder="Enter team name"
-          disabled={readOnly}
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="event-type">Event Type</Label>
-        <Select
-          value={config.eventType || "issue_created"}
-          onValueChange={(value) => handleChange("eventType", value)}
-          disabled={readOnly}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select event type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="issue_created">Issue Created</SelectItem>
-            <SelectItem value="issue_updated">Issue Updated</SelectItem>
-            <SelectItem value="issue_commented">Issue Commented</SelectItem>
-            <SelectItem value="cycle_created">Cycle Created</SelectItem>
-            <SelectItem value="project_created">Project Created</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label htmlFor="priority">Priority Filter</Label>
-        <Select
-          value={config.priority || "all"}
-          onValueChange={(value) => handleChange("priority", value)}
-          disabled={readOnly}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="urgent">Urgent</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="no_priority">No Priority</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <Switch
-          id="include-subtasks"
-          checked={config.includeSubtasks || false}
-          onCheckedChange={(checked) =>
-            handleChange("includeSubtasks", checked)
+        <Label htmlFor="integration">Linear Integration</Label>
+        <LinearIntegrationSelector
+          selectedIntegrationId={
+            config.integrationId || config.integration_id || ""
           }
-          disabled={readOnly}
+          onIntegrationChange={(integrationId, uniqueIdentifier) => {
+            console.log(
+              "Linear trigger onIntegrationChange called with:",
+              integrationId,
+              uniqueIdentifier
+            );
+            const newConfig = { ...config, integrationId };
+            if (uniqueIdentifier) {
+              newConfig.uniqueIdentifier = uniqueIdentifier;
+            }
+            console.log("Linear trigger updating config to:", newConfig);
+            onConfigChange(newConfig);
+          }}
+          readOnly={readOnly}
         />
-        <Label htmlFor="include-subtasks">Include Subtasks</Label>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <Switch
-          id="auto-assign"
-          checked={config.autoAssign || false}
-          onCheckedChange={(checked) => handleChange("autoAssign", checked)}
-          disabled={readOnly}
-        />
-        <Label htmlFor="auto-assign">Auto-assign to creator</Label>
       </div>
     </div>
   );
@@ -148,6 +68,11 @@ export const linearTriggerNodeMetadata = {
 
 export const LinearTriggerNode = ({ data }: { data: WorkflowNode }) => {
   const colors = getNodeColors(data.group);
+  const { integrationId, integration_id, uniqueIdentifier, unique_identifier } =
+    data.data || {};
+  const actualIntegrationId = integrationId || integration_id;
+  const actualUniqueIdentifier = uniqueIdentifier || unique_identifier;
+
   return (
     <div className="w-full">
       <div
@@ -155,17 +80,25 @@ export const LinearTriggerNode = ({ data }: { data: WorkflowNode }) => {
         style={{ backgroundColor: colors.secondary }}
       >
         <div className="flex items-center">
-          <AlertTriangle
+          <MessageSquare
             className="w-5 h-5 mr-2"
             style={{ color: colors.primary }}
           />
-          <h3 className="font-semibold text-gray-800">Linear Trigger</h3>
+          <h3 className="font-semibold text-gray-800">Linear Issue Created</h3>
         </div>
       </div>
-      <div className="p-4">
-        <div className="flex items-center bg-orange-50 rounded-md p-2">
-          <CircleDot className="w-3 h-3 text-orange-500 mr-2" />
-          <span className="text-sm text-gray-700">{data.type}</span>
+      <div className="p-4 space-y-2">
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-gray-500">Integration</div>
+          <div className="text-sm font-medium text-gray-800">
+            {actualIntegrationId ? (
+              <span className="text-green-600">✓ Connected</span>
+            ) : (
+              <span className="italic text-gray-400">
+                No integration selected
+              </span>
+            )}
+          </div>
         </div>
       </div>
       <SourceHandle />

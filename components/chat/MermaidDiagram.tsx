@@ -92,9 +92,23 @@ const preprocessMermaidChart = (chart: string): string => {
     let fixedChart = processedChart;
     const fixedLines: string[] = [];
 
+    let activeSubgraph: string | null = null;
     for (const line of lines) {
       let fixedLine = line;
       const trimmedLine = line.trim();
+
+      // Track subgraph entry/exit for correct insertion scope
+      const subgraphEnter = trimmedLine.match(/^subgraph\s+(\w+)(?:\[.*?\])?/);
+      if (subgraphEnter) {
+        activeSubgraph = subgraphEnter[1];
+        fixedLines.push(fixedLine);
+        continue;
+      }
+      if (trimmedLine === 'end') {
+        activeSubgraph = null;
+        fixedLines.push(fixedLine);
+        continue;
+      }
 
       // Skip non-connection lines
       if (!trimmedLine.includes('-->') && !trimmedLine.includes('--') || trimmedLine.startsWith('%%')) {
@@ -125,7 +139,8 @@ const preprocessMermaidChart = (chart: string): string => {
       if (undefinedNodeMatch) {
         const undefinedNode = undefinedNodeMatch[1];
         if (!definedNodes.has(undefinedNode)) {
-          const nodeDefLine = `    ${undefinedNode}["${undefinedNode}"]`;
+          const indent = activeSubgraph ? '  ' : '';
+          const nodeDefLine = `${indent}${undefinedNode}["${undefinedNode}"]`;
           fixedLines.push(nodeDefLine);
           definedNodes.add(undefinedNode);
           console.log(`Auto-fixed: Added missing node definition for '${undefinedNode}'`);
@@ -240,12 +255,34 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
             .replace(/onmouseout="[^"]*"/g, '')
             .replace(/href="[^"]*"/g, '');
 
+          // Sanitize SVG with DOMPurify configured for Mermaid diagrams
+          const { default: DOMPurify } = await import('dompurify');
+          const safeSvg = DOMPurify.sanitize(cleanedSvg, {
+            USE_PROFILES: { svg: true, svgFilters: true },
+            ADD_TAGS: [
+              'foreignObject', 'switch', 'marker', 'pattern', 'mask', 'clipPath',
+              'metadata', 'title', 'desc', 'defs', 'symbol', 'use'
+            ],
+            ADD_ATTR: [
+              'style', 'transform', 'font-family', 'font-size', 'font-weight',
+              'text-anchor', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray',
+              'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
+              'width', 'height', 'viewBox', 'preserveAspectRatio', 'opacity',
+              'fill-opacity', 'stroke-opacity', 'marker-start', 'marker-mid', 'marker-end',
+              'clip-path', 'mask', 'filter', 'dominant-baseline', 'alignment-baseline',
+              'baseline-shift', 'text-decoration', 'letter-spacing', 'word-spacing',
+              'direction', 'unicode-bidi'
+            ],
+            FORBID_TAGS: ['script', 'object', 'embed', 'link', 'meta', 'base'],
+            FORBID_ATTR: ['onload', 'onerror', 'onmouseover', 'onclick', 'href', 'xlink:href']
+          });
+
           // Verify we have a valid SVG
-          if (!cleanedSvg.includes('<svg')) {
+          if (!safeSvg.includes('<svg')) {
             throw new Error('Rendered result is not a valid SVG');
           }
 
-          setSvg(cleanedSvg);
+          setSvg(safeSvg);
           setError(null);
         }
 
@@ -356,13 +393,35 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
         .replace(/onmouseout="[^"]*"/g, '')
         .replace(/href="[^"]*"/g, '');
 
+      // Sanitize SVG with DOMPurify configured for Mermaid diagrams
+      const { default: DOMPurify } = await import('dompurify');
+      const safeModalSvg = DOMPurify.sanitize(cleanedSvg, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: [
+          'foreignObject', 'switch', 'marker', 'pattern', 'mask', 'clipPath',
+          'metadata', 'title', 'desc', 'defs', 'symbol', 'use'
+        ],
+        ADD_ATTR: [
+          'style', 'transform', 'font-family', 'font-size', 'font-weight',
+          'text-anchor', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray',
+          'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
+          'width', 'height', 'viewBox', 'preserveAspectRatio', 'opacity',
+          'fill-opacity', 'stroke-opacity', 'marker-start', 'marker-mid', 'marker-end',
+          'clip-path', 'mask', 'filter', 'dominant-baseline', 'alignment-baseline',
+          'baseline-shift', 'text-decoration', 'letter-spacing', 'word-spacing',
+          'direction', 'unicode-bidi'
+        ],
+        FORBID_TAGS: ['script', 'object', 'embed', 'link', 'meta', 'base'],
+        FORBID_ATTR: ['onload', 'onerror', 'onmouseover', 'onclick', 'href', 'xlink:href']
+      });
+
       // Modify SVG for better scaling in modal
-      cleanedSvg = cleanedSvg.replace(
+      const scaledSvg = safeModalSvg.replace(
         /<svg([^>]*)>/,
         '<svg$1 style="width: 100%; height: auto; max-width: none; transform: scale(1.5); transform-origin: center;">'
       );
 
-      setModalSvg(cleanedSvg);
+      setModalSvg(scaledSvg);
     } catch (err) {
       console.error('Error rendering modal diagram:', err);
       // Fall back to regular SVG

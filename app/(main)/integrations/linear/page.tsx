@@ -132,8 +132,8 @@ export default function LinearIntegrationPage() {
               <CardTitle>Connect to Linear</CardTitle>
               <CardDescription>
                 Click the button below to start the OAuth authentication process
-                with Linear. You'll be redirected to Linear to authorize the
-                integration.
+                with Linear. You&apos;ll be redirected to Linear to authorize
+                the integration.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">

@@ -241,6 +241,13 @@ export default function IntegrationModal({ params }: PageProps) {
     }
   }, [integrationId, router]);
 
+  // If it's Slack, redirect to the dedicated Slack page
+  useEffect(() => {
+    if (integrationId === "slack") {
+      router.push("/integrations/slack");
+    }
+  }, [integrationId, router]);
+
   const handleFormChange = (fieldId: string, value: string) => {
     setIntegrationForm((prev) => ({ ...prev, [fieldId]: value }));
   };

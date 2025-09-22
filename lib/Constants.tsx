@@ -169,13 +169,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         href: "https://marketplace.visualstudio.com/items?itemName=PotpieAI.potpie-vscode-extension",
         disabled: false,
       },
-      {
-        icons: <Slack size={20} strokeWidth={1.5} />,
-        title: "Slack",
-        href: "https://slack.potpie.ai/slack/install",
-        disabled: false,
-        description: "New",
-      },
     ],
   },
   {

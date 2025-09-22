@@ -115,7 +115,7 @@ export default function SlackWebhookPage() {
                       <li className="flex items-start gap-2">
                         <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                         <span>
-                          Verify the request token matches your Slack app's
+                          Verify the request token matches your Slack app&apos;s
                           verification token
                         </span>
                       </li>
@@ -132,7 +132,8 @@ export default function SlackWebhookPage() {
                       <li className="flex items-start gap-2">
                         <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                         <span>
-                          Update the user's integration status in your database
+                          Update the user&apos;s integration status in your
+                          database
                         </span>
                       </li>
                       <li className="flex items-start gap-2">
@@ -153,7 +154,7 @@ export default function SlackWebhookPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600 mb-4">
-                  Here's a basic example of how to handle the webhook:
+                  Here&apos;s a basic example of how to handle the webhook:
                 </p>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <pre className="text-xs font-mono text-gray-800 overflow-x-auto">

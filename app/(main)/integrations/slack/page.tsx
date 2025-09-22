@@ -201,8 +201,8 @@ export default function SlackIntegrationPage() {
               <CardTitle>Install Potpie AI for Slack</CardTitle>
               <CardDescription>
                 Click the button below to install the Potpie AI app to your
-                Slack workspace. You'll be redirected to Slack to complete the
-                installation process.
+                Slack workspace. You&apos;ll be redirected to Slack to complete
+                the installation process.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">

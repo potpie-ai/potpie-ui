@@ -41,6 +41,9 @@ import ChatService from "@/services/ChatService";
 import Image from "next/image";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import { useQuery } from "@tanstack/react-query";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
@@ -70,6 +73,11 @@ const MessageComposer = ({
   conversation_id,
   setSelectedNodesInConfig,
 }: MessageComposerProps) => {
+  const { backgroundTaskActive } = useSelector((state: RootState) => state.chat);
+
+  // Modify the disabled prop logic in the component
+  const isDisabled = disabled || backgroundTaskActive;
+
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
 
   const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>(nodes);
@@ -401,16 +409,22 @@ const MessageComposer = ({
     id: string;
   } | null>(null);
   
-  const loadCurrentModel = async () => {
-    try {
-      if (user?.uid) {
-        const data = await MinorService.fetchUserSubscription(user.uid);
-        setCurrPlan(data.plan_type);
-      }
-    } catch (error) {
-      console.error("Error fetching user plan: ", error);
+  // Use React Query to fetch user subscription (same as Sidebar to avoid duplicate calls)
+  const { data: userSubscription } = useQuery({
+    queryKey: ["userSubscription", user?.uid],
+    queryFn: () => MinorService.fetchUserSubscription(user?.uid as string),
+    enabled: !!user?.uid,
+    retry: false,
+  });
+
+  // Update currPlan when userSubscription data changes
+  useEffect(() => {
+    if (userSubscription?.plan_type) {
+      setCurrPlan(userSubscription.plan_type);
     }
-    
+  }, [userSubscription?.plan_type]);
+
+  const loadCurrentModel = async () => {
     try {
       const res = await ModelService.getCurrentModel();
       if (res && res.chat_model) {
@@ -424,10 +438,10 @@ const MessageComposer = ({
       console.error("Error fetching current model: ", error);
     }
   };
-  
+
   useEffect(() => {
     loadCurrentModel();
-  }, [user?.uid]);
+  }, []);
 
   const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
     return (
@@ -451,7 +465,7 @@ const MessageComposer = ({
         <ThreadPrimitive.If running={false}>
           <button
             type="button"
-            disabled={disabled}
+            disabled={isDisabled}
             title="Send"
             className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100"
             onClick={handleSend}
@@ -572,7 +586,7 @@ const MessageComposer = ({
           </div>
           
           <ComposerPrimitive.Input
-            submitOnEnter={!disabled}
+            submitOnEnter={!isDisabled}
             ref={messageRef}
             value={message}
             rows={1}
@@ -584,7 +598,7 @@ const MessageComposer = ({
           />
         </div>
         
-        <ComposerAction disabled={disabled} />
+        <ComposerAction disabled={isDisabled} />
       </div>
     </div>
   );

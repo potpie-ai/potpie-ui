@@ -35,7 +35,9 @@ export default function SlackIntegrationPage() {
       console.log("🚀 Initiating Slack OAuth flow...");
 
       // Redirect to Slack app installation
-      const slackInstallUrl = "https://slack.potpie.ai/slack/install";
+      const slackServer =
+        process.env.NEXT_PUBLIC_SLACK_SERVER || "https://slack.potpie.ai";
+      const slackInstallUrl = `${slackServer}/slack/install`;
 
       console.log("🔗 Redirecting to Slack app installation...");
       window.location.href = slackInstallUrl;

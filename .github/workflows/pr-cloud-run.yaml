@@ -71,6 +71,7 @@ jobs:
           echo "NEXT_PUBLIC_SENTRY_CLIENT_SECRET=${{ secrets.STAGE_NEXT_PUBLIC_SENTRY_CLIENT_SECRET }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SENTRY_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_SENTRY_REDIRECT_URI }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_LINEAR_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SLACK_SERVER=${{ secrets.STAGE_NEXT_PUBLIC_SLACK_SERVER }}" >> $GITHUB_ENV
 
           # Convert branch name to valid service name (replace underscores with dashes and ensure it's lowercase)
           BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
@@ -109,6 +110,7 @@ jobs:
             --build-arg NEXT_PUBLIC_SENTRY_CLIENT_SECRET="${{ env.NEXT_PUBLIC_SENTRY_CLIENT_SECRET }}" \
             --build-arg NEXT_PUBLIC_SENTRY_REDIRECT_URI="${{ env.NEXT_PUBLIC_SENTRY_REDIRECT_URI }}" \
             --build-arg NEXT_PUBLIC_LINEAR_REDIRECT_URI="${{ env.NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" \
+            --build-arg NEXT_PUBLIC_SLACK_SERVER="${{ env.NEXT_PUBLIC_SLACK_SERVER }}" \
             -f Dockerfile .
 
       # Push the Docker image to Google Artifact Registry

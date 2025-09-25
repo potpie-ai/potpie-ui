@@ -216,3 +216,24 @@
   padding: 2px 4px;
   border-radius: 4px;
 }
+
+/* Mermaid diagram styling */
+.mermaid-diagram {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Dark mode support for mermaid - avoid filter inversion */
+.dark .mermaid-diagram {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.dark .mermaid-diagram svg {
+  background: transparent;
+}

@@ -55,6 +55,7 @@ const CustomMarkdown = ({ content }: { content: string }) => {
             className="underline inline-flex transition-all text-blue-600 hover:text-blue-800"
             href={href}
             target="_blank"
+            rel="noopener noreferrer"
           >
             {children}
             <ExternalLinkIcon className="h-4 w-4 ml-1" />

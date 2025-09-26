@@ -70,6 +70,12 @@ export const isFormbricksEnabled = (): boolean => {
   return isServiceEnabled(requiredVars);
 };
 
+// Check if Multimodal features are enabled
+export const isMultimodalEnabled = (): boolean => {
+  const enabled = process.env.NEXT_PUBLIC_MULTIMODAL_ENABLED;
+  return enabled === 'true' || enabled === '1';
+};
+
 // Generate a mock user for development mode
 export const generateMockUser = () => {
   // Check if Firebase is enabled

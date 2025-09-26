@@ -1,6 +1,7 @@
 import getHeaders from "@/app/utils/headers.util";
 import { AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { isMultimodalEnabled } from "@/lib/utils";
 import {
   Command,
   CommandEmpty,
@@ -309,6 +310,8 @@ const MessageComposer = ({
   };
 
   const handleImagePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled()) return;
+
     // Prevent double processing
     if (processingPaste.current) return;
     processingPaste.current = true;
@@ -379,22 +382,25 @@ const MessageComposer = ({
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled()) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled()) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled()) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    
+
     const files = e.dataTransfer.files;
     if (files) {
       handleImageSelect(files);
@@ -534,7 +540,7 @@ const MessageComposer = ({
         style={{ outline: 'none' }}
       >
         {/* Drag over indicator */}
-        {isDragOver && (
+        {isMultimodalEnabled() && isDragOver && (
           <div className="flex items-center justify-center w-full py-8 text-blue-600">
             <div className="text-center">
               <ImageIcon className="w-8 h-8 mx-auto mb-2" />
@@ -544,7 +550,7 @@ const MessageComposer = ({
         )}
 
         {/* Image Previews */}
-        {imagePreviews.length > 0 && !isDragOver && (
+        {isMultimodalEnabled() && imagePreviews.length > 0 && !isDragOver && (
           <div className="flex flex-wrap gap-2 px-4">
             {imagePreviews.map((preview, index) => (
               <div key={index} className="relative">
@@ -566,24 +572,26 @@ const MessageComposer = ({
         
         <div className="flex flex-row w-full items-end gap-2">
           {/* Attachment Button - moved to left side */}
-          <div className="flex items-center pb-4">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={(e) => handleImageSelect(e.target.files)}
-              accept="image/*"
-              multiple
-              className="hidden"
-            />
-            <button
-              type="button"
-              title="Attach Images"
-              className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
-          </div>
+          {isMultimodalEnabled() && (
+            <div className="flex items-center pb-4">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => handleImageSelect(e.target.files)}
+                accept="image/*"
+                multiple
+                className="hidden"
+              />
+              <button
+                type="button"
+                title="Attach Images"
+                className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           
           <ComposerPrimitive.Input
             submitOnEnter={!isDisabled}

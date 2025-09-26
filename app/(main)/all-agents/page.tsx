@@ -43,12 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { auth } from "@/configs/Firebase-config";
 import { queryClient } from "../../utils/queryClient";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ReactMarkdown from "react-markdown";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -71,7 +66,9 @@ const AllAgents = () => {
   });
 
   // Check if user is on free plan
-  const isFreeUser = !subscriptionLoading && (!userSubscription || userSubscription.plan_type === planTypesEnum.FREE);
+  const isFreeUser =
+    !subscriptionLoading &&
+    (!userSubscription || userSubscription.plan_type === planTypesEnum.FREE);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
@@ -87,7 +84,7 @@ const AllAgents = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [agentToEdit, setAgentToEdit] = useState<any>(null);
-  
+
   // Share agent modal state
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareAgentId, setShareAgentId] = useState<string | null>(null);
@@ -135,7 +132,7 @@ const AllAgents = () => {
       return response;
     },
   });
-  
+
   // Effect to update isPublic state whenever shareAgentId changes
   useEffect(() => {
     if (shareAgentId && data) {
@@ -149,7 +146,10 @@ const AllAgents = () => {
   useEffect(() => {
     if (!isLoading && data && data.length > 0) {
       const newStatuses = data.reduce(
-        (acc: { [id: string]: string }, agent: { id: string; status: string }) => {
+        (
+          acc: { [id: string]: string },
+          agent: { id: string; status: string }
+        ) => {
           acc[agent.id] = agent.status;
           return acc;
         },
@@ -168,22 +168,22 @@ const AllAgents = () => {
       handler.clear();
     };
   }, [searchTerm]);
-  
+
   // Function to fetch agent sharing details
   const fetchAgentSharingDetails = async (agentId: string) => {
     if (!agentId) return;
-    
+
     setIsLoadingSharedDetails(true);
     try {
       const response = await AgentService.getSharedAgentsDetails(agentId);
-      
+
       // Update state with the response values
       setIsPublic(response.visibility === "public");
       setSharedEmails(response.shared_with || []);
-      
+
       // Mark toggle as initialized with actual data from API
       setToggleInitialized(true);
-      
+
       return response; // Return response for further processing
     } catch (error) {
       toast.error("Failed to load sharing details");
@@ -196,9 +196,12 @@ const AllAgents = () => {
     mutationFn: async (agentId: string) => {
       const header = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      return (await axios.delete(`${baseUrl}/api/v1/custom-agents/agents/${agentId}`, {
-        headers: header,
-      })) as AxiosResponse<any, any>;
+      return (await axios.delete(
+        `${baseUrl}/api/v1/custom-agents/agents/${agentId}`,
+        {
+          headers: header,
+        }
+      )) as AxiosResponse<any, any>;
     },
     onSuccess: (data, agentId) => {
       router.refresh();
@@ -280,13 +283,19 @@ const AllAgents = () => {
       toast.error("Failed to create agent. Please try again.");
     },
   });
-  
+
   // Loading state for visibility toggle
   const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
-  
+
   // Mutation for sharing agent with email
   const shareWithEmailMutation = useMutation({
-    mutationFn: async ({ agentId, email }: { agentId: string; email: string }) => {
+    mutationFn: async ({
+      agentId,
+      email,
+    }: {
+      agentId: string;
+      email: string;
+    }) => {
       return AgentService.shareAgentWithEmail(agentId, email);
     },
     onSuccess: (response) => {
@@ -304,18 +313,24 @@ const AllAgents = () => {
       toast.error("Failed to share agent");
     },
   });
-  
+
   // Mutation for revoking access to agent
   const revokeAccessMutation = useMutation({
-    mutationFn: async ({ agentId, email }: { agentId: string; email: string }) => {
+    mutationFn: async ({
+      agentId,
+      email,
+    }: {
+      agentId: string;
+      email: string;
+    }) => {
       return AgentService.revokeAgentAccess(agentId, email);
     },
     onSuccess: (response, variables) => {
       toast.success("Access revoked successfully");
-      
+
       // Optimistically update the UI by removing the email
-      setSharedEmails(prev => prev.filter(e => e !== variables.email));
-      
+      setSharedEmails((prev) => prev.filter((e) => e !== variables.email));
+
       // Then fetch full details to ensure consistency
       fetchAgentSharingDetails(shareAgentId!);
     },
@@ -355,74 +370,81 @@ const AllAgents = () => {
     navigator.clipboard.writeText(id);
     toast.success("Agent ID copied to clipboard");
   };
-  
+
   // Helper function to refresh agent sharing details
   const refreshAgentSharingDetails = () => {
     if (shareAgentId) {
       fetchAgentSharingDetails(shareAgentId);
     }
   };
-  
+
   // Function to share agent with email
   const shareAgentWithEmail = () => {
     if (!shareAgentId || !emailToShare.trim()) return;
-    
+
     // Improved email validation
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(emailToShare)) {
       toast.error("Please enter a valid email address");
       return;
     }
-    
+
     // Check if email already exists in the list
     if (sharedEmails.includes(emailToShare.trim())) {
       toast.error("This email has already been added");
       return;
     }
-    
+
     // Optimistically update UI
     const emailToAdd = emailToShare.trim();
-    setSharedEmails(prev => [...prev, emailToAdd]);
-    
+    setSharedEmails((prev) => [...prev, emailToAdd]);
+
     // Call the API
-    shareWithEmailMutation.mutate({
-      agentId: shareAgentId,
-      email: emailToAdd
-    }, {
-      onError: () => {
-        // Revert on error
-        setSharedEmails(prev => prev.filter(email => email !== emailToAdd));
+    shareWithEmailMutation.mutate(
+      {
+        agentId: shareAgentId,
+        email: emailToAdd,
+      },
+      {
+        onError: () => {
+          // Revert on error
+          setSharedEmails((prev) =>
+            prev.filter((email) => email !== emailToAdd)
+          );
+        },
       }
-    });
+    );
   };
-  
+
   // Function to revoke access to agent
   const revokeAccess = (email: string) => {
     if (!shareAgentId) return;
-    
+
     revokeAccessMutation.mutate({
       agentId: shareAgentId,
-      email: email
+      email: email,
     });
   };
-  
+
   // Function to copy shareable URL
   const copyShareableUrl = () => {
     if (!shareAgentId) return;
-    
+
     // Don't copy if agent is not public and has no shared emails
     if (!isPublic && sharedEmails.length === 0) {
-      toast.error("Agent must be public or shared with at least one person to be shareable");
+      toast.error(
+        "Agent must be public or shared with at least one person to be shareable"
+      );
       return;
     }
-    
+
     const baseUrl = window.location.origin;
     const shareableUrl = `${baseUrl}/shared-agent?agent_id=${shareAgentId}`;
-    
+
     navigator.clipboard.writeText(shareableUrl);
     setCopyUrlSuccess(true);
     toast.success("Shareable URL copied to clipboard");
-    
+
     // Reset success state after 2 seconds
     setTimeout(() => setCopyUrlSuccess(false), 2000);
   };
@@ -430,7 +452,10 @@ const AllAgents = () => {
   const handleEditClick = async (agent: any) => {
     try {
       // Fetch complete agent details
-      const fullAgentDetails = await AgentService.getAgentDetails(agent.id, userId as string);
+      const fullAgentDetails = await AgentService.getAgentDetails(
+        agent.id,
+        userId as string
+      );
       setAgentToEdit(fullAgentDetails);
       setEditDialogOpen(true);
     } catch (error) {
@@ -475,8 +500,8 @@ const AllAgents = () => {
               isUpgradeMode
                 ? "sm:max-w-[600px] p-6"
                 : !generatedAgent
-                ? "sm:max-w-[600px] h-[80vh] p-6"
-                : "sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-0"
+                  ? "sm:max-w-[600px] h-[80vh] p-6"
+                  : "sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-0"
             }
           >
             {isUpgradeMode ? (
@@ -487,16 +512,20 @@ const AllAgents = () => {
                 </DialogHeader>
                 <div className="py-4 text-center">
                   <p className="text-sm text-black">
-                    Free users are limited to 3 agents. You already have {data?.length} agent
-                    {data?.length > 1 ? "s" : ""}. Upgrade to create more agents and unlock additional
-                    features.
+                    Free users are limited to 3 agents. You already have{" "}
+                    {data?.length} agent
+                    {data?.length > 1 ? "s" : ""}. Upgrade to create more agents
+                    and unlock additional features.
                   </p>
                 </div>
                 <DialogFooter className="pt-6 pb-2">
                   <Button
                     variant="outline"
                     onClick={() =>
-                      window.open(`${window.location.origin}/user-subscription`, "_blank")
+                      window.open(
+                        `${window.location.origin}/user-subscription`,
+                        "_blank"
+                      )
                     }
                   >
                     Upgrade
@@ -512,9 +541,9 @@ const AllAgents = () => {
                 <div className="flex-1 py-4">
                   <div className="space-y-2">
                     <p className="text-sm text-black">
-                      Describe the purpose and functionality of your agent in detail.
-                      Include any specific tasks, behaviors, or algorithms you want it to
-                      implement.
+                      Describe the purpose and functionality of your agent in
+                      detail. Include any specific tasks, behaviors, or
+                      algorithms you want it to implement.
                     </p>
                     <textarea
                       className="w-full h-[calc(80vh-250px)] p-4 rounded-md border resize-none"
@@ -603,7 +632,9 @@ const AllAgents = () => {
                       <div className="truncate">{content.name}</div>
                       <Bot className="flex-shrink-0" />
                       {(content as any).visibility === "public" && (
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Public</span>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          Public
+                        </span>
                       )}
                     </CardTitle>
                   </CardHeader>
@@ -625,7 +656,7 @@ const AllAgents = () => {
                     >
                       <Copy className="size-5" />
                     </Button>
-                    
+
                     {/* Share Agent Button */}
                     <Button
                       variant="ghost"
@@ -634,20 +665,23 @@ const AllAgents = () => {
                       onClick={async () => {
                         // Set the agent ID - the useEffect will handle setting the visibility
                         setShareAgentId(content.id);
-                        
+
                         // Reset other share-related state
                         setToggleInitialized(false);
                         setSharedEmails([]);
                         setEmailToShare("");
-                        
+
                         // Open the modal
                         setShareModalOpen(true);
                         setIsLoadingSharedDetails(true);
-                        
+
                         // Fetch the complete sharing details asynchronously
                         try {
-                          const details = await AgentService.getSharedAgentsDetails(content.id);
-                          
+                          const details =
+                            await AgentService.getSharedAgentsDetails(
+                              content.id
+                            );
+
                           // Update shared emails
                           setSharedEmails(details.shared_with || []);
                           setToggleInitialized(true);
@@ -661,7 +695,7 @@ const AllAgents = () => {
                     >
                       <Share2 className="size-5" />
                     </Button>
-                    
+
                     <Dialog
                       open={deleteDailogOpen}
                       onOpenChange={(open) => {
@@ -684,10 +718,12 @@ const AllAgents = () => {
                           <DialogTitle className="truncate max-w-[400px] flex items-center">
                             Are you sure you want to delete&nbsp;
                             <span className="font-semibold inline-block max-w-[200px] truncate">
-                              {data?.find(
-                                (agent: { id: string; name: string }) =>
-                                  agent.id === agentToDelete
-                              )?.name}
+                              {
+                                data?.find(
+                                  (agent: { id: string; name: string }) =>
+                                    agent.id === agentToDelete
+                                )?.name
+                              }
                             </span>
                             ?
                           </DialogTitle>
@@ -728,7 +764,7 @@ const AllAgents = () => {
           )
         )}
       </div>
-      
+
       {/* Share Agent Modal */}
       <Dialog
         open={shareModalOpen}
@@ -743,10 +779,12 @@ const AllAgents = () => {
           } else {
             // Just update the open state - data loading is handled elsewhere
             setShareModalOpen(open);
-            
+
             // If we're opening the dialog and we have an agent ID, make sure we have the correct visibility state
             if (shareAgentId) {
-              const agentData = data?.find((agent: any) => agent.id === shareAgentId);
+              const agentData = data?.find(
+                (agent: any) => agent.id === shareAgentId
+              );
               if (agentData && (agentData as any).visibility !== undefined) {
                 setIsPublic((agentData as any).visibility === "public");
               }
@@ -758,27 +796,30 @@ const AllAgents = () => {
           <DialogHeader>
             <DialogTitle>Share Agent</DialogTitle>
             <DialogDescription>
-              Make your agent available to other users by sharing it publicly or with specific people.
+              Make your agent available to other users by sharing it publicly or
+              with specific people.
             </DialogDescription>
           </DialogHeader>
-          
+
           {/* Shareable status indicator */}
           {!isLoadingSharedDetails && (
-            <div className={`py-2 px-4 rounded-md mb-2 ${
-              isPublic || sharedEmails.length > 0 
-                ? "bg-green-50 text-green-800 border border-green-200" 
-                : "bg-yellow-50 text-yellow-800 border border-yellow-200"
-            }`}>
+            <div
+              className={`py-2 px-4 rounded-md mb-2 ${
+                isPublic || sharedEmails.length > 0
+                  ? "bg-green-50 text-green-800 border border-green-200"
+                  : "bg-yellow-50 text-yellow-800 border border-yellow-200"
+              }`}
+            >
               <p className="text-sm">
-                {isPublic 
-                  ? "This agent is public and can be accessed by anyone with the link." 
-                  : sharedEmails.length > 0 
+                {isPublic
+                  ? "This agent is public and can be accessed by anyone with the link."
+                  : sharedEmails.length > 0
                     ? `This agent is shared with ${sharedEmails.length} ${sharedEmails.length === 1 ? "person" : "people"}.`
                     : "This agent is private. Make it public or share with specific people to make it accessible."}
               </p>
             </div>
           )}
-          
+
           <div className="space-y-6 py-4">
             {/* Public/Private Toggle */}
             <div className="flex items-center justify-between">
@@ -788,7 +829,7 @@ const AllAgents = () => {
                   Anyone with the link can access this agent
                 </p>
               </div>
-              
+
               {isLoadingSharedDetails ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-black">Loading...</span>
@@ -799,34 +840,38 @@ const AllAgents = () => {
                   <span className="text-xs text-black">
                     {isPublic ? "Public" : "Private"}
                   </span>
-                  <Switch 
-                    checked={isPublic} 
+                  <Switch
+                    checked={isPublic}
                     onCheckedChange={(checked) => {
                       // Use simple direct API call
                       setIsPublic(checked);
                       setIsTogglingVisibility(true);
-                      
+
                       AgentService.setAgentVisibility(
-                        shareAgentId!, 
+                        shareAgentId!,
                         checked ? "public" : "private"
-                      ).then(response => {
-                        // Update based on response from API
-                        setIsPublic(response.visibility === "public");
-                        toast.success("Agent visibility updated successfully");
-                        setIsTogglingVisibility(false);
-                      }).catch(error => {
-                        // Revert on error
-                        setIsPublic(!checked);
-                        toast.error("Failed to update agent visibility");
-                        setIsTogglingVisibility(false);
-                      });
+                      )
+                        .then((response) => {
+                          // Update based on response from API
+                          setIsPublic(response.visibility === "public");
+                          toast.success(
+                            "Agent visibility updated successfully"
+                          );
+                          setIsTogglingVisibility(false);
+                        })
+                        .catch((error) => {
+                          // Revert on error
+                          setIsPublic(!checked);
+                          toast.error("Failed to update agent visibility");
+                          setIsTogglingVisibility(false);
+                        });
                     }}
                     disabled={isLoadingSharedDetails || isTogglingVisibility}
                   />
                 </div>
               )}
             </div>
-            
+
             {/* Email Sharing */}
             <div className="space-y-3">
               <h4 className="font-medium">Share with specific people</h4>
@@ -838,9 +883,11 @@ const AllAgents = () => {
                   className="flex-1"
                   disabled={shareWithEmailMutation.isPending}
                 />
-                <Button 
+                <Button
                   onClick={shareAgentWithEmail}
-                  disabled={!emailToShare.trim() || shareWithEmailMutation.isPending}
+                  disabled={
+                    !emailToShare.trim() || shareWithEmailMutation.isPending
+                  }
                 >
                   {shareWithEmailMutation.isPending ? (
                     <Loader className="h-4 w-4 animate-spin" />
@@ -849,7 +896,7 @@ const AllAgents = () => {
                   )}
                 </Button>
               </div>
-              
+
               {/* Shared Emails List */}
               <div className="rounded-md border h-[120px] overflow-y-auto p-2">
                 {isLoadingSharedDetails ? (
@@ -863,7 +910,10 @@ const AllAgents = () => {
                 ) : (
                   <ul className="space-y-2">
                     {sharedEmails.map((email, index) => (
-                      <li key={index} className="flex items-center justify-between bg-secondary/30 rounded-md px-3 py-2 text-sm">
+                      <li
+                        key={index}
+                        className="flex items-center justify-between bg-secondary/30 rounded-md px-3 py-2 text-sm"
+                      >
                         <span>{email}</span>
                         <Button
                           variant="ghost"
@@ -884,15 +934,23 @@ const AllAgents = () => {
                 )}
               </div>
             </div>
-            
+
             {/* Copy URL */}
             <div>
               <Button
                 variant="outline"
                 className="w-full"
                 onClick={copyShareableUrl}
-                disabled={copyUrlSuccess || (!isPublic && sharedEmails.length === 0) || isLoadingSharedDetails}
-                title={!isPublic && sharedEmails.length === 0 ? "Agent must be public or shared with at least one person" : ""}
+                disabled={
+                  copyUrlSuccess ||
+                  (!isPublic && sharedEmails.length === 0) ||
+                  isLoadingSharedDetails
+                }
+                title={
+                  !isPublic && sharedEmails.length === 0
+                    ? "Agent must be public or shared with at least one person"
+                    : ""
+                }
               >
                 {copyUrlSuccess ? (
                   <>URL Copied</>
@@ -906,10 +964,14 @@ const AllAgents = () => {
               </Button>
             </div>
           </div>
-          
+
           <DialogFooter className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-end sm:items-center">
             <div className="flex space-x-2">
-              <Button type="submit" onClick={shareAgentWithEmail} disabled={!emailToShare}>
+              <Button
+                type="submit"
+                onClick={shareAgentWithEmail}
+                disabled={!emailToShare}
+              >
                 Share
               </Button>
               <DialogClose asChild>
@@ -932,9 +994,7 @@ const AllAgents = () => {
           }
         }}
       >
-        <DialogContent
-          className="sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-0"
-        >
+        <DialogContent className="sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] h-[90vh] p-0">
           {agentToEdit && (
             <AgentCreationChatPanel
               agentPrompt=""

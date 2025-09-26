@@ -53,6 +53,7 @@ const Chat = () => {
   const { planType, total_human_messages } = useSelector(
     (state: RootState) => state.UserInfo
   );
+  const { backgroundTaskActive } = useSelector((state: RootState) => state.chat);
   const [Error, setError] = useState({
     isError: false,
     message: "",
@@ -107,6 +108,8 @@ const Chat = () => {
 
         return;
       }
+
+
       setIsCreator(info.is_creator);
 
       if (!list_system_agents.includes(info.agent_ids[0])) {

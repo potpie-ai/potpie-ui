@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { CustomAgentsFormValues } from "@/lib/Schema";
-import { generateHmacSignature } from "@/app/utils/hmac.util";
+import { parseApiError } from "@/lib/utils";
 
 export default class AgentService {
   static async getAgentTypes() {
@@ -16,7 +16,8 @@ export default class AgentService {
       );
       return response.data;
     } catch (error) {
-      throw new Error("Error fetching agent types");
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -24,30 +25,36 @@ export default class AgentService {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
-      console.log("Fetching agent list with params:", { includePublic, includeShared });
+      console.log("Fetching agent list with params:", {
+        includePublic,
+        includeShared,
+      });
       const response: any = await axios.get(
         `${baseUrl}/api/v1/list-available-agents/`,
-        { 
-          params: { 
+        {
+          params: {
             list_system_agents: false,
             include_public: includePublic,
-            include_shared: includeShared 
-          }, 
-          headers: headers 
+            include_shared: includeShared,
+          },
+          headers: headers,
         }
       );
       console.log("Agent list response:", response.data);
-      
+
       // Log visibility information for each agent
       if (response.data && Array.isArray(response.data)) {
         response.data.forEach((agent: any) => {
-          console.log(`Agent ${agent.id} (${agent.name}) visibility: ${agent.visibility}`);
+          console.log(
+            `Agent ${agent.id} (${agent.name}) visibility: ${agent.visibility}`
+          );
         });
       }
-      
+
       return response.data;
     } catch (error) {
-      throw new Error("Error fetching agent types");
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -65,7 +72,8 @@ export default class AgentService {
       );
       return response.data as AxiosResponse<CustomAgentType, any>;
     } catch (error) {
-      throw new Error("Error updating agent");
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -82,10 +90,10 @@ export default class AgentService {
       );
       return response.data as AxiosResponse<CustomAgentType, any>;
     } catch (error) {
-      throw new Error("Error creating agent");
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
     }
   }
-
 
   static async createAgentFromPrompt(prompt: string) {
     const headers = await getHeaders();
@@ -105,16 +113,12 @@ export default class AgentService {
   static async getAgentDetails(agentId: string, userId: string) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    const hmacSignature = generateHmacSignature(userId);
-    
+
     try {
       const response = await axios.get(
         `${baseUrl}/api/v1/custom-agents/agents/${agentId}`,
         {
-          headers: {
-            ...headers,
-            'X-Hmac-Signature': hmacSignature
-          },
+          headers: headers,
           params: {
             user_id: userId,
           },
@@ -128,16 +132,19 @@ export default class AgentService {
   }
 
   // New methods for agent sharing functionality
-  static async setAgentVisibility(agentId: string, visibility: "private" | "public" | "shared") {
+  static async setAgentVisibility(
+    agentId: string,
+    visibility: "private" | "public" | "shared"
+  ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       console.log(`Setting agent ${agentId} visibility to:`, visibility);
       const response = await axios.post(
         `${baseUrl}/api/v1/custom-agents/agents/share`,
-        { 
+        {
           agent_id: agentId,
-          visibility: visibility
+          visibility: visibility,
         },
         { headers }
       );
@@ -149,7 +156,11 @@ export default class AgentService {
     }
   }
 
-  static async shareAgentWithEmail(agentId: string, email: string, visibility?: "private" | "public" | "shared") {
+  static async shareAgentWithEmail(
+    agentId: string,
+    email: string,
+    visibility?: "private" | "public" | "shared"
+  ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
@@ -158,7 +169,7 @@ export default class AgentService {
         {
           agent_id: agentId,
           visibility: visibility,
-          shared_with_email: email
+          shared_with_email: email,
         },
         { headers }
       );
@@ -168,7 +179,10 @@ export default class AgentService {
     }
   }
 
-  static async changeAgentVisibility(agentId: string, visibility: "private" | "public" | "shared") {
+  static async changeAgentVisibility(
+    agentId: string,
+    visibility: "private" | "public" | "shared"
+  ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
@@ -176,7 +190,7 @@ export default class AgentService {
         `${baseUrl}/api/v1/custom-agents/agents/share`,
         {
           agent_id: agentId,
-          visibility: visibility
+          visibility: visibility,
         },
         { headers }
       );
@@ -194,7 +208,7 @@ export default class AgentService {
         `${baseUrl}/api/v1/custom-agents/agents/revoke-access`,
         {
           agent_id: agentId,
-          user_email: email
+          user_email: email,
         },
         { headers }
       );

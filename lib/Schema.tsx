@@ -29,7 +29,9 @@ export const DbMockFormSchema = z.object({
   port: z.string().optional(),
 });
 
-export const CustomAgentsExpectedOutputSchema = z.string().min(1, { message: "Expected output is required" })
+export const CustomAgentsExpectedOutputSchema = z
+  .string()
+  .min(1, { message: "Expected output is required" })
   .refine(
     (value) => {
       try {
@@ -48,6 +50,14 @@ export const CustomAgentsTaskSchema = z.object({
     .array(z.string().min(1))
     .min(1, { message: "At least one tool is required" }),
   expected_output: CustomAgentsExpectedOutputSchema,
+  mcp_servers: z
+    .array(
+      z.object({
+        name: z.string().min(1, { message: "Server name is required" }),
+        link: z.string().url({ message: "Server link must be a valid URL" }),
+      })
+    )
+    .optional(),
 });
 
 export const CustomAgentsFormSchema = z.object({

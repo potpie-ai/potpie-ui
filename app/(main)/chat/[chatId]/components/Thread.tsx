@@ -10,6 +10,8 @@ import {
   useThreadRuntime,
 } from "@assistant-ui/react";
 import { useEffect, useMemo, useState, type FC, useCallback } from "react";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -23,10 +25,10 @@ import {
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import ReactMarkdown from "react-markdown";
+import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
+import { MermaidDiagram } from "@/components/chat/MermaidDiagram";
 import MyCodeBlock from "@/components/codeBlock";
 import MessageComposer from "./MessageComposer";
-import remarkGfm from "remark-gfm";
 import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Accordion, AccordionTrigger } from "@/components/ui/accordion";
@@ -47,6 +49,7 @@ export const Thread: FC<ThreadProps> = ({
 }) => {
   const runtime = useThreadRuntime();
   const [isLoading, setIsLoading] = useState(true);
+  const { backgroundTaskActive, sessionResuming } = useSelector((state: RootState) => state.chat);
 
   useEffect(() => {
     const unsubscribe = runtime.subscribe(() => {
@@ -60,6 +63,20 @@ export const Thread: FC<ThreadProps> = ({
   let userMessage = useMemo(() => {
     return UserMessageWithURL(userImageURL);
   }, [userImageURL]);
+
+  // Add loading state for background tasks
+  if (backgroundTaskActive && !sessionResuming) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <Loader className="h-6 w-6 animate-spin mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">
+            Background task in progress...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">
@@ -164,49 +181,7 @@ const parseMessage = (message: string) => {
 };
 
 const CustomMarkdown = ({ content }: { content: string }) => {
-  const markdownContent = content;
-
-  return (
-    <ReactMarkdown
-      className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
-      components={{
-        p: ({ children }) => <p className="text-slate-900">{children}</p>,
-        code: ({ children, className }) => {
-          const language = className
-            ? className.replace("language-", "")
-            : "plaintext";
-
-          if (language === "plaintext") {
-            return (
-              <code className="bg-green-200 rounded text-sm font-medium text-slate-900">
-                {children}
-              </code>
-            );
-          }
-
-          return (
-            <MyCodeBlock
-              code={String(children).replace(/\n$/, "")}
-              language={language}
-            />
-          );
-        },
-        a: ({ href, children }) => (
-          <a
-            className="underline inline-flex transition-all text-blue-600 hover:text-blue-800"
-            href={href}
-            target="_blank"
-          >
-            {children}
-            <ExternalLinkIcon className="h-4 w-4 ml-1" />
-          </a>
-        ),
-      }}
-      remarkPlugins={[remarkGfm]}
-    >
-      {markdownContent}
-    </ReactMarkdown>
-  );
+  return <SharedMarkdown content={content} />;
 };
 
 const MarkdownComponent = (content: any) => {
@@ -220,7 +195,17 @@ const MarkdownComponent = (content: any) => {
             {section.type === "text" && (
               <CustomMarkdown content={section.content} />
             )}
-            {section.type === "code" && (
+            {section.type === "code" && section.language === "mermaid" && (
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: "backInOut", stiffness: 50 }}
+                className="pb-4 text-xs max-w-4xl"
+              >
+                <MermaidDiagram chart={section.content} />
+              </motion.div>
+            )}
+            {section.type === "code" && section.language !== "mermaid" && (
               <motion.div
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -355,6 +340,12 @@ const UserMessageWithURL = (userPhotoURL: string) => {
 };
 
 const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
+  const message = useMessage();
+  
+  // Separate text and image content
+  const textContent = message.content.find(c => c.type === "text");
+  const imageContent = message.content.filter(c => c.type === "image");
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -364,7 +355,30 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          <MessagePrimitive.Content />
+          {/* Render image previews first if they exist */}
+          {imageContent.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {imageContent.map((img: any, index: number) => (
+                <div key={index} className="relative">
+                  <img
+                    src={img.image}
+                    alt={`Uploaded ${index + 1}`}
+                    className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Render text content */}
+          {textContent && (
+            <div className="break-words">{(textContent as any).text}</div>
+          )}
+          
+          {/* Fallback: if no custom content, use original */}
+          {imageContent.length === 0 && !textContent && (
+            <MessagePrimitive.Content />
+          )}
         </div>
       </MessagePrimitive.Root>
       <Avatar className="mr-4 rounded-md bg-transparent">
@@ -586,12 +600,10 @@ const AssistantMessage: FC = () => {
                                   </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-12 max-h-96 overflow-y-scroll">
-                                  <ReactMarkdown
+                                  <SharedMarkdown
+                                    content={toolState.details_summary}
                                     className="markdown-content break-words break-before-avoid stroke-red-600 text-xs"
-                                    remarkPlugins={[remarkGfm]}
-                                  >
-                                    {toolState.details_summary}
-                                  </ReactMarkdown>
+                                  />
                                 </AccordionContent>
                               </AccordionItem>
                             </Accordion>

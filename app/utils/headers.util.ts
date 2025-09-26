@@ -3,8 +3,8 @@ import { isFirebaseEnabled } from "@/lib/utils";
 
 // Define a type for the headers
 type Headers = {
-    Authorization?: string;
-    [key: string]: string | undefined;
+  Authorization?: string;
+  [key: string]: string | undefined;
 };
 
 const getHeaders = async (existingHeaders: Headers = {}): Promise<Headers> => {
@@ -36,7 +36,7 @@ const getHeaders = async (existingHeaders: Headers = {}): Promise<Headers> => {
             // Only proceed with token if Firebase is enabled AND we're not using mock Firebase
             if (firebaseEnabled && !usingMockFirebase) {
                 // Get the token from the user object
-                const idToken = await user.getIdToken(true);
+                const idToken = await user.getIdToken(false);
                 
                 // Check if this is a mock user by examining the token directly
                 const isMockToken = idToken === 'mock-token-for-local-development' || 

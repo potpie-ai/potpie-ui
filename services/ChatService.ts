@@ -1,6 +1,7 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { Visibility } from "@/lib/Constants";
+import { SessionInfo, TaskStatus } from "@/lib/types/session";
 
 export default class ChatService {
   // Method for creating a chat with a shared agent
@@ -36,33 +37,67 @@ export default class ChatService {
     }
   }
 
-  static async streamMessage(
-    conversationId: string,
-    message: string,
-    selectedNodes: any[],
-    onMessageUpdate: (
-      message: string,
-      tool_calls: any[],
-      citations: string[]
-    ) => void
-  ): Promise<{ message: string; citations: string[] }> {
+  static async detectActiveSession(conversationId: string): Promise<SessionInfo | null> {
     try {
+      const headers = await getHeaders();
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/active-session`,
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return null; // No active session
+      }
+      throw error;
+    }
+  }
+
+  static async checkBackgroundTaskStatus(conversationId: string): Promise<TaskStatus> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/task-status`,
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      return { isActive: false, conversationId };
+    }
+  }
+
+  static generateSessionId(conversationId: string, userId: string, prevHumanMessageId?: string): string {
+    // Format: conversation:{user_id}:{prev_human_message_id}
+    const messageId = prevHumanMessageId || Date.now().toString();
+    return `conversation:${userId}:${messageId}`;
+  }
+
+  static async resumeActiveSession(
+    conversationId: string,
+    sessionId: string,
+    onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void
+  ): Promise<{ success: boolean; reason?: string; message?: string; citations?: string[] }> {
+    try {
+      const headers = await getHeaders();
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message/`,
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/resume/${sessionId}`,
         {
           method: "POST",
-          headers: {
-            ...(await getHeaders()),
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ content: message, node_ids: selectedNodes }),
+          headers: headers as HeadersInit,
         }
       );
+
+      if (response.status === 404) {
+        // Session no longer exists or expired
+        return { success: false, reason: 'session_not_found' };
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
+      // Handle streaming response similar to streamMessage
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let currentMessage = "";
@@ -77,7 +112,7 @@ export default class ChatService {
 
             const chunk = decoder.decode(value);
 
-            // Try to extract complete JSON objects from the buffer
+            // Process chunks using same logic as streamMessage
             chunk.split(/(?<=})\s*(?={)/).forEach((jsonStr) => {
               try {
                 const data = JSON.parse(jsonStr);
@@ -91,29 +126,17 @@ export default class ChatService {
                       )
                   );
                   currentMessage += messageWithEmojis;
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
+                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
                 }
 
                 if (data.tool_calls !== undefined) {
                   currentToolCalls.push(...data.tool_calls);
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
+                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
                 }
 
                 if (data.citations !== undefined) {
                   currentCitations = data.citations;
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
+                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
                 }
               } catch (e) {
                 // Silently handle parsing errors
@@ -125,11 +148,200 @@ export default class ChatService {
         }
       }
 
-      return { message: currentMessage, citations: currentCitations };
+      return {
+        success: true,
+        message: currentMessage,
+        citations: currentCitations
+      };
     } catch (error) {
-      // Handle streaming error
-      throw error;
+      console.error("Error resuming session:", error);
+      return { success: false, reason: 'network_error' };
     }
+  }
+
+  static async streamMessage(
+    conversationId: string,
+    message: string,
+    selectedNodes: any[],
+    images: File[] = [],
+    onMessageUpdate: (
+      message: string,
+      tool_calls: any[],
+      citations: string[]
+    ) => void,
+    sessionId?: string // New optional parameter
+  ): Promise<{ message: string; citations: string[]; sessionId: string }> {
+    let currentSessionId = sessionId;
+
+    // Check for existing active session if no sessionId provided
+    if (!currentSessionId) {
+      const activeSession = await this.detectActiveSession(conversationId);
+      if (activeSession && activeSession.status === 'active') {
+        throw new Error("Background task already active. Cannot start new stream.");
+      }
+
+      // Generate new session ID
+      currentSessionId = this.generateSessionId(conversationId, "current_user_id", Date.now().toString());
+    }
+
+    try {
+      const headers = await getHeaders();
+      const formData = new FormData();
+
+      formData.append('content', message);
+      formData.append('node_ids', JSON.stringify(selectedNodes));
+      formData.append('session_id', currentSessionId);
+
+      // Add images to form data
+      images.forEach((image, index) => {
+        formData.append('images', image);
+      });
+
+      const response = await this.streamWithRetry(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message/`,
+        {
+          method: "POST",
+          headers: headers as HeadersInit,
+          body: formData,
+        },
+        onMessageUpdate,
+        3 // max retries
+      );
+
+      return {
+        message: response.message,
+        citations: response.citations,
+        sessionId: currentSessionId
+      };
+    } catch (error) {
+      console.error("Stream failed, attempting fallback polling:", error);
+
+      // Fallback to polling if stream fails completely
+      const fallbackResult = await this.pollForFinalMessage(conversationId);
+      if (fallbackResult) {
+        return { ...fallbackResult, sessionId: currentSessionId };
+      }
+
+      throw new Error("Stream failed and fallback polling unsuccessful");
+    }
+  }
+
+  // New retry mechanism method
+  static async streamWithRetry(
+    url: string,
+    options: RequestInit,
+    onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void,
+    maxRetries: number
+  ): Promise<{ message: string; citations: string[] }> {
+    let retries = 0;
+
+    while (retries <= maxRetries) {
+      try {
+        const response = await fetch(url, options);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Process streaming response (existing logic from original streamMessage)
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let currentMessage = "";
+        let currentCitations: string[] = [];
+        let currentToolCalls: any[] = [];
+
+        if (reader) {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              const chunk = decoder.decode(value);
+
+              // Process chunks (existing logic from lines 92-133)
+              chunk.split(/(?<=})\s*(?={)/).forEach((jsonStr) => {
+                try {
+                  const data = JSON.parse(jsonStr);
+
+                  if (data.message !== undefined) {
+                    const messageWithEmojis = data.message.replace(
+                      /\\u[\dA-F]{4}/gi,
+                      (match: string) =>
+                        String.fromCodePoint(
+                          parseInt(match.replace(/\\u/g, ""), 16)
+                        )
+                    );
+                    currentMessage += messageWithEmojis;
+                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+                  }
+
+                  if (data.tool_calls !== undefined) {
+                    currentToolCalls.push(...data.tool_calls);
+                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+                  }
+
+                  if (data.citations !== undefined) {
+                    currentCitations = data.citations;
+                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+                  }
+                } catch (e) {
+                  // Silently handle parsing errors
+                }
+              });
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        }
+
+        return { message: currentMessage, citations: currentCitations };
+
+      } catch (error) {
+        retries++;
+        if (retries > maxRetries) {
+          throw error;
+        }
+
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = Math.pow(2, retries - 1) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        console.warn(`Retry ${retries}/${maxRetries} after ${delay}ms delay`);
+      }
+    }
+
+    throw new Error("Max retries exceeded");
+  }
+
+  static async pollForFinalMessage(
+    conversationId: string,
+    timeoutMs: number = 30000
+  ): Promise<{ message: string; citations: string[] } | null> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        // Check if background task is still active
+        const taskStatus = await this.checkBackgroundTaskStatus(conversationId);
+        if (!taskStatus.isActive) {
+          // Task completed, fetch latest messages
+          const messages = await this.loadMessages(conversationId, 0, 1);
+          if (messages.length > 0) {
+            const latestMessage = messages[0];
+            return {
+              message: latestMessage.text,
+              citations: latestMessage.citations || []
+            };
+          }
+        }
+
+        // Wait 2 seconds before next poll
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (error) {
+        console.error("Error polling for final message:", error);
+      }
+    }
+
+    return null; // Timeout
   }
 
   static async loadMessages(
@@ -147,11 +359,20 @@ export default class ChatService {
     );
 
     return response.data.map(
-      (message: { id: any; content: any; type: string; citations: any }) => ({
+      (message: { 
+        id: any; 
+        content: any; 
+        type: string; 
+        citations: any;
+        has_attachments?: boolean;
+        attachments?: any[];
+      }) => ({
         id: message.id,
         text: message.content,
         sender: message.type === "HUMAN" ? "user" : "agent",
         citations: message.citations || [],
+        has_attachments: message.has_attachments || false,
+        attachments: message.attachments || [],
       })
     );
   }
@@ -221,15 +442,19 @@ export default class ChatService {
     ) => void
   ): Promise<{ message: string; citations: string[]; tool_calls: any[] }> {
     try {
+      const headers = await getHeaders();
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/regenerate/`,
         {
           method: "POST",
           headers: {
-            ...(await getHeaders()),
-            "Content-Type": "application/json",
+            ...headers,
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ node_ids: selectedNodes }),
+          body: JSON.stringify({
+            node_ids: selectedNodes
+          }),
         }
       );
 

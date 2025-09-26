@@ -73,17 +73,43 @@ jobs:
           echo "NEXT_PUBLIC_LINEAR_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SLACK_SERVER=${{ secrets.STAGE_NEXT_PUBLIC_SLACK_SERVER }}" >> $GITHUB_ENV
 
-          # Convert branch name to valid service name (replace underscores with dashes and ensure it's lowercase)
-          BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
-          BRANCH_NAME=${BRANCH_NAME//_/-}
+          # Convert branch name to valid Cloud Run service name
+          # Cloud Run service names must:
+          # - be lowercase
+          # - contain only letters, numbers, and hyphens
+          # - start with a letter
+          # - end with a letter or number
+          # - be at most 63 characters long
+          BRANCH_NAME="$GITHUB_HEAD_REF"
+
+          # Replace slashes, underscores, and other special characters with hyphens
+          BRANCH_NAME=${BRANCH_NAME//[\/\\_\.\+\=\@\#\$\%\^\&\*\(\)\[\]\{\}\|\\\:\;\'\"\,\<\>\?\`\~]/-}
+
+          # Convert to lowercase
           BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
+
+          # Remove leading/trailing hyphens and collapse multiple hyphens
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^-*//' | sed 's/-*$//' | sed 's/-\{2,\}/-/g')
+
+          # Ensure it starts with a letter if it doesn't already
+          if [[ ! "$BRANCH_NAME" =~ ^[a-z] ]]; then
+            BRANCH_NAME="br-$BRANCH_NAME"
+          fi
+
+          # Truncate to 58 characters to leave room for "pr-" prefix (total 61 chars)
+          BRANCH_NAME=${BRANCH_NAME:0:58}
+
+          # Remove trailing hyphen if present after truncation
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/-*$//')
+
           echo "SANITIZED_BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+          echo "Original branch: $GITHUB_HEAD_REF"
+          echo "Sanitized branch: $BRANCH_NAME"
 
       # Build the Docker image
       - name: Build
         run: |-
-          BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
-          IMAGE_TAG="$GAR_ZONE-docker.pkg.dev/$PROJECT_ID/$GAR_REPO/nextjs-app-pr:$BRANCH_NAME-$GITHUB_SHA"
+          IMAGE_TAG="$GAR_ZONE-docker.pkg.dev/$PROJECT_ID/$GAR_REPO/nextjs-app-pr:$SANITIZED_BRANCH_NAME-$GITHUB_SHA"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
           docker build \
             --tag "$IMAGE_TAG" \
@@ -166,7 +192,28 @@ jobs:
       # Sanitize branch name and delete Cloud Run Service
       - name: Delete Cloud Run Service
         run: |-
-          BRANCH_NAME=${GITHUB_HEAD_REF//\//-}
-          BRANCH_NAME=${BRANCH_NAME//_/-}
+          # Use the same sanitization logic as deployment
+          BRANCH_NAME="$GITHUB_HEAD_REF"
+
+          # Replace slashes, underscores, and other special characters with hyphens
+          BRANCH_NAME=${BRANCH_NAME//[\/\\_\.\+\=\@\#\$\%\^\&\*\(\)\[\]\{\}\|\\\:\;\'\"\,\<\>\?\`\~]/-}
+
+          # Convert to lowercase
           BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
+
+          # Remove leading/trailing hyphens and collapse multiple hyphens
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^-*//' | sed 's/-*$//' | sed 's/-\{2,\}/-/g')
+
+          # Ensure it starts with a letter if it doesn't already
+          if [[ ! "$BRANCH_NAME" =~ ^[a-z] ]]; then
+            BRANCH_NAME="br-$BRANCH_NAME"
+          fi
+
+          # Truncate to 58 characters to leave room for "pr-" prefix (total 61 chars)
+          BRANCH_NAME=${BRANCH_NAME:0:58}
+
+          # Remove trailing hyphen if present after truncation
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/-*$//')
+
+          echo "Deleting Cloud Run service: pr-${BRANCH_NAME}"
           gcloud run services delete "pr-${BRANCH_NAME}" --region $GAR_ZONE --platform managed --quiet

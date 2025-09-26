@@ -10,6 +10,8 @@ import {
   useThreadRuntime,
 } from "@assistant-ui/react";
 import { useEffect, useMemo, useState, type FC, useCallback } from "react";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -47,6 +49,7 @@ export const Thread: FC<ThreadProps> = ({
 }) => {
   const runtime = useThreadRuntime();
   const [isLoading, setIsLoading] = useState(true);
+  const { backgroundTaskActive, sessionResuming } = useSelector((state: RootState) => state.chat);
 
   useEffect(() => {
     const unsubscribe = runtime.subscribe(() => {
@@ -60,6 +63,20 @@ export const Thread: FC<ThreadProps> = ({
   let userMessage = useMemo(() => {
     return UserMessageWithURL(userImageURL);
   }, [userImageURL]);
+
+  // Add loading state for background tasks
+  if (backgroundTaskActive && !sessionResuming) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <Loader className="h-6 w-6 animate-spin mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">
+            Background task in progress...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">

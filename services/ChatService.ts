@@ -2,6 +2,7 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { Visibility } from "@/lib/Constants";
 import { SessionInfo, TaskStatus } from "@/lib/types/session";
+import { isMultimodalEnabled } from "@/lib/utils";
 
 export default class ChatService {
   // Method for creating a chat with a shared agent
@@ -192,8 +193,9 @@ export default class ChatService {
       formData.append('node_ids', JSON.stringify(selectedNodes));
       formData.append('session_id', currentSessionId);
 
-      // Add images to form data
-      images.forEach((image, index) => {
+      // Only process images if multimodal is enabled
+      const enabledImages = isMultimodalEnabled() ? images : [];
+      enabledImages.forEach((image, index) => {
         formData.append('images', image);
       });
 

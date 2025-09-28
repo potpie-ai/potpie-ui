@@ -2,6 +2,7 @@ import { setPendingMessage, setBackgroundTaskActive, setSessionResuming, setActi
 import { AppDispatch, RootState } from "@/lib/state/store";
 import ChatService from "@/services/ChatService";
 import { SessionInfo } from "@/lib/types/session";
+import { isMultimodalEnabled } from "@/lib/utils";
 import {
   AppendMessage,
   ThreadMessageLike,
@@ -22,12 +23,12 @@ const convertToThreadMessage = (message: any): ThreadMessageLike => {
     },
   ];
 
-  // Process attachments if they exist
-  if (message.has_attachments && message.attachments && message.attachments.length > 0) {
+  // Only process image attachments if multimodal enabled
+  if (isMultimodalEnabled() && message.has_attachments && message.attachments && message.attachments.length > 0) {
     const imageAttachments = message.attachments.filter(
       (attachment: any) => attachment.attachment_type === "image"
     );
-    
+
     // Add image content for each image attachment
     imageAttachments.forEach((attachment: any) => {
       // Use the signed download URL provided by the API
@@ -259,14 +260,18 @@ export function PotpieRuntime(chatId: string) {
       throw new Error("Message must contain text content");
     }
 
-    // Get images from run config
-    const images: File[] = (message.runConfig?.custom?.images as File[]) || [];
-    
-    // Create image content for display purposes
-    const imageContent = images.map(image => ({
-      type: "image" as const,
-      image: URL.createObjectURL(image)
-    }));
+    // Only extract images if multimodal enabled
+    const images: File[] = isMultimodalEnabled()
+      ? (message.runConfig?.custom?.images as File[]) || []
+      : [];
+
+    // Create image content for display (only if enabled)
+    const imageContent = isMultimodalEnabled()
+      ? images.map(image => ({
+          type: "image" as const,
+          image: URL.createObjectURL(image)
+        }))
+      : [];
 
     // Create user message with both text and images
     const userMessage: ThreadMessageLike = {

@@ -22,7 +22,7 @@ import {
   Loader,
   RefreshCwIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, isMultimodalEnabled } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
@@ -355,8 +355,8 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          {/* Render image previews first if they exist */}
-          {imageContent.length > 0 && (
+          {/* Only render image previews if multimodal enabled and images exist */}
+          {isMultimodalEnabled() && imageContent.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {imageContent.map((img: any, index: number) => (
                 <div key={index} className="relative">

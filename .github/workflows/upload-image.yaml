@@ -89,6 +89,7 @@ jobs:
           echo "NEXT_PUBLIC_LINEAR_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SLACK_SERVER=${{ secrets.STAGE_NEXT_PUBLIC_SLACK_SERVER }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_LOGIN_PASSWORD=${{ secrets.STAGE_NEXT_PUBLIC_LOGIN_PASSWORD }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_MULTIMODAL_ENABLED=${{ secrets.ENV_NEXT_PUBLIC_LOGIN_PASSWORD }}" >> $GITHUB_ENV
 
       # Build the Docker image
       - name: Build
@@ -123,6 +124,7 @@ jobs:
             --build-arg NEXT_PUBLIC_LINEAR_REDIRECT_URI="${{ env.NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" \
             --build-arg NEXT_PUBLIC_SLACK_SERVER="${{ env.NEXT_PUBLIC_SLACK_SERVER }}" \
             --build-arg NEXT_PUBLIC_LOGIN_PASSWORD="${{ env.NEXT_PUBLIC_LOGIN_PASSWORD }}" \
+            --build-arg NEXT_PUBLIC_MULTIMODAL_ENABLED="${{ env.NEXT_PUBLIC_MULTIMODAL_ENABLED }}" \
             -f Dockerfile .
 
       # Push the Docker image to Google Artifact Registry

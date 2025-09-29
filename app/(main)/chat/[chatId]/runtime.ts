@@ -1,6 +1,8 @@
-import { setPendingMessage } from "@/lib/state/Reducers/chat";
+import { setPendingMessage, setBackgroundTaskActive, setSessionResuming, setActiveSession } from "@/lib/state/Reducers/chat";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import ChatService from "@/services/ChatService";
+import { SessionInfo } from "@/lib/types/session";
+import { isMultimodalEnabled } from "@/lib/utils";
 import {
   AppendMessage,
   ThreadMessageLike,
@@ -14,15 +16,35 @@ const convertMessage = (message: ThreadMessageLike) => {
 };
 
 const convertToThreadMessage = (message: any): ThreadMessageLike => {
+  const content: any[] = [
+    {
+      type: "text",
+      text: message.text,
+    },
+  ];
+
+  // Only process image attachments if multimodal enabled
+  if (isMultimodalEnabled() && message.has_attachments && message.attachments && message.attachments.length > 0) {
+    const imageAttachments = message.attachments.filter(
+      (attachment: any) => attachment.attachment_type === "image"
+    );
+
+    // Add image content for each image attachment
+    imageAttachments.forEach((attachment: any) => {
+      // Use the signed download URL provided by the API
+      if (attachment.download_url) {
+        content.push({
+          type: "image",
+          image: attachment.download_url,
+        });
+      }
+    });
+  }
+
   return {
     id: message.id,
     role: message.sender == "user" ? "user" : "assistant",
-    content: [
-      {
-        type: "text",
-        text: message.text,
-      },
-    ],
+    content,
   };
 };
 
@@ -37,7 +59,7 @@ export function PotpieRuntime(chatId: string) {
 
   const initarray: ThreadMessageLike[] = [];
   const [messages, setMessages] = useState(initarray);
-  const { pendingMessage } = useSelector((state: RootState) => state.chat);
+  const { pendingMessage, backgroundTaskActive, sessionResuming } = useSelector((state: RootState) => state.chat);
   const dispatch: AppDispatch = useDispatch();
 
   const loadMessages = async () => {
@@ -47,19 +69,100 @@ export function PotpieRuntime(chatId: string) {
 
       setExtras({ loading: true, streaming: false, error: false });
 
+      // Check for active session first
+      const activeSession = await ChatService.detectActiveSession(chatId);
+      if (activeSession && activeSession.status === 'active') {
+        dispatch(setActiveSession(activeSession));
+        dispatch(setBackgroundTaskActive(true));
+
+        // Resume active session instead of loading historical messages
+        await resumeActiveSession(activeSession);
+        return;
+      }
+
+      // Standard message loading if no active session
       const res = await ChatService.loadMessages(chatId, 0, 1000);
-
       setMessages(res.map((msg: any) => convertToThreadMessage(msg)));
-
       setMessagesLoaded(true);
       setExtras({ loading: false, streaming: false, error: false });
 
-      if (pendingMessage && pendingMessage != "") {
+      // Handle pending message only if no background task
+      if (pendingMessage && pendingMessage !== "" && !backgroundTaskActive) {
         onMessage(pendingMessage);
         dispatch(setPendingMessage(""));
       }
     } catch (error) {
-      console.error("Error fetching conversations:", error);
+      console.error("Error in enhanced loadMessages:", error);
+      setExtras({ loading: false, streaming: false, error: true });
+    }
+  };
+
+  // Add new resumeActiveSession function
+  const resumeActiveSession = async (sessionInfo: SessionInfo) => {
+    try {
+      dispatch(setSessionResuming(true));
+
+      // Load existing messages first
+      const res = await ChatService.loadMessages(chatId, 0, 1000);
+      setMessages(res.map((msg: any) => convertToThreadMessage(msg)));
+
+      // If we reach here, session resumption was successful
+      // Add empty assistant message for stream resumption
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        getMessageFromText(undefined, "")
+      ]);
+
+      // Attempt to resume the session with streaming callback
+      const resumeResult = await ChatService.resumeActiveSession(
+        chatId,
+        sessionInfo.sessionId,
+        (message: string, tool_calls: any[]) => {
+          setExtras({ loading: false, streaming: true, error: false });
+
+          setMessages((currentMessages) => {
+            return [
+              ...currentMessages.slice(0, -1),
+              getMessageFromText(currentMessages.at(-1)?.id, message, tool_calls),
+            ];
+          });
+        }
+      );
+
+      if (!resumeResult.success) {
+        if (resumeResult.reason === 'session_not_found') {
+          console.log("Session not found (404), refreshing conversation messages instead");
+
+          // Fallback: Refresh the conversation to get the latest messages
+          // The session might have completed while user was away
+          const refreshedMessages = await ChatService.loadMessages(chatId, 0, 1000);
+          setMessages(refreshedMessages.map((msg: any) => convertToThreadMessage(msg)));
+
+          // Clear session state since the session no longer exists
+          dispatch(setBackgroundTaskActive(false));
+          dispatch(setSessionResuming(false));
+          dispatch(setActiveSession(null));
+          setExtras({ loading: false, streaming: false, error: false });
+          setMessagesLoaded(true);
+
+          return; // Exit early, conversation is up to date
+        } else {
+          throw new Error(`Failed to resume session: ${resumeResult.reason}`);
+        }
+      }
+
+      // Resume completed successfully
+      dispatch(setBackgroundTaskActive(false));
+      dispatch(setSessionResuming(false));
+      dispatch(setActiveSession(null));
+      setExtras({ loading: false, streaming: false, error: false });
+      setMessagesLoaded(true);
+
+    } catch (error) {
+      console.error("Error resuming session:", error);
+      dispatch(setBackgroundTaskActive(false));
+      dispatch(setSessionResuming(false));
+      setExtras({ loading: false, streaming: false, error: true });
     }
   };
 
@@ -127,6 +230,7 @@ export function PotpieRuntime(chatId: string) {
       chatId,
       message,
       [], // @ts-ignore
+      [], // No images for this function
       (message: string, tool_calls: any[]) => {
         setIsRunning(false);
         setExtras({ loading: false, streaming: true, error: false });
@@ -144,12 +248,38 @@ export function PotpieRuntime(chatId: string) {
   };
 
   const onNew = async (message: AppendMessage) => {
-    if (message.content.length !== 1 || message.content[0]?.type !== "text")
-      throw new Error("Only text content is supported");
+    // Prevent new messages during background tasks
+    if (backgroundTaskActive) {
+      console.warn("Cannot send message while background task is active");
+      return;
+    }
 
+    // Extract text content
+    const textContent = message.content.find(c => c.type === "text");
+    if (!textContent) {
+      throw new Error("Message must contain text content");
+    }
+
+    // Only extract images if multimodal enabled
+    const images: File[] = isMultimodalEnabled()
+      ? (message.runConfig?.custom?.images as File[]) || []
+      : [];
+
+    // Create image content for display (only if enabled)
+    const imageContent = isMultimodalEnabled()
+      ? images.map(image => ({
+          type: "image" as const,
+          image: URL.createObjectURL(image)
+        }))
+      : [];
+
+    // Create user message with both text and images
     const userMessage: ThreadMessageLike = {
       role: "user",
-      content: [{ type: "text", text: message.content[0].text }],
+      content: [
+        { type: "text", text: textContent.text },
+        ...imageContent
+      ],
     };
     setIsRunning(true);
     setMessages((currentMessages) => [...currentMessages, userMessage]);
@@ -160,8 +290,9 @@ export function PotpieRuntime(chatId: string) {
     try {
       await ChatService.streamMessage(
         chatId,
-        message.content[0].text,
-        (message.runConfig?.custom?.selectedNodes as any[]) || [], // @ts-ignore
+        textContent.text,
+        (message.runConfig?.custom?.selectedNodes as any[]) || [],
+        images, // Pass images to the service
         (message: string, tool_calls: any[]) => {
           setIsRunning(false);
           setExtras({ loading: false, streaming: true, error: false });

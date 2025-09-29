@@ -9,6 +9,7 @@ import {
   LucideFileText,
   MessagesSquare,
   Zap,
+  Plug,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -130,6 +131,17 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     ],
   },
   {
+    title: "Integrations",
+    links: [
+      {
+        icons: <Plug size={20} strokeWidth={1.5} />,
+        title: "Integrations",
+        href: "/integrations",
+        disabled: false,
+      },
+    ],
+  },
+  {
     title: "Knowledge Base",
     links: [
       {
@@ -156,13 +168,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         title: "VS Code",
         href: "https://marketplace.visualstudio.com/items?itemName=PotpieAI.potpie-vscode-extension",
         disabled: false,
-      },
-      {
-        icons: <Slack size={20} strokeWidth={1.5} />,
-        title: "Slack",
-        href: "https://slack.potpie.ai/slack/install",
-        disabled: false,
-        description: "New",
       },
     ],
   },

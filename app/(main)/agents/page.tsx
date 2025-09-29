@@ -16,7 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { InfoIcon, Plus, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { MultiSelect } from "@/components/ui/multi-select";
+import ToolSelector from "@/components/agent-creation/ToolSelector";
 import { Skeleton } from "@/components/ui/skeleton";
 import getHeaders from "@/app/utils/headers.util";
 import { useEffect, useLayoutEffect, useState } from "react";
@@ -36,15 +36,12 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { planTypesEnum } from "@/lib/Constants";
 import AgentService from "@/services/AgentService";
-import { generateHmacSignature } from "@/app/utils/hmac.util";
 
 const CustomAgent: React.FC = () => {
   const searchParams = useSearchParams();
   const agentIdParam = searchParams.get("edit");
   const userId = auth.currentUser?.uid || "";
-  const { planType } = useSelector(
-    (state: RootState) => state.UserInfo
-  );
+  const { planType } = useSelector((state: RootState) => state.UserInfo);
   const { data: agentDetails, isLoading: agentDetailsLoading } = useQuery({
     queryKey: ["agents", agentIdParam],
     queryFn: async () => {
@@ -78,10 +75,10 @@ const CustomAgent: React.FC = () => {
       goal: "",
       backstory: "",
       tasks: [
-        { 
-          description: "", 
-          tools: [""], 
-          expected_output: "" 
+        {
+          description: "",
+          tools: [""],
+          expected_output: "",
         },
       ],
     },
@@ -162,7 +159,7 @@ const CustomAgent: React.FC = () => {
   useEffect(() => {
     if (agentDetails) {
       console.log("Setting form with agent details:", agentDetails);
-      
+
       try {
         form.reset({
           system_prompt: agentDetails.system_prompt || "",
@@ -173,14 +170,16 @@ const CustomAgent: React.FC = () => {
             ? agentDetails.tasks.map((task: any) => ({
                 description: task.description || "",
                 tools: Array.isArray(task.tools) ? task.tools : [],
-                expected_output: JSON.stringify(task.expected_output, null, 2)
+                expected_output: JSON.stringify(task.expected_output, null, 2),
               }))
             : [{ description: "", tools: [""], expected_output: "" }],
         });
 
         setSelectedTools(
           Array.isArray(agentDetails.tasks)
-            ? agentDetails.tasks.map((task: any) => Array.isArray(task.tools) ? task.tools : [])
+            ? agentDetails.tasks.map((task: any) =>
+                Array.isArray(task.tools) ? task.tools : []
+              )
             : [[]]
         );
         console.log("Form reset complete");
@@ -232,24 +231,26 @@ const CustomAgent: React.FC = () => {
       // Process the form values to parse JSON strings into objects
       const processedValues = {
         ...values,
-        tasks: values.tasks.map(task => {
+        tasks: values.tasks.map((task) => {
           let parsedOutput;
           try {
-            parsedOutput = task.expected_output ? JSON.parse(task.expected_output) : {};
-            console.log('Parsed output:', parsedOutput); // Debug log
+            parsedOutput = task.expected_output
+              ? JSON.parse(task.expected_output)
+              : {};
+            console.log("Parsed output:", parsedOutput); // Debug log
           } catch (e) {
-            console.error('JSON parse error:', e);
-            toast.error('Invalid JSON format in expected output');
-            throw new Error('Invalid JSON format in expected output');
+            console.error("JSON parse error:", e);
+            toast.error("Invalid JSON format in expected output");
+            throw new Error("Invalid JSON format in expected output");
           }
           return {
             ...task,
-            expected_output: parsedOutput
+            expected_output: parsedOutput,
           };
-        })
+        }),
       };
 
-      console.log('Submitting values:', processedValues); // Debug log
+      console.log("Submitting values:", processedValues); // Debug log
 
       if (agentIdParam) {
         await updateCustomAgentForm.mutateAsync(processedValues);
@@ -257,8 +258,10 @@ const CustomAgent: React.FC = () => {
         await submitCustomAgentForm.mutateAsync(processedValues);
       }
     } catch (error) {
-      console.error('Form submission error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to submit form');
+      console.error("Form submission error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to submit form"
+      );
     }
   };
 
@@ -404,26 +407,14 @@ const CustomAgent: React.FC = () => {
                                   </Tooltip>
                                 </FormLabel>
                                 {!toolsLoading && toolsData ? (
-                                  <MultiSelect
-                                    options={toolsData.map(
-                                      (tool: { id: string; name: string; description: string }) => ({
-                                        value: tool.id,
-                                        label: tool.name,
-                                        description: tool.description,
-                                      })
-                                    )}
-                                    defaultValue={
-                                      Array.isArray(field.value) &&
-                                      field.value.length === 1 &&
-                                      field.value[0] === ""
-                                        ? []
-                                        : field.value
-                                    }
-                                    value={selectedTools[idx] || []}
-                                    onValueChange={(tools) =>
+                                  <ToolSelector
+                                    availableTools={toolsData}
+                                    selectedTools={selectedTools[idx] || []}
+                                    isLoading={toolsLoading}
+                                    onChange={(tools: string[]) =>
                                       handleToolChange(idx, tools)
                                     }
-                                    placeholder="Select tools"
+                                    placeholderText="Select tools"
                                   />
                                 ) : (
                                   <Skeleton className="w-full h-10" />
@@ -445,7 +436,8 @@ const CustomAgent: React.FC = () => {
                                     </TooltipTrigger>
                                     <TooltipContent>
                                       <p>
-                                        The expected output format for this task.
+                                        The expected output format for this
+                                        task.
                                       </p>
                                     </TooltipContent>
                                   </Tooltip>
@@ -472,7 +464,7 @@ const CustomAgent: React.FC = () => {
                               append({
                                 description: "",
                                 tools: [""],
-                                expected_output: ""
+                                expected_output: "",
                               })
                             }
                           >
@@ -492,8 +484,7 @@ const CustomAgent: React.FC = () => {
           submitForm={form.handleSubmit(onSubmit)}
           update={!!agentIdParam}
           primaryBtnLoading={
-            updateCustomAgentForm.isPending ||
-            submitCustomAgentForm.isPending
+            updateCustomAgentForm.isPending || submitCustomAgentForm.isPending
           }
         />
       </Stepper>

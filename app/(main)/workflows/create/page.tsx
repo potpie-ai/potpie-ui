@@ -1,554 +1,125 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import AgentService from "@/services/AgentService";
-import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
-import WorkflowService, { Trigger } from "@/services/WorkflowService";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { WorkflowEditor } from "../components/editor/WorkflowEditor";
+import { Workflow } from "@/services/WorkflowService";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import { promise, z } from "zod";
-import { MultiSelectDropdown } from "../components/trigger-select";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
-import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, Folder, GitBranch, Github, Plus, RefreshCcw } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { useQuery } from "@tanstack/react-query";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import Link from "next/link";
-
-const formSchema = z.object({
-  title: z.string().min(3, {
-    message: "Title must be at least 3 characters.",
-  }),
-  description: z.string().optional(),
-  repo_name: z.string().nonempty(),
-  branch: z.string().nonempty(),
-  agent_id: z.string().nonempty(),
-  triggers: z.array(z.string()).min(1, {
-    message: "Please select at least one trigger.",
-  }),
-  task: z.string().min(20, {
-    message: "must be at least 20 characters.",
-  }),
-});
-
-interface Agent {
-  id: string;
-  name: string;
-  description: string;
-}
-
-interface Template {
-  title: string;
-  description?: string;
-  agent_id: string;
-  triggers: string[];
-  task: string;
-}
+import { LucideLoader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { parseApiError } from "@/lib/utils";
 
 export default function CreateWorkflowPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [template, setTemplate] = useState<Template | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [templateWorkflow, setTemplateWorkflow] = useState<Workflow | null>(
+    null
+  );
 
+  // Handle template parameter from URL
   useEffect(() => {
     const templateParam = searchParams.get("template");
     if (templateParam) {
       try {
-        // Parse the JSON string from the query parameter
-        const parsedTemplate: Template = JSON.parse(templateParam);
-        setTemplate(parsedTemplate);
-        form.setValue("title", parsedTemplate.title);
-        form.setValue("description", parsedTemplate.description);
-        // form.setValue("agent_id", _workflow.agent_id);
-        form.setValue("triggers", parsedTemplate.triggers);
-        form.setValue("task", parsedTemplate.task);
+        const template = JSON.parse(templateParam);
+        if (template.graph) {
+          // Create a workflow from template
+          const now = new Date().toISOString();
+          const workflowFromTemplate: Workflow = {
+            id: "",
+            title: template.title || "New Workflow from Template",
+            description: template.description || "",
+            created_by: "",
+            created_at: now,
+            updated_at: now,
+            is_paused: false,
+            version: "1.0.0",
+            graph: {
+              id: "graph-" + Math.random().toString(36).substr(2, 9),
+              workflow_id: "",
+              nodes: template.graph.nodes || {},
+              adjacency_list: template.graph.adjacency_list || {},
+              created_at: now,
+              updated_at: now,
+            },
+            variables: {},
+          };
+          setTemplateWorkflow(workflowFromTemplate);
+        }
       } catch (error) {
-        console.error("Failed to parse template:", error);
+        console.error("Error parsing template:", error);
+        toast.error("Failed to load template");
       }
     }
   }, [searchParams]);
 
-  const [repoOpen, setRepoOpen] = useState(false);
-  const [repoName, setRepoName] = useState("");
-  const [searchValue, setSearchValue] = useState("");
-  const [isValidLink, setIsValidLink] = useState(false);
-  const [linkedRepoName, setLinkedRepoName] = useState<string | null>(null);
-  const [inputValue, setInputValue] = useState("");
-  const [branchOpen, setBranchOpen] = useState(false);
-  const [branchName, setBranchName] = useState("");
-
-  const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
-  const [triggers, setTriggers] = useState<Trigger[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function fetchData() {
-    setLoading(true);
-    const _triggers = await WorkflowService.getAllTriggers();
-    const agents = await AgentService.getAgentTypes();
-    setAvailableAgents(
-      agents
-        .filter((agent: any) => agent.status != "SYSTEM")
-        .map((agent: any) => ({
-          id: agent.id,
-          name: agent.name,
-          description: agent.description,
-        }))
-    );
-    setTriggers(_triggers);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery(
-    {
-      queryKey: ["user-repository"],
-      queryFn: async () => {
-        const repos =
-          await BranchAndRepositoryService.getUserRepositories().then(
-            (data) => {
-              return data;
-            }
-          );
-        return repos;
-      },
-    }
-  );
-
-  const { data: UserBranch, isLoading: UserBranchLoading } = useQuery({
-    queryKey: ["user-branch", repoName],
-    queryFn: () => {
-      const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
-      const match = repoName.match(regex);
-      if (match) {
-        const ownerRepo = `${match[1]}/${match[2]}`;
-        return BranchAndRepositoryService.getBranchList(ownerRepo);
-      }
-      return BranchAndRepositoryService.getBranchList(repoName).then((data) => {
-        // Auto-select branch if there's only one
-        if (data?.length === 1) {
-          setBranchName(data[0]);
-        }
-        return data;
-      });
-    },
-    enabled: !!repoName && repoName !== "",
-  });
-
-  const handleRepoSelect = (repo: string) => {
-    setRepoName(repo);
-    setInputValue(repo);
-    setLinkedRepoName(null);
-  };
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      title: "",
-    },
-  });
-
-  useEffect(() => {
-    form.setValue("repo_name", repoName);
-    form.setValue("branch", branchName);
-  }, [repoName, branchName, form]);
-
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  const handleSave = async (workflow: Workflow, isNewWorkflow: boolean) => {
     try {
-      const workflow = await WorkflowService.createWorkflow({
-        title: values.title,
-        description: values.description || "",
-        triggers: values.triggers,
-        repo_name: values.repo_name,
-        branch: values.branch,
-        agent_id: values.agent_id,
-        task: values.task,
-      });
-      if (workflow) {
-        router.push(`/workflows/${workflow.id}`);
+      setLoading(true);
+
+      if (isNewWorkflow) {
+        toast.success("Workflow created successfully!");
+
+        // Add a small delay to ensure the toast is shown before redirect
+        setTimeout(() => {
+          try {
+            router.push(`/workflows/${workflow.id}?mode=edit`);
+          } catch (error) {
+            // Fallback: try window.location if router fails
+            window.location.href = `/workflows/${workflow.id}?mode=edit`;
+          }
+        }, 100);
+      } else {
+        toast.success("Workflow saved successfully!");
       }
     } catch (error) {
-      console.error("Error creating workflow:", error);
-      console.error("Error updating workflow:", error);
-      toast.error("Error updating workflow. Please try again.");
+      console.error("Error saving workflow:", error);
+      const errorMessage = parseApiError(error);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleCancel = () => {
+    // Navigate back to workflows list
+    router.push("/workflows");
+  };
+
+  const handleModeChange = (newMode: "view_only" | "edit" | "preview") => {
+    // In create mode, we only support edit mode
+    if (newMode !== "edit") {
+      return;
+    }
+  };
+
+  const handleExecutionsClick = () => {
+    // In create mode, executions don't exist yet, so we can either:
+    // 1. Do nothing
+    // 2. Show a toast message
+    // 3. Redirect to workflows list
+    toast.info("Executions are only available after the workflow is created.");
+  };
+
+  if (loading) {
+    return (
+      <div className="flex w-full h-svh items-center justify-center">
+        <LucideLoader2 className="w-12 h-12 animate-spin" />
+      </div>
+    );
   }
 
   return (
-    <div className="p-8">
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <FormField
-            control={form.control}
-            name="title"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <Input
-                    autoFocus
-                    className="rounded-none p-0 focus-visible:ring-0 focus-visible:ring-offset-0
-                    focus:ring-0 focus:ring-offset-0 focus:outline-none w-1/2
-                    border-none outline-none text-4xl font-bold placeholder:italic placeholder:text-gray-300"
-                    placeholder="Enter workflow title"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage className="text-red-500 italic" />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem className="mt-2">
-                <FormControl>
-                  <Textarea
-                    {...field}
-                    placeholder="Enter a detailed description..."
-                    className="p-0 focus-visible:ring-0 focus-visible:ring-offset-0
-                    focus:ring-0 focus:ring-offset-0 focus:outline-none w-1/2
-                    border-none outline-none placeholder:italic placeholder:text-gray-300"
-                  />
-                </FormControl>
-                <FormMessage className="text-red-500 italic" />
-              </FormItem>
-            )}
-          />
-
-          <Label className="mt-8">
-            Select a repository and a branch ({" "}
-            <span className="italic">
-              for github triggers, we will use the branch from github
-              automatically
-            </span>{" "}
-            )
-          </Label>
-          <div className="flex gap-4 w-1/2 mt-2">
-            <Popover open={repoOpen} onOpenChange={setRepoOpen}>
-              <PopoverTrigger asChild className="flex-1">
-                {UserRepositorys?.length === 0 || !repoName ? (
-                  <Button
-                    className="flex gap-3 items-center font-semibold justify-start"
-                    variant="outline"
-                  >
-                    <Github
-                      className="h-4 w-4 text-[#7A7A7A]"
-                      strokeWidth={1.5}
-                    />
-                    Select Repository
-                  </Button>
-                ) : (
-                  <Button
-                    className="flex gap-3 items-center font-semibold justify-start"
-                    variant="outline"
-                  >
-                    {repoName.startsWith("/") ||
-                    repoName.includes(":\\") ||
-                    repoName.includes(":/") ? (
-                      <Folder
-                        className="h-4 w-4 text-[#7A7A7A]"
-                        strokeWidth={1.5}
-                      />
-                    ) : (
-                      <Github
-                        className="h-4 w-4 text-[#7A7A7A]"
-                        strokeWidth={1.5}
-                      />
-                    )}
-                    <span className="truncate text-ellipsis whitespace-nowrap">
-                      {repoName}
-                    </span>
-                  </Button>
-                )}
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                <Command defaultValue={undefined}>
-                  <CommandInput
-                    value={searchValue}
-                    onValueChange={(e) => {
-                      setSearchValue(e);
-                    }}
-                    placeholder="Search repo.."
-                  />
-                  <CommandList>
-                    <CommandEmpty>
-                      {searchValue &&
-                      searchValue.trim() !== "" &&
-                      (searchValue.startsWith("/") ||
-                        searchValue.includes(":\\") ||
-                        searchValue.includes(":/")) &&
-                      searchValue &&
-                      searchValue.trim() !== ""
-                        ? "No repositories found."
-                        : "No results found."}
-                    </CommandEmpty>
-
-                    <CommandGroup>
-                      {isValidLink && linkedRepoName && (
-                        <CommandItem
-                          value={linkedRepoName}
-                          onSelect={() => handleRepoSelect(linkedRepoName)}
-                        >
-                          {linkedRepoName}
-                        </CommandItem>
-                      )}
-                      {UserRepositorys?.map((value: any) => (
-                        <CommandItem
-                          key={value.id}
-                          value={value.full_name}
-                          onSelect={(value) => {
-                            setRepoName(value);
-                            setRepoOpen(false);
-                          }}
-                        >
-                          {value.full_name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-
-            {UserBranchLoading ? (
-              <Skeleton className="flex-1 h-10" />
-            ) : (
-              <Popover open={branchOpen} onOpenChange={setBranchOpen}>
-                <PopoverTrigger asChild className="flex-1">
-                  {UserBranch?.length === 0 || !branchName ? (
-                    <Button
-                      className="flex gap-3 items-center font-semibold justify-start"
-                      variant="outline"
-                    >
-                      <GitBranch
-                        className="h-4 w-4 text-[#7A7A7A] "
-                        strokeWidth={1.5}
-                      />
-                      Select Branch
-                    </Button>
-                  ) : (
-                    <Button
-                      className="flex gap-3 items-center font-semibold w-[220px] justify-start"
-                      variant="outline"
-                    >
-                      <GitBranch
-                        className="h-4 w-4 text-[#7A7A7A] "
-                        strokeWidth={1.5}
-                      />
-                      <span className="truncate text-ellipsis whitespace-nowrap">
-                        {branchName}
-                      </span>
-                    </Button>
-                  )}
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                  <Command defaultValue={undefined}>
-                    <CommandInput placeholder="Search branch..." />
-                    <CommandList>
-                      <CommandEmpty>No branch found.</CommandEmpty>
-                      <CommandGroup>
-                        {UserBranch?.map((value: any) => (
-                          <CommandItem
-                            key={value}
-                            value={value}
-                            onSelect={(value) => {
-                              setBranchName(value);
-                              setBranchOpen(false);
-                            }}
-                          >
-                            {value}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
-          <FormField
-            control={form.control}
-            name="triggers"
-            render={({ field }) => (
-              <FormItem className="mt-8">
-                <FormLabel>
-                  Triggers <FormMessage className="text-red-500 italic" />
-                </FormLabel>
-                <FormControl>
-                  <MultiSelectDropdown
-                    options={triggers.map((trigger) => ({
-                      label: trigger.name,
-                      value: trigger.id,
-                    }))}
-                    value={field.value || []}
-                    onChange={field.onChange}
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="agent_id"
-            render={({ field }) => (
-              <FormItem className="mt-8">
-                <FormLabel className="inline-flex items-center gap-2">
-                  Choose an agent to use for the trigger:{" "}
-                  <FormMessage className="text-red-500 italic" />
-                  <RefreshCcw
-                    className={`h-4 w-4 cursor-pointer ${loading ? "animate-spin" : ""}`}
-                    onClick={() => fetchData()}
-                  />
-                </FormLabel>
-                <div>
-                  <Label className="text-xs text-gray-400 italic">
-                    Note: Make sure to add necessary tools to the agent you
-                    select to complete the task. Make sure you have integrated
-                    with platform you are asking the agent to take action on
-                  </Label>
-                </div>
-                <FormControl>
-                  <Carousel
-                    opts={{
-                      align: "start",
-                      slidesToScroll: 1,
-                    }}
-                    className="flex flex-row w-3/4 ml-12"
-                  >
-                    <CarouselPrevious type="button" />
-                    <CarouselNext type="button" />
-                    {availableAgents.length === 0 && loading && (
-                      <div className="flex items-center justify-start gap-4 w-full h-full">
-                        <Skeleton className="h-60 w-1/4 " />
-                        <Skeleton className="h-60 w-1/4 " />
-                        <Skeleton className="h-60 w-1/4 " />
-                        <Skeleton className="h-60 w-1/4 " />
-                      </div>
-                    )}
-                    <CarouselContent className="p-2">
-                      {availableAgents.map((agent) => (
-                        <CarouselItem key={agent.id} className="basis-1/4 ">
-                          <Card
-                            className={cn(
-                              "h-60 p-2 border rounded-lg cursor-pointer shadow-md",
-                              field.value === agent.id
-                                ? " bg-green-400/40 "
-                                : "border-gray-300 hover:shadow-sm hover:scale-95 transition-all ease-out"
-                            )}
-                            onClick={() => field.onChange(agent.id)}
-                          >
-                            <CardHeader className="flex items-center space-x-3 p-2">
-                              <Bot className="flex-shrink-0" />
-                              <CardTitle className="text-lg font-medium text-center">
-                                {agent.name}
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-2">
-                              <p className="text-sm text-gray-600 text-center">
-                                {agent.description}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        </CarouselItem>
-                      ))}
-                      {!loading && (
-                        <CarouselItem
-                          key={"create-agent"}
-                          className="basis-1/4 min-w-60"
-                        >
-                          <Link
-                            href={"/all-agents?createAgent=true"}
-                            target="_blank"
-                          >
-                            <Card
-                              className={cn(
-                                "h-60 p-2 border rounded-lg cursor-pointer shadow-md",
-                                field.value === "create-agent"
-                                  ? " bg-green-400/40 "
-                                  : "border-gray-300 hover:shadow-sm hover:scale-95 transition-all ease-out"
-                              )}
-                            >
-                              <CardHeader className="flex items-center space-x-3 p-2">
-                                <Bot className="flex-shrink-0" />
-                                <CardTitle className="text-lg font-medium text-center">
-                                  {"Create a new custom agent"}
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="p-2 flex items-center justify-center">
-                                <Plus className="h-10 w-10" />
-                              </CardContent>
-                            </Card>
-                          </Link>
-                        </CarouselItem>
-                      )}
-                    </CarouselContent>
-                  </Carousel>
-                </FormControl>
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="task"
-            render={({ field }) => (
-              <FormItem className="mt-8">
-                <FormLabel>
-                  Task <FormMessage className="text-red-500 italic" />
-                </FormLabel>
-                <FormControl>
-                  <Textarea
-                    {...field}
-                    placeholder="Enter a detailed task for agent to perform..."
-                    rows={1}
-                    className=" min-h-20 max-h-[200px] overflow-y-auto transition-all duration-200 ease-in-out w-1/2 placeholder:text-gray-400"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <Button type="submit" className="mt-8">
-            Save
-          </Button>
-        </form>
-      </Form>
+    <div className="h-[100vh] w-full overflow-hidden">
+      <WorkflowEditor
+        workflow={templateWorkflow || undefined}
+        mode="edit"
+        onSave={handleSave}
+        onCancel={handleCancel}
+        onModeChange={handleModeChange}
+        onExecutionsClick={handleExecutionsClick}
+      />
     </div>
   );
 }

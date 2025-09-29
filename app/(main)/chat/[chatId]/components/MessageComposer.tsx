@@ -1,7 +1,7 @@
 import getHeaders from "@/app/utils/headers.util";
-import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { isMultimodalEnabled } from "@/lib/utils";
 import {
   Command,
   CommandEmpty,
@@ -34,12 +34,17 @@ import {
   X,
   Loader2Icon,
   Crown,
+  ImageIcon,
+  Paperclip,
 } from "lucide-react";
 import { FC, useRef, useState, KeyboardEvent, useEffect } from "react";
 import ChatService from "@/services/ChatService";
 import Image from "next/image";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import { useQuery } from "@tanstack/react-query";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
@@ -69,6 +74,11 @@ const MessageComposer = ({
   conversation_id,
   setSelectedNodesInConfig,
 }: MessageComposerProps) => {
+  const { backgroundTaskActive } = useSelector((state: RootState) => state.chat);
+
+  // Modify the disabled prop logic in the component
+  const isDisabled = disabled || backgroundTaskActive;
+
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
 
   const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>(nodes);
@@ -83,8 +93,13 @@ const MessageComposer = ({
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
   const [isTextareaDisabled, setIsTextareaDisabled] = useState(false);
+  const [images, setImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
@@ -115,6 +130,19 @@ const MessageComposer = ({
       setMessage(composer.getState().text);
     }
   });
+
+  // Update config when images or nodes change
+  useEffect(() => {
+    composer.setRunConfig({
+      custom: {
+        selectedNodes: selectedNodes,
+        images: images
+      }
+    });
+  }, [selectedNodes, images, composer]);
+
+  // Use a flag to prevent double processing
+  const processingPaste = useRef(false);
 
   const handleNodeSelect = (node: NodeOption) => {
     const cursorPosition = messageRef.current?.selectionStart || 0;
@@ -248,9 +276,135 @@ const MessageComposer = ({
   };
 
   const handleSend = () => {
+    // For now, we'll handle images through the runtime custom config
+    // The actual image handling will be done in the runtime when onNew is called
+    
     composer.send();
     setMessage("");
     setSelectedNodes([]);
+    setImages([]);
+    setImagePreviews([]);
+  };
+
+  const handleImageSelect = (files: FileList | null) => {
+    if (!files) return;
+    
+    const newImages = Array.from(files).filter(file => 
+      file.type.startsWith('image/')
+    );
+    
+    if (newImages.length === 0) return;
+    
+    setImages(prev => [...prev, ...newImages]);
+    
+    // Generate previews
+    newImages.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setImagePreviews(prev => [...prev, e.target!.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImagePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled()) return;
+
+    // Prevent double processing
+    if (processingPaste.current) return;
+    processingPaste.current = true;
+    
+    console.log('Paste event triggered', e.clipboardData?.items);
+    const items = e.clipboardData?.items;
+    if (!items) {
+      processingPaste.current = false;
+      return;
+    }
+
+    let hasImage = false;
+    const newImages: File[] = [];
+    
+    for (const item of Array.from(items)) {
+      console.log('Clipboard item:', item.type, item.kind);
+      if (item.type.startsWith('image/')) {
+        hasImage = true;
+        e.preventDefault();
+        const file = item.getAsFile();
+        console.log('Image file:', file);
+        if (file) {
+          newImages.push(file);
+        }
+      }
+    }
+    
+    if (hasImage && newImages.length > 0) {
+      console.log('Image detected and processed:', newImages.length);
+      
+      // Add images to state
+      setImages(prev => [...prev, ...newImages]);
+      
+      // Generate previews
+      newImages.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (e.target?.result) {
+            setImagePreviews(prev => [...prev, e.target!.result as string]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    
+    // Reset the flag after a short delay
+    setTimeout(() => {
+      processingPaste.current = false;
+    }, 100);
+  };
+
+  // Add keyboard paste handler as backup
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      // Let the paste event handle it
+      return;
+    }
+    
+    // Handle existing key functionality if needed
+    if (e.target === messageRef.current) {
+      handleKeyPress(e as any);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files) {
+      handleImageSelect(files);
+    }
   };
 
   const [currPlan, setCurrPlan] = useState<string | undefined>(undefined);
@@ -260,23 +414,37 @@ const MessageComposer = ({
     name: string;
     id: string;
   } | null>(null);
+  
+  // Use React Query to fetch user subscription (same as Sidebar to avoid duplicate calls)
+  const { data: userSubscription } = useQuery({
+    queryKey: ["userSubscription", user?.uid],
+    queryFn: () => MinorService.fetchUserSubscription(user?.uid as string),
+    enabled: !!user?.uid,
+    retry: false,
+  });
+
+  // Update currPlan when userSubscription data changes
+  useEffect(() => {
+    if (userSubscription?.plan_type) {
+      setCurrPlan(userSubscription.plan_type);
+    }
+  }, [userSubscription?.plan_type]);
+
   const loadCurrentModel = async () => {
     try {
-      const data = await MinorService.fetchUserSubscription(user?.uid);
-      setCurrPlan(data.plan_type);
+      const res = await ModelService.getCurrentModel();
+      if (res && res.chat_model) {
+        setCurrentModel({
+          provider: res.chat_model.provider,
+          name: res.chat_model.name,
+          id: res.chat_model.id,
+        });
+      }
     } catch (error) {
-      console.error("Error fetching user plan: ", error);
+      console.error("Error fetching current model: ", error);
     }
-    const res = await ModelService.getCurrentModel();
-
-    res &&
-      res.chat_model &&
-      setCurrentModel({
-        provider: res.chat_model.provider,
-        name: res.chat_model.name,
-        id: res.chat_model.id,
-      });
   };
+
   useEffect(() => {
     loadCurrentModel();
   }, []);
@@ -291,36 +459,29 @@ const MessageComposer = ({
           disabled={disabled}
         />
         <div className="flex items-center justify-end">
-          <TooltipIconButton
-            tooltip="Enhance Prompt"
-            variant="default"
-            className="size-8 p-2 transition ease-in bg-white hover:bg-orange-200"
+          <button
+            type="button"
+            title="Enhance Prompt"
+            className="size-8 p-2 transition ease-in bg-white hover:bg-orange-200 rounded-md flex items-center justify-center"
             onClick={handleEnhancePrompt}
           >
             <span className="text-lg">✨</span>
-          </TooltipIconButton>
+          </button>
         </div>
         <ThreadPrimitive.If running={false}>
-          <TooltipIconButton
-            disabled={disabled}
-            tooltip="Send"
-            variant="default"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in"
+          <button
+            type="button"
+            disabled={isDisabled}
+            title="Send"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100"
             onClick={handleSend}
           >
             <SendHorizontalIcon />
-          </TooltipIconButton>
+          </button>
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
-          <ComposerPrimitive.Cancel asChild>
-            <TooltipIconButton
-              disabled={disabled}
-              tooltip="Cancel"
-              variant="default"
-              className="my-2.5 size-8 p-2 transition-opacity ease-in"
-            >
-              <CircleStopIcon />
-            </TooltipIconButton>
+          <ComposerPrimitive.Cancel className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer">
+            <CircleStopIcon />
           </ComposerPrimitive.Cancel>
         </ThreadPrimitive.If>
       </div>
@@ -355,30 +516,97 @@ const MessageComposer = ({
             className="flex flex-row items-center justify-center p-2 m-2 rounded-full bg-[#f7e6e6] shadow-sm"
           >
             <span>{node.name}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-2 h-4 w-4 hover:bg-red-400/50 hover:scale-105 hover:shadow-md transition ease-out"
+            <button
+              type="button"
+              className="ml-2 h-4 w-4 hover:bg-red-400/50 hover:scale-105 hover:shadow-md transition ease-out rounded-sm flex items-center justify-center"
               onClick={() => handleNodeDeselect(node)}
             >
               <X className="w-4 h-4" />
-            </Button>
+            </button>
           </div>
         ))}
       </div>
-      <div className="flex flex-col w-full items-start gap-4">
-        <ComposerPrimitive.Input
-          submitOnEnter={!disabled}
-          ref={messageRef}
-          value={message}
-          rows={1}
-          autoFocus
-          placeholder={"Type @ followed by file or function name"}
-          onChange={handleMessageChange}
-          onKeyDown={handleKeyPress}
-          className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
-        />
-        <ComposerAction disabled={disabled} />
+      <div 
+        ref={containerRef}
+        className={`flex flex-col w-full items-start gap-4 transition-all duration-200 ${
+          isDragOver ? 'bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg p-2' : ''
+        }`}
+        onPaste={handleImagePaste}
+        onKeyDown={handleKeyDown}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        tabIndex={0}
+        style={{ outline: 'none' }}
+      >
+        {/* Drag over indicator */}
+        {isMultimodalEnabled() && isDragOver && (
+          <div className="flex items-center justify-center w-full py-8 text-blue-600">
+            <div className="text-center">
+              <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+              <p className="text-sm font-medium">Drop images here to upload</p>
+            </div>
+          </div>
+        )}
+
+        {/* Image Previews */}
+        {isMultimodalEnabled() && imagePreviews.length > 0 && !isDragOver && (
+          <div className="flex flex-wrap gap-2 px-4">
+            {imagePreviews.map((preview, index) => (
+              <div key={index} className="relative">
+                <img
+                  src={preview}
+                  alt={`Upload ${index + 1}`}
+                  className="w-20 h-20 object-cover rounded-lg border"
+                />
+                <div
+                  onClick={() => removeImage(index)}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        <div className="flex flex-row w-full items-end gap-2">
+          {/* Attachment Button - moved to left side */}
+          {isMultimodalEnabled() && (
+            <div className="flex items-center pb-4">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => handleImageSelect(e.target.files)}
+                accept="image/*"
+                multiple
+                className="hidden"
+              />
+              <button
+                type="button"
+                title="Attach Images"
+                className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          
+          <ComposerPrimitive.Input
+            submitOnEnter={!isDisabled}
+            ref={messageRef}
+            value={message}
+            rows={1}
+            autoFocus
+            placeholder={"Type @ followed by file or function name, or paste/upload images"}
+            onChange={handleMessageChange}
+            onKeyDown={handleKeyPress}
+            className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+          />
+        </div>
+        
+        <ComposerAction disabled={isDisabled} />
       </div>
     </div>
   );
@@ -475,24 +703,21 @@ const ModelSelection: FC<{
   return (
     <Dialog>
       {currentModel ? (
-        <DialogTrigger asChild>
-          <Button
-            variant={"secondary"}
-            className="p-2 transition ease-in bg-white hover:bg-gray-200"
-            disabled={disabled}
-            onClick={handleModelList}
-          >
-            <div className="flex flex-row justify-center items-center">
-              <Image
-                height={20}
-                width={20}
-                src={currentModel.provider + ".svg"}
-                alt={currentModel.provider.charAt(0)}
-              />
+        <DialogTrigger 
+          className="p-2 transition ease-in bg-white hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
+          disabled={disabled}
+          onClick={handleModelList}
+        >
+          <div className="flex flex-row justify-center items-center">
+            <Image
+              height={20}
+              width={20}
+              src={currentModel.provider + ".svg"}
+              alt={currentModel.provider.charAt(0)}
+            />
 
-              <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
-            </div>
-          </Button>
+            <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
+          </div>
         </DialogTrigger>
       ) : (
         <div className="flex flex-row items-center justify-center">

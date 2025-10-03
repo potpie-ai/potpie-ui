@@ -570,7 +570,7 @@ export default class ChatService {
   static async getAllChats() {
     const headers = await getHeaders();
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/user/conversations`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations`,
       {
         params: {
           start: 0,

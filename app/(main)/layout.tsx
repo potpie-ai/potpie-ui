@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/Layouts/Sidebar";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
+import { EmailVerificationBanner } from "@/components/auth/email-verification-banner";
 
 export default function RootLayout({
   children,
@@ -44,14 +45,17 @@ export default function RootLayout({
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <main
-          className={cn(
-            "flex flex-1 flex-col gap-4 lg:gap-6",
-            `${GeistSans.variable} ${GeistMono.variable}`
-          )}
-        >
-          {children}
-        </main>
+        <div className="flex h-screen w-full flex-col bg-muted/40">
+          <EmailVerificationBanner />
+          <main
+            className={cn(
+              "flex flex-1 flex-col gap-4 lg:gap-6",
+              `${GeistSans.variable} ${GeistMono.variable}`
+            )}
+          >
+            {children}
+          </main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

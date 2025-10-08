@@ -19,6 +19,15 @@ import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { useSearchParams } from "next/navigation";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 
 export default function Signin() {
   const searchParams = useSearchParams();
@@ -71,26 +80,53 @@ export default function Signin() {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         const user = userCredential.user;
         const headers = await getHeaders();
-        const userSignup = await axios
-          .post(`${baseUrl}/api/v1/signup`, user, { headers: headers })
-          .then((res) => {
-            if (source === "vscode") {
-              console.log("res.data", res.data);
-              handleExternalRedirect(res.data.token);
-            } else if (finalAgent_id) {
-              handleExternalRedirect("");
-            }
-            return res.data;
-          })
-          .catch((e) => {
-            toast.error("Signup call unsuccessful");
-          });
-        toast.success("Logged in successfully as " + user.displayName);
+
+        try {
+          const userSignup = await axios.post(
+            `${baseUrl}/api/v1/signup`,
+            {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || user.email?.split("@")[0],
+              emailVerified: user.emailVerified,
+              createdAt: user.metadata?.creationTime
+                ? new Date(user.metadata.creationTime).toISOString()
+                : "",
+              lastLoginAt: user.metadata?.lastSignInTime
+                ? new Date(user.metadata.lastSignInTime).toISOString()
+                : "",
+              providerData: user.providerData,
+              provider: "email",
+            },
+            { headers: headers }
+          );
+
+          if (source === "vscode") {
+            console.log("res.data", userSignup.data);
+            handleExternalRedirect(userSignup.data.token);
+          } else if (finalAgent_id) {
+            handleExternalRedirect("");
+          } else {
+            window.location.href = "/newchat";
+          }
+
+          toast.success("Logged in successfully");
+        } catch (e) {
+          console.error("API error:", e);
+          toast.error("Sign-in unsuccessful");
+        }
       })
       .catch((error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
-        toast.error(errorMessage);
+
+        if (errorCode === "auth/user-not-found" || errorCode === "auth/wrong-password") {
+          toast.error("Invalid email or password");
+        } else if (errorCode === "auth/too-many-requests") {
+          toast.error("Too many failed login attempts. Please try again later.");
+        } else {
+          toast.error(errorMessage);
+        }
       });
   };
 
@@ -127,24 +163,12 @@ export default function Signin() {
               email: result.user.email,
               name: result.user?.displayName || "",
             });
-            //if this is a new user
+
+            // Check if this is a new user - if so, reject sign-up via GitHub
             if (!userSignup.data.exists) {
-              // For new users, redirect to onboarding
-              toast.success(
-                "Account created successfully as " + result.user.displayName
-              );
-
-              const urlSearchParams = new URLSearchParams(
-                window.location.search
-              );
-              const plan = (
-                urlSearchParams.get("plan") ||
-                urlSearchParams.get("PLAN") ||
-                ""
-              ).toLowerCase();
-              const prompt = urlSearchParams.get("prompt") || "";
-
-              return (window.location.href = `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || "")}&name=${encodeURIComponent(result.user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(finalAgent_id || "")}`);
+              // New users cannot sign up with GitHub - redirect to sign-up page
+              toast.error("Please sign up with your work email address.");
+              return (window.location.href = "/sign-up");
             }
 
             if (source === "vscode") {
@@ -195,32 +219,78 @@ export default function Signin() {
           />
           <h1 className="text-7xl font-bold text-gray-700">potpie</h1>
         </div>
-        <div className="flex items-center justify-center flex-col text-border">
-          {/* <h3 className="text-2xl font-bold text-black">Get Started!</h3> */}
-          {/* <div className="flex items-start justify-start flex-col mt-10 gap-4">
-          <p className="flex items-center justify-center text-start gap-4">
-            <LucideCheck
-              size={20}
-              className="bg-primary rounded-full p-[0.5px] text-white"
-            />
-            Select the repositories you want to build your AI agents on.
-          </p>
-          <p className="flex items-center justify-center text-start gap-4">
-            <LucideCheck
-              size={20}
-              className="bg-primary rounded-full p-[0.5px] text-white"
-            />
-            You can choose to add more repositories later on from the
-            dashboard
-          </p>
-        </div> */}
+
+        <div className="flex items-center justify-center flex-col text-border w-full max-w-md px-6">
+          <h3 className="text-2xl font-bold text-black mb-6">Welcome back</h3>
+
+          {/* Email/Password Form */}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="you@company.com"
+                        type="email"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="••••••••"
+                        type="password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button
+                type="submit"
+                className="w-full"
+              >
+                Sign in
+              </Button>
+            </form>
+          </Form>
+
+          <div className="relative w-full my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
+          </div>
+
+          {/* GitHub Button - For existing users only */}
           <Button
             onClick={() => onGithub()}
-            className="mt-14 gap-2 w-60 hover:bg-black bg-gray-800"
+            className="w-full gap-2 hover:bg-black bg-gray-800"
           >
-            <LucideGithub className=" rounded-full border border-white p-1" />
-            Signin with GitHub
+            <LucideGithub className="rounded-full border border-white p-1" />
+            Sign in with GitHub
           </Button>
+
           <div className="mt-4 text-center text-sm text-black">
             Don&apos;t have an account?{" "}
             <Link href="/sign-up" className="underline">

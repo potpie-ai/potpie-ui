@@ -341,11 +341,12 @@ const UserMessageWithURL = (userPhotoURL: string) => {
 
 const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
   const message = useMessage();
-  
-  // Separate text and image content
+
+  // Separate text, image content, and attachments
   const textContent = message.content.find(c => c.type === "text");
   const imageContent = message.content.filter(c => c.type === "image");
-  
+  const attachments = (message as any).attachments || [];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -355,6 +356,44 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
+          {/* Document Attachments */}
+          {attachments.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {attachments.map((attachment: any, index: number) => {
+                // Handle both backend format (file_metadata) and frontend format (metadata, token_count)
+                const tokenCount = attachment.token_count || attachment.file_metadata?.token_count;
+                const metadata = attachment.metadata || attachment.file_metadata;
+
+                return (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 text-xs bg-white rounded-lg p-2 border"
+                  >
+                    <span className="text-lg">
+                      {attachment.attachment_type === 'pdf' && '📄'}
+                      {attachment.attachment_type === 'spreadsheet' && '📊'}
+                      {attachment.attachment_type === 'code' && '💻'}
+                      {attachment.attachment_type === 'document' && '📝'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{attachment.file_name}</div>
+                      {tokenCount && (
+                        <div className="text-gray-500">
+                          {tokenCount.toLocaleString()} tokens
+                        </div>
+                      )}
+                      {metadata?.page_count && (
+                        <div className="text-gray-400 text-xs">
+                          {metadata.page_count} pages
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Only render image previews if multimodal enabled and images exist */}
           {isMultimodalEnabled() && imageContent.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
@@ -369,14 +408,14 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
               ))}
             </div>
           )}
-          
+
           {/* Render text content */}
           {textContent && (
             <div className="break-words">{(textContent as any).text}</div>
           )}
-          
+
           {/* Fallback: if no custom content, use original */}
-          {imageContent.length === 0 && !textContent && (
+          {imageContent.length === 0 && !textContent && attachments.length === 0 && (
             <MessagePrimitive.Content />
           )}
         </div>

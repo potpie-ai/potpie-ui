@@ -45,6 +45,16 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { useQuery } from "@tanstack/react-query";
+import { DocumentAttachment, ValidationResponse } from "@/lib/types/attachment";
+import {
+  isDocumentType,
+  isImageType,
+  MAX_FILE_SIZE,
+  getSupportedFileExtensions
+} from "@/lib/utils/fileTypes";
+import { DocumentAttachmentCard } from "@/components/chat/DocumentAttachmentCard";
+import { ValidationErrorModal } from "@/components/chat/ValidationErrorModal";
+import { ContextUsageIndicator } from "@/components/chat/ContextUsageIndicator";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
@@ -96,6 +106,13 @@ const MessageComposer = ({
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [documents, setDocuments] = useState<DocumentAttachment[]>([]);
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState<{
+    validation: ValidationResponse;
+    file: File;
+  } | null>(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -131,15 +148,17 @@ const MessageComposer = ({
     }
   });
 
-  // Update config when images or nodes change
+  // Update config when images, documents, or nodes change
   useEffect(() => {
     composer.setRunConfig({
       custom: {
         selectedNodes: selectedNodes,
-        images: images
+        images: images,
+        documentIds: documents.map(doc => doc.id),
+        documents: documents // Pass full document objects for display
       }
     });
-  }, [selectedNodes, images, composer]);
+  }, [selectedNodes, images, documents, composer]);
 
   // Use a flag to prevent double processing
   const processingPaste = useRef(false);
@@ -276,27 +295,39 @@ const MessageComposer = ({
   };
 
   const handleSend = () => {
-    // For now, we'll handle images through the runtime custom config
-    // The actual image handling will be done in the runtime when onNew is called
-    
+    // Ensure config is set with current documents before sending
+    const documentIds = documents.map(doc => doc.id);
+    console.log('[MessageComposer] handleSend - documentIds:', documentIds);
+    console.log('[MessageComposer] handleSend - documents:', documents);
+
+    composer.setRunConfig({
+      custom: {
+        selectedNodes: selectedNodes,
+        images: images,
+        documentIds: documentIds,
+        documents: documents // Pass full document objects for display
+      }
+    });
+
     composer.send();
     setMessage("");
     setSelectedNodes([]);
     setImages([]);
     setImagePreviews([]);
+    setDocuments([]);
   };
 
   const handleImageSelect = (files: FileList | null) => {
     if (!files) return;
-    
-    const newImages = Array.from(files).filter(file => 
+
+    const newImages = Array.from(files).filter(file =>
       file.type.startsWith('image/')
     );
-    
+
     if (newImages.length === 0) return;
-    
+
     setImages(prev => [...prev, ...newImages]);
-    
+
     // Generate previews
     newImages.forEach(file => {
       const reader = new FileReader();
@@ -307,6 +338,63 @@ const MessageComposer = ({
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleDocumentSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const file = files[0]; // Single document at a time for now
+
+    // Client-side validation
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`File size exceeds 10MB limit. ${file.name} is ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+      return;
+    }
+
+    if (!isDocumentType(file.type)) {
+      alert(`Unsupported file type: ${file.type}\n\nSupported types: PDF, DOCX, CSV, XLSX, code files, markdown`);
+      return;
+    }
+
+    // Validate against context window
+    setValidating(true);
+    try {
+      const validation = await ChatService.validateDocument(conversation_id, file);
+
+      if (!validation.can_upload) {
+        // Show error modal
+        setValidationError({ validation, file });
+        return;
+      }
+
+      // Show warning if usage will be high
+      if (validation.usage_after_upload && validation.usage_after_upload > 80) {
+        console.warn(`High context usage after upload: ${validation.usage_after_upload}%`);
+      }
+
+      // Upload the document
+      setUploadingDocument(true);
+      const uploadResult = await ChatService.uploadAttachment(file);
+
+      // Get full metadata including token count
+      const attachmentInfo = await ChatService.getAttachmentInfo(uploadResult.id);
+
+      // Add to documents state
+      const documentAttachment: DocumentAttachment = {
+        ...uploadResult,
+        file,
+        token_count: attachmentInfo.file_metadata.token_count,
+        metadata: attachmentInfo.file_metadata,
+      };
+
+      setDocuments(prev => [...prev, documentAttachment]);
+    } catch (error: any) {
+      console.error('Document upload error:', error);
+      alert(`Failed to upload document: ${error.message}`);
+    } finally {
+      setValidating(false);
+      setUploadingDocument(false);
+    }
   };
 
   const handleImagePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
@@ -505,9 +593,39 @@ const MessageComposer = ({
     }
   };
 
+  const handleCloseValidationModal = () => {
+    setValidationError(null);
+  };
+
   return (
-    <div className="flex flex-col w-full p-2">
-      {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
+    <>
+      {/* Validation Error Modal */}
+      {validationError && (
+        <ValidationErrorModal
+          open={!!validationError}
+          onClose={handleCloseValidationModal}
+          validation={validationError.validation}
+          fileName={validationError.file.name}
+          fileSize={validationError.file.size}
+          onViewAttachments={() => {
+            // Scroll to attachments section
+            handleCloseValidationModal();
+          }}
+          onChangeModel={() => {
+            // Open model selector
+            handleCloseValidationModal();
+            // Trigger model dialog (you may need to add this functionality)
+          }}
+        />
+      )}
+
+      <div className="flex flex-col w-full p-2">
+        {/* Context Usage Indicator */}
+        <div className="px-2 mb-2">
+          <ContextUsageIndicator conversationId={conversation_id} />
+        </div>
+
+        {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
       <div className="flex flex-row">
         {/* display selected nodes */}
         {selectedNodes.map((node) => (
@@ -549,6 +667,38 @@ const MessageComposer = ({
           </div>
         )}
 
+        {/* Document Attachments */}
+        {documents.length > 0 && (
+          <div className="w-full px-4 space-y-2">
+            <div className="text-xs font-medium text-gray-600">
+              Documents ({documents.length})
+            </div>
+            {documents.map((doc, index) => (
+              <DocumentAttachmentCard
+                key={doc.id}
+                attachment={doc}
+                onRemove={() => {
+                  setDocuments(prev => prev.filter((_, i) => i !== index));
+                }}
+                onDownload={() => {
+                  ChatService.downloadAttachment(doc.id, doc.file_name);
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Validation/Upload Loading State */}
+        {(validating || uploadingDocument) && (
+          <div className="w-full px-4 py-2 text-sm text-gray-600 flex items-center gap-2">
+            <Loader2Icon className="w-4 h-4 animate-spin" />
+            <span>
+              {validating && 'Validating document...'}
+              {uploadingDocument && 'Uploading document...'}
+            </span>
+          </div>
+        )}
+
         {/* Image Previews */}
         {isMultimodalEnabled() && imagePreviews.length > 0 && !isDragOver && (
           <div className="flex flex-wrap gap-2 px-4">
@@ -577,14 +727,29 @@ const MessageComposer = ({
               <input
                 type="file"
                 ref={fileInputRef}
-                onChange={(e) => handleImageSelect(e.target.files)}
-                accept="image/*"
-                multiple
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
+
+                  const file = files[0];
+                  if (isImageType(file.type)) {
+                    handleImageSelect(files);
+                  } else if (isDocumentType(file.type)) {
+                    handleDocumentSelect(files);
+                  } else {
+                    alert('Unsupported file type');
+                  }
+
+                  // Reset input
+                  e.target.value = '';
+                }}
+                accept={getSupportedFileExtensions()}
+                multiple={false}
                 className="hidden"
               />
               <button
                 type="button"
-                title="Attach Images"
+                title="Attach Files"
                 className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -609,6 +774,7 @@ const MessageComposer = ({
         <ComposerAction disabled={isDisabled} />
       </div>
     </div>
+    </>
   );
 };
 

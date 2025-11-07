@@ -2050,6 +2050,7 @@ export default function VerticalTaskExecution() {
         text,
         [], // selectedNodes
         [], // images
+        [], // document attachment IDs
         (message: string) => {
           setChatMessages((prev) => {
             const next = [...prev];

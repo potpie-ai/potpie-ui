@@ -261,15 +261,18 @@ const createChatAdapter = (
         throw new Error("Message must contain text");
       }
 
-      // Extract custom config (selectedNodes)
+      // Extract custom config (selectedNodes, document attachment IDs for API)
       interface RunConfig {
         custom?: {
           selectedNodes?: unknown[];
+          documentIds?: string[];
         };
       }
       const runConfig = (context as { runConfig?: RunConfig }).runConfig;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
+      const documentIds =
+        (runConfig?.custom?.documentIds as string[]) || [];
 
       // Extract images from message attachments (the assistant-ui way)
       const images: File[] = [];
@@ -341,6 +344,7 @@ const createChatAdapter = (
           textContent.text,
           selectedNodes,
           images,
+          documentIds,
           (
             message: string,
             tool_calls: any[],
@@ -666,12 +670,23 @@ const convertToThreadMessage = (msg: BackendMessage): ThreadMessage => {
       });
     }
 
+    const documentAttachments =
+      (msg.attachments?.filter(
+        (a) =>
+          (a as { attachment_type?: string }).attachment_type &&
+          (a as { attachment_type?: string }).attachment_type !== "image"
+      ) as unknown[]) || [];
+
     return {
       id: msg.id,
       role: "user",
       content: content as ThreadUserMessage["content"],
       attachments,
-      metadata: { custom: {} },
+      metadata: {
+        custom: {
+          documentAttachments,
+        },
+      },
       createdAt,
     };
   }

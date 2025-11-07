@@ -3,6 +3,8 @@ import getHeaders from "@/app/utils/headers.util";
 import { Visibility } from "@/lib/Constants";
 import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
+import { getEffectiveMimeType } from "@/lib/utils/fileTypes";
+import { ValidationResponse, AttachmentUploadResponse, AttachmentInfo, ContextUsageResponse } from "@/lib/types/attachment";
 
 /** Tool call from message history / stream API */
 export interface ToolCall {
@@ -457,6 +459,7 @@ export default class ChatService {
     message: string,
     selectedNodes: any[],
     images: File[] = [],
+    attachmentIds: string[] = [],
     onMessageUpdate: (
       message: string,
       tool_calls: any[],
@@ -491,6 +494,10 @@ export default class ChatService {
 
       formData.append("content", message);
       formData.append("node_ids", JSON.stringify(selectedNodes));
+
+      if (attachmentIds.length > 0) {
+        formData.append("attachment_ids", JSON.stringify(attachmentIds));
+      }
 
       // Only process images if multimodal is enabled
       const enabledImages = isMultimodalEnabled() ? images : [];
@@ -1162,6 +1169,151 @@ export default class ChatService {
     } catch (error) {
       console.error("Error stopping message:", error);
       // Don't throw - we still want to clean up even if stop endpoint fails
+    }
+  }
+
+  static async validateDocument(
+    conversationId: string,
+    file: File
+  ): Promise<ValidationResponse> {
+    const headers = await getHeaders();
+    const formData = new FormData();
+
+    formData.append("conversation_id", conversationId);
+    formData.append("file_size", file.size.toString());
+    formData.append("file_name", file.name);
+    formData.append("mime_type", file.type);
+
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/validate-document`,
+        formData,
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("Document validation error:", error);
+      throw new Error(
+        error.response?.data?.detail || "Failed to validate document"
+      );
+    }
+  }
+
+  static async uploadAttachment(
+    file: File,
+    messageId?: string,
+    onProgress?: (progress: number) => void,
+    signal?: AbortSignal
+  ): Promise<AttachmentUploadResponse> {
+    const headers = await getHeaders();
+    const formData = new FormData();
+
+    const effectiveType = getEffectiveMimeType(file);
+    const uploadFile =
+      effectiveType !== file.type
+        ? new File([file], file.name, { type: effectiveType })
+        : file;
+
+    formData.append("file", uploadFile);
+    if (messageId) {
+      formData.append("message_id", messageId);
+    }
+
+    try {
+      const uploadHeaders = { ...headers };
+      delete (uploadHeaders as Record<string, string>)["Content-Type"];
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/upload`,
+        formData,
+        {
+          headers: uploadHeaders,
+          signal,
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total && onProgress) {
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              onProgress(percentCompleted);
+            }
+          },
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("File upload error:", error);
+      throw new Error(
+        error.response?.data?.detail || "Failed to upload file"
+      );
+    }
+  }
+
+  static async getAttachmentInfo(
+    attachmentId: string
+  ): Promise<AttachmentInfo> {
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/${attachmentId}/info`,
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("Get attachment info error:", error);
+      throw new Error(
+        error.response?.data?.detail || "Failed to get attachment info"
+      );
+    }
+  }
+
+  static async getContextUsage(
+    conversationId: string
+  ): Promise<ContextUsageResponse> {
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/context-usage`,
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("Get context usage error:", error);
+      throw new Error(
+        error.response?.data?.detail || "Failed to get context usage"
+      );
+    }
+  }
+
+  static async downloadAttachment(
+    attachmentId: string,
+    fileName: string
+  ): Promise<void> {
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/${attachmentId}/download`,
+        {
+          headers,
+          responseType: "blob",
+        }
+      );
+
+      const url = window.URL.createObjectURL(response.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      console.error("Download attachment error:", error);
+      throw new Error(
+        error.response?.data?.detail || "Failed to download attachment"
+      );
     }
   }
 }

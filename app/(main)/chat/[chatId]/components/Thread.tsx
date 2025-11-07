@@ -25,7 +25,6 @@ import {
   RefreshCwIcon,
   Loader,
 } from "lucide-react";
-import { isMultimodalEnabled, stripAssistantMarkers } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import {
@@ -33,7 +32,6 @@ import {
   StandaloneMarkdown,
 } from "@/components/assistant-ui/markdown-text";
 import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
-import { MonacoDiffView } from "@/components/diff-editor/MonacoDiffView";
 import MessageComposer from "./MessageComposer";
 import { motion } from "motion/react";
 import {
@@ -44,80 +42,7 @@ import {
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
-
-const looksLikeUnifiedDiff = (text: string | undefined | null): boolean => {
-  if (!text) return false;
-  const trimmed = text.trimStart();
-  if (!trimmed) return false;
-  const firstLines = trimmed.split("\n").slice(0, 10);
-  return firstLines.some((line) => {
-    const l = line.trimStart();
-    return (
-      l.startsWith("diff --git") ||
-      l.startsWith("--- ") ||
-      l.startsWith("+++ ") ||
-      l.startsWith("@@ ")
-    );
-  });
-};
-
-const extractPathFromDiff = (text: string | undefined | null): string => {
-  if (!text) return "patch.diff";
-  const lines = text.split("\n");
-  let candidatePath: string | null = null;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("+++ ")) {
-      const parts = trimmed.split(/\s+/);
-      const pathPart = (parts[1] ?? "").replace(/^a\//, "").replace(/^b\//, "");
-      if (pathPart && pathPart !== "/dev/null") {
-        return pathPart;
-      }
-      if (!candidatePath && pathPart) {
-        candidatePath = pathPart;
-      }
-    }
-    if (trimmed.startsWith("--- ")) {
-      const parts = trimmed.split(/\s+/);
-      const pathPart = (parts[1] ?? "").replace(/^a\//, "").replace(/^b\//, "");
-      if (pathPart && pathPart !== "/dev/null") {
-        return pathPart;
-      }
-      if (!candidatePath && pathPart) {
-        candidatePath = pathPart;
-      }
-    }
-  }
-  if (candidatePath && candidatePath !== "/dev/null") {
-    return candidatePath;
-  }
-  return "patch.diff";
-};
-
-const extractDiffBlockFromText = (
-  text: string | undefined | null
-): { before: string; diff: string; after: string } | null => {
-  if (!text) return null;
-  const full = text;
-
-  const fenced = full.match(/```(?:diff|patch)?\s*\n([\s\S]*?)```/i);
-  if (fenced && typeof fenced.index === "number") {
-    const fenceHeader = fenced[0].split("\n", 1)[0] ?? "";
-    const isTaggedDiff = /^```(?:diff|patch)\b/i.test(fenceHeader);
-    const before = full.slice(0, fenced.index).trim();
-    const after = full.slice(fenced.index + fenced[0].length).trim();
-    const diff = fenced[1] ?? "";
-    if (diff.trim() && (isTaggedDiff || looksLikeUnifiedDiff(diff))) {
-      return { before, diff, after };
-    }
-  }
-
-  if (looksLikeUnifiedDiff(full)) {
-    return { before: "", diff: full, after: "" };
-  }
-
-  return null;
-};
+import type { DocumentAttachment } from "@/lib/types/attachment";
 
 interface ThreadProps {
   projectId: string;
@@ -126,7 +51,8 @@ interface ThreadProps {
   conversation_id: string;
   isSessionResuming: boolean;
   isBackgroundTaskActive: boolean;
-  hasPendingMessage?: boolean; // New prop to detect pending message
+  /** Set by chat page when a pending message is being injected into the thread. */
+  hasPendingMessage?: boolean;
 }
 
 export const Thread: FC<ThreadProps> = ({
@@ -136,69 +62,112 @@ export const Thread: FC<ThreadProps> = ({
   conversation_id,
   isSessionResuming,
   isBackgroundTaskActive,
-  hasPendingMessage = false,
+  hasPendingMessage: _hasPendingMessage,
 }) => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [pendingDocumentAttachments, setPendingDocumentAttachments] = useState<
+    DocumentAttachment[] | null
+  >(null);
+  // Once we show pending docs on a message, store by message id so they stay visible after clearing pending
+  const [committedDocumentAttachmentsByMessageId, setCommittedDocumentAttachmentsByMessageId] =
+    useState<Record<string, DocumentAttachment[]>>({});
   const runtime = useThreadRuntime();
+  const [messagesSnapshot, setMessagesSnapshot] = useState(
+    () => runtime.getState().messages ?? []
+  );
+  const prevLastUserMessageIdRef = useRef<string | null>(null);
+
+  // Subscribe to thread so we see new messages (e.g. just-sent user message)
+  useEffect(() => {
+    setMessagesSnapshot(runtime.getState().messages ?? []);
+    const unsub = runtime.subscribe(() => {
+      setMessagesSnapshot(runtime.getState().messages ?? []);
+    });
+    return unsub;
+  }, [runtime]);
+
+  // Commit pending only when a *new* user message appears (last user message id changed)
+  // so we don't wrongly attach pending docs to the previous message
+  const lastUserMessageId = useMemo(() => {
+    const messages = messagesSnapshot;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i].id;
+    }
+    return null;
+  }, [messagesSnapshot]);
+
+  useEffect(() => {
+    if (
+      lastUserMessageId != null &&
+      lastUserMessageId !== prevLastUserMessageIdRef.current &&
+      pendingDocumentAttachments != null &&
+      pendingDocumentAttachments.length > 0
+    ) {
+      setCommittedDocumentAttachmentsByMessageId((prev) => ({
+        ...prev,
+        [lastUserMessageId]: pendingDocumentAttachments,
+      }));
+      setPendingDocumentAttachments(null);
+    }
+    prevLastUserMessageIdRef.current = lastUserMessageId;
+  }, [lastUserMessageId, pendingDocumentAttachments]);
 
   // Move useMemo before any early returns to satisfy React Hooks rules
   const userMessage = useMemo(() => {
     const UserMessageComponent = () => (
-      <UserMessage userPhotoURL={userImageURL} />
+      <UserMessage
+        userPhotoURL={userImageURL}
+        pendingDocumentAttachments={pendingDocumentAttachments}
+        setPendingDocumentAttachments={setPendingDocumentAttachments}
+        committedDocumentAttachmentsByMessageId={
+          committedDocumentAttachmentsByMessageId
+        }
+        setCommittedDocumentAttachmentsByMessageId={
+          setCommittedDocumentAttachmentsByMessageId
+        }
+      />
     );
     UserMessageComponent.displayName = "UserMessageComponent";
     return UserMessageComponent;
-  }, [userImageURL]);
+  }, [
+    userImageURL,
+    pendingDocumentAttachments,
+    committedDocumentAttachmentsByMessageId,
+  ]);
 
   useEffect(() => {
     const state = runtime.getState();
-    const messagesLoaded = Array.isArray(state.messages) && state.messages.length > 0;
-    const isEmptyChat = Array.isArray(state.messages) && state.messages.length === 0;
+    // Check if messages array exists (even if empty) - this means history load has completed
+    const messagesLoaded = Array.isArray(state.messages);
 
-    // If messages have actual content, we're no longer in initial loading
+    // If messages have been loaded (array exists), we're no longer in initial loading
+    // This handles both empty chats ([]) and chats with messages
     if (messagesLoaded) {
       setIsInitialLoading(false);
-      return;
-    }
-
-    // If empty array AND has pending message, keep loading to avoid showing empty chat
-    if (isEmptyChat && hasPendingMessage) {
-      return;
+      return; // Early return if already loaded
     }
 
     // Safety timeout: Clear loading after 10 seconds if history never loads
+    // This prevents infinite loading in case of network errors or adapter failures
     const timeoutId = setTimeout(() => {
       setIsInitialLoading((prev) => {
+        // Only clear if still loading
         if (prev) {
+          console.warn("History load timeout - clearing initial loading state");
           return false;
         }
         return prev;
       });
     }, 10000);
 
-    // Subscribe to runtime changes
+    // Messages haven't loaded yet, subscribe to changes
     const unsubscribe = runtime.subscribe(() => {
       const nextState = runtime.getState();
-
-      if (Array.isArray(nextState.messages) && nextState.messages.length > 0) {
+      // Once messages array exists (history load completed), clear loading
+      // This works for both empty chats ([]) and chats with messages
+      if (Array.isArray(nextState.messages)) {
         clearTimeout(timeoutId);
         setIsInitialLoading(false);
-        unsubscribe();
-        return;
-      }
-
-      if (Array.isArray(nextState.messages) && nextState.messages.length === 0) {
-        setTimeout(() => {
-          const finalState = runtime.getState();
-          if (Array.isArray(finalState.messages) && finalState.messages.length === 0) {
-            if (hasPendingMessage) {
-              return;
-            }
-            clearTimeout(timeoutId);
-            setIsInitialLoading(false);
-            unsubscribe();
-          }
-        }, 500);
       }
     });
 
@@ -206,43 +175,32 @@ export const Thread: FC<ThreadProps> = ({
       clearTimeout(timeoutId);
       unsubscribe();
     };
-  }, [runtime, hasPendingMessage]);
+  }, [runtime]);
 
-  // Watch for message additions to clear loading when pending message sends
-  useEffect(() => {
-    if (!hasPendingMessage || !isInitialLoading) {
-      return;
-    }
-
-    const unsubscribe = runtime.subscribe(() => {
-      const state = runtime.getState();
-      const messageCount = Array.isArray(state.messages) ? state.messages.length : 0;
-
-      if (messageCount > 0) {
-        setIsInitialLoading(false);
-        unsubscribe();
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [hasPendingMessage, isInitialLoading, runtime]);
+  // Loading state for background tasks (not for normal streaming)
+  if (isBackgroundTaskActive && !isSessionResuming) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <Loader className="h-6 w-6 animate-spin mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">
+            Background task in progress...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">
       <div className="h-full w-full bg-background">
-        {(() => {
-          if (isInitialLoading) {
-            return (
-              <div className="flex items-center justify-center h-full space-x-1 mt-2">
-                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
-                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
-                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
-              </div>
-            );
-          } else {
-            return (
+        {isInitialLoading ? (
+          <div className="flex items-center justify-center h-full space-x-1 mt-2">
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+          </div>
+        ) : (
           <>
             {/* Built-in loading state - no manual state needed */}
             <ThreadPrimitive.If empty>
@@ -270,12 +228,11 @@ export const Thread: FC<ThreadProps> = ({
                 projectId={projectId}
                 disabled={writeDisabled}
                 conversation_id={conversation_id}
+                setPendingDocumentAttachments={setPendingDocumentAttachments}
               />
             </div>
           </>
-            );
-          }
-        })()}
+        )}
       </div>
     </ThreadPrimitive.Root>
   );
@@ -289,7 +246,7 @@ const ThreadWelcome: FC<{ showSuggestions: boolean }> = ({
       <div className="flex w-full h-full max-w-[var(--thread-max-width)] flex-grow flex-col">
         <div className="flex w-full flex-grow flex-col items-center justify-center">
           <Avatar className="rounded-none">
-            <AvatarImage src="/images/logo.svg" alt="Agent" />
+            <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
             <AvatarFallback className="bg-transparent">P</AvatarFallback>
           </Avatar>
           <p className="mt-4 font-medium">How can I help you today?</p>
@@ -342,22 +299,81 @@ const Composer: FC<{
   projectId: string;
   disabled: boolean;
   conversation_id: string;
-}> = ({ projectId, disabled, conversation_id }) => {
-  // REMOVED: Manual runtime subscriptions and state
-  // REMOVED: isStreaming check - assistant-ui handles this
-
+  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
+}> = ({ projectId, disabled, conversation_id, setPendingDocumentAttachments }) => {
   return (
-    <ComposerPrimitive.Root className="bg-background z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out">
+    <ComposerPrimitive.Root className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out">
       <MessageComposer
         projectId={projectId}
         conversation_id={conversation_id}
         disabled={disabled}
+        setPendingDocumentAttachments={setPendingDocumentAttachments}
       />
     </ComposerPrimitive.Root>
   );
 };
 
-const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
+const UserMessage: FC<{
+  userPhotoURL: string;
+  pendingDocumentAttachments: DocumentAttachment[] | null;
+  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
+  committedDocumentAttachmentsByMessageId: Record<
+    string,
+    DocumentAttachment[]
+  >;
+  setCommittedDocumentAttachmentsByMessageId: React.Dispatch<
+    React.SetStateAction<Record<string, DocumentAttachment[]>>
+  >;
+}> = ({
+  userPhotoURL,
+  pendingDocumentAttachments,
+  setPendingDocumentAttachments,
+  committedDocumentAttachmentsByMessageId,
+  setCommittedDocumentAttachmentsByMessageId,
+}) => {
+  const message = useMessage();
+  const runtime = useThreadRuntime();
+  const [messagesSnapshot, setMessagesSnapshot] = useState(
+    () => runtime.getState().messages ?? []
+  );
+
+  useEffect(() => {
+    setMessagesSnapshot(runtime.getState().messages ?? []);
+    const unsub = runtime.subscribe(() => {
+      setMessagesSnapshot(runtime.getState().messages ?? []);
+    });
+    return unsub;
+  }, [runtime]);
+
+  const metadataDocumentAttachments =
+    (message.metadata as any)?.custom?.documentAttachments ?? [];
+
+  // For just-sent messages, metadata may not be populated yet; use pending or committed docs
+  const lastUserMessage = useMemo(() => {
+    const messages = messagesSnapshot;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i];
+    }
+    return null;
+  }, [messagesSnapshot]);
+
+  const isLastUserMessage = lastUserMessage?.id === message.id;
+  const committedForThisMessage = committedDocumentAttachmentsByMessageId[message.id];
+  const showPending =
+    metadataDocumentAttachments.length === 0 &&
+    !(committedForThisMessage?.length) &&
+    isLastUserMessage &&
+    (pendingDocumentAttachments?.length ?? 0) > 0;
+
+  const documentAttachments =
+    metadataDocumentAttachments.length > 0
+      ? metadataDocumentAttachments
+      : committedForThisMessage?.length
+        ? committedForThisMessage
+        : showPending
+          ? pendingDocumentAttachments!
+          : [];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -367,12 +383,51 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          {/* Display attachments using assistant-ui component */}
-          {isMultimodalEnabled() && <UserMessageAttachments />}
+          {/* Document Attachments */}
+          {documentAttachments.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {documentAttachments.map((attachment: any, index: number) => {
+                const tokenCount =
+                  attachment.token_count || attachment.file_metadata?.token_count;
+                const metadata = attachment.metadata || attachment.file_metadata;
+
+                return (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 text-xs bg-white rounded-lg p-2 border"
+                  >
+                    <span className="text-lg">
+                      {attachment.attachment_type === "pdf" && "📄"}
+                      {attachment.attachment_type === "spreadsheet" && "📊"}
+                      {attachment.attachment_type === "code" && "💻"}
+                      {attachment.attachment_type === "document" && "📝"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {attachment.file_name}
+                      </div>
+                      {tokenCount && (
+                        <div className="text-gray-500">
+                          {tokenCount.toLocaleString()} tokens
+                        </div>
+                      )}
+                      {metadata?.page_count && (
+                        <div className="text-gray-400 text-xs">
+                          {metadata.page_count} pages
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <UserMessageAttachments />
 
           <MessagePrimitive.Parts
             components={{
-              Image: () => null, //UserMessageAttachments already handles images
+              Image: () => null,
             }}
           />
         </div>
@@ -492,28 +547,15 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   const eventType = currentState?.event_type || "";
 
   // Status messages (tool_response from API)
-  const callStatusMessage = stripAssistantMarkers(callState?.response || "");
-  const resultStatusMessage = stripAssistantMarkers(
-    resultStateLocal?.response || ""
-  );
+  const callStatusMessage = callState?.response || "";
+  const resultStatusMessage = resultStateLocal?.response || "";
 
   // Detailed summaries (tool_call_details.summary from API)
-  const callSummary = stripAssistantMarkers(callState?.details?.summary || "");
-  const resultSummary = stripAssistantMarkers(
-    resultStateLocal?.details?.summary || ""
-  );
+  const callSummary = callState?.details?.summary || "";
+  const resultSummary = resultStateLocal?.details?.summary || "";
 
   // Streaming content (accumulated stream_part)
-  const streamingContentRaw = resultStateLocal?.accumulated_response || "";
-  const streamingContent = streamingContentRaw;
-  // Prefer streaming content for diffs; fall back to result summary if needed
-  const diffCandidate =
-    (streamingContent && looksLikeUnifiedDiff(streamingContent) && streamingContent) ||
-    (resultStateLocal?.details?.summary &&
-      looksLikeUnifiedDiff(resultStateLocal.details.summary) &&
-      resultStateLocal.details.summary) ||
-    "";
-  const hasDiffCandidate = !!diffCandidate;
+  const streamingContent = resultStateLocal?.accumulated_response || "";
 
   const isError = toolCallPart?.isError ?? currentState?.event_type === "error";
   const isCompleted =
@@ -580,17 +622,11 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
 
   // Combine all content for the collapsible block
   const hasAnyContent = hasCallInfo || hasResultInfo || !isCompleted;
-  const rawDisplayStatus = showResultStatus
+  const displayStatus = showResultStatus
     ? resultStatusMessage
     : showCallStatus
       ? callStatusMessage
       : toolName;
-  // Backend may send null/empty tool_response as the string "None" (e.g. Python); don't show that
-  const displayStatus =
-    rawDisplayStatus?.trim() &&
-    rawDisplayStatus.trim().toLowerCase() !== "none"
-      ? rawDisplayStatus
-      : (toolName?.trim() || "Tool call");
 
   return (
     <motion.div
@@ -647,49 +683,17 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
                     {resultStatusMessage}
                   </div>
                 )}
-                {/* Streaming content (from stream_part) or unified diff */}
-                {hasDiffCandidate ? (
+                {/* Streaming content (from stream_part) */}
+                {streamingContent && (
                   <div className="text-foreground/90 bg-white/50 dark:bg-neutral-900/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
                     {isToolCallStreaming && !isCompleted && (
                       <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
                     )}
-                    {(() => {
-                      const diffPath = extractPathFromDiff(diffCandidate);
-                      const fileLabel = diffPath || "patch.diff";
-                      return (
-                        <div className="mt-1 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white">
-                          <div className="flex items-center px-3 py-1.5 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50">
-                            <p className="text-[11px] font-medium text-[#022019] truncate">
-                              {fileLabel}
-                            </p>
-                          </div>
-                          <div className="min-h-[200px]">
-                            <MonacoDiffView
-                              change={{
-                                path: diffPath,
-                                lang: "",
-                                content: diffCandidate,
-                              }}
-                              height={280}
-                              className="w-full"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    <StandaloneMarkdown
+                      text={streamingContent}
+                      className="markdown-content break-words text-xs"
+                    />
                   </div>
-                ) : (
-                  streamingContentRaw && (
-                    <div className="text-foreground/90 bg-white/50 dark:bg-neutral-900/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
-                      {isToolCallStreaming && !isCompleted && (
-                        <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
-                      )}
-                      <StandaloneMarkdown
-                        text={stripAssistantMarkers(streamingContentRaw)}
-                        className="markdown-content break-words text-xs"
-                      />
-                    </div>
-                  )
                 )}
                 {/* Result summary (from tool_call_details.summary) */}
                 {showResultSummary && (
@@ -734,62 +738,15 @@ const InlineMessageContent: FC = () => {
   return (
     <div className="inline-message-content">
       {message.content.map((part, index) => {
-          if (part.type === "text") {
-          const rawText = stripAssistantMarkers(part.text ?? "");
+        if (part.type === "text") {
           // Only render non-empty text segments
-          if (!rawText.trim()) {
+          if (!part.text || !part.text.trim()) {
             return null;
           }
-
-          const diffBlock = extractDiffBlockFromText(rawText);
-
-          if (diffBlock) {
-            return (
-              <div key={`text-${index}`} className="w-full my-8 space-y-8">
-                {diffBlock.before && (
-                  <StandaloneMarkdown
-                    text={stripAssistantMarkers(diffBlock.before)}
-                    className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
-                  />
-                )}
-                {(() => {
-                  const diffPath = extractPathFromDiff(diffBlock.diff);
-                  const fileLabel = diffPath || "patch.diff";
-                  return (
-                    <div className="rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white">
-                      <div className="flex items-center px-3 py-1.5 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50">
-                        <p className="text-[11px] font-medium text-[#022019] truncate">
-                          {fileLabel}
-                        </p>
-                      </div>
-                      <div className="min-h-[200px]">
-                        <MonacoDiffView
-                          change={{
-                            path: diffPath,
-                            lang: "",
-                            content: diffBlock.diff,
-                          }}
-                          height={280}
-                          className="w-full"
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
-                {diffBlock.after && (
-                  <StandaloneMarkdown
-                    text={stripAssistantMarkers(diffBlock.after)}
-                    className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
-                  />
-                )}
-              </div>
-            );
-          }
-
           return (
             <div key={`text-${index}`} className="w-full my-1">
               <StandaloneMarkdown
-                text={rawText}
+                text={part.text}
                 className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
               />
             </div>
@@ -875,7 +832,7 @@ const AssistantMessage: FC = () => {
     >
       <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative">
         <Avatar className="mr-4 rounded-none bg-transparent">
-          <AvatarImage src="/images/logo.svg" alt="Agent" />
+          <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
           <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
         </Avatar>
 

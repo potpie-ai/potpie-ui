@@ -207,7 +207,13 @@ const Step1: React.FC<Step1Props> = ({
       queryFn: async () => {
         const repos = await BranchAndRepositoryService.getUserRepositories().then((data) => {
           if (defaultRepo && data.length > 0 ) {
-            if (defaultRepo && data.length > 0) {
+            const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
+            const matchingRepo = data.find((repo: { full_name?: string | null; owner?: string | null; name?: string | null }) => {
+              const repoIdentifier = getRepoIdentifier(repo);
+              return repoIdentifier && repoIdentifier.toLowerCase() === decodedDefaultRepo;
+            });
+            dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
+          }
               const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
               const matchingRepo = data.find((repo: { full_name?: string | null; owner?: string | null; name?: string | null }) => {
                 const repoIdentifier = getRepoIdentifier(repo);

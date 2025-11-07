@@ -69,6 +69,20 @@ interface Step1Props {
   setChatStep: (step: number) => void;
 }
 
+const getRepoIdentifier = (repo: {
+  full_name?: string | null;
+  owner?: string | null;
+  name?: string | null;
+}) => {
+  if (repo?.full_name) {
+    return repo.full_name;
+  }
+  if (repo?.owner && repo?.name) {
+    return `${repo.owner}/${repo.name}`;
+  }
+  return repo?.name || "";
+};
+
 const Step1: React.FC<Step1Props> = ({
   setProjectId,
   setChatStep,
@@ -193,10 +207,18 @@ const Step1: React.FC<Step1Props> = ({
       queryFn: async () => {
         const repos = await BranchAndRepositoryService.getUserRepositories().then((data) => {
           if (defaultRepo && data.length > 0 ) {
-            if (defaultRepo && data.length > 0) {
-              const matchingRepo = data.find((repo: { full_name: string }) => 
-                repo.full_name.toLowerCase() === decodeURIComponent(defaultRepo).toLowerCase()
-              );
+            const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
+            const matchingRepo = data.find((repo: { full_name?: string | null; owner?: string | null; name?: string | null }) => {
+              const repoIdentifier = getRepoIdentifier(repo);
+              return repoIdentifier && repoIdentifier.toLowerCase() === decodedDefaultRepo;
+            });
+            dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
+          }
+              const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
+              const matchingRepo = data.find((repo: { full_name?: string | null; owner?: string | null; name?: string | null }) => {
+                const repoIdentifier = getRepoIdentifier(repo);
+                return repoIdentifier && repoIdentifier.toLowerCase() === decodedDefaultRepo;
+              });
               dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
             }
           }
@@ -427,18 +449,24 @@ const Step1: React.FC<Step1Props> = ({
                         {linkedRepoName}
                       </CommandItem>
                     )}
-                    {UserRepositorys?.map((value: any) => (
-                      <CommandItem
-                        key={value.id}
-                        value={value.full_name}
-                        onSelect={(value) => {
-                           dispatch(setRepoName(value));
-                          setRepoOpen(false);
-                        }}
-                      >
-                        {value.full_name}
-                      </CommandItem>
-                    ))}
+                    {UserRepositorys?.map((value: any) => {
+                      const repoIdentifier = getRepoIdentifier(value);
+                      if (!repoIdentifier) {
+                        return null;
+                      }
+                      return (
+                        <CommandItem
+                          key={value.id}
+                          value={repoIdentifier}
+                          onSelect={(value) => {
+                            dispatch(setRepoName(value));
+                            setRepoOpen(false);
+                          }}
+                        >
+                          {repoIdentifier}
+                        </CommandItem>
+                      );
+                    })}
                   </CommandGroup>
                   <CommandSeparator className="my-1" />
                   {!process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (

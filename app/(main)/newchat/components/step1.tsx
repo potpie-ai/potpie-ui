@@ -214,14 +214,6 @@ const Step1: React.FC<Step1Props> = ({
             });
             dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
           }
-              const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
-              const matchingRepo = data.find((repo: { full_name?: string | null; owner?: string | null; name?: string | null }) => {
-                const repoIdentifier = getRepoIdentifier(repo);
-                return repoIdentifier && repoIdentifier.toLowerCase() === decodedDefaultRepo;
-              });
-              dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
-            }
-          }
           return data;
         });
         return repos;

@@ -154,6 +154,22 @@ const availableIntegrationTypes = [
     ],
   },
   {
+    id: "confluence",
+    name: "Confluence",
+    description:
+      "Integrate with Confluence to manage documentation, collaborate on pages, and organize knowledge.",
+    icon: <Image src="/images/confluence-1.svg" alt="Confluence" width={24} height={24} />,
+    category: "Documentation",
+    fields: [
+      {
+        id: "instanceName",
+        label: "Instance Name",
+        placeholder: "e.g., Company Confluence",
+        required: true,
+      },
+    ],
+  },
+  {
     id: "s3",
     name: "Amazon S3",
     description:

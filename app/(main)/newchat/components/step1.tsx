@@ -69,11 +69,13 @@ interface Step1Props {
   setChatStep: (step: number) => void;
 }
 
-const getRepoIdentifier = (repo: {
+interface RepoIdentifier {
   full_name?: string | null;
   owner?: string | null;
   name?: string | null;
-}) => {
+}
+
+const getRepoIdentifier = (repo: RepoIdentifier) => {
   if (repo?.full_name) {
     return repo.full_name;
   }
@@ -208,7 +210,7 @@ const Step1: React.FC<Step1Props> = ({
         const repos = await BranchAndRepositoryService.getUserRepositories().then((data) => {
           if (defaultRepo && data.length > 0 ) {
             const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
-            const matchingRepo = data.find((repo: { full_name?: string | null; owner?: string | null; name?: string | null }) => {
+            const matchingRepo = data.find((repo: RepoIdentifier) => {
               const repoIdentifier = getRepoIdentifier(repo);
               return repoIdentifier && repoIdentifier.toLowerCase() === decodedDefaultRepo;
             });

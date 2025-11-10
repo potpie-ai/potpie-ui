@@ -213,6 +213,44 @@ export default class IntegrationService {
     }
   }
 
+  static async checkJiraIntegrationStatus(userId: string): Promise<any> {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+    try {
+      const response = await axios.get(
+        `${baseUrl}/api/v1/integrations/jira/status/${userId}`,
+        {
+          headers: headers,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  static async revokeJiraIntegration(userId: string): Promise<any> {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+    try {
+      const response = await axios.delete(
+        `${baseUrl}/api/v1/integrations/jira/revoke/${userId}`,
+        {
+          headers: headers,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
   private static formatLastSync(updatedAt: string): string {
     const now = new Date();
     const updated = new Date(updatedAt);

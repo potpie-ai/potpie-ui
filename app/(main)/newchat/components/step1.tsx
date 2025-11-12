@@ -489,19 +489,17 @@ const Step1: React.FC<Step1Props> = ({
                       <CommandSeparator className="my-1" />
                     </>
                   )}
-                  {!process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
-                    <CommandItem>
-                      <span
-                        className="flex items-center gap-2"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          openPopup();
-                        }}
-                      >
-                        <Plus className="size-4" /> Link new repository
-                      </span>
-                    </CommandItem>
-                  )}
+                  <CommandItem>
+                    <span
+                      className="flex items-center gap-2"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        openPopup();
+                      }}
+                    >
+                      <Plus className="size-4" /> Link new repository
+                    </span>
+                  </CommandItem>
                 </CommandList>
               </Command>
             </PopoverContent>

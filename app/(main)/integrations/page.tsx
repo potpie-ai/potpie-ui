@@ -156,9 +156,15 @@ const availableIntegrationTypes = [
   {
     id: "confluence",
     name: "Confluence",
-    description:
-      "Integrate with Confluence to manage documentation, collaborate on pages, and organize knowledge.",
-    icon: <Image src="/images/confluence-1.svg" alt="Confluence" width={24} height={24} />,
+    description: "Sync documentation and knowledge management with Confluence.",
+    icon: (
+      <Image
+        src="/images/confluence-1.svg"
+        alt="Confluence"
+        width={24}
+        height={24}
+      />
+    ),
     category: "Documentation",
     fields: [
       {
@@ -166,6 +172,25 @@ const availableIntegrationTypes = [
         label: "Instance Name",
         placeholder: "e.g., Company Confluence",
         required: true,
+      },
+      {
+        id: "domain",
+        label: "Domain",
+        placeholder: "e.g., company.atlassian.net",
+        required: true,
+      },
+      {
+        id: "email",
+        label: "Email",
+        placeholder: "user@company.com",
+        required: true,
+      },
+      {
+        id: "apiToken",
+        label: "API Token",
+        placeholder: "ATATT3...",
+        required: true,
+        type: "password",
       },
     ],
   },
@@ -289,47 +314,6 @@ const availableIntegrationTypes = [
         id: "appPassword",
         label: "App Password",
         placeholder: "Enter your app password",
-        required: true,
-        type: "password",
-      },
-    ],
-  },
-  {
-    id: "confluence",
-    name: "Confluence",
-    description: "Sync documentation and knowledge management with Confluence.",
-    icon: (
-      <Image
-        src="/images/confluence-1.svg"
-        alt="Confluence"
-        width={24}
-        height={24}
-      />
-    ),
-    category: "Documentation",
-    fields: [
-      {
-        id: "instanceName",
-        label: "Instance Name",
-        placeholder: "e.g., Company Confluence",
-        required: true,
-      },
-      {
-        id: "domain",
-        label: "Domain",
-        placeholder: "e.g., company.atlassian.net",
-        required: true,
-      },
-      {
-        id: "email",
-        label: "Email",
-        placeholder: "user@company.com",
-        required: true,
-      },
-      {
-        id: "apiToken",
-        label: "API Token",
-        placeholder: "ATATT3...",
         required: true,
         type: "password",
       },

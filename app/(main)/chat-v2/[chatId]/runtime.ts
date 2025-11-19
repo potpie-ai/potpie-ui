@@ -161,13 +161,17 @@ const createChatAdapter = (
 
             tool_calls.forEach((toolCallJson) => {
               try {
-                const parsed = JSON.parse(toolCallJson);
+                // Detect whether toolCallJson is a string or already an object
+                const parsed = typeof toolCallJson === "string" 
+                  ? JSON.parse(toolCallJson) 
+                  : toolCallJson;
                 const {
                   call_id,
                   tool_name,
                   tool_call_details,
                   event_type,
                   tool_response,
+                  args,
                 } = parsed;
 
                 const previous =
@@ -176,8 +180,8 @@ const createChatAdapter = (
                     type: "tool-call" as const,
                     toolCallId: call_id,
                     toolName: tool_name,
-                    args: {},
-                    argsText: JSON.stringify({}),
+                    args: args || {},
+                    argsText: args ? JSON.stringify(args) : JSON.stringify({}),
                   } as StreamingToolCallPart);
 
                 const streamState: ToolCallResult = {
@@ -190,6 +194,8 @@ const createChatAdapter = (
                   ...previous,
                   streamState,
                   toolName: tool_name,
+                  args: args || previous.args,
+                  argsText: args ? JSON.stringify(args) : previous.argsText,
                 };
 
                 if (event_type === "result" || event_type === "error") {

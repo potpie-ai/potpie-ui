@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
@@ -44,16 +44,25 @@ const ChatV2 = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const { backgroundTaskActive } = useSelector((state: RootState) => state.chat);
-  const [Error, setError] = useState({
+  const [errorState, setErrorState] = useState({
     isError: false,
     message: "",
     description: "",
   });
 
+  // Ref to prevent overlapping parsing polls
+  const isPollingRef = useRef(false);
+
   // Call hook before any early returns
   const runtime = useChatRuntime(params.chatId);
 
   const parseRepo = async () => {
+    // Guard: prevent overlapping polls and bail if projectId is missing
+    if (isPollingRef.current || !projectId) {
+      return;
+    }
+
+    isPollingRef.current = true;
     try {
       await BranchAndRepositoryService.pollParsingStatus(
         projectId,
@@ -63,6 +72,8 @@ const ChatV2 = () => {
     } catch (err) {
       console.error("Error during parsing:", err);
       setParsingStatus(ParsingStatusEnum.ERROR);
+    } finally {
+      isPollingRef.current = false;
     }
   };
 
@@ -93,7 +104,7 @@ const ChatV2 = () => {
           toast.error(info.description);
         }
         setShowNavbar(false);
-        setError({
+        setErrorState({
           isError: true,
           message: info.message,
           description: info.description,
@@ -157,9 +168,9 @@ const ChatV2 = () => {
     }
   }, [parsingStatus, projectId]);
 
-  if (Error.isError)
+  if (errorState.isError)
     return (
-      <GlobalError title={Error.message} description={Error.description} />
+      <GlobalError title={errorState.message} description={errorState.description} />
     );
   if (chatAccess === "not_found") {
     return (
@@ -181,7 +192,7 @@ const ChatV2 = () => {
       <Navbar
         disableShare={!isCreator}
         showShare
-        hidden={!showNavbar || Error.isError}
+        hidden={!showNavbar || errorState.isError}
       />
       <div className="h-[calc(90vh)]">
         <AssistantRuntimeProvider runtime={runtime}>

@@ -65,18 +65,19 @@ const MessageComposer = ({
   conversation_id,
 }: MessageComposerProps) => {
   const { backgroundTaskActive } = useSelector((state: RootState) => state.chat);
-  const isDisabled = disabled || backgroundTaskActive;
-
+  
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>([]);
   const [message, setMessage] = useState("");
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
-  const [isTextareaDisabled, setIsTextareaDisabled] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+
+  const isDisabled = disabled || backgroundTaskActive || isEnhancing;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const composer = useComposerRuntime();
 
@@ -113,6 +114,15 @@ const MessageComposer = ({
     });
   }, [selectedNodes, composer]);
 
+  // Cleanup search timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Node fetching and handling
   const fetchNodes = async (query: string) => {
     const headers = await getHeaders();
@@ -133,8 +143,9 @@ const MessageComposer = ({
     } catch (error) {
       console.error("Error fetching nodes:", error);
       setNodeOptions([]);
+    } finally {
+      setIsSearchingNode(false);
     }
-    setIsSearchingNode(false);
   };
 
   const handleNodeSelect = (node: NodeOption) => {
@@ -190,14 +201,13 @@ const MessageComposer = ({
     ) {
       const query = value.substring(lastAtPosition + 1, cursorPosition);
       if (query.trim().length > 0 && !query.includes(" ")) {
-        if (searchTimeout) clearTimeout(searchTimeout);
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
-        setIsSearchingNode(true);
+        // Debounce the search - fetchNodes owns the loading state
         const timeoutId = setTimeout(() => {
-          fetchNodes(query);
-          setIsSearchingNode(false);
+          void fetchNodes(query);
         }, 300);
-        setSearchTimeout(timeoutId);
+        searchTimeoutRef.current = timeoutId;
       }
     } else {
       setNodeOptions([]);
@@ -283,7 +293,7 @@ const MessageComposer = ({
 
   const handleEnhancePrompt = async () => {
     try {
-      setIsTextareaDisabled(true);
+      setIsEnhancing(true);
       setMessage("Enhancing...");
       composer.setText("Enhancing...");
       const enhancedMessage = await ChatService.enhancePrompt(
@@ -295,7 +305,7 @@ const MessageComposer = ({
     } catch (error) {
       console.error("Error enhancing prompt:", error);
     } finally {
-      setIsTextareaDisabled(false);
+      setIsEnhancing(false);
     }
   };
 
@@ -372,7 +382,10 @@ const MessageComposer = ({
           </button>
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
-          <ComposerPrimitive.Cancel className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer">
+          <ComposerPrimitive.Cancel 
+            disabled={disabled}
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <CircleStopIcon />
           </ComposerPrimitive.Cancel>
         </ThreadPrimitive.If>
@@ -434,7 +447,7 @@ const MessageComposer = ({
             placeholder="Type @ followed by file or function name, or paste/upload images"
             onChange={handleMessageChange}
             onKeyDown={handleKeyPress}
-            disabled={isTextareaDisabled || isDisabled}
+            disabled={isDisabled}
             className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
           />
         </div>

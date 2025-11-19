@@ -1,3 +1,4 @@
+"use client";
 import {
   ActionBarPrimitive,
   ComposerPrimitive,
@@ -80,10 +81,7 @@ export const Thread: FC<ThreadProps> = ({
 
     return unsubscribe;
   }, [runtime, isInitialLoading]);
-
-  // REMOVED: Manual state subscriptions and runtime.getState() calls
-  // assistant-ui handles all state internally now
-
+  
   // Loading state for background tasks (not for normal streaming)
   if (backgroundTaskActive && !sessionResuming) {
     return (

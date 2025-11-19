@@ -55,6 +55,13 @@ export const Thread: FC<ThreadProps> = ({
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const runtime = useThreadRuntime();
 
+  // Move useMemo before any early returns to satisfy React Hooks rules
+  const userMessage = useMemo(() => {
+    const UserMessageComponent = () => <UserMessage userPhotoURL={userImageURL} />;
+    UserMessageComponent.displayName = 'UserMessageComponent';
+    return UserMessageComponent;
+  }, [userImageURL]);
+
   useEffect(() => {
     const state = runtime.getState();
     const hasMessages = state.messages && state.messages.length > 0;
@@ -90,10 +97,6 @@ export const Thread: FC<ThreadProps> = ({
       </div>
     );
   }
-
-  let userMessage = useMemo(() => {
-    return () => <UserMessage userPhotoURL={userImageURL} />;
-  }, [userImageURL]);
 
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">

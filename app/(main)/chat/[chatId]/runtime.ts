@@ -117,7 +117,7 @@ export function PotpieRuntime(chatId: string) {
       const resumeResult = await ChatService.resumeActiveSession(
         chatId,
         sessionInfo.sessionId,
-        (message: string, tool_calls: any[]) => {
+        (message: string, tool_calls: any[], _citations: string[]) => {
           setExtras({ loading: false, streaming: true, error: false });
 
           setMessages((currentMessages) => {
@@ -231,7 +231,7 @@ export function PotpieRuntime(chatId: string) {
       message,
       [], // @ts-ignore
       [], // No images for this function
-      (message: string, tool_calls: any[]) => {
+      (message: string, tool_calls: any[], _citations: string[]) => {
         setIsRunning(false);
         setExtras({ loading: false, streaming: true, error: false });
 
@@ -256,7 +256,7 @@ export function PotpieRuntime(chatId: string) {
 
     // Extract text content
     const textContent = message.content.find(c => c.type === "text");
-    if (!textContent) {
+    if (!textContent || textContent.type !== "text") {
       throw new Error("Message must contain text content");
     }
 
@@ -293,7 +293,7 @@ export function PotpieRuntime(chatId: string) {
         textContent.text,
         (message.runConfig?.custom?.selectedNodes as any[]) || [],
         images, // Pass images to the service
-        (message: string, tool_calls: any[]) => {
+        (message: string, tool_calls: any[], _citations: string[]) => {
           setIsRunning(false);
           setExtras({ loading: false, streaming: true, error: false });
 
@@ -329,7 +329,7 @@ export function PotpieRuntime(chatId: string) {
       await ChatService.regenerateMessage(
         chatId,
         [],
-        (message: string, tool_calls: any[]) => {
+        (message: string, tool_calls: any[], _citations: string[]) => {
           setIsRunning(false);
           setExtras({ loading: false, streaming: true, error: false });
           setMessages((currentMessages) => {
@@ -362,7 +362,7 @@ export function PotpieRuntime(chatId: string) {
     isRunning,
     messages,
     extras,
-    setMessages,
+    setMessages: (messages) => setMessages([...messages]),
     onNew,
     onReload,
     convertMessage,

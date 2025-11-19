@@ -9,6 +9,7 @@ import {
   useMessageRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
+import type { ToolCallMessagePart } from "@assistant-ui/react";
 import { useEffect, useMemo, useState, type FC, useCallback } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -476,14 +477,18 @@ const AssistantMessage: FC = () => {
       setText((runtime.getState().content[0] as any)?.text || "");
       const tool_calls = runtime
         .getState()
-        .content.filter((content) => content.type === "tool-call");
+        .content.filter(
+          (content): content is ToolCallMessagePart =>
+            content.type === "tool-call"
+        );
 
       const callStates = tool_calls.map((call) => {
+        const result = (call.result ?? {}) as any;
         return {
           id: call.toolCallId,
-          message: (call.result as any)?.response,
-          status: (call.result as any)?.event_type,
-          details_summary: (call.result as any)?.details?.summary,
+          message: result?.response ?? "",
+          status: result?.event_type ?? "",
+          details_summary: result?.details?.summary ?? "",
         };
       });
       let res: {

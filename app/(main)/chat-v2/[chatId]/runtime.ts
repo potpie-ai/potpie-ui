@@ -59,9 +59,7 @@ interface BackendMessage {
 // Create the adapter that bridges our Redis backend to assistant-ui
 const createChatAdapter = (
   chatId: string,
-  dispatch: AppDispatch,
   backgroundTaskActive: boolean,
-  pendingMessage: string
 ): ChatModelAdapter => {
   return {
     async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
@@ -171,8 +169,9 @@ const createChatAdapter = (
                   tool_call_details,
                   event_type,
                   tool_response,
-                  args,
                 } = parsed;
+
+                const rawArgs = tool_call_details?.arguments;
 
                 const previous =
                   accumulatedToolCalls.get(call_id) ??
@@ -180,9 +179,29 @@ const createChatAdapter = (
                     type: "tool-call" as const,
                     toolCallId: call_id,
                     toolName: tool_name,
-                    args: args || {},
-                    argsText: args ? JSON.stringify(args) : JSON.stringify({}),
+                    args:
+                      typeof rawArgs === "object" && rawArgs !== null
+                        ? rawArgs
+                        : {},
+                    argsText:
+                      typeof rawArgs === "string"
+                        ? rawArgs
+                        : JSON.stringify(rawArgs ?? {}, null, 2),
                   } as StreamingToolCallPart);
+
+                const argsValue =
+                  rawArgs === undefined
+                    ? previous.args
+                    : typeof rawArgs === "object" && rawArgs !== null
+                      ? rawArgs
+                      : {};
+
+                const argsTextValue =
+                  rawArgs === undefined
+                    ? previous.argsText
+                    : typeof rawArgs === "string"
+                      ? rawArgs
+                      : JSON.stringify(rawArgs, null, 2);
 
                 const streamState: ToolCallResult = {
                   event_type,
@@ -194,8 +213,8 @@ const createChatAdapter = (
                   ...previous,
                   streamState,
                   toolName: tool_name,
-                  args: args || previous.args,
-                  argsText: args ? JSON.stringify(args) : previous.argsText,
+                  args: argsValue,
+                  argsText: argsTextValue,
                 };
 
                 if (event_type === "result" || event_type === "error") {
@@ -545,13 +564,8 @@ export function useChatRuntime(chatId: string | null | undefined) {
   const adapter = useMemo(() => {
     // chatId || "" will always be a string, but TypeScript needs help with narrowing in useMemo
     const safeChatId: string = (chatId || "") as string;
-    return createChatAdapter(
-      safeChatId,
-      dispatch,
-      backgroundTaskActive,
-      pendingMessage as string
-    );
-  }, [chatId, dispatch, backgroundTaskActive, pendingMessage]);
+    return createChatAdapter(safeChatId, backgroundTaskActive);
+  }, [chatId, backgroundTaskActive]);
 
   // Create the history adapter
   const historyAdapter = useMemo(() => {

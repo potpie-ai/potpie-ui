@@ -33,7 +33,7 @@ const ChatV2 = () => {
   const dispatch: AppDispatch = useDispatch();
   const [projectId, setProjectId] = useState<string>("");
   const [parsingStatus, setParsingStatus] = useState<string>("");
-  const [infoLoaded, setInfoLoaded] = useState(false);
+  const [infoLoadedForChat, setInfoLoadedForChat] = useState<string | null>(null);
   const currentConversationId = params.chatId;
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
@@ -87,7 +87,7 @@ const ChatV2 = () => {
   };
 
   const loadInfoOnce = async () => {
-    if (infoLoaded) return;
+    if (infoLoadedForChat === currentConversationId) return;
     setParsingStatus("loading");
 
     try {
@@ -130,7 +130,7 @@ const ChatV2 = () => {
       );
 
       setProjectId(info.project_ids[0]);
-      setInfoLoaded(true);
+      setInfoLoadedForChat(currentConversationId);
 
       if (!info.is_creator) {
         fetchProfilePicture(info.creator_id).then((profilePicture) => {

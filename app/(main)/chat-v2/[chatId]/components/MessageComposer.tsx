@@ -114,6 +114,25 @@ const MessageComposer = ({
     });
   }, [selectedNodes, composer]);
 
+  useEffect(() => {
+    const unsubscribe =
+      composer.unstable_on?.("send", () => {
+        composer.setRunConfig({
+          custom: {
+            selectedNodes: [],
+          },
+        });
+        setSelectedNodes([]);
+        setNodeOptions([]);
+        setSelectedNodeIndex(-1);
+        setMessage("");
+        messageRef.current = "";
+        lastSyncedComposerText.current = "";
+      }) ?? undefined;
+
+    return unsubscribe;
+  }, [composer]);
+
   // Cleanup search timeout on unmount
   useEffect(() => {
     return () => {

@@ -1,6 +1,7 @@
 import { WorkflowNode } from "@/services/WorkflowService";
 import { TriggerNode } from "./triggers/trigger";
 import { LinearTriggerNode } from "./triggers/linear/linear-trigger";
+import { JiraTriggerNode } from "./triggers/jira/jira-trigger";
 import { AgentNode } from "./agents/agent";
 import { ActionAgentNode } from "./agents/action-agent";
 import { IfConditionNode } from "./flow-controls/if-condition";
@@ -15,6 +16,8 @@ export const SwitchComponent = ({ data }: { data: WorkflowNode }) => {
           return <TriggerNode data={data} />;
         case "trigger_linear_issue_created":
           return <LinearTriggerNode data={data} />;
+        case "trigger_jira_issue_created":
+          return <JiraTriggerNode data={data} />;
         default:
           return <TriggerNode data={data} />;
       }
@@ -76,11 +79,9 @@ export const NodeComponent = ({
       )}
 
       <div
-        className={`bg-white rounded-xl border-2 ${
-          selected ? "border-orange-500 shadow-lg" : "border-gray-200"
-        } shadow-md w-64 overflow-hidden transition-all duration-200 ${
-          data.isNewlyDropped ? "animate-bounce-drop" : ""
-        }`}
+        className={`bg-white rounded-xl border-2 ${selected ? "border-orange-500 shadow-lg" : "border-gray-200"
+          } shadow-md w-64 overflow-hidden transition-all duration-200 ${data.isNewlyDropped ? "animate-bounce-drop" : ""
+          }`}
       >
         <SwitchComponent data={data} />
       </div>

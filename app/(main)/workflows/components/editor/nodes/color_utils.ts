@@ -2,6 +2,7 @@ export type NodeGroup =
   | "default"
   | "github"
   | "linear"
+  | "jira"
   | "sentry"
   | "flow_control";
 
@@ -29,6 +30,12 @@ export const getNodeColors = (group: NodeGroup): NodeColorPalette => {
       return {
         primary: "#5f6ad2", // Linear purple
         secondary: "#b4b9f8", // Linear light purple
+        text: "#111", // black for contrast
+      };
+    case "jira":
+      return {
+        primary: "#0052CC", // Jira blue
+        secondary: "#DEEBFF", // Jira light blue
         text: "#111", // black for contrast
       };
     case "sentry":

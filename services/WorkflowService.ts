@@ -84,6 +84,7 @@ export type NodeType =
   | "trigger_github_issue_opened"
   | "trigger_linear_issue_created"
   | "trigger_sentry_issue_created"
+  | "trigger_jira_issue_created"
   | "trigger_webhook"
   | "custom_agent"
   | "action_agent"

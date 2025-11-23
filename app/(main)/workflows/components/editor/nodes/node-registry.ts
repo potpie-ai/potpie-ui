@@ -6,6 +6,7 @@ export type NodeType =
   | "trigger_github_pr_merged"
   | "trigger_github_issue_opened"
   | "trigger_linear_issue_created"
+  | "trigger_jira_issue_created"
   | "trigger_sentry_issue_created"
   | "trigger_webhook"
   | "custom_agent"
@@ -19,6 +20,7 @@ export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step";
 export type NodeGroup =
   | "github"
   | "linear"
+  | "jira"
   | "sentry"
   | "default"
   | "flow_control";
@@ -27,6 +29,7 @@ import { agentNodeMetadata } from "./agents/agent";
 import { actionAgentNodeMetadata } from "./agents/action-agent";
 import { ifConditionNodeMetadata } from "./flow-controls/if-condition";
 import { linearTriggerNodeMetadata } from "./triggers/linear/linear-trigger";
+import { jiraTriggerNodeMetadata } from "./triggers/jira/jira-trigger";
 import { prOpenedTriggerNodeMetadata } from "./triggers/github/pr-opened-trigger";
 import { prClosedTriggerNodeMetadata } from "./triggers/github/pr-closed-trigger";
 import { prReopenedTriggerNodeMetadata } from "./triggers/github/pr-reopened-trigger";
@@ -62,6 +65,7 @@ export const availableNodes: NodeInfo[] = [
   prMergedTriggerNodeMetadata,
   issueAddedTriggerNodeMetadata,
   linearTriggerNodeMetadata,
+  jiraTriggerNodeMetadata,
   issueCreatedTriggerNodeMetadata,
   webhookTriggerNodeMetadata,
   agentNodeMetadata,
@@ -77,6 +81,7 @@ export {
   prMergedTriggerNodeMetadata,
   issueAddedTriggerNodeMetadata,
   linearTriggerNodeMetadata,
+  jiraTriggerNodeMetadata,
   issueCreatedTriggerNodeMetadata,
   webhookTriggerNodeMetadata,
   agentNodeMetadata,

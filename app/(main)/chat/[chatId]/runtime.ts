@@ -231,6 +231,7 @@ export function PotpieRuntime(chatId: string) {
       message,
       [], // @ts-ignore
       [], // No images for this function
+      [], // No attachment IDs for this function
       (message: string, tool_calls: any[]) => {
         setIsRunning(false);
         setExtras({ loading: false, streaming: true, error: false });
@@ -265,6 +266,9 @@ export function PotpieRuntime(chatId: string) {
       ? (message.runConfig?.custom?.images as File[]) || []
       : [];
 
+    // Extract document attachments from config
+    const documentAttachments = (message.runConfig?.custom?.documents as any[]) || [];
+
     // Create image content for display (only if enabled)
     const imageContent = isMultimodalEnabled()
       ? images.map(image => ({
@@ -273,14 +277,16 @@ export function PotpieRuntime(chatId: string) {
         }))
       : [];
 
-    // Create user message with both text and images
+    // Create user message with text, images, and document metadata
     const userMessage: ThreadMessageLike = {
       role: "user",
       content: [
         { type: "text", text: textContent.text },
         ...imageContent
       ],
-    };
+      // Attach document metadata for display
+      ...(documentAttachments.length > 0 ? { attachments: documentAttachments } : {})
+    } as any;
     setIsRunning(true);
     setMessages((currentMessages) => [...currentMessages, userMessage]);
 
@@ -288,11 +294,16 @@ export function PotpieRuntime(chatId: string) {
       return [...currentMessages, getMessageFromText(undefined, "")];
     });
     try {
+      const documentIds = (message.runConfig?.custom?.documentIds as string[]) || [];
+      console.log('[Runtime] onNew - runConfig.custom:', message.runConfig?.custom);
+      console.log('[Runtime] onNew - documentIds:', documentIds);
+
       await ChatService.streamMessage(
         chatId,
         textContent.text,
         (message.runConfig?.custom?.selectedNodes as any[]) || [],
         images, // Pass images to the service
+        documentIds, // Pass document attachment IDs to the service
         (message: string, tool_calls: any[]) => {
           setIsRunning(false);
           setExtras({ loading: false, streaming: true, error: false });

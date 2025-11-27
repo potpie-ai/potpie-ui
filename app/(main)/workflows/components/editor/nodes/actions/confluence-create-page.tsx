@@ -3,6 +3,8 @@ import { getNodeColors } from "../color_utils";
 import { SourceHandle, TargetHandle } from "../../handles";
 import { FileText } from "lucide-react";
 import { FC } from "react";
+import { ConfluenceIntegrationSelector } from "./confluence/ConfluenceIntegrationSelector";
+import { ConfluenceSpaceSelector } from "./confluence/ConfluenceSpaceSelector";
 
 interface ConfluenceConfigProps {
     config: any;
@@ -15,39 +17,41 @@ export const ConfluenceConfigComponent: FC<ConfluenceConfigProps> = ({
     onConfigChange,
     readOnly = false,
 }) => {
+    // Handle integration change
+    const handleIntegrationChange = (integrationId: string, cloudId: string) => {
+        onConfigChange({
+            ...config,
+            connection_id: integrationId,
+            cloud_id: cloudId,
+            // Reset space when integration changes
+            space_key: null,
+            space_name: null,
+        });
+    };
+
+    // Handle space change
+    const handleSpaceChange = (spaceKey: string, spaceName: string) => {
+        onConfigChange({
+            ...config,
+            space_key: spaceKey,
+            space_name: spaceName,
+        });
+    };
+
     return (
         <div className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Connection ID
-                </label>
-                <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded-md p-2 text-sm"
-                    placeholder="confluence-connection-id"
-                    value={config?.connection_id || ""}
-                    onChange={(e) =>
-                        onConfigChange({ ...config, connection_id: e.target.value })
-                    }
-                    disabled={readOnly}
-                />
-            </div>
+            {/* Integration Selector */}
+            <ConfluenceIntegrationSelector
+                selectedIntegrationId={config?.connection_id || null}
+                onIntegrationChange={handleIntegrationChange}
+            />
 
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Space Key
-                </label>
-                <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded-md p-2 text-sm"
-                    placeholder="DOCS"
-                    value={config?.space_key || ""}
-                    onChange={(e) =>
-                        onConfigChange({ ...config, space_key: e.target.value })
-                    }
-                    disabled={readOnly}
-                />
-            </div>
+            {/* Space Selector */}
+            <ConfluenceSpaceSelector
+                integrationId={config?.connection_id || null}
+                selectedSpaceKey={config?.space_key || null}
+                onSpaceChange={handleSpaceChange}
+            />
 
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -113,7 +117,8 @@ export const confluenceCreatePageNodeMetadata = {
 export const ConfluenceCreatePageNode = ({ data }: { data: WorkflowNode }) => {
     const colors = getNodeColors(data.group);
     const title = data.data?.title;
-    const spaceKey = data.data?.space_key;
+    const spaceName = data.data?.space_name;
+    const integrationId = data.data?.connection_id;
 
     return (
         <div className="w-full">
@@ -127,15 +132,38 @@ export const ConfluenceCreatePageNode = ({ data }: { data: WorkflowNode }) => {
                 </div>
             </div>
             <div className="p-4 flex flex-col items-start gap-2">
-                <div className="w-full">
-                    <p className="font-semibold truncate text-gray-900" title={title || undefined}>
-                        {title || "No title specified"}
-                    </p>
-                    {spaceKey && (
-                        <p className="mt-1 text-xs text-gray-600 truncate" title={spaceKey}>
-                            📁 Space: {spaceKey}
-                        </p>
+                <div className="w-full space-y-2">
+                    {/* Integration Status */}
+                    <div className="flex flex-col gap-1">
+                        <div className="text-xs text-gray-500">Integration</div>
+                        <div className="text-sm font-medium text-gray-800">
+                            {integrationId ? (
+                                <span className="text-green-600">✓ Connected</span>
+                            ) : (
+                                <span className="italic text-gray-400">
+                                    No integration selected
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Space (if selected) */}
+                    {spaceName && (
+                        <div className="flex flex-col gap-1">
+                            <div className="text-xs text-gray-500">Space</div>
+                            <div className="text-sm font-medium text-gray-800 truncate" title={spaceName}>
+                                {spaceName}
+                            </div>
+                        </div>
                     )}
+
+                    {/* Title */}
+                    <div className="flex flex-col gap-1">
+                        <div className="text-xs text-gray-500">Page Title</div>
+                        <p className="text-sm font-medium text-gray-900 truncate" title={title || undefined}>
+                            {title || <span className="italic text-gray-400">No title specified</span>}
+                        </p>
+                    </div>
                 </div>
             </div>
             <TargetHandle />

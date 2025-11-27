@@ -5,6 +5,9 @@ import { JiraTriggerNode } from "./triggers/jira/jira-trigger";
 import { AgentNode } from "./agents/agent";
 import { ActionAgentNode } from "./agents/action-agent";
 import { IfConditionNode } from "./flow-controls/if-condition";
+import { ConfluenceCreatePageNode } from "./actions/confluence-create-page";
+import { SlackSendMessageNode } from "./actions/slack-send-message";
+import { ConfluenceAgentNode } from "./agents/confluence-agent";
 import { X } from "lucide-react";
 
 export const SwitchComponent = ({ data }: { data: WorkflowNode }) => {
@@ -26,11 +29,23 @@ export const SwitchComponent = ({ data }: { data: WorkflowNode }) => {
       switch (data.type) {
         case "action_agent":
           return <ActionAgentNode data={data} />;
+        case "system_workflow_agent_confluence":
+          return <ConfluenceAgentNode data={data} />;
         default:
           return <AgentNode data={data} />;
       }
     case "flow_control":
       return <IfConditionNode data={data} />;
+    case "action":
+      // Handle different action types
+      switch (data.type) {
+        case "action_confluence_create_page":
+          return <ConfluenceCreatePageNode data={data} />;
+        case "action_slack_send_message":
+          return <SlackSendMessageNode data={data} />;
+        default:
+          return <div>Unknown action type</div>;
+      }
   }
 };
 

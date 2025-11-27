@@ -15,15 +15,20 @@ export type NodeType =
   | "flow_control_collect"
   | "flow_control_selector"
   | "manual_step_approval"
-  | "manual_step_input";
-export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step";
+  | "manual_step_input"
+  | "action_confluence_create_page"
+  | "action_slack_send_message"
+  | "system_workflow_agent_confluence";
+export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step" | "action";
 export type NodeGroup =
   | "github"
   | "linear"
   | "jira"
   | "sentry"
   | "default"
-  | "flow_control";
+  | "flow_control"
+  | "confluence"
+  | "slack";
 
 import { agentNodeMetadata } from "./agents/agent";
 import { actionAgentNodeMetadata } from "./agents/action-agent";
@@ -37,6 +42,9 @@ import { prMergedTriggerNodeMetadata } from "./triggers/github/pr-merged-trigger
 import { issueAddedTriggerNodeMetadata } from "./triggers/github/issue-added-trigger";
 import { issueCreatedTriggerNodeMetadata } from "./triggers/sentry/issue-created-trigger";
 import { webhookTriggerNodeMetadata } from "./triggers/webhook";
+import { confluenceCreatePageNodeMetadata } from "./actions/confluence-create-page";
+import { slackSendMessageNodeMetadata } from "./actions/slack-send-message";
+import { confluenceAgentNodeMetadata } from "./agents/confluence-agent";
 
 export interface NodeInfo {
   type: string;
@@ -71,6 +79,9 @@ export const availableNodes: NodeInfo[] = [
   agentNodeMetadata,
   actionAgentNodeMetadata,
   ifConditionNodeMetadata,
+  confluenceCreatePageNodeMetadata,
+  slackSendMessageNodeMetadata,
+  confluenceAgentNodeMetadata,
 ];
 
 // Export individual metadata for direct access if needed
@@ -87,4 +98,5 @@ export {
   agentNodeMetadata,
   actionAgentNodeMetadata,
   ifConditionNodeMetadata,
+  confluenceAgentNodeMetadata,
 };

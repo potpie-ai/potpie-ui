@@ -13,13 +13,36 @@ import {
   setting,
 } from "@/public";
 import axios from "axios";
-import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
+import { GithubAuthProvider, signInWithPopup, createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { LucideCheck, LucideGithub } from "lucide-react";
 import Image from "next/image";
 import { usePostHog } from "posthog-js/react";
 import React, { useRef } from "react";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
+import { workEmailSchema, passwordSchema } from "@/lib/validation";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import Link from "next/link";
+
+const emailPasswordFormSchema = z.object({
+  email: workEmailSchema,
+  password: passwordSchema,
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
 
 const Signup = () => {
   const githubAppUrl =
@@ -45,6 +68,15 @@ const Signup = () => {
       console.error("Error parsing redirect URL:", e);
     }
   }
+
+  const emailPasswordForm = useForm<z.infer<typeof emailPasswordFormSchema>>({
+    resolver: zodResolver(emailPasswordFormSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
 
   // Cleanup function for timers and popups
   React.useEffect(() => {
@@ -134,6 +166,89 @@ const Signup = () => {
   const provider = new GithubAuthProvider();
   provider.addScope("read:org");
   provider.addScope("user:email");
+
+  const onEmailPasswordSignup = async (data: z.infer<typeof emailPasswordFormSchema>) => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    posthog.capture("email password signup clicked");
+
+    try {
+      console.log("[DEBUG] Starting email/password sign up flow");
+      const result = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      console.log("[DEBUG] Firebase auth successful");
+
+      // Send email verification (non-blocking)
+      try {
+        await sendEmailVerification(result.user);
+        console.log("[DEBUG] Email verification sent");
+      } catch (verificationError) {
+        console.error("[DEBUG] Failed to send verification email:", verificationError);
+        // Don't block sign-up if verification email fails
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const headers = await getHeaders();
+
+      try {
+        console.log("[DEBUG] Making signup API call");
+        const userSignup = await axios.post(
+          `${baseUrl}/api/v1/signup`,
+          {
+            uid: result.user.uid,
+            email: result.user.email,
+            displayName: result.user.email?.split("@")[0] || "User",
+            emailVerified: result.user.emailVerified,
+            createdAt: result.user.metadata?.creationTime
+              ? new Date(result.user.metadata.creationTime).toISOString()
+              : "",
+            lastLoginAt: result.user.metadata?.lastSignInTime
+              ? new Date(result.user.metadata.lastSignInTime).toISOString()
+              : "",
+            providerData: result.user.providerData,
+            provider: "email", // Distinguish from GitHub users
+            // No accessToken or providerUsername for email users
+          },
+          { headers: headers }
+        );
+
+        console.log("[DEBUG] Signup API response:", userSignup.data);
+
+        posthog.identify(result.user.uid, {
+          email: result.user.email,
+          name: result.user.email?.split("@")[0] || "",
+        });
+
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const plan = (
+          urlSearchParams.get("plan") ||
+          urlSearchParams.get("PLAN") ||
+          ""
+        ).toLowerCase();
+        const prompt = urlSearchParams.get("prompt") || "";
+        const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
+
+        toast.success("Account created successfully!");
+
+        // Email/password users are always new, go to GitHub app installation
+        await openPopup(result, plan, prompt, agent_id);
+      } catch (e: any) {
+        console.log("[DEBUG] API error:", e.response?.status, e.message);
+        toast.error("Signup call unsuccessful");
+      }
+    } catch (e: any) {
+      console.log("[DEBUG] Firebase auth error:", e);
+      if (e.code === "auth/email-already-in-use") {
+        toast.error("An account with this email already exists. Please sign in.");
+      } else if (e.code === "auth/weak-password") {
+        toast.error("Password is too weak. Please use a stronger password.");
+      } else {
+        toast.error(e.message || "Failed to create account");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const onGithub = async () => {
     if (isLoading) return;
@@ -293,33 +408,83 @@ const Signup = () => {
           />
           <h1 className="text-7xl font-bold text-gray-700">potpie</h1>
         </div>
-        <div className="flex items-center justify-center flex-col text-border">
-          <h3 className="text-2xl font-bold text-black">Get Started!</h3>
-          <div className="flex items-start justify-start flex-col mt-10 gap-4">
-            <p className="flex items-center justify-center text-start text-black gap-4">
-              <LucideCheck
-                size={20}
-                className="bg-primary rounded-full p-[0.5px] text-white"
+
+        <div className="flex items-center justify-center flex-col text-border w-full max-w-md px-6">
+          <h3 className="text-2xl font-bold text-black mb-6">Create your account</h3>
+
+          {/* Email/Password Form */}
+          <Form {...emailPasswordForm}>
+            <form onSubmit={emailPasswordForm.handleSubmit(onEmailPasswordSignup)} className="w-full space-y-4">
+              <FormField
+                control={emailPasswordForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Work Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="you@company.com"
+                        type="email"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              Select the repositories you want to build your AI agents on.
-            </p>
-            <p className="flex items-center justify-center text-start text-black gap-4">
-              <LucideCheck
-                size={20}
-                className="bg-primary rounded-full p-[0.5px] text-white"
+
+              <FormField
+                control={emailPasswordForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="••••••••"
+                        type="password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              You can choose to add more repositories later on from the
-              dashboard
-            </p>
+
+              <FormField
+                control={emailPasswordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="••••••••"
+                        type="password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? "Creating account..." : "Create account"}
+              </Button>
+            </form>
+          </Form>
+
+          <div className="mt-4 text-center text-sm text-black">
+            Already have an account?{" "}
+            <Link href="/sign-in" className="underline">
+              Sign in
+            </Link>
           </div>
-          <Button
-            onClick={() => onGithub()}
-            className="mt-14 gap-2 w-60 hover:bg-black bg-gray-800"
-            disabled={isLoading}
-          >
-            <LucideGithub className="rounded-full border border-white p-1" />
-            {isLoading ? "Signing in..." : "Continue with GitHub"}
-          </Button>
         </div>
       </div>
     </section>

@@ -237,3 +237,20 @@
 .dark .mermaid-diagram svg {
   background: transparent;
 }
+
+/* Fix input text and placeholder colors */
+input {
+  color: #000000 !important; /* black for user text */
+}
+
+input::placeholder {
+  color: #9ca3af !important; /* gray-400 for placeholder */
+}
+
+input:focus {
+  color: #000000 !important; /* black for user text when focused */
+}
+
+input:focus::placeholder {
+  color: #9ca3af !important; /* gray-400 for placeholder when focused */
+}

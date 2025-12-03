@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/Layouts/Sidebar";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
+import { useEffect } from "react";
 
 export default function RootLayout({
   children,
@@ -25,19 +26,27 @@ export default function RootLayout({
   const branch = searchParams.get("branch");
   const agent_id = searchParams.get("agent_id");
   
-  if (user == null) {
-    // Preserve all query parameters when redirecting to sign-in
-    const queryString = searchParams.toString();
-    const redirectPath = queryString ? `${pathname}?${queryString}` : pathname;
-    
-    if (repo && branch) {
-      dispatch(setRepoName(repo));
-      dispatch(setBranchName(branch));
+  // Handle redirect to sign-in in useEffect to avoid setState during render
+  useEffect(() => {
+    if (user == null) {
+      // Preserve all query parameters when redirecting to sign-in
+      const queryString = searchParams.toString();
+      const redirectPath = queryString ? `${pathname}?${queryString}` : pathname;
+      
+      if (repo && branch) {
+        dispatch(setRepoName(repo));
+        dispatch(setBranchName(branch));
+      }
+      
+      router.push(`/sign-in?redirect=${encodeURIComponent(redirectPath)}`);
     }
-    
-    router.push(`/sign-in?redirect=${encodeURIComponent(redirectPath)}`);
+  }, [user, pathname, searchParams, router, dispatch, repo, branch]);
+  
+  // Show loading state while checking auth
+  if (user == null) {
     return null;
   }
+  
   posthog.identify(user.id, { email: user.email, name: user?.name || "" });
 
   return (

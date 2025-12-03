@@ -20,6 +20,12 @@ importers:
       '@assistant-ui/react-markdown':
         specifier: ^0.8.0
         version: 0.8.0(@assistant-ui/react@0.8.5(@types/react-dom@18.3.6(@types/react@18.3.20))(@types/react@18.3.20)(immer@10.1.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(use-sync-external-store@1.4.0(react@18.3.1)))(@types/react-dom@18.3.6(@types/react@18.3.20))(@types/react@18.3.20)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@azure/msal-browser':
+        specifier: ^4.26.2
+        version: 4.26.2
+      '@azure/msal-react':
+        specifier: ^3.0.22
+        version: 3.0.22(@azure/msal-browser@4.26.2)(react@18.3.1)
       '@emotion/react':
         specifier: ^11.14.0
         version: 11.14.0(@types/react@18.3.20)(react@18.3.1)
@@ -86,6 +92,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.1.8
         version: 1.1.8(@types/react-dom@18.3.6(@types/react@18.3.20))(@types/react@18.3.20)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@react-oauth/google':
+        specifier: ^0.12.2
+        version: 0.12.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@reduxjs/toolkit':
         specifier: ^2.6.1
         version: 2.6.1(react-redux@9.2.0(@types/react@18.3.20)(react@18.3.1)(redux@5.0.1))(react@18.3.1)
@@ -371,6 +380,21 @@ packages:
         optional: true
       '@types/react-dom':
         optional: true
+
+  '@azure/msal-browser@4.26.2':
+    resolution: {integrity: sha512-F2U1mEAFsYGC5xzo1KuWc/Sy3CRglU9Ql46cDUx8x/Y3KnAIr1QAq96cIKCk/ZfnVxlvprXWRjNKoEpgLJXLhg==}
+    engines: {node: '>=0.8.0'}
+
+  '@azure/msal-common@15.13.2':
+    resolution: {integrity: sha512-cNwUoCk3FF8VQ7Ln/MdcJVIv3sF73/OT86cRH81ECsydh7F4CNfIo2OAx6Cegtg8Yv75x4506wN4q+Emo6erOA==}
+    engines: {node: '>=0.8.0'}
+
+  '@azure/msal-react@3.0.22':
+    resolution: {integrity: sha512-ZiNr/uQr0f28UGcrMdlBNRlMzA7Mzp0sW4eOR7/rmVBykv4shT2y6PG5+CDCQlSL+AAdoR8pYbaOkuAtPR+37g==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      '@azure/msal-browser': ^4.26.2
+      react: ^16.8.0 || ^17 || ^18 || ^19
 
   '@babel/code-frame@7.26.2':
     resolution: {integrity: sha512-RJlIHRueQgwWitWgF8OdFYGZX328Ax5BCemNGlqHfplnRT9ESi8JkFlvaVYbS+UubVY6dpv87Fs2u5M29iNFVQ==}
@@ -1805,6 +1829,12 @@ packages:
 
   '@react-dnd/shallowequal@4.0.2':
     resolution: {integrity: sha512-/RVXdLvJxLg4QKvMoM5WlwNR9ViO9z8B/qPcc+C0Sa/teJY7QG7kJ441DwzOjMYEY7GmU4dj5EcGHIkKZiQZCA==}
+
+  '@react-oauth/google@0.12.2':
+    resolution: {integrity: sha512-d1GVm2uD4E44EJft2RbKtp8Z1fp/gK8Lb6KHgs3pHlM0PxCXGLaq8LLYQYENnN4xPWO1gkL4apBtlPKzpLvZwg==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
 
   '@reactflow/background@11.3.14':
     resolution: {integrity: sha512-Gewd7blEVT5Lh6jqrvOgd4G6Qk17eGKQfsDXgyRSqM+CTwDqRldG2LsWN4sNeno6sbqVIC2fZ+rAUBFA9ZEUDA==}
@@ -5049,6 +5079,17 @@ snapshots:
       - immer
       - use-sync-external-store
 
+  '@azure/msal-browser@4.26.2':
+    dependencies:
+      '@azure/msal-common': 15.13.2
+
+  '@azure/msal-common@15.13.2': {}
+
+  '@azure/msal-react@3.0.22(@azure/msal-browser@4.26.2)(react@18.3.1)':
+    dependencies:
+      '@azure/msal-browser': 4.26.2
+      react: 18.3.1
+
   '@babel/code-frame@7.26.2':
     dependencies:
       '@babel/helper-validator-identifier': 7.25.9
@@ -6581,6 +6622,11 @@ snapshots:
   '@react-dnd/invariant@4.0.2': {}
 
   '@react-dnd/shallowequal@4.0.2': {}
+
+  '@react-oauth/google@0.12.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
 
   '@reactflow/background@11.3.14(@types/react@18.3.20)(immer@10.1.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:

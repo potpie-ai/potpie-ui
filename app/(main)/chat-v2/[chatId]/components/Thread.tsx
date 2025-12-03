@@ -306,6 +306,7 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   result,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const threadRuntime = useThreadRuntime();
   
   // Get the full message to access the complete tool call part with streamState
   const message = useMessage();
@@ -325,6 +326,43 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   const isCompleted = status === "result" && !isError;
   const hasDetails = !!details_summary;
 
+  // Track thread running state
+  const [threadIsRunning, setThreadIsRunning] = useState(false);
+
+  // Subscribe to thread runtime to track streaming state
+  useEffect(() => {
+    if (!message.isLast) {
+      setThreadIsRunning(false);
+      return;
+    }
+
+    const unsubscribe = threadRuntime.subscribe(() => {
+      const state = threadRuntime.getState();
+      const lastMessage = state.messages.at(-1);
+      const running = lastMessage?.id === message.id && state.isRunning;
+      setThreadIsRunning(running);
+    });
+
+    // Set initial state
+    const initialState = threadRuntime.getState();
+    const lastMessage = initialState.messages.at(-1);
+    const running = lastMessage?.id === message.id && initialState.isRunning;
+    setThreadIsRunning(running);
+
+    return unsubscribe;
+  }, [message.isLast, message.id, threadRuntime]);
+
+  // Check if streaming is ongoing for this tool call
+  // Streaming if: has streamState (actively receiving updates), not completed, not error, and thread is running
+  const isStreaming = !!streamState && !isCompleted && !isError && message.isLast && threadIsRunning;
+
+  // Auto-expand accordion when streaming starts, keep it open during streaming
+  useEffect(() => {
+    if (isStreaming) {
+      setIsExpanded(true);
+    }
+  }, [isStreaming]);
+
   return (
     <motion.li
       initial={{ opacity: 0, x: 20 }}
@@ -336,8 +374,13 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
         <Accordion
           type="single"
           collapsible
-          value={isExpanded ? toolCallId : ""}
-          onValueChange={(value) => setIsExpanded(value === toolCallId)}
+          value={isStreaming ? toolCallId : (isExpanded ? toolCallId : "")}
+          onValueChange={(value) => {
+            // Only allow manual control when not streaming
+            if (!isStreaming) {
+              setIsExpanded(value === toolCallId);
+            }
+          }}
         >
           <AccordionItem value={toolCallId} className="border-0">
             <AccordionTrigger className="py-0 px-0 hover:no-underline">
@@ -355,7 +398,7 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
               </div>
             </AccordionTrigger>
             <AccordionContent className="pt-2 pb-0 px-0">
-              <div className="text-xs text-foreground bg-background/60 rounded-md px-4 py-3">
+              <div className="text-xs text-foreground bg-background/60 rounded-md px-4 py-3 max-h-[350px] overflow-y-auto">
                 <SharedMarkdown
                   content={details_summary}
                   className="markdown-content break-words text-xs"

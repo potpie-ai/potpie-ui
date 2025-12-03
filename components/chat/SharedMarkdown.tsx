@@ -35,39 +35,47 @@ export const SharedMarkdown: FC<SharedMarkdownProps> = ({
           }
           return <pre>{children}</pre>;
         },
-        code: ({ children, className, ...props }) => {
-          const inline = 'inline' in props ? props.inline : false;
-          const language = className
-            ? className.replace("language-", "")
-            : "plaintext";
-
-          // Handle inline code differently from code blocks
-          if (inline) {
+        code: ({ node, inline, className, children, ...props }: any) => {
+          // Handle inline code (single backtick) - check both the explicit inline prop and node type
+          const isInline = inline === true || (node && node.position && 
+            node.position.start.line === node.position.end.line && 
+            !className);
+          
+          if (isInline) {
             return (
-              <code className="bg-green-200 rounded text-sm font-medium text-slate-900">
+              <code className="bg-green-200 rounded px-1 text-sm font-medium text-slate-900">
                 {children}
               </code>
             );
           }
 
-          if (language === "plaintext") {
-            return (
-              <code className="bg-green-200 rounded text-sm font-medium text-slate-900">
-                {children}
-              </code>
-            );
-          }
+          // Extract language from className (format: "language-javascript")
+          const match = /language-(\w+)/.exec(className || '');
+          const language = match ? match[1] : '';
 
-          if (language === "mermaid") {
+          // Mermaid diagrams
+          if (language === 'mermaid') {
             return (
               <MermaidDiagram chart={String(children).replace(/\n$/, "")} />
             );
           }
 
+          // Code blocks with language specified
+          if (language) {
+            return (
+              <MyCodeBlock
+                code={String(children).replace(/\n$/, "")}
+                language={language}
+              />
+            );
+          }
+
+          // Code blocks without language - still render as code block
+          // Use 'text' as default language instead of treating as inline
           return (
             <MyCodeBlock
               code={String(children).replace(/\n$/, "")}
-              language={language}
+              language="text"
             />
           );
         },

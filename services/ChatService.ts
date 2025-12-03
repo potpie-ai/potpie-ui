@@ -5,6 +5,59 @@ import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 
 export default class ChatService {
+  /**
+   * Helper function to extract complete JSON objects from a streaming buffer
+   * Handles concatenated JSON objects without newlines
+   */
+  private static extractJsonObjects(input: string): { objects: string[]; remaining: string } {
+    const objects: string[] = [];
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+    let startIndex = -1;
+
+    for (let i = 0; i < input.length; i++) {
+      const char = input[i]!;
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        if (inString) {
+          escapeNext = true;
+        }
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === "{") {
+        if (depth === 0) {
+          startIndex = i;
+        }
+        depth++;
+      } else if (char === "}") {
+        depth--;
+        if (depth === 0 && startIndex !== -1) {
+          objects.push(input.slice(startIndex, i + 1));
+          startIndex = -1;
+        }
+      }
+    }
+
+    const remaining =
+      depth > 0 && startIndex !== -1 ? input.slice(startIndex) : "";
+
+    return { objects, remaining };
+  }
+
   // Method for creating a chat with a shared agent
   static async createChat(params: {
     agent_id: string;
@@ -104,45 +157,75 @@ export default class ChatService {
       let currentMessage = "";
       let currentCitations: string[] = [];
       let currentToolCalls: any[] = [];
+      let buffer = ""; // Buffer for incomplete JSON chunks
 
       if (reader) {
+        const processJsonSegment = (jsonStr: string) => {
+          if (!jsonStr) return;
+
+          try {
+            const data = JSON.parse(jsonStr);
+
+            if (data.message !== undefined) {
+              const messageWithEmojis = data.message.replace(
+                /\\u[\dA-F]{4}/gi,
+                (match: string) =>
+                  String.fromCodePoint(
+                    parseInt(match.replace(/\\u/g, ""), 16)
+                  )
+              );
+              currentMessage += messageWithEmojis;
+              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            }
+
+            if (data.tool_calls !== undefined) {
+              currentToolCalls.push(...data.tool_calls);
+              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            }
+
+            if (data.citations !== undefined) {
+              currentCitations = data.citations;
+              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            }
+          } catch (e) {
+            // Try to recover by extracting multiple JSON objects
+            const extracted = ChatService.extractJsonObjects(jsonStr);
+            if (extracted.objects.length > 1) {
+              extracted.objects.forEach(processJsonSegment);
+              if (extracted.remaining.trim()) {
+                console.warn(
+                  "Residual data after recovering JSON chunk in resume:",
+                  extracted.remaining,
+                );
+              }
+              return;
+            }
+            console.warn("Failed to parse JSON chunk in resume:", jsonStr, e);
+          }
+        };
+
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value);
+            // Decode chunk and add to buffer
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
 
-            // Process chunks using same logic as streamMessage
-            chunk.split(/(?<=})\s*(?={)/).forEach((jsonStr) => {
-              try {
-                const data = JSON.parse(jsonStr);
+            // Extract and process complete JSON objects from buffer
+            const extracted = ChatService.extractJsonObjects(buffer);
+            buffer = extracted.remaining;
+            extracted.objects.forEach(processJsonSegment);
+          }
 
-                if (data.message !== undefined) {
-                  const messageWithEmojis = data.message.replace(
-                    /\\u[\dA-F]{4}/gi,
-                    (match: string) =>
-                      String.fromCodePoint(
-                        parseInt(match.replace(/\\u/g, ""), 16)
-                      )
-                  );
-                  currentMessage += messageWithEmojis;
-                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                }
+          // Process any remaining complete JSON in buffer after stream ends
+          const extracted = ChatService.extractJsonObjects(buffer);
+          buffer = extracted.remaining;
+          extracted.objects.forEach(processJsonSegment);
 
-                if (data.tool_calls !== undefined) {
-                  currentToolCalls.push(...data.tool_calls);
-                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                }
-
-                if (data.citations !== undefined) {
-                  currentCitations = data.citations;
-                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                }
-              } catch (e) {
-                // Silently handle parsing errors
-              }
-            });
+          if (buffer.trim()) {
+            console.warn("Unprocessed JSON buffer after resume stream end:", buffer);
           }
         } finally {
           reader.releaseLock();
@@ -170,7 +253,8 @@ export default class ChatService {
       tool_calls: any[],
       citations: string[]
     ) => void,
-    sessionId?: string // New optional parameter
+    sessionId?: string, // New optional parameter
+    abortSignal?: AbortSignal
   ): Promise<{ message: string; citations: string[]; sessionId: string }> {
     let currentSessionId = sessionId;
 
@@ -207,7 +291,8 @@ export default class ChatService {
           body: formData,
         },
         onMessageUpdate,
-        3 // max retries
+        3, // max retries
+        abortSignal
       );
 
       return {
@@ -216,6 +301,16 @@ export default class ChatService {
         sessionId: currentSessionId
       };
     } catch (error) {
+      if (
+        abortSignal?.aborted ||
+        (error instanceof DOMException && error.name === "AbortError")
+      ) {
+        return {
+          message: "",
+          citations: [],
+          sessionId: currentSessionId!,
+        };
+      }
       console.error("Stream failed, attempting fallback polling:", error);
 
       // Fallback to polling if stream fails completely
@@ -233,13 +328,17 @@ export default class ChatService {
     url: string,
     options: RequestInit,
     onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void,
-    maxRetries: number
+    maxRetries: number,
+    abortSignal?: AbortSignal
   ): Promise<{ message: string; citations: string[] }> {
     let retries = 0;
 
     while (retries <= maxRetries) {
       try {
-        const response = await fetch(url, options);
+        const response = await fetch(url, {
+          ...options,
+          signal: abortSignal,
+        });
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -251,54 +350,104 @@ export default class ChatService {
         let currentMessage = "";
         let currentCitations: string[] = [];
         let currentToolCalls: any[] = [];
+        let buffer = ""; // Buffer for incomplete JSON chunks
+
+        const processJsonSegment = (jsonStr: string) => {
+          if (!jsonStr) return;
+
+          try {
+            const data = JSON.parse(jsonStr);
+
+            if (data.message !== undefined) {
+              const messageWithEmojis = data.message.replace(
+                /\\u[\dA-F]{4}/gi,
+                (match: string) =>
+                  String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16)),
+              );
+              currentMessage += messageWithEmojis;
+              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            }
+
+            if (data.tool_calls !== undefined) {
+              currentToolCalls.push(...data.tool_calls);
+              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            }
+
+            if (data.citations !== undefined) {
+              currentCitations = data.citations;
+              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            }
+          } catch (e) {
+            // Try to recover by extracting multiple JSON objects
+            const extracted = ChatService.extractJsonObjects(jsonStr);
+            if (extracted.objects.length > 1) {
+              extracted.objects.forEach(processJsonSegment);
+              if (extracted.remaining.trim()) {
+                console.warn(
+                  "Residual data after recovering JSON chunk:",
+                  extracted.remaining,
+                );
+              }
+              return;
+            }
+            console.warn("Failed to parse JSON chunk:", jsonStr, e);
+          }
+        };
 
         if (reader) {
+          const cancelReader = () => {
+            try {
+              reader.cancel();
+            } catch (e) {
+              console.warn("Failed to cancel reader after abort:", e);
+            }
+          };
+
+          if (abortSignal) {
+            if (abortSignal.aborted) {
+              cancelReader();
+              throw new DOMException("Aborted", "AbortError");
+            }
+            abortSignal.addEventListener("abort", cancelReader, { once: true });
+          }
+
           try {
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
 
-              const chunk = decoder.decode(value);
+              const chunk = decoder.decode(value, { stream: true });
+              buffer += chunk;
 
-              // Process chunks (existing logic from lines 92-133)
-              chunk.split(/(?<=})\s*(?={)/).forEach((jsonStr) => {
-                try {
-                  const data = JSON.parse(jsonStr);
+              const extracted = ChatService.extractJsonObjects(buffer);
+              buffer = extracted.remaining;
+              extracted.objects.forEach(processJsonSegment);
+            }
 
-                  if (data.message !== undefined) {
-                    const messageWithEmojis = data.message.replace(
-                      /\\u[\dA-F]{4}/gi,
-                      (match: string) =>
-                        String.fromCodePoint(
-                          parseInt(match.replace(/\\u/g, ""), 16)
-                        )
-                    );
-                    currentMessage += messageWithEmojis;
-                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                  }
+            const extracted = ChatService.extractJsonObjects(buffer);
+            buffer = extracted.remaining;
+            extracted.objects.forEach(processJsonSegment);
 
-                  if (data.tool_calls !== undefined) {
-                    currentToolCalls.push(...data.tool_calls);
-                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                  }
-
-                  if (data.citations !== undefined) {
-                    currentCitations = data.citations;
-                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                  }
-                } catch (e) {
-                  // Silently handle parsing errors
-                }
-              });
+            if (buffer.trim()) {
+              console.warn("Unprocessed JSON buffer after stream end:", buffer);
             }
           } finally {
             reader.releaseLock();
+            if (abortSignal) {
+              abortSignal.removeEventListener("abort", cancelReader);
+            }
           }
         }
 
         return { message: currentMessage, citations: currentCitations };
 
       } catch (error) {
+        if (
+          abortSignal?.aborted ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
+          throw error;
+        }
         retries++;
         if (retries > maxRetries) {
           throw error;
@@ -684,6 +833,20 @@ export default class ChatService {
     } catch (error) {
       console.error("Error enhancing prompt:", error);
       throw error;
+    }
+  }
+
+  static async stopMessage(conversationId: string): Promise<void> {
+    try {
+      const headers = await getHeaders();
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/stop/`,
+        {},
+        { headers }
+      );
+    } catch (error) {
+      console.error("Error stopping message:", error);
+      // Don't throw - we still want to clean up even if stop endpoint fails
     }
   }
 }

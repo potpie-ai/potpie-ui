@@ -71,7 +71,6 @@ export default function AccountSettingsPage() {
   const providerInfo: Record<string, { name: string; icon: string }> = {
     firebase_github: { name: 'GitHub', icon: '🐙' },
     sso_google: { name: 'Google', icon: '🔵' },
-    sso_azure: { name: 'Microsoft', icon: '🔷' },
   };
 
   if (loading) {

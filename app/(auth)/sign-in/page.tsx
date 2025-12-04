@@ -10,32 +10,21 @@ import {
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 
-import { LucideCheck, LucideGithub, Mail } from "lucide-react";
+import { LucideGithub } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { useSearchParams, useRouter } from "next/navigation";
-import { PublicClientApplication } from '@azure/msal-browser';
-import { MsalProvider } from '@azure/msal-react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { WorkEmailSSO } from '@/components/auth/WorkEmailSSO';
 import { LinkProviderDialog } from '@/components/auth/LinkProviderDialog';
+import { DirectSSOButtons } from '@/components/auth/DirectSSOButtons';
 import type { SSOLoginResponse } from '@/types/auth';
-
-// Initialize MSAL for Azure AD
-const msalConfig = {
-  auth: {
-    clientId: process.env.NEXT_PUBLIC_AZURE_SSO_CLIENT_ID || '',
-    authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_AZURE_SSO_TENANT_ID || 'common'}`,
-    redirectUri: typeof window !== 'undefined' ? window.location.origin : undefined,
-  },
-};
-
-const msalInstance = new PublicClientApplication(msalConfig);
+import { validateWorkEmail } from "@/lib/utils/emailValidation";
 
 export default function Signin() {
   const router = useRouter();
@@ -45,9 +34,6 @@ export default function Signin() {
   const redirectUrl = searchParams.get("redirect");
   
   // SSO state
-  const [ssoEmail, setSsoEmail] = React.useState('');
-  const [ssoEmailInput, setSsoEmailInput] = React.useState('');
-  const [showSSOFlow, setShowSSOFlow] = React.useState(false);
   const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(null);
   const [showLinkingDialog, setShowLinkingDialog] = React.useState(false);
 
@@ -67,7 +53,7 @@ export default function Signin() {
   const finalAgent_id = agent_id || redirectAgent_id;
 
   const formSchema = z.object({
-    email: z.string().email(),
+    email: z.string().email("Please enter a valid email address"),
     password: z.string().min(6, { message: "Password is required" }),
   });
   const form = useForm<z.infer<typeof formSchema>>({
@@ -91,6 +77,14 @@ export default function Signin() {
   };
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    // Validate work email
+    const emailValidation = validateWorkEmail(data.email);
+    if (!emailValidation.isValid) {
+      form.setError("email", { message: emailValidation.errorMessage });
+      // Don't show toast - inline error is sufficient
+      return;
+    }
+
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -110,12 +104,37 @@ export default function Signin() {
           .catch((e) => {
             toast.error("Signup call unsuccessful");
           });
-        toast.success("Logged in successfully as " + user.displayName);
+        toast.success("Logged in successfully as " + (user.displayName || user.email));
       })
-      .catch((error) => {
+      .catch(async (error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
-        toast.error(errorMessage);
+        
+        // If invalid credentials, check if user might have signed up with SSO
+        if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password' || errorCode === 'auth/user-not-found') {
+          try {
+            // Check if user exists with SSO by calling backend
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+            const checkResponse = await axios.get(
+              `${baseUrl}/api/v1/account/check-email?email=${encodeURIComponent(data.email)}`,
+              { validateStatus: () => true } // Don't throw on any status
+            );
+            
+            if (checkResponse.status === 200 && checkResponse.data?.has_sso) {
+              const friendlyError = 'This email is registered with Google SSO. Please sign in with Google instead.';
+              form.setError("email", { message: friendlyError });
+              // Don't show toast - inline error is sufficient
+              return;
+            }
+          } catch (checkError) {
+            // If check fails, fall through to default error
+            console.error("Error checking SSO status:", checkError);
+          }
+        }
+        
+        const friendlyError = getUserFriendlyError(error);
+        form.setError("email", { message: friendlyError });
+        // Don't show toast - inline error is sufficient
       });
   };
 
@@ -185,7 +204,7 @@ export default function Signin() {
             );
           } catch (e: any) {
             console.error("API error:", e);
-            toast.error("Sign-in unsuccessful");
+            toast.error(getUserFriendlyError(e));
           }
         }
       })
@@ -194,19 +213,12 @@ export default function Signin() {
         const errorMessage = error.message;
         const email = error.customData?.email;
         const credential = GithubAuthProvider.credentialFromError(error);
-        toast.error(errorMessage);
+        const friendlyError = getUserFriendlyError(error);
+        toast.error(friendlyError);
       });
   };
 
   // SSO handlers
-  const handleSSOEmailSubmit = () => {
-    if (!ssoEmailInput || !ssoEmailInput.includes('@')) {
-      toast.error('Please enter a valid work email address');
-      return;
-    }
-    setSsoEmail(ssoEmailInput);
-  };
-
   const handleSSONeedsLinking = (response: SSOLoginResponse) => {
     setLinkingData(response);
     setShowLinkingDialog(true);
@@ -215,7 +227,6 @@ export default function Signin() {
   const handleSSOLinked = () => {
     // After linking, redirect based on context
     if (source === "vscode") {
-      // Handle vscode redirect - would need token from backend
       router.push('/newchat');
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
@@ -227,7 +238,6 @@ export default function Signin() {
   const handleSSOSuccess = () => {
     // For existing users signing in via SSO
     if (source === "vscode") {
-      // Handle vscode redirect - would need token from backend
       router.push('/newchat');
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
@@ -236,14 +246,8 @@ export default function Signin() {
     }
   };
 
-  const resetSSOFlow = () => {
-    setShowSSOFlow(false);
-    setSsoEmail('');
-    setSsoEmailInput('');
-  };
-
   return (
-    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative">
+    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition">
       <div className="flex items-center justify-center w-1/2 h-full p-6">
         <div className="relative h-full w-full rounded-lg overflow-hidden">
           <Image
@@ -284,107 +288,75 @@ export default function Signin() {
             dashboard
           </p>
         </div> */}
-          <Button
-            onClick={() => onGithub()}
-            className="mt-14 gap-2 w-60 hover:bg-black bg-gray-800"
-          >
-            <LucideGithub className=" rounded-full border border-white p-1" />
-            Signin with GitHub
-          </Button>
+          <div className="w-60 mt-14 space-y-6">
+            {/* GitHub Sign-in */}
+            <Button
+              onClick={() => onGithub()}
+              className="gap-2 w-full h-12 hover:bg-black bg-gray-800"
+            >
+              <LucideGithub className="rounded-full border border-white p-1" />
+              Sign in with GitHub
+            </Button>
 
-          {/* SSO Flow - In-place */}
-          <div className="w-60 transition-all duration-300 ease-in-out">
-            {!showSSOFlow ? (
-              <div className="space-y-6 transition-opacity duration-300 ease-in-out">
-                <div className="relative my-6">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-200" />
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="bg-white px-3 text-gray-500 font-medium">or</span>
-                  </div>
-                </div>
+            {/* SSO Buttons */}
+            <DirectSSOButtons
+              onNeedsLinking={handleSSONeedsLinking}
+              onSuccess={handleSSOSuccess}
+            />
 
-                <Button
-                  onClick={() => setShowSSOFlow(true)}
-                  variant="outline"
-                  className="gap-2 w-full h-12 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50/80 bg-white shadow-sm hover:shadow-md transition-all duration-200 ease-in-out group"
-                >
-                  <Mail className="w-5 h-5 text-gray-600 group-hover:text-gray-700 transition-colors" />
-                  <span className="text-gray-700 font-medium group-hover:text-gray-900 transition-colors">
-                    Continue with Work Email
-                  </span>
-                </Button>
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
               </div>
-            ) : (
-              <div className="mt-6 space-y-3 transition-all duration-300 ease-in-out">
-                {!ssoEmail ? (
-                  <div className="w-full space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex-1 relative">
-                        <input
-                          type="email"
-                          placeholder="you@company.com"
-                          value={ssoEmailInput}
-                          onChange={(e) => setSsoEmailInput(e.target.value)}
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              handleSSOEmailSubmit();
-                            }
-                          }}
-                          className="w-full px-4 py-3 pr-10 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400 text-gray-900"
-                          autoFocus
-                        />
-                        {ssoEmailInput && (
-                          <button
-                            onClick={() => setSsoEmailInput('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        onClick={resetSSOFlow}
-                        className="px-4 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200 font-medium"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    <button
-                      onClick={handleSSOEmailSubmit}
-                      disabled={!ssoEmailInput || !ssoEmailInput.includes('@')}
-                      className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md font-medium disabled:hover:shadow-sm"
-                    >
-                      Continue
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3 transition-opacity duration-300 ease-in-out">
-                    <div className="text-sm text-gray-600 text-center py-2 px-3 bg-gray-50 rounded-lg border border-gray-200">
-                      Sign in with: <span className="font-semibold text-gray-900">{ssoEmail}</span>
-                    </div>
-                    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID || ''}>
-                      <MsalProvider instance={msalInstance}>
-                        <WorkEmailSSO
-                          email={ssoEmail}
-                          onNeedsLinking={handleSSONeedsLinking}
-                          onSuccess={handleSSOSuccess}
-                        />
-                      </MsalProvider>
-                    </GoogleOAuthProvider>
-                    <button
-                      onClick={resetSSOFlow}
-                      className="w-full text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 py-2 rounded-lg transition-colors duration-200 font-medium"
-                    >
-                      Use different email
-                    </button>
-                  </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="bg-white px-3 text-gray-500 font-medium">or</span>
+              </div>
+            </div>
+
+            {/* Email/Password Form */}
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div>
+                <input
+                  type="email"
+                  placeholder="you@company.com"
+                  {...form.register("email")}
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all duration-300 placeholder:text-gray-400 text-gray-900 input-error ${
+                    form.formState.errors.email
+                      ? "border-red-500"
+                      : "border-gray-200"
+                  }`}
+                />
+                {form.formState.errors.email && (
+                  <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
+                    {form.formState.errors.email.message}
+                  </p>
                 )}
               </div>
-            )}
+              <div>
+                <input
+                  type="password"
+                  placeholder="Password"
+                  {...form.register("password")}
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all duration-300 placeholder:text-gray-400 text-gray-900 input-error ${
+                    form.formState.errors.password
+                      ? "border-red-500"
+                      : "border-gray-200"
+                  }`}
+                />
+                {form.formState.errors.password && (
+                  <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
+                    {form.formState.errors.password.message}
+                  </p>
+                )}
+              </div>
+              <Button
+                type="submit"
+                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm hover:shadow-md transition-all duration-200"
+              >
+                Sign in
+              </Button>
+            </form>
           </div>
           
           <div className="mt-4 text-center text-sm text-black">

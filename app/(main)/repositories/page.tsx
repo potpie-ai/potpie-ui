@@ -26,6 +26,43 @@ const AllRepos = () => {
       "width=1000,height=700"
     );
   };
+  // Check if GitHub is linked before fetching repos
+  const [hasGithubLinked, setHasGithubLinked] = useState<boolean | null>(null);
+  const [isCheckingGithub, setIsCheckingGithub] = useState(true);
+
+  // Check GitHub link status on mount
+  useEffect(() => {
+    const checkGithubLinked = async () => {
+      try {
+        const { auth } = await import("@/configs/Firebase-config");
+        const user = auth.currentUser;
+        if (!user) {
+          setHasGithubLinked(false);
+          setIsCheckingGithub(false);
+          return;
+        }
+
+        const token = await user.getIdToken();
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+        const { authClient } = await import("@/lib/sso/unified-auth");
+        
+        const response = await authClient.getMyProviders(token);
+        const hasGithub = response.providers?.some(
+          (p: any) => p.provider_type === 'firebase_github'
+        );
+        
+        setHasGithubLinked(hasGithub || false);
+      } catch (error: any) {
+        console.warn("Error checking GitHub link (non-critical):", error);
+        setHasGithubLinked(false);
+      } finally {
+        setIsCheckingGithub(false);
+      }
+    };
+
+    checkGithubLinked();
+  }, []);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["all-repos"],
     queryFn: async () => {
@@ -36,7 +73,9 @@ const AllRepos = () => {
       });
 
       return response.data.repositories;
-    }
+    },
+    enabled: hasGithubLinked === true && !isCheckingGithub, // Only fetch if GitHub is linked
+    retry: false, // Don't retry if it fails
   });
 
   useEffect(() => {

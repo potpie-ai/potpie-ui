@@ -181,10 +181,12 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
 
       {/* Pagination Dots */}
       <div className="flex space-x-2 mt-4">
-        {AgentTypes && (() => {
+        {AgentTypes && AgentTypes.length > 0 && visibleCards > 0 && (() => {
           const totalPages = Math.ceil(AgentTypes.length / visibleCards);
+          // Ensure totalPages is a valid positive number
+          const safeTotalPages = Math.max(1, Math.min(totalPages, 1000)); // Cap at 1000 to prevent memory issues
           const currentPage = Math.floor(currentIndex / visibleCards);
-          return [...Array(totalPages)].map((_, index) => (
+          return [...Array(safeTotalPages)].map((_, index) => (
             <button
               key={index}
               className={`h-2 w-2 rounded-full transition ${

@@ -17,6 +17,14 @@ export default function AuthLayout({
 
   useEffect(() => {
     if (user) {
+      const currentPath = window.location.pathname;
+      
+      // Always allow onboarding page - don't redirect away from it
+      if (currentPath.startsWith('/onboarding')) {
+        console.log("User authenticated on onboarding page - allowing access");
+        return;
+      }
+      
       // Handle VSCode authentication flow
       if (source === "vscode") {
         user.getIdToken().then((token: any) => {
@@ -33,11 +41,16 @@ export default function AuthLayout({
       }
 
       // Handle regular authentication flow with redirect parameter
-      if (!window.location.pathname.startsWith('/onboarding') && 
-          !window.location.pathname.startsWith('/sign-up') && 
-          !window.location.pathname.startsWith('/link-github')) {
-        console.log("redirecting to", redirectUrl ? decodeURIComponent(redirectUrl) : "/");
-        router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
+      // Only redirect if we're not on sign-up or link-github pages
+      if (!currentPath.startsWith('/sign-up') && 
+          !currentPath.startsWith('/link-github')) {
+        // Only redirect if there's an explicit redirectUrl parameter
+        // Don't auto-redirect to "/" for authenticated users
+        if (redirectUrl) {
+          console.log("redirecting to", decodeURIComponent(redirectUrl));
+          router.push(decodeURIComponent(redirectUrl));
+        }
+        // If no redirectUrl, stay on current page (don't force redirect to "/")
       }
     }
   }, [user, source, redirectUrl, agent_id, router]);

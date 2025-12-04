@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/sso/unified-auth';
 import { toast } from 'sonner';
 import type { SSOLoginResponse } from '@/types/auth';
+import { getUserFriendlyError, getUserFriendlyProviderName } from '@/lib/utils/errorMessages';
 
 interface LinkProviderDialogProps {
   isOpen: boolean;
@@ -23,19 +24,36 @@ export function LinkProviderDialog({
   const [isLinking, setIsLinking] = useState(false);
 
   const handleConfirm = async () => {
-    if (!linkingData.linking_token) return;
+    if (!linkingData.linking_token) {
+      console.error('No linking token provided');
+      return;
+    }
+
+    console.log('=== LINK PROVIDER DIALOG - CONFIRM ===');
+    console.log('Linking token:', linkingData.linking_token);
+    console.log('Full linking data:', linkingData);
 
     setIsLinking(true);
     try {
-      await authClient.confirmLinking(linkingData.linking_token);
+      console.log('Calling authClient.confirmLinking...');
+      const result = await authClient.confirmLinking(linkingData.linking_token);
+      console.log('confirmLinking result:', result);
       toast.success('Account linked successfully!');
       onLinked();
       onClose();
     } catch (error: any) {
-      console.error('Linking error:', error);
-      toast.error(error.response?.data?.error || 'Failed to link account');
+      console.error('=== LINKING ERROR ===');
+      console.error('Error object:', error);
+      console.error('Error message:', error.message);
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error response headers:', error.response?.headers);
+      console.error('Full error:', JSON.stringify(error, null, 2));
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsLinking(false);
+      console.log('=== END LINK PROVIDER DIALOG - CONFIRM ===');
     }
   };
 
@@ -50,18 +68,11 @@ export function LinkProviderDialog({
     onClose();
   };
 
-  const providerNames: Record<string, string> = {
-    firebase_github: 'GitHub',
-    sso_google: 'Google',
-    sso_azure: 'Microsoft',
-  };
-
   const existingProviderNames = linkingData.existing_providers?.map(
-    (p) => providerNames[p] || p
+    (p) => getUserFriendlyProviderName(p)
   ).join(', ');
 
   const newProviderType = linkingData.message.includes('Google') ? 'Google' :
-                          linkingData.message.includes('Microsoft') || linkingData.message.includes('Azure') ? 'Microsoft' :
                           'SSO';
 
   return (

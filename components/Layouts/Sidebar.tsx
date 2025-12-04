@@ -47,9 +47,71 @@ export function AppSidebar() {
   const [progress, setProgress] = React.useState(90);
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
+  const router = useRouter();
   const dispatch: AppDispatch = useDispatch();
 
   const userId = user?.uid;
+  
+  // Get user account info from backend to ensure we use the primary email (not GitHub email)
+  const { data: userAccount, isLoading: accountLoading, error: accountError } = useQuery({
+    queryKey: ["userAccount", userId],
+    queryFn: async () => {
+      if (!user) return null;
+      try {
+        const token = await user.getIdToken();
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+        const { authClient } = await import("@/lib/sso/unified-auth");
+        const account = await authClient.getAccount(token);
+        console.log('Sidebar: Fetched account from backend:', {
+          email: account.email,
+          display_name: account.display_name,
+          providers: account.providers?.map((p: any) => p.provider_type),
+        });
+        return account;
+      } catch (error: any) {
+        console.error("Error fetching user account:", error);
+        console.error("Error details:", error.response?.data || error.message);
+        // Don't return null on error - throw to trigger retry
+        throw error;
+      }
+    },
+    enabled: !!userId && !!user,
+    retry: 2, // Retry twice on failure
+    retryDelay: 1000, // Wait 1 second between retries
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+  });
+  
+  // Use backend email if available, otherwise fall back to Firebase email
+  // This ensures we show the primary sign-in email, not GitHub email
+  // IMPORTANT: Always prefer backend email to avoid showing GitHub email
+  // Filter out GitHub noreply emails as fallback
+  const getDisplayEmail = () => {
+    // If backend query is still loading, don't show email yet (or show loading)
+    if (accountLoading && !userAccount) {
+      return user?.email || ''; // Show Firebase email while loading
+    }
+    
+    // Always prefer backend email when available
+    if (userAccount?.email) {
+      console.log('Sidebar: Using backend email:', userAccount.email);
+      return userAccount.email;
+    }
+    
+    // Fallback to Firebase email only if it's not a GitHub noreply email
+    const firebaseEmail = user?.email;
+    if (firebaseEmail && !firebaseEmail.includes('@users.noreply.github.com')) {
+      console.warn('Sidebar: Using Firebase email (backend query failed or not available):', firebaseEmail);
+      console.warn('Sidebar: Account error:', accountError);
+      return firebaseEmail;
+    }
+    
+    console.warn('Sidebar: No valid email found. Backend:', userAccount?.email, 'Firebase:', firebaseEmail);
+    return firebaseEmail || ''; // Return empty string as last resort
+  };
+  
+  const displayEmail = getDisplayEmail();
+  const displayName = userAccount?.display_name || user?.displayName;
   const { total_human_messages } = useSelector(
     (state: RootState) => state.UserInfo
   );
@@ -186,88 +248,94 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href={`/user-subscription?end_date=${userSubscription?.end_date ? new Date(userSubscription.end_date).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : ''}&plan_type=${userSubscription?.plan_type}`} className="w-full">
-              <Card className="bg-background border border-gray-200 text-black">
-                <CardHeader className="p-2 pt-0 md:p-4">
-                  <CardTitle className="text-lg text-black">
-                    {(() => {
-                      const now = new Date();
-                      const subscriptionEndDate = new Date(
-                        userSubscription?.end_date || 0
-                      );
+            <Card 
+              className="bg-background border border-gray-200 text-black cursor-pointer hover:bg-gray-50 transition-colors"
+              onClick={() => {
+                const subscriptionUrl = `/user-subscription?end_date=${userSubscription?.end_date ? new Date(userSubscription.end_date).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : ''}&plan_type=${userSubscription?.plan_type || ''}`;
+                router.push(subscriptionUrl);
+              }}
+            >
+              <CardHeader className="p-2 pt-0 md:p-4">
+                <CardTitle className="text-lg text-black">
+                  {(() => {
+                    const now = new Date();
+                    const subscriptionEndDate = new Date(
+                      userSubscription?.end_date || 0
+                    );
 
-                      if (subscriptionLoading)
-                        return <Skeleton className="w-28 h-6" />;
-                      if (
-                        !userSubscription ||
-                        userSubscription.plan_type === planTypesEnum.FREE
-                      ) {
-                        return "Free Plan";
-                      } else if (
-                        userSubscription.plan_type === planTypesEnum.STARTUP &&
-                        subscriptionEndDate > now
-                      ) {
-                        return "Early-Stage";
-                      } else if (
-                        userSubscription.plan_type === planTypesEnum.PRO &&
-                        subscriptionEndDate > now
-                      ) {
-                        return "Individual - Pro";
-                      } else {
-                        return "Expired Plan";
-                      }
-                    })()}
-                  </CardTitle>
-                  <CardDescription className="flex flex-row justify-between text-gray-600">
-                    <span>Credits used</span>
-                    <span>
-                      {usageLoading ? (
-                        <Skeleton className="w-10 h-5" />
-                      ) : (
-                        `${total_human_messages || 0} / ${userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50}`
-                      )}
-                    </span>
-                  </CardDescription>
-                </CardHeader>
+                    if (subscriptionLoading)
+                      return <Skeleton className="w-28 h-6" />;
+                    if (
+                      !userSubscription ||
+                      userSubscription.plan_type === planTypesEnum.FREE
+                    ) {
+                      return "Free Plan";
+                    } else if (
+                      userSubscription.plan_type === planTypesEnum.STARTUP &&
+                      subscriptionEndDate > now
+                    ) {
+                      return "Early-Stage";
+                    } else if (
+                      userSubscription.plan_type === planTypesEnum.PRO &&
+                      subscriptionEndDate > now
+                    ) {
+                      return "Individual - Pro";
+                    } else {
+                      return "Expired Plan";
+                    }
+                  })()}
+                </CardTitle>
+                <CardDescription className="flex flex-row justify-between text-gray-600">
+                  <span>Credits used</span>
+                  <span>
+                    {usageLoading ? (
+                      <Skeleton className="w-10 h-5" />
+                    ) : (
+                      `${total_human_messages || 0} / ${userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50}`
+                    )}
+                  </span>
+                </CardDescription>
+              </CardHeader>
 
-                <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex">
-                  <Progress.Root
-                    className="relative overflow-hidden bg-[#7F7F7F] rounded-full w-full h-[5px]"
-                    style={{
-                      transform: "translateZ(0)",
-                    }}
-                    value={progress}
+              <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex">
+                <Progress.Root
+                  className="relative overflow-hidden bg-[#7F7F7F] rounded-full w-full h-[5px]"
+                  style={{
+                    transform: "translateZ(0)",
+                  }}
+                  value={progress}
+                >
+                  <Progress.Indicator
+                    className="bg-black w-full h-full transition-transform transition-duration-[660ms] ease-[cubic-bezier(0.65, 0, 0.35, 1)]"
+                    style={{ transform: `translateX(-${100 - progress}%)` }}
+                  />
+                </Progress.Root>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent card click when clicking button
+                    router.push("/user-subscription");
+                  }}
+                  style={{ 
+                    display: userSubscription?.plan_type === planTypesEnum.PRO ? 'none' : 'block' 
+                  }}
+                >
+                  <Button
+                    size="sm"
+                    className="w-full bg-black hover:text-white text-white !border-none"
                   >
-                    <Progress.Indicator
-                      className="bg-black w-full h-full transition-transform transition-duration-[660ms] ease-[cubic-bezier(0.65, 0, 0.35, 1)]"
-                      style={{ transform: `translateX(-${100 - progress}%)` }}
-                    />
-                  </Progress.Root>
-                  <Link
-                    href={"/user-subscription"}
-                    className="w-full inset-0"
-                    style={{ 
-                      display: userSubscription?.plan_type === planTypesEnum.PRO ? 'none' : 'block' 
-                    }}
-                  >
-                    <Button
-                      size="sm"
-                      className="w-full bg-black hover:text-white text-white !border-none"
-                    >
-                      ✨ Upgrade
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            </Link>
+                    ✨ Upgrade
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </SidebarMenuItem>
         </SidebarMenu>
         <Separator />
         <NavUser
           user={{
             avatar: user?.photoURL,
-            email: user?.email,
-            name: user?.displayName,
+            email: displayEmail,
+            name: displayName,
           }}
         />
       </SidebarFooter>

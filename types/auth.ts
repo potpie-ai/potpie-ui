@@ -1,7 +1,6 @@
 export type ProviderType = 
   | 'firebase_github' 
-  | 'sso_google' 
-  | 'sso_azure';
+  | 'sso_google';
 
 export type SSOLoginStatus = 
   | 'success' 
@@ -25,6 +24,7 @@ export interface SSOLoginResponse {
   email: string;
   display_name?: string;
   access_token?: string;
+  firebase_token?: string;  // Firebase custom token for frontend auth
   message: string;
   linking_token?: string;
   existing_providers?: string[];

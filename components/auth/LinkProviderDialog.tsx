@@ -29,31 +29,17 @@ export function LinkProviderDialog({
       return;
     }
 
-    console.log('=== LINK PROVIDER DIALOG - CONFIRM ===');
-    console.log('Linking token:', linkingData.linking_token);
-    console.log('Full linking data:', linkingData);
-
     setIsLinking(true);
     try {
-      console.log('Calling authClient.confirmLinking...');
       const result = await authClient.confirmLinking(linkingData.linking_token);
-      console.log('confirmLinking result:', result);
-      toast.success('Account linked successfully!');
+      toast.success('Perfect! Your accounts are now connected.');
       onLinked();
       onClose();
     } catch (error: any) {
-      console.error('=== LINKING ERROR ===');
-      console.error('Error object:', error);
-      console.error('Error message:', error.message);
-      console.error('Error response:', error.response);
-      console.error('Error response data:', error.response?.data);
-      console.error('Error response status:', error.response?.status);
-      console.error('Error response headers:', error.response?.headers);
-      console.error('Full error:', JSON.stringify(error, null, 2));
+      console.error('Error linking provider:', error);
       toast.error(getUserFriendlyError(error));
     } finally {
       setIsLinking(false);
-      console.log('=== END LINK PROVIDER DIALOG - CONFIRM ===');
     }
   };
 
@@ -106,7 +92,7 @@ export function LinkProviderDialog({
                 <span className="font-semibold">{linkingData.email}</span> already has an account
               </p>
               <p className="text-sm text-gray-600 mb-3">
-                You're currently signed in with: <span className="font-medium">{existingProviderNames}</span>
+                You&apos;re currently signed in with: <span className="font-medium">{existingProviderNames}</span>
               </p>
               <p className="text-sm text-gray-600">
                 Would you like to link your {newProviderType} account to enable signing in with both methods?

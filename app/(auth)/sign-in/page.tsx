@@ -20,7 +20,6 @@ import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { useSearchParams, useRouter } from "next/navigation";
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { LinkProviderDialog } from '@/components/auth/LinkProviderDialog';
 import { DirectSSOButtons } from '@/components/auth/DirectSSOButtons';
 import type { SSOLoginResponse } from '@/types/auth';
@@ -94,7 +93,6 @@ export default function Signin() {
           .post(`${baseUrl}/api/v1/signup`, user, { headers: headers })
           .then((res) => {
             if (source === "vscode") {
-              console.log("res.data", res.data);
               handleExternalRedirect(res.data.token);
             } else if (finalAgent_id) {
               handleExternalRedirect("");
@@ -102,9 +100,9 @@ export default function Signin() {
             return res.data;
           })
           .catch((e) => {
-            toast.error("Signup call unsuccessful");
+            toast.error("Oops! Something went wrong. Please try again.");
           });
-        toast.success("Logged in successfully as " + (user.displayName || user.email));
+        toast.success("Welcome back, " + (user.displayName || user.email?.split("@")[0] || "there") + "!");
       })
       .catch(async (error) => {
         const errorCode = error.code;
@@ -175,7 +173,7 @@ export default function Signin() {
             if (!userSignup.data.exists) {
               // For new users, redirect to onboarding
               toast.success(
-                "Account created successfully as " + result.user.displayName
+                "Awesome! Your account is ready. Let's get you set up!"
               );
 
               const urlSearchParams = new URLSearchParams(
@@ -200,7 +198,7 @@ export default function Signin() {
             }
 
             toast.success(
-              "Logged in successfully as " + result.user.displayName
+              "Great to see you again, " + (result.user.displayName || result.user.email?.split("@")[0] || "there") + "!"
             );
           } catch (e: any) {
             console.error("API error:", e);
@@ -235,7 +233,13 @@ export default function Signin() {
     }
   };
 
-  const handleSSOSuccess = () => {
+  const handleSSOSuccess = (response?: SSOLoginResponse) => {
+    // Check if this is actually a new user (defensive check)
+    if (response && response.status === 'new_user') {
+      handleSSONewUser(response);
+      return;
+    }
+    
     // For existing users signing in via SSO
     if (source === "vscode") {
       router.push('/newchat');
@@ -246,122 +250,124 @@ export default function Signin() {
     }
   };
 
+  const handleSSONewUser = (response: SSOLoginResponse) => {
+    // For new users signing in via SSO, redirect to onboarding
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+    const prompt = urlSearchParams.get("prompt") || "";
+    
+    const onboardingParams = new URLSearchParams({
+      ...(response.user_id && { uid: response.user_id }),
+      ...(response.email && { email: response.email }),
+      ...(response.display_name && { name: response.display_name }),
+      ...(plan && { plan }),
+      ...(prompt && { prompt }),
+      ...(finalAgent_id && { agent_id: finalAgent_id }),
+    });
+    
+    const onboardingUrl = `/onboarding?${onboardingParams.toString()}`;
+    router.push(onboardingUrl);
+  };
+
   return (
-    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition">
-      <div className="flex items-center justify-center w-1/2 h-full p-6">
+    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition bg-gray-50">
+      <div className="hidden lg:flex items-center justify-center w-1/2 h-full p-6">
         <div className="relative h-full w-full rounded-lg overflow-hidden">
           <Image
             src={"/images/landing.png"}
             alt="landing"
-            layout="fill"
-            objectFit="cover"
+            fill
+            className="object-cover"
           />
         </div>
       </div>
 
-      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-2">
-        <div className="flex items-center justify-center flex-row gap-2">
-          <Image
-            src={"/images/potpie-blue.svg"}
-            width={100}
-            height={100}
-            alt="logo"
-          />
-          <h1 className="text-7xl font-bold text-gray-700">potpie</h1>
-        </div>
-        <div className="flex items-center justify-center flex-col text-border">
-          {/* <h3 className="text-2xl font-bold text-black">Get Started!</h3> */}
-          {/* <div className="flex items-start justify-start flex-col mt-10 gap-4">
-          <p className="flex items-center justify-center text-start gap-4">
-            <LucideCheck
-              size={20}
-              className="bg-primary rounded-full p-[0.5px] text-white"
-            />
-            Select the repositories you want to build your AI agents on.
-          </p>
-          <p className="flex items-center justify-center text-start gap-4">
-            <LucideCheck
-              size={20}
-              className="bg-primary rounded-full p-[0.5px] text-white"
-            />
-            You can choose to add more repositories later on from the
-            dashboard
-          </p>
-        </div> */}
-          <div className="w-60 mt-14 space-y-6">
+      <div className="w-full lg:w-1/2 h-full flex items-center justify-center flex-col p-6 lg:p-12">
+        <div className="w-full max-w-md">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h1>
+            <p className="text-gray-600 text-base">Enter your credentials to continue</p>
+          </div>
+
+          {/* Social Login Buttons */}
+          <div className="space-y-3 mb-6">
             {/* GitHub Sign-in */}
             <Button
               onClick={() => onGithub()}
-              className="gap-2 w-full h-12 hover:bg-black bg-gray-800"
+              className="gap-2 w-full h-12 bg-gray-800 hover:bg-gray-900 rounded-lg"
             >
-              <LucideGithub className="rounded-full border border-white p-1" />
-              Sign in with GitHub
+              <LucideGithub className="w-5 h-5 text-white" />
+              <span className="text-white font-medium text-base">Continue with GitHub</span>
             </Button>
 
             {/* SSO Buttons */}
             <DirectSSOButtons
               onNeedsLinking={handleSSONeedsLinking}
               onSuccess={handleSSOSuccess}
+              onNewUser={handleSSONewUser}
             />
 
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-3 text-gray-500 font-medium">or</span>
-              </div>
-            </div>
-
-            {/* Email/Password Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div>
-                <input
-                  type="email"
-                  placeholder="you@company.com"
-                  {...form.register("email")}
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all duration-300 placeholder:text-gray-400 text-gray-900 input-error ${
-                    form.formState.errors.email
-                      ? "border-red-500"
-                      : "border-gray-200"
-                  }`}
-                />
-                {form.formState.errors.email && (
-                  <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
-                    {form.formState.errors.email.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <input
-                  type="password"
-                  placeholder="Password"
-                  {...form.register("password")}
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all duration-300 placeholder:text-gray-400 text-gray-900 input-error ${
-                    form.formState.errors.password
-                      ? "border-red-500"
-                      : "border-gray-200"
-                  }`}
-                />
-                {form.formState.errors.password && (
-                  <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
-                    {form.formState.errors.password.message}
-                  </p>
-                )}
-              </div>
-              <Button
-                type="submit"
-                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm hover:shadow-md transition-all duration-200"
-              >
-                Sign in
-              </Button>
-            </form>
           </div>
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-gray-50 px-3 text-gray-500 font-medium">or</span>
+            </div>
+          </div>
+
+          {/* Email/Password Form */}
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mb-6">
+            <div>
+              <input
+                type="email"
+                placeholder="you@company.com"
+                {...form.register("email")}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-white transition-all placeholder:text-gray-400 text-gray-900 ${
+                  form.formState.errors.email
+                    ? "border-red-500"
+                    : "border-gray-300"
+                }`}
+              />
+              {form.formState.errors.email && (
+                <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
+                  {form.formState.errors.email.message}
+                </p>
+              )}
+            </div>
+            <div>
+              <input
+                type="password"
+                placeholder="Password"
+                {...form.register("password")}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-white transition-all placeholder:text-gray-400 text-gray-900 ${
+                  form.formState.errors.password
+                    ? "border-red-500"
+                    : "border-gray-300"
+                }`}
+              />
+              {form.formState.errors.password && (
+                <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
+                  {form.formState.errors.password.message}
+                </p>
+              )}
+            </div>
+            <Button
+              type="submit"
+              className="w-full h-12 bg-primary hover:opacity-90 text-white font-medium rounded-lg transition-all"
+            >
+              Sign in
+            </Button>
+          </form>
           
-          <div className="mt-4 text-center text-sm text-black">
+          {/* Sign up link */}
+          <div className="text-center text-sm text-gray-600">
             Don&apos;t have an account?{" "}
-            <Link href="/sign-up" className="underline">
+            <Link href="/sign-up" className="text-gray-900 underline font-medium">
               Sign up
             </Link>
           </div>

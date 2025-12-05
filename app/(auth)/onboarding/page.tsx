@@ -88,6 +88,7 @@ const Onboarding = () => {
   const [isLinkingGithub, setIsLinkingGithub] = useState(false);
   const [onboardingSubmitted, setOnboardingSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1); // 1 = form, 2 = github linking
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -142,7 +143,7 @@ const Onboarding = () => {
     };
 
     checkAuth();
-  }, [email, router]);
+  }, [email, router, formData.companyName]);
 
   // Check if GitHub is already linked (only after onboarding is submitted)
   useEffect(() => {
@@ -167,7 +168,6 @@ const Onboarding = () => {
         const hasGithub = response.data.providers?.some(
           (p: any) => p.provider_type === 'firebase_github'
         );
-        console.log("GitHub link check - hasGithub:", hasGithub, "providers:", response.data.providers);
         setHasGithubLinked(hasGithub || false);
       } catch (error: any) {
         // Silently handle errors - user might not exist yet or endpoint might fail
@@ -237,11 +237,11 @@ const Onboarding = () => {
 
       try {
         await setDoc(doc(db, "users", uid), userDoc);
-        // Small delay for smooth transition
-        await new Promise(resolve => setTimeout(resolve, 300));
+        toast.success("Great! Your profile is all set. Now let's connect GitHub!");
+        // Add a smooth transition delay before moving to next step
+        await new Promise(resolve => setTimeout(resolve, 500));
         setOnboardingSubmitted(true);
-        console.log("Onboarding submitted. hasGithubLinked:", hasGithubLinked);
-        toast.success("Onboarding information saved!");
+        setCurrentStep(2); // Move to GitHub linking step
       } catch (firebaseError: any) {
         console.error("Firebase Error:", firebaseError);
         if (firebaseError.code === "permission-denied") {
@@ -339,7 +339,7 @@ const Onboarding = () => {
         { headers: headers }
       );
 
-      toast.success("GitHub account linked successfully!");
+      toast.success("Awesome! GitHub is connected. You're ready to go!");
       // Small delay for smooth transition
       await new Promise(resolve => setTimeout(resolve, 300));
       setHasGithubLinked(true);
@@ -357,7 +357,7 @@ const Onboarding = () => {
     } catch (error: any) {
       console.error("GitHub linking error:", error);
       if (error.code === "auth/popup-closed-by-user") {
-        toast.error("GitHub sign-in was cancelled");
+        toast.error("No problem! GitHub sign-in was cancelled. You can connect it later.");
       } else {
         toast.error(getUserFriendlyError(error));
       }
@@ -367,216 +367,269 @@ const Onboarding = () => {
   };
 
   return (
-    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition">
-      <div className="flex items-center justify-center w-1/2 h-full p-6">
-        <div className="relative h-full w-full rounded-lg overflow-hidden">
+    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition bg-gradient-to-br from-gray-50 to-white">
+      <div className="hidden lg:flex items-center justify-center w-1/2 h-full p-8">
+        <div className="relative h-full w-full rounded-2xl overflow-hidden shadow-2xl">
           <Image
             src={"/images/landing.png"}
             alt="landing"
-            layout="fill"
-            objectFit="cover"
+            fill
+            className="object-cover"
+            priority
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
         </div>
       </div>
-      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-14">
-        <div className="flex items-center justify-center flex-row gap-2">
-          <Image
-            src={"/images/potpie-blue.svg"}
-            width={100}
-            height={100}
-            alt="logo"
-          />
-          <h1 className="text-7xl font-bold text-gray-700">potpie</h1>
-        </div>
-        <div className="flex items-center justify-center flex-col text-border">
-          <h3 className="text-2xl font-bold text-black">
-            Lets get a few more info and you are good to go!
-          </h3>
-
-          {/* Add authentication error message */}
-          {authError && (
-            <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-              {authError}
-            </div>
-          )}
-
-          {/* Only show the form if authenticated */}
-          {isAuthenticated ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitOnboarding();
-              }}
-              className="flex flex-col gap-6 mt-10"
+      <div className="w-full lg:w-1/2 h-full flex items-center justify-center flex-col gap-8 lg:gap-12 p-6 lg:p-12 overflow-y-auto">
+        {/* Progress Indicator */}
+        <div className="w-full max-w-md flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className={`h-1 w-12 rounded-full ${currentStep >= 1 ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+            <div className={`h-1 w-12 rounded-full ${currentStep >= 2 ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+          </div>
+          {currentStep === 2 && (
+            <button
+              onClick={() => setCurrentStep(1)}
+              className="flex items-center gap-1 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors"
             >
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-900">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={email || ""}
-                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed"
-                  disabled
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-900">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter your name"
-                  value={formData.name || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-900">
-                  How did you find us?
-                </label>
-                <select
-                  value={formData.source}
-                  onChange={(e) =>
-                    setFormData({ ...formData, source: e.target.value })
-                  }
-                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                >
-                  <option value="">Select an option</option>
-                  <option value="Reddit">Reddit</option>
-                  <option value="Twitter">Twitter</option>
-                  <option value="LinkedIn">LinkedIn</option>
-                  <option value="HackerNews">HackerNews</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-900">
-                  Industry you work in?
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter your industry"
-                  value={formData.industry}
-                  onChange={(e) =>
-                    setFormData({ ...formData, industry: e.target.value })
-                  }
-                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-900">
-                  Your job title?
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter your job title"
-                  value={formData.jobTitle}
-                  onChange={(e) =>
-                    setFormData({ ...formData, jobTitle: e.target.value })
-                  }
-                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-900">
-                  Your company name?
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter your company name"
-                  value={formData.companyName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, companyName: e.target.value })
-                  }
-                  className="w-80 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-            </form>
-          ) : (
-            <div className="mt-10 p-6 bg-gray-100 rounded-md text-black text-center">
-              <p>Please sign in to continue.</p>
-              <Button
-                onClick={() => router.push("/sign-in")}
-                className="mt-4 mx-auto hover:bg-black bg-gray-800"
-              >
-                Go to Sign In
-              </Button>
-            </div>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
           )}
+        </div>
 
-          {isAuthenticated && (
-            <div className="mt-14 space-y-4">
-              {!onboardingSubmitted ? (
-                <Button
-                  onClick={() => submitOnboarding()}
-                  className="gap-2 hover:bg-black bg-gray-800 w-80 button-smooth"
-                  disabled={!isAuthenticated || isSubmitting}
+        <div className="flex items-center justify-center flex-col w-full max-w-md">
+          {currentStep === 1 && (
+            <>
+              <div className="text-center mb-10">
+                <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-3">
+                  Welcome! Let&apos;s get you set up
+                </h2>
+                <p className="text-gray-500 text-base">
+                  We just need a few details to personalize your experience
+                </p>
+              </div>
+
+              {/* Add authentication error message */}
+              {authError && (
+                <div className="w-full max-w-md mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg shadow-sm">
+                  <p className="text-red-800 text-sm font-medium">{authError}</p>
+                </div>
+              )}
+
+              {/* Only show the form if authenticated and on step 1 */}
+              {isAuthenticated ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitOnboarding();
+                  }}
+                  className="w-full max-w-md space-y-5 form-fade-in"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Submitting...
-                    </>
-                  ) : (
-                    "Submit"
-                  )}
-                </Button>
-              ) : null}
-              
-              {/* GitHub Linking Section - appears after form submission */}
-              {onboardingSubmitted && !hasGithubLinked && (
-                <div className="space-y-4 pt-6 border-t border-gray-200 slide-in-up">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-2">Link Your GitHub Account</h4>
-                  <div className="flex items-start justify-start flex-col gap-4 text-gray-800">
-                    <p className="flex items-center justify-center text-start gap-4 text-sm">
-                      <LucideCheck
-                        size={20}
-                        className="bg-primary rounded-full p-[0.5px] text-white flex-shrink-0"
-                      />
-                      <span>Link your GitHub account to select repositories for your AI agents</span>
-                    </p>
-                    <p className="flex items-center justify-center text-start gap-4 text-sm">
-                      <LucideCheck
-                        size={20}
-                        className="bg-primary rounded-full p-[0.5px] text-white flex-shrink-0"
-                      />
-                      <span>You can add more repositories later from the dashboard</span>
-                    </p>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={email || ""}
+                      placeholder="you@company.com"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed transition-all"
+                      disabled
+                    />
                   </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="John Doe"
+                      value={formData.name || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">
+                      How did you find us? <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.source}
+                      onChange={(e) =>
+                        setFormData({ ...formData, source: e.target.value })
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="">Select an option</option>
+                      <option value="Reddit">Reddit</option>
+                      <option value="Twitter">Twitter</option>
+                      <option value="LinkedIn">LinkedIn</option>
+                      <option value="HackerNews">HackerNews</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  
+                  {/* Industry and Job Title side by side */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-gray-700">
+                        Industry <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Technology"
+                        value={formData.industry}
+                        onChange={(e) =>
+                          setFormData({ ...formData, industry: e.target.value })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-gray-700">
+                        Job Title <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Software Engineer"
+                        value={formData.jobTitle}
+                        onChange={(e) =>
+                          setFormData({ ...formData, jobTitle: e.target.value })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">
+                      Company Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Acme Inc."
+                      value={formData.companyName}
+                      onChange={(e) =>
+                        setFormData({ ...formData, companyName: e.target.value })
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      required
+                    />
+                  </div>
+
                   <Button
-                    onClick={linkGithub}
-                    className="gap-2 hover:bg-black bg-gray-800 w-80 button-smooth"
-                    disabled={isLinkingGithub}
+                    type="submit"
+                    className="w-full gap-2 bg-gray-900 hover:bg-gray-800 text-white px-6 py-3.5 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-6"
+                    disabled={!isAuthenticated || isSubmitting}
                   >
-                    <LucideGithub className="rounded-full border border-white p-1" />
-                    {isLinkingGithub ? "Linking..." : "Link GitHub Account"}
+                    {isSubmitting ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </>
+                    )}
+                  </Button>
+                </form>
+              ) : (
+                <div className="w-full max-w-md mt-8 p-8 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200 text-center shadow-sm">
+                  <p className="text-gray-700 mb-4 font-medium">Please sign in to continue</p>
+                  <Button
+                    onClick={() => router.push("/sign-in")}
+                    className="gap-2 hover:bg-gray-900 bg-gray-800 text-white px-6 py-2.5 rounded-lg transition-all shadow-md hover:shadow-lg"
+                  >
+                    Go to Sign In
                   </Button>
                 </div>
               )}
-              
-              {onboardingSubmitted && hasGithubLinked && (
-                <div className="pt-6 fade-scale-in">
-                  <Button
-                    onClick={proceedToNextStep}
-                    className="gap-2 hover:bg-black bg-gray-800 w-80 button-smooth"
-                  >
-                    Continue to Dashboard
-                  </Button>
+            </>
+          )}
+
+          {/* Step 2: GitHub Linking */}
+          {currentStep === 2 && (
+            <div className="fade-slide-in">
+              <div className="text-center mb-8">
+                <div className="flex justify-center mb-6">
+                  <div className="w-20 h-20 rounded-2xl bg-gray-900 flex items-center justify-center shadow-lg">
+                    <LucideGithub className="w-10 h-10 text-white" />
+                  </div>
+                </div>
+                <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+                  Connect Your GitHub
+                </h2>
+                <p className="text-gray-600 text-sm lg:text-base">
+                  Link your GitHub account to get started with repositories
+                </p>
+              </div>
+
+              {isAuthenticated && (
+                <div className="w-full max-w-md space-y-6">
+                  {!hasGithubLinked ? (
+                    <>
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100 space-y-4">
+                        <div className="flex items-start gap-3 text-gray-700">
+                          <LucideCheck
+                            size={20}
+                            className="bg-blue-500 rounded-full p-0.5 text-white flex-shrink-0 mt-0.5"
+                          />
+                          <span className="text-sm">Select repositories for your AI agents</span>
+                        </div>
+                        <div className="flex items-start gap-3 text-gray-700">
+                          <LucideCheck
+                            size={20}
+                            className="bg-blue-500 rounded-full p-0.5 text-white flex-shrink-0 mt-0.5"
+                          />
+                          <span className="text-sm">Add more repositories anytime from your dashboard</span>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={linkGithub}
+                        className="w-full gap-3 hover:bg-gray-900 bg-gray-800 text-white px-6 py-3.5 rounded-lg font-semibold button-smooth shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
+                        disabled={isLinkingGithub}
+                      >
+                        <LucideGithub className="w-5 h-5" />
+                        {isLinkingGithub ? "Connecting..." : "Link GitHub Account"}
+                      </Button>
+                      <p className="text-xs text-gray-500 text-center mt-4">
+                        We&apos;ll only access repositories you explicitly authorize
+                      </p>
+                    </>
+                  ) : (
+                    <div className="space-y-4 fade-scale-in">
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-800 font-medium text-center">
+                          ✓ GitHub account linked successfully!
+                        </p>
+                      </div>
+                      <Button
+                        onClick={proceedToNextStep}
+                        className="w-full gap-2 hover:bg-gray-900 bg-gray-800 text-white px-6 py-3.5 rounded-lg font-semibold button-smooth shadow-lg hover:shadow-xl transition-all"
+                      >
+                        Continue to Dashboard
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -584,6 +637,7 @@ const Onboarding = () => {
         </div>
       </div>
     </section>
+    
   );
 };
 

@@ -95,8 +95,8 @@ const LinkGithub = () => {
           <Image
             src={"/images/landing.png"}
             alt="landing"
-            layout="fill"
-            objectFit="cover"
+            fill
+            className="object-cover"
           />
         </div>
       </div>

@@ -82,32 +82,28 @@ export function AppSidebar() {
     refetchOnWindowFocus: false, // Don't refetch on window focus
   });
   
-  // Use backend email if available, otherwise fall back to Firebase email
-  // This ensures we show the primary sign-in email, not GitHub email
-  // IMPORTANT: Always prefer backend email to avoid showing GitHub email
-  // Filter out GitHub noreply emails as fallback
+  // Use backend email - it now correctly returns email based on primary provider:
+  // - If primary is GitHub → GitHub email
+  // - If primary is Google SSO → Google email
+  // - If primary is email/password → email/password email
   const getDisplayEmail = () => {
-    // If backend query is still loading, don't show email yet (or show loading)
+    // If backend query is still loading, show Firebase email temporarily
     if (accountLoading && !userAccount) {
       return user?.email || ''; // Show Firebase email while loading
     }
     
-    // Always prefer backend email when available
+    // Always use backend email - it's now correctly determined by primary provider
     if (userAccount?.email) {
-      console.log('Sidebar: Using backend email:', userAccount.email);
       return userAccount.email;
     }
     
-    // Fallback to Firebase email only if it's not a GitHub noreply email
+    // Fallback to Firebase email only if backend query failed
     const firebaseEmail = user?.email;
-    if (firebaseEmail && !firebaseEmail.includes('@users.noreply.github.com')) {
-      console.warn('Sidebar: Using Firebase email (backend query failed or not available):', firebaseEmail);
-      console.warn('Sidebar: Account error:', accountError);
+    if (firebaseEmail) {
       return firebaseEmail;
     }
     
-    console.warn('Sidebar: No valid email found. Backend:', userAccount?.email, 'Firebase:', firebaseEmail);
-    return firebaseEmail || ''; // Return empty string as last resort
+    return ''; // Return empty string as last resort
   };
   
   const displayEmail = getDisplayEmail();

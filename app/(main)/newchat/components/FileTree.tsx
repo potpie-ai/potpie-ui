@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { ChevronRight, ChevronDown, Folder, File, Loader2, Search, X } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, File, Loader2, Search, X, Settings, Regex } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 
 // Duplicate interface to avoid circular dependency
@@ -26,6 +33,124 @@ interface FileTreeProps {
     filters: ParseFilters;
     setFilters: (filters: ParseFilters) => void;
 }
+
+// Sort nodes: directories first, then files, alphabetically within each group
+const sortNodes = (nodes: FileNode[]): FileNode[] => {
+    return [...nodes].sort((a, b) => {
+        // Directories come first
+        if (a.type === "directory" && b.type === "file") return -1;
+        if (a.type === "file" && b.type === "directory") return 1;
+        // Alphabetically within same type
+        return a.name.localeCompare(b.name);
+    });
+};
+
+// VS Code style search result item - flat list with path on the side
+const SearchResultItem = ({
+    node,
+    isSelected,
+    onToggle,
+    searchQuery,
+}: {
+    node: FileNode;
+    isSelected: boolean;
+    onToggle: (node: FileNode, checked: boolean) => void;
+    searchQuery: string;
+}) => {
+    // Get parent path (everything except the file/folder name)
+    const parentPath = node.path.includes("/")
+        ? node.path.substring(0, node.path.lastIndexOf("/"))
+        : "";
+
+    // Highlight matching text in name
+    const highlightMatch = (text: string) => {
+        if (!searchQuery) return text;
+        const index = text.toLowerCase().indexOf(searchQuery.toLowerCase());
+        if (index === -1) return text;
+        return (
+            <>
+                {text.slice(0, index)}
+                <span className="bg-yellow-200 rounded px-0.5">{text.slice(index, index + searchQuery.length)}</span>
+                {text.slice(index + searchQuery.length)}
+            </>
+        );
+    };
+
+    return (
+        <TooltipProvider delayDuration={300}>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-100 rounded cursor-pointer group">
+                        <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => onToggle(node, checked as boolean)}
+                            className="h-4 w-4 shrink-0"
+                        />
+
+                        {node.type === "directory" ? (
+                            <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+                        ) : (
+                            <File className="h-4 w-4 text-gray-500 shrink-0" />
+                        )}
+
+                        <span className="text-sm font-medium truncate">
+                            {highlightMatch(node.name)}
+                        </span>
+
+                        {parentPath && (
+                            <span className="text-xs text-gray-400 truncate ml-auto pl-2 max-w-[50%] text-right">
+                                {parentPath}
+                            </span>
+                        )}
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-md">
+                    <p className="text-xs font-mono">{node.path}</p>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
+};
+
+// Pattern preview item - no checkbox, just shows what will be excluded
+const PatternPreviewItem = ({
+    node,
+}: {
+    node: FileNode;
+}) => {
+    const parentPath = node.path.includes("/")
+        ? node.path.substring(0, node.path.lastIndexOf("/"))
+        : "";
+
+    return (
+        <TooltipProvider delayDuration={300}>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-50 rounded cursor-default group">
+                        {node.type === "directory" ? (
+                            <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+                        ) : (
+                            <File className="h-4 w-4 text-gray-500 shrink-0" />
+                        )}
+
+                        <span className="text-sm truncate text-gray-700">
+                            {node.name}
+                        </span>
+
+                        {parentPath && (
+                            <span className="text-xs text-gray-400 truncate ml-auto pl-2 max-w-[50%] text-right">
+                                {parentPath}
+                            </span>
+                        )}
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-md">
+                    <p className="text-xs font-mono">{node.path}</p>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
+};
 
 const FileTreeNode = ({
     node,
@@ -106,7 +231,7 @@ const FileTreeNode = ({
 
             {isOpen && node.children && (
                 <div>
-                    {node.children.map((child) => (
+                    {sortNodes(node.children).map((child) => (
                         <FileTreeNode
                             key={child.path}
                             node={child}
@@ -133,6 +258,8 @@ const FileTree: React.FC<FileTreeProps> = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [showPatternMode, setShowPatternMode] = useState(false);
+    const [patternQuery, setPatternQuery] = useState("");
 
     // Flatten tree for easier lookup
     const allNodes = useMemo(() => {
@@ -156,10 +283,51 @@ const FileTree: React.FC<FileTreeProps> = ({
         });
     };
 
+    // Helper to match glob patterns (supports * and **)
+    const matchesGlobPattern = (filePath: string, pattern: string): boolean => {
+        // If it's an exact match, return true
+        if (filePath === pattern) return true;
+
+        // If pattern doesn't contain wildcards, check for exact match or as suffix
+        if (!pattern.includes('*')) {
+            // Check if it matches the filename exactly
+            const fileName = filePath.split('/').pop() || '';
+            return fileName === pattern || filePath === pattern;
+        }
+
+        // Convert glob pattern to regex
+        // Escape special regex characters except * and **
+        let regexPattern = pattern
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape special chars
+            .replace(/\*\*/g, '{{GLOBSTAR}}')     // Temp placeholder for **
+            .replace(/\*/g, '[^/]*')              // * matches anything except /
+            .replace(/{{GLOBSTAR}}/g, '.*');      // ** matches anything including /
+
+        // If pattern doesn't start with *, it should match from start or after /
+        if (!pattern.startsWith('*')) {
+            regexPattern = '(^|/)' + regexPattern;
+        }
+
+        // Pattern should match to end of string or filename
+        regexPattern = regexPattern + '$';
+
+        try {
+            const regex = new RegExp(regexPattern);
+            return regex.test(filePath);
+        } catch {
+            // If regex fails, fall back to simple includes
+            return filePath.includes(pattern.replace(/\*/g, ''));
+        }
+    };
+
     // Helper to check if path is excluded/included by filters
     const isPathActive = (node: FileNode, directories: string[], files: string[], extensions: string[]) => {
-        // Check if path is explicitly in files list
-        if (files.includes(node.path)) return true;
+        // Check if path matches any file pattern (supports globs)
+        const matchesFilePattern = files.some(pattern =>
+            matchesGlobPattern(node.path, pattern) ||
+            matchesGlobPattern(node.name, pattern)
+        );
+        if (matchesFilePattern) return true;
 
         // Check if path or any parent is in directories list
         const inDirectory = directories.some(dir =>
@@ -198,6 +366,33 @@ const FileTree: React.FC<FileTreeProps> = ({
 
         return selected;
     }, [allNodes, filters]);
+
+    // Get files matching the current pattern query (for preview)
+    const patternMatches = useMemo(() => {
+        if (!patternQuery.trim()) return [];
+
+        const results: FileNode[] = [];
+        allNodes.forEach(node => {
+            if (matchesGlobPattern(node.path, patternQuery) ||
+                matchesGlobPattern(node.name, patternQuery)) {
+                results.push(node);
+            }
+        });
+
+        return sortNodes(results);
+    }, [allNodes, patternQuery]);
+
+    // Handle adding pattern as exclusion
+    const handleExcludePattern = () => {
+        if (!patternQuery.trim() || patternMatches.length === 0) return;
+
+        const newFilters = { ...filters };
+        if (!newFilters.excluded_files.includes(patternQuery.trim())) {
+            newFilters.excluded_files = [...newFilters.excluded_files, patternQuery.trim()];
+        }
+        setFilters(newFilters);
+        setPatternQuery("");
+    };
 
     // Transform tree data to ensure all nodes have paths
     const addPathsToTree = (nodes: any[], parentPath: string = ""): FileNode[] => {
@@ -309,10 +504,10 @@ const FileTree: React.FC<FileTreeProps> = ({
         setFilters(newFilters);
     };
 
-    // Filter tree based on search query
+    // Filter tree based on search query (for tree view - keeps structure)
     const filterTreeBySearch = (nodes: FileNode[], query: string): FileNode[] => {
         if (!query) return nodes;
-        
+
         const lowerQuery = query.toLowerCase();
         const result: FileNode[] = [];
 
@@ -326,10 +521,10 @@ const FileTree: React.FC<FileTreeProps> = ({
                 }
             } else {
                 // For directories, include if name matches or if any children match
-                const filteredChildren = node.children 
+                const filteredChildren = node.children
                     ? filterTreeBySearch(node.children, query)
                     : [];
-                
+
                 if (nameMatches || pathMatches || filteredChildren.length > 0) {
                     result.push({
                         ...node,
@@ -341,6 +536,26 @@ const FileTree: React.FC<FileTreeProps> = ({
 
         return result;
     };
+
+    // Flatten matching nodes for search results (VS Code style)
+    const getSearchResults = useMemo(() => {
+        if (!searchQuery) return [];
+
+        const lowerQuery = searchQuery.toLowerCase();
+        const results: FileNode[] = [];
+
+        allNodes.forEach(node => {
+            const nameMatches = node.name.toLowerCase().includes(lowerQuery);
+            const pathMatches = node.path.toLowerCase().includes(lowerQuery);
+
+            if (nameMatches || pathMatches) {
+                results.push(node);
+            }
+        });
+
+        // Sort: directories first, then alphabetically
+        return sortNodes(results);
+    }, [allNodes, searchQuery]);
 
     const filteredTreeData = useMemo(() => {
         return filterTreeBySearch(treeData, searchQuery);
@@ -364,36 +579,134 @@ const FileTree: React.FC<FileTreeProps> = ({
 
     return (
         <div className="flex flex-col h-full">
-            {/* Search Box */}
-            <div className="p-2 border-b sticky top-0 bg-white z-10">
-                <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                    <Input
-                        type="text"
-                        placeholder="Search files..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-8 pl-8 pr-8 text-sm"
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery("")}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 rounded"
-                        >
-                            <X className="h-3.5 w-3.5 text-gray-400" />
-                        </button>
-                    )}
+            {/* Search Box with Pattern Toggle */}
+            <div className="p-2 border-b sticky top-0 bg-white z-10 space-y-2">
+                <div className="flex gap-2">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                        <Input
+                            type="text"
+                            placeholder="Search files and folders..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="h-8 pl-8 pr-8 text-sm"
+                            disabled={showPatternMode}
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 rounded"
+                            >
+                                <X className="h-3.5 w-3.5 text-gray-400" />
+                            </button>
+                        )}
+                    </div>
+                    <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant={showPatternMode ? "secondary" : "ghost"}
+                                    size="sm"
+                                    className="h-8 w-8 p-0 shrink-0"
+                                    onClick={() => {
+                                        setShowPatternMode(!showPatternMode);
+                                        if (showPatternMode) {
+                                            setPatternQuery("");
+                                        } else {
+                                            setSearchQuery("");
+                                        }
+                                    }}
+                                >
+                                    <Settings className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                                <p className="text-xs">{showPatternMode ? "Close pattern mode" : "Exclude by pattern"}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
+
+                {/* Pattern Input - Only visible when pattern mode is active */}
+                {showPatternMode && (
+                    <div className="flex gap-2 items-center">
+                        <div className="relative flex-1">
+                            <Regex className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                            <Input
+                                type="text"
+                                placeholder="e.g. *.test.js, **/node_modules/**"
+                                value={patternQuery}
+                                onChange={(e) => setPatternQuery(e.target.value)}
+                                className="h-8 pl-8 pr-8 text-sm"
+                                autoFocus
+                            />
+                            {patternQuery && (
+                                <button
+                                    onClick={() => setPatternQuery("")}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 rounded"
+                                >
+                                    <X className="h-3.5 w-3.5 text-gray-400" />
+                                </button>
+                            )}
+                        </div>
+                        <Button
+                            size="sm"
+                            className="h-8 text-xs shrink-0"
+                            onClick={handleExcludePattern}
+                            disabled={!patternQuery.trim() || patternMatches.length === 0}
+                        >
+                            Exclude Pattern
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Tree Content */}
             <div className="flex-1 overflow-y-auto p-1">
-                {filteredTreeData.length === 0 ? (
-                    <div className="text-gray-500 p-4 text-sm text-center">
-                        No files matching "{searchQuery}"
-                    </div>
+                {showPatternMode && patternQuery ? (
+                    // Pattern preview mode - no checkboxes
+                    patternMatches.length === 0 ? (
+                        <div className="text-gray-500 p-4 text-sm text-center">
+                            No files matching pattern "{patternQuery}"
+                        </div>
+                    ) : (
+                        <div className="space-y-0.5">
+                            <div className="text-xs text-orange-500 px-2 py-1 font-medium">
+                                {patternMatches.length} file{patternMatches.length !== 1 ? 's' : ''} will be excluded
+                            </div>
+                            {patternMatches.map((node) => (
+                                <PatternPreviewItem
+                                    key={node.path}
+                                    node={node}
+                                />
+                            ))}
+                        </div>
+                    )
+                ) : searchQuery ? (
+                    // VS Code style flat search results
+                    getSearchResults.length === 0 ? (
+                        <div className="text-gray-500 p-4 text-sm text-center">
+                            No files matching "{searchQuery}"
+                        </div>
+                    ) : (
+                        <div className="space-y-0.5">
+                            <div className="text-xs text-gray-400 px-2 py-1">
+                                {getSearchResults.length} result{getSearchResults.length !== 1 ? 's' : ''}
+                            </div>
+                            {getSearchResults.map((node) => (
+                                <SearchResultItem
+                                    key={node.path}
+                                    node={node}
+                                    isSelected={selectedPaths.has(node.path)}
+                                    onToggle={handleToggle}
+                                    searchQuery={searchQuery}
+                                />
+                            ))}
+                        </div>
+                    )
                 ) : (
-                    filteredTreeData.map((node) => (
+                    // Normal tree view
+                    sortNodes(treeData).map((node) => (
                         <FileTreeNode
                             key={node.path}
                             node={node}
@@ -401,7 +714,7 @@ const FileTree: React.FC<FileTreeProps> = ({
                             selectedPaths={selectedPaths}
                             onToggle={handleToggle}
                             searchQuery={searchQuery}
-                            forceOpen={!!searchQuery}
+                            forceOpen={false}
                         />
                     ))
                 )}

@@ -337,6 +337,15 @@ const Step1: React.FC<Step1Props> = ({
   // Fetch existing filters when repo and branch are selected
   useEffect(() => {
     const fetchExistingFilters = async () => {
+      // Reset filters first when repo/branch changes
+      const defaultFilters = {
+        excluded_directories: [],
+        excluded_files: [],
+        excluded_extensions: [],
+        include_mode: false,
+      };
+      setFilters(defaultFilters);
+
       if (repoName && branchName) {
         try {
           const statusResponse = await BranchAndRepositoryService.checkParsingStatus(repoName, branchName);

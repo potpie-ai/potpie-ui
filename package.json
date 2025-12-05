@@ -108,7 +108,7 @@
     "overrides": {
       "form-data": "^4.0.4",
       "glob": "10.5.0",
-      "mdast-util-to-hast": "13.2.1"
+      "mdast-util-to-hast": "13.2.1",
       "undici": "^6.21.2",
       "brace-expansion": "^2.0.2"
     }

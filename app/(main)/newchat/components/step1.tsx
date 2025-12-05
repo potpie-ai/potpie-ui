@@ -637,7 +637,7 @@ const Step1: React.FC<Step1Props> = ({
         </div>
       </div>
       
-      <FileSelector filters={filters} setFilters={setFilters} repoName={repoName} branchName={branchName} />
+      <FileSelector filters={filters} setFilters={setFilters} repoName={repoName} branchName={branchName} isParsing={parsingStatus !== ""} />
       
       {/* Parsing Status with new ParsingProgress component */}
       {parsingStatus && (

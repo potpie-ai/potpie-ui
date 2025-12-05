@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Plus, Info, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, Filter } from "lucide-react";
+import { ChevronDown, ChevronRight, Filter, FolderTree, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import FileTree from "./FileTree";
 
@@ -32,50 +32,8 @@ interface FileSelectorProps {
     setFilters: (filters: ParseFilters) => void;
     repoName?: string;
     branchName?: string;
+    isParsing?: boolean;
 }
-
-const PRESETS = {
-    "Exclude Tests": {
-        excluded_directories: ["tests", "__tests__", "test", "spec"],
-        excluded_files: ["*.test.*", "*.spec.*", "*_test.go", "*_test.py"],
-        excluded_extensions: [],
-        include_mode: false,
-    },
-    "Exclude Dependencies": {
-        excluded_directories: [
-            "node_modules",
-            "venv",
-            ".venv",
-            "target",
-            "vendor",
-            "build",
-            "dist",
-        ],
-        excluded_files: [
-            "package-lock.json",
-            "yarn.lock",
-            "poetry.lock",
-            "uv.lock",
-            "requirements.txt",
-            "go.sum",
-            "Cargo.lock",
-        ],
-        excluded_extensions: [],
-        include_mode: false,
-    },
-    "Frontend Only": {
-        excluded_directories: [],
-        excluded_files: [],
-        excluded_extensions: [".py", ".go", ".java", ".c", ".cpp", ".rs", ".rb", ".php", ".cs"],
-        include_mode: false,
-    },
-    "Backend Only": {
-        excluded_directories: [],
-        excluded_files: [],
-        excluded_extensions: [".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".scss", ".vue", ".svelte"],
-        include_mode: false,
-    },
-};
 
 const COMMON_EXTENSIONS = [
     ".min.js",
@@ -195,8 +153,15 @@ const TagInput = ({
     );
 };
 
-const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoName, branchName }) => {
+const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoName, branchName, isParsing }) => {
     const [isOpen, setIsOpen] = useState(false);
+
+    // Collapse when parsing starts
+    useEffect(() => {
+        if (isParsing) {
+            setIsOpen(false);
+        }
+    }, [isParsing]);
 
     const updateFilter = (key: keyof ParseFilters, value: any) => {
         setFilters({ ...filters, [key]: value });
@@ -217,27 +182,9 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
         );
     };
 
-    const applyPreset = (presetName: keyof typeof PRESETS) => {
-        const preset = PRESETS[presetName];
-        const newFilters = { ...filters };
-
-        // Merge lists instead of overwriting, to allow combining presets
-        newFilters.excluded_directories = Array.from(
-            new Set([...newFilters.excluded_directories, ...preset.excluded_directories])
-        );
-        newFilters.excluded_files = Array.from(
-            new Set([...newFilters.excluded_files, ...preset.excluded_files])
-        );
-        newFilters.excluded_extensions = Array.from(
-            new Set([...newFilters.excluded_extensions, ...preset.excluded_extensions])
-        );
-
-        setFilters(newFilters);
-    };
-
     return (
         <TooltipProvider delayDuration={200}>
-            <div className="w-full border rounded-md p-4 bg-white mt-4 shadow-sm">
+            <div className="w-full border rounded-md p-3 bg-white mt-4 shadow-sm">
                 <Collapsible open={isOpen} onOpenChange={setIsOpen}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -250,8 +197,8 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
                                     )}
                                 </Button>
                             </CollapsibleTrigger>
-                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
-                                <Filter className="h-4 w-4 text-gray-500" />
+                            <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+                                <Settings2 className="h-4 w-4 text-gray-400" />
                                 <h3 className="font-medium text-sm">Parsing Options</h3>
                             </div>
 
@@ -271,44 +218,50 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
                             )}
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            <Label htmlFor="include-mode" className={cn("text-xs cursor-pointer", filters.include_mode ? "font-bold text-primary" : "text-gray-500")}>
-                                {filters.include_mode ? "Include Only" : "Exclude Mode"}
-                            </Label>
-                            <Switch
-                                id="include-mode"
-                                checked={filters.include_mode}
-                                onCheckedChange={(checked) =>
-                                    updateFilter("include_mode", checked)
-                                }
-                            />
-                        </div>
+                        {isOpen && (
+                            <div className="flex items-center gap-2">
+                                <Label htmlFor="include-mode" className={cn("text-xs cursor-pointer", filters.include_mode ? "font-bold text-primary" : "text-gray-500")}>
+                                    {filters.include_mode ? "Include Only" : "Exclude Mode"}
+                                </Label>
+                                <Switch
+                                    id="include-mode"
+                                    checked={filters.include_mode}
+                                    onCheckedChange={(checked) =>
+                                        updateFilter("include_mode", checked)
+                                    }
+                                />
+                            </div>
+                        )}
                     </div>
 
-                    <CollapsibleContent className="space-y-6 mt-4 animate-in slide-in-from-top-2 duration-200">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            {/* Left Column: Filter Rules */}
-                            <div className="lg:col-span-2 space-y-6">
-                                {/* Presets Section */}
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quick Presets</Label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {Object.keys(PRESETS).map((preset) => (
-                                            <Button
-                                                key={preset}
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => applyPreset(preset as keyof typeof PRESETS)}
-                                                className="text-xs h-7 bg-gray-50 hover:bg-gray-100 border-dashed border-gray-300"
-                                            >
-                                                <Plus className="h-3 w-3 mr-1" /> {preset}
-                                            </Button>
-                                        ))}
-                                    </div>
+                    <CollapsibleContent className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                            {/* Left Column: File Tree */}
+                            <div className="flex flex-col">
+                                <h4 className="font-medium text-xs mb-2 flex items-center gap-1.5 text-gray-600 uppercase tracking-wide">
+                                    <FolderTree className="h-3.5 w-3.5" />
+                                    File Tree
+                                </h4>
+                                <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[400px] border rounded-lg bg-gray-50/30">
+                                    {repoName && branchName ? (
+                                        <FileTree
+                                            repoName={repoName}
+                                            branchName={branchName}
+                                            filters={filters}
+                                            setFilters={setFilters}
+                                        />
+                                    ) : (
+                                        <div className="text-center p-8 text-gray-500 text-sm">
+                                            Select a repository and branch to view files.
+                                        </div>
+                                    )}
                                 </div>
+                            </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-4">
+                            {/* Right Column: Filter Rules */}
+                            <div className="lg:col-span-2 space-y-5 border-l pl-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div className="space-y-3">
                                         <TagInput
                                             label="Directories"
                                             items={filters.excluded_directories}
@@ -326,7 +279,7 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
                                             tooltip="File or file patterns to exclude (or include). Supports wildcards (*)."
                                         />
                                     </div>
-                                    <div className="space-y-4">
+                                    <div className="space-y-3">
                                         <TagInput
                                             label="Extensions"
                                             items={filters.excluded_extensions}
@@ -339,33 +292,11 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Right Column: File Tree */}
-                            <div className="border-l pl-6 flex flex-col">
-                                <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                                    <Filter className="h-4 w-4 text-gray-500" />
-                                    File Tree Selection
-                                </h4>
-                                <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[300px] border rounded-md bg-gray-50/50">
-                                    {repoName && branchName ? (
-                                        <FileTree
-                                            repoName={repoName}
-                                            branchName={branchName}
-                                            filters={filters}
-                                            setFilters={setFilters}
-                                        />
-                                    ) : (
-                                        <div className="text-center p-8 text-gray-500 text-sm">
-                                            Select a repository and branch to view files.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
                         </div>
 
-                        <div className={cn("text-xs p-3 rounded border", filters.include_mode ? "bg-blue-50 border-blue-100 text-blue-700" : "bg-gray-50 border-gray-100 text-gray-600")}>
-                            <div className="flex items-start gap-2">
-                                <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                        <div className={cn("text-xs px-3 py-2.5 rounded-lg border", filters.include_mode ? "bg-blue-50/70 border-blue-100 text-blue-600" : "bg-gray-50/70 border-gray-100 text-gray-500")}>
+                            <div className="flex items-center gap-2">
+                                <Info className="h-3.5 w-3.5 shrink-0" />
                                 <p>
                                     {filters.include_mode
                                         ? "Include Mode Active: Only files matching the criteria above will be parsed. Everything else will be ignored."

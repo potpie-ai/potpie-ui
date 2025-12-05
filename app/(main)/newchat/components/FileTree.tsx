@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { ChevronRight, ChevronDown, Folder, File, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, File, Loader2, Search, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 
@@ -31,17 +32,42 @@ const FileTreeNode = ({
     level,
     selectedPaths,
     onToggle,
+    searchQuery,
+    forceOpen,
 }: {
     node: FileNode;
     level: number;
     selectedPaths: Set<string>;
     onToggle: (node: FileNode, checked: boolean) => void;
+    searchQuery: string;
+    forceOpen: boolean;
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const isSelected = selectedPaths.has(node.path);
 
+    // Auto-expand when search matches children
+    useEffect(() => {
+        if (forceOpen) {
+            setIsOpen(true);
+        }
+    }, [forceOpen]);
+
     const handleToggle = (checked: boolean) => {
         onToggle(node, checked);
+    };
+
+    // Highlight matching text
+    const highlightMatch = (text: string) => {
+        if (!searchQuery) return text;
+        const index = text.toLowerCase().indexOf(searchQuery.toLowerCase());
+        if (index === -1) return text;
+        return (
+            <>
+                {text.slice(0, index)}
+                <span className="bg-yellow-200 rounded px-0.5">{text.slice(index, index + searchQuery.length)}</span>
+                {text.slice(index + searchQuery.length)}
+            </>
+        );
     };
 
     return (
@@ -74,7 +100,7 @@ const FileTreeNode = ({
                     ) : (
                         <File className="h-4 w-4 text-gray-500" />
                     )}
-                    <span className="text-sm truncate">{node.name}</span>
+                    <span className="text-sm truncate">{highlightMatch(node.name)}</span>
                 </div>
             </div>
 
@@ -87,6 +113,8 @@ const FileTreeNode = ({
                             level={level + 1}
                             selectedPaths={selectedPaths}
                             onToggle={onToggle}
+                            searchQuery={searchQuery}
+                            forceOpen={forceOpen}
                         />
                     ))}
                 </div>
@@ -104,6 +132,7 @@ const FileTree: React.FC<FileTreeProps> = ({
     const [treeData, setTreeData] = useState<FileNode[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
 
     // Flatten tree for easier lookup
     const allNodes = useMemo(() => {
@@ -280,6 +309,43 @@ const FileTree: React.FC<FileTreeProps> = ({
         setFilters(newFilters);
     };
 
+    // Filter tree based on search query
+    const filterTreeBySearch = (nodes: FileNode[], query: string): FileNode[] => {
+        if (!query) return nodes;
+        
+        const lowerQuery = query.toLowerCase();
+        const result: FileNode[] = [];
+
+        for (const node of nodes) {
+            const nameMatches = node.name.toLowerCase().includes(lowerQuery);
+            const pathMatches = node.path.toLowerCase().includes(lowerQuery);
+
+            if (node.type === "file") {
+                if (nameMatches || pathMatches) {
+                    result.push(node);
+                }
+            } else {
+                // For directories, include if name matches or if any children match
+                const filteredChildren = node.children 
+                    ? filterTreeBySearch(node.children, query)
+                    : [];
+                
+                if (nameMatches || pathMatches || filteredChildren.length > 0) {
+                    result.push({
+                        ...node,
+                        children: filteredChildren.length > 0 ? filteredChildren : node.children
+                    });
+                }
+            }
+        }
+
+        return result;
+    };
+
+    const filteredTreeData = useMemo(() => {
+        return filterTreeBySearch(treeData, searchQuery);
+    }, [treeData, searchQuery]);
+
     if (loading) {
         return (
             <div className="flex justify-center p-8">
@@ -297,16 +363,49 @@ const FileTree: React.FC<FileTreeProps> = ({
     }
 
     return (
-        <div className="p-1">
-            {treeData.map((node) => (
-                <FileTreeNode
-                    key={node.path}
-                    node={node}
-                    level={0}
-                    selectedPaths={selectedPaths}
-                    onToggle={handleToggle}
-                />
-            ))}
+        <div className="flex flex-col h-full">
+            {/* Search Box */}
+            <div className="p-2 border-b sticky top-0 bg-white z-10">
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                    <Input
+                        type="text"
+                        placeholder="Search files..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="h-8 pl-8 pr-8 text-sm"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 rounded"
+                        >
+                            <X className="h-3.5 w-3.5 text-gray-400" />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Tree Content */}
+            <div className="flex-1 overflow-y-auto p-1">
+                {filteredTreeData.length === 0 ? (
+                    <div className="text-gray-500 p-4 text-sm text-center">
+                        No files matching "{searchQuery}"
+                    </div>
+                ) : (
+                    filteredTreeData.map((node) => (
+                        <FileTreeNode
+                            key={node.path}
+                            node={node}
+                            level={0}
+                            selectedPaths={selectedPaths}
+                            onToggle={handleToggle}
+                            searchQuery={searchQuery}
+                            forceOpen={!!searchQuery}
+                        />
+                    ))
+                )}
+            </div>
         </div>
     );
 };

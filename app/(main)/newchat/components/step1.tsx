@@ -101,7 +101,6 @@ const Step1: React.FC<Step1Props> = ({
     excluded_directories: [],
     excluded_files: [],
     excluded_extensions: [],
-    include_mode: false,
   });
 
   const [parsingStatus, setParsingStatus] = useState<string>("");
@@ -342,7 +341,6 @@ const Step1: React.FC<Step1Props> = ({
         excluded_directories: [],
         excluded_files: [],
         excluded_extensions: [],
-        include_mode: false,
       };
       setFilters(defaultFilters);
 
@@ -355,7 +353,6 @@ const Step1: React.FC<Step1Props> = ({
               excluded_directories: existingFilters.excluded_directories || [],
               excluded_files: existingFilters.excluded_files || [],
               excluded_extensions: existingFilters.excluded_extensions || [],
-              include_mode: existingFilters.include_mode || false,
             });
           }
         } catch (error) {

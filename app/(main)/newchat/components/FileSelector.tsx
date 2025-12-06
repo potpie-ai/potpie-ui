@@ -23,7 +23,6 @@ export interface ParseFilters {
     excluded_directories: string[];
     excluded_files: string[];
     excluded_extensions: string[];
-    include_mode: boolean;
 }
 
 interface FileSelectorProps {

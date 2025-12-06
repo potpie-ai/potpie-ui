@@ -17,7 +17,6 @@ export interface ParseFilters {
     excluded_directories: string[];
     excluded_files: string[];
     excluded_extensions: string[];
-    include_mode: boolean;
 }
 
 interface FileNode {
@@ -399,13 +398,8 @@ const FileTree: React.FC<FileTreeProps> = ({
                 filters.excluded_extensions
             );
 
-            if (filters.include_mode) {
-                // Include Mode: Selected if it MATCHES a filter (is in the list)
-                if (isMatch) selected.add(node.path);
-            } else {
-                // Exclude Mode: Selected if it DOES NOT match a filter (is NOT in the list)
-                if (!isMatch) selected.add(node.path);
-            }
+            // Exclude Mode: Selected (checked) if it DOES NOT match a filter (is NOT excluded)
+            if (!isMatch) selected.add(node.path);
         });
 
         return selected;
@@ -505,18 +499,14 @@ const FileTree: React.FC<FileTreeProps> = ({
     const handleToggle = (node: FileNode, checked: boolean) => {
         const newFilters = { ...filters };
 
-        // In Exclude Mode (default):
+        // Exclude Mode:
         // Checked = Include (Remove from exclude list)
         // Unchecked = Exclude (Add to exclude list)
 
-        // In Include Mode:
-        // Checked = Include (Add to include list)
-        // Unchecked = Exclude (Remove from include list)
-
-        const addToFilter = filters.include_mode ? checked : !checked;
+        const addToFilter = !checked;
 
         if (addToFilter) {
-            // Add to filter list
+            // Add to exclude filter list
             if (node.type === "directory") {
                 // First, remove any descendants (they'll be covered by parent)
                 newFilters.excluded_directories = newFilters.excluded_directories.filter(
@@ -536,7 +526,7 @@ const FileTree: React.FC<FileTreeProps> = ({
                 }
             }
         } else {
-            // Remove from filter list
+            // Remove from exclude filter list
             if (node.type === "directory") {
                 // Remove this directory and any of its descendants
                 newFilters.excluded_directories = newFilters.excluded_directories.filter(

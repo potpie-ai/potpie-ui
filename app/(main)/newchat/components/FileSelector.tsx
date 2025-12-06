@@ -398,9 +398,9 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
                     </div>
                 </div>
 
-                <CollapsibleContent className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                <CollapsibleContent forceMount className="data-[state=closed]:hidden space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
                     {/* Top Notice */}
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-700">
                         <Info className="h-4 w-4 shrink-0" />
                         <p className="text-xs font-medium">
                             Unchecked files and folders will not be parsed. Only selected items will be included in the analysis.

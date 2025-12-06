@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { ChevronRight, ChevronDown, Folder, File, Loader2, Search, X, Settings, Regex } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -258,8 +258,52 @@ const FileTree: React.FC<FileTreeProps> = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
     const [showPatternMode, setShowPatternMode] = useState(false);
     const [patternQuery, setPatternQuery] = useState("");
+    const [debouncedPatternQuery, setDebouncedPatternQuery] = useState("");
+    const [isSearching, setIsSearching] = useState(false);
+    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const patternTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Debounce search query - wait 300ms after user stops typing
+    useEffect(() => {
+        if (searchQuery) {
+            setIsSearching(true);
+        }
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        searchTimeoutRef.current = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+            setIsSearching(false);
+        }, 300);
+
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, [searchQuery]);
+
+    // Debounce pattern query
+    useEffect(() => {
+        if (patternTimeoutRef.current) {
+            clearTimeout(patternTimeoutRef.current);
+        }
+
+        patternTimeoutRef.current = setTimeout(() => {
+            setDebouncedPatternQuery(patternQuery);
+        }, 300);
+
+        return () => {
+            if (patternTimeoutRef.current) {
+                clearTimeout(patternTimeoutRef.current);
+            }
+        };
+    }, [patternQuery]);
 
     // Flatten tree for easier lookup
     const allNodes = useMemo(() => {
@@ -367,20 +411,28 @@ const FileTree: React.FC<FileTreeProps> = ({
         return selected;
     }, [allNodes, filters]);
 
+    // Maximum results to show (prevents UI from freezing on huge repos)
+    const MAX_SEARCH_RESULTS = 200;
+
     // Get files matching the current pattern query (for preview)
     const patternMatches = useMemo(() => {
-        if (!patternQuery.trim()) return [];
+        if (!debouncedPatternQuery.trim()) return [];
 
         const results: FileNode[] = [];
-        allNodes.forEach(node => {
-            if (matchesGlobPattern(node.path, patternQuery) ||
-                matchesGlobPattern(node.name, patternQuery)) {
+        const trimmedPattern = debouncedPatternQuery.trim();
+
+        // Early exit once we have enough results
+        for (const node of allNodes) {
+            if (results.length >= MAX_SEARCH_RESULTS) break;
+
+            if (matchesGlobPattern(node.path, trimmedPattern) ||
+                matchesGlobPattern(node.name, trimmedPattern)) {
                 results.push(node);
             }
-        });
+        }
 
         return sortNodes(results);
-    }, [allNodes, patternQuery]);
+    }, [allNodes, debouncedPatternQuery]);
 
     // Handle adding pattern as exclusion
     const handleExcludePattern = () => {
@@ -538,28 +590,41 @@ const FileTree: React.FC<FileTreeProps> = ({
     };
 
     // Flatten matching nodes for search results (VS Code style)
+    // Optimized: uses debounced query and limits results
     const getSearchResults = useMemo(() => {
-        if (!searchQuery) return [];
+        if (!debouncedSearchQuery) return [];
 
-        const lowerQuery = searchQuery.toLowerCase();
+        const lowerQuery = debouncedSearchQuery.toLowerCase();
         const results: FileNode[] = [];
 
-        allNodes.forEach(node => {
-            const nameMatches = node.name.toLowerCase().includes(lowerQuery);
-            const pathMatches = node.path.toLowerCase().includes(lowerQuery);
+        // Prioritize name matches over path matches
+        const nameMatches: FileNode[] = [];
+        const pathOnlyMatches: FileNode[] = [];
 
-            if (nameMatches || pathMatches) {
-                results.push(node);
+        for (const node of allNodes) {
+            // Early exit if we have enough results
+            if (nameMatches.length + pathOnlyMatches.length >= MAX_SEARCH_RESULTS) break;
+
+            const lowerName = node.name.toLowerCase();
+            const lowerPath = node.path.toLowerCase();
+
+            if (lowerName.includes(lowerQuery)) {
+                nameMatches.push(node);
+            } else if (lowerPath.includes(lowerQuery)) {
+                pathOnlyMatches.push(node);
             }
-        });
+        }
+
+        // Combine results: name matches first, then path-only matches
+        const combined = [...nameMatches, ...pathOnlyMatches].slice(0, MAX_SEARCH_RESULTS);
 
         // Sort: directories first, then alphabetically
-        return sortNodes(results);
-    }, [allNodes, searchQuery]);
+        return sortNodes(combined);
+    }, [allNodes, debouncedSearchQuery]);
 
     const filteredTreeData = useMemo(() => {
-        return filterTreeBySearch(treeData, searchQuery);
-    }, [treeData, searchQuery]);
+        return filterTreeBySearch(treeData, debouncedSearchQuery);
+    }, [treeData, debouncedSearchQuery]);
 
     if (loading) {
         return (
@@ -665,14 +730,21 @@ const FileTree: React.FC<FileTreeProps> = ({
             <div className="flex-1 overflow-y-auto p-1">
                 {showPatternMode && patternQuery ? (
                     // Pattern preview mode - no checkboxes
-                    patternMatches.length === 0 ? (
+                    debouncedPatternQuery !== patternQuery ? (
+                        <div className="flex justify-center p-4">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                        </div>
+                    ) : patternMatches.length === 0 ? (
                         <div className="text-gray-500 p-4 text-sm text-center">
                             No files matching pattern "{patternQuery}"
                         </div>
                     ) : (
                         <div className="space-y-0.5">
                             <div className="text-xs text-orange-500 px-2 py-1 font-medium">
-                                {patternMatches.length} file{patternMatches.length !== 1 ? 's' : ''} will be excluded
+                                {patternMatches.length >= MAX_SEARCH_RESULTS
+                                    ? `${MAX_SEARCH_RESULTS}+ files will be excluded (showing first ${MAX_SEARCH_RESULTS})`
+                                    : `${patternMatches.length} file${patternMatches.length !== 1 ? 's' : ''} will be excluded`
+                                }
                             </div>
                             {patternMatches.map((node) => (
                                 <PatternPreviewItem
@@ -684,14 +756,21 @@ const FileTree: React.FC<FileTreeProps> = ({
                     )
                 ) : searchQuery ? (
                     // VS Code style flat search results
-                    getSearchResults.length === 0 ? (
+                    isSearching ? (
+                        <div className="flex justify-center p-4">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                        </div>
+                    ) : getSearchResults.length === 0 ? (
                         <div className="text-gray-500 p-4 text-sm text-center">
                             No files matching "{searchQuery}"
                         </div>
                     ) : (
                         <div className="space-y-0.5">
                             <div className="text-xs text-gray-400 px-2 py-1">
-                                {getSearchResults.length} result{getSearchResults.length !== 1 ? 's' : ''}
+                                {getSearchResults.length >= MAX_SEARCH_RESULTS
+                                    ? `${MAX_SEARCH_RESULTS}+ results (showing first ${MAX_SEARCH_RESULTS})`
+                                    : `${getSearchResults.length} result${getSearchResults.length !== 1 ? 's' : ''}`
+                                }
                             </div>
                             {getSearchResults.map((node) => (
                                 <SearchResultItem
@@ -699,7 +778,7 @@ const FileTree: React.FC<FileTreeProps> = ({
                                     node={node}
                                     isSelected={selectedPaths.has(node.path)}
                                     onToggle={handleToggle}
-                                    searchQuery={searchQuery}
+                                    searchQuery={debouncedSearchQuery}
                                 />
                             ))}
                         </div>

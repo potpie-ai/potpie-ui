@@ -10,14 +10,14 @@ type Headers = {
 
 export default class BranchAndRepositoryService {
 
-    static async parseRepo(repo_name: string, branch_name: string) {
+    static async parseRepo(repo_name: string, branch_name: string, filters?: any) {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
         try {
             const parseResponse = await axios.post(
                 `${baseUrl}/api/v1/parse`,
-                { repo_name, branch_name },
+                { repo_name, branch_name, filters },
                 { headers }
             );
             return parseResponse.data;
@@ -126,6 +126,29 @@ export default class BranchAndRepositoryService {
             return [];
         }
     }
+
+    static async getRepoStructure(repoName: string, branchName: string) {
+        const headers = await getHeaders();
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+        try {
+            const response = await axios.get(
+                `${baseUrl}/api/v1/github/repo-structure`,
+                {
+                    params: {
+                        repo_name: repoName,
+                        branch_name: branchName,
+                    },
+                    headers,
+                }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching repo structure:", error);
+            return [];
+        }
+    }
+
     static async check_public_repo(repoName: string) {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -145,6 +168,24 @@ export default class BranchAndRepositoryService {
         throw new Error("Error fetching Repository");
       }
     }
+
+    static async checkParsingStatus(repoName: string, branchName: string, filters?: any) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+      try {
+        const response = await axios.post(
+          `${baseUrl}/api/v1/check-status`,
+          { repo_name: repoName, branch_name: branchName, filters },
+          { headers }
+        );
+        return response.data;
+      } catch (error) {
+        console.error("Error checking parsing status:", error);
+        return null;
+      }
+    }
+
     static async pollParsingStatus(
         projectId: string,
         initialStatus: string,

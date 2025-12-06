@@ -23,6 +23,7 @@ import {
   IssueAddedTriggerNodeData,
 } from "./github/issue-added-trigger";
 import { LinearTriggerNode } from "./linear/linear-trigger";
+import { JiraTriggerNode } from "./jira/jira-trigger";
 import {
   IssueCreatedTriggerNode,
   IssueCreatedTriggerNodeData,
@@ -65,6 +66,8 @@ export const TriggerNode = ({ data }: { data: WorkflowNode }) => {
       );
     case "trigger_linear_issue_created":
       return <LinearTriggerNode data={data} />;
+    case "trigger_jira_issue_created":
+      return <JiraTriggerNode data={data} />;
     case "trigger_sentry_issue_created":
       return (
         <IssueCreatedTriggerNode

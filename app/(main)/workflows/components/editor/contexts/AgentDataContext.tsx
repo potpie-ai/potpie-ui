@@ -12,6 +12,8 @@ interface Agent {
   name: string;
   description: string;
   status?: string;
+  is_workflow_agent?: boolean;
+  requires_repo_context?: boolean;
 }
 
 interface AgentDataContextType {
@@ -40,14 +42,16 @@ export const AgentDataProvider: React.FC<AgentDataProviderProps> = ({
     try {
       setLoading(true);
       setError(null);
-      const agentTypes = await AgentService.getAgentTypes();
-      const filtered = agentTypes
-        .filter((agent: any) => agent.status !== "SYSTEM")
-        .map((agent: any) => ({
-          id: agent.id,
-          name: agent.name,
-          description: agent.description,
-        }));
+      // Fetch all agents including workflow agents
+      const agentTypes = await AgentService.getAgentList(false, false, true);
+      const filtered = agentTypes.map((agent: any) => ({
+        id: agent.id,
+        name: agent.name,
+        description: agent.description,
+        status: agent.status,
+        is_workflow_agent: agent.is_workflow_agent,
+        requires_repo_context: agent.requires_repo_context,
+      }));
       setAgents(filtered);
       console.log(
         `[AgentDataContext] Fetched ${filtered.length} agents successfully`

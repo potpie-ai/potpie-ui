@@ -163,6 +163,56 @@ const templates = [
   //   triggers: ["github_issue_added"],
   //   task: "For the newly created issue, analyze the issue. If it is a bug that is fixable, create a new branch add a commit with the fix and create a pull request",
   // },
+  {
+    title: "PR Merged → Documentation Generator",
+    description: "Generate documentation from merged PRs and publish to Confluence with Slack notifications",
+    triggers: ["github_pr_merged"],
+    task: "When a PR is merged, analyze the changes and create comprehensive documentation in Confluence, then notify via Slack.",
+    graph: {
+      nodes: {
+        trigger_github_pr_merged: {
+          id: "trigger_github_pr_merged",
+          type: "trigger_github_pr_merged",
+          group: "github",
+          category: "trigger",
+          position: { x: -730, y: 230 },
+          data: {
+            repo_name: "",
+            hash: "",
+          },
+        },
+        confluence_doc_agent: {
+          id: "confluence_doc_agent",
+          type: "system_workflow_agent_confluence",
+          group: "confluence",
+          category: "agent",
+          position: { x: -314, y: 170 },
+          data: {
+            task: "Analyze the merged PR changes from the trigger data. Generate comprehensive documentation covering: 1) Summary of changes, 2) New features or modifications, 3) API changes if any, 4) Migration notes if applicable. Create a well-structured Confluence page with this documentation in the configured space.",
+            integration_id: "",
+            space_key: "",
+            space_name: "",
+          },
+        },
+        action_slack_send_message: {
+          id: "action_slack_send_message",
+          type: "action_slack_send_message",
+          group: "slack",
+          category: "action",
+          position: { x: 150, y: 170 },
+          data: {
+            connection_id: "",
+            channel_id: "",
+            message: "📚 New documentation has been published to Confluence for the merged PR. Check the Confluence space for details.",
+          },
+        },
+      },
+      adjacency_list: {
+        trigger_github_pr_merged: ["confluence_doc_agent"],
+        confluence_doc_agent: ["action_slack_send_message"],
+      },
+    },
+  },
 ];
 
 const Workflows = () => {
@@ -194,10 +244,11 @@ const Workflows = () => {
       )
     );
 
-    // Fetch custom agents using getAgentList
-    const customAgents = await AgentService.getAgentList();
+    // Fetch agents including system workflow agents
+    const agents = await AgentService.getAgentList(false, false, true);
+    console.log('[Workflows] Fetched agents (including workflow agents):', agents);
     setAvailableAgents(
-      customAgents.map((agent: any) => ({ id: agent.id, name: agent.name }))
+      agents.map((agent: any) => ({ id: agent.id, name: agent.name }))
     );
     const _triggers = await WorkflowService.getAllTriggers();
     setTriggers(_triggers);
@@ -247,11 +298,25 @@ const Workflows = () => {
 
   // Helper function to get agent names from workflow graph
   const getAgentNames = (workflow: Workflow) => {
-    const agentNodes = Object.values(workflow.graph.nodes).filter(
-      (node) => node.type === "custom_agent"
+    // Include all agent types: custom_agent, action_agent, and system workflow agents
+    const agentTypes = [
+      "custom_agent",
+      "action_agent",
+      "system_workflow_agent_confluence",
+    ];
+    const agentNodes = Object.values(workflow.graph.nodes).filter((node) =>
+      agentTypes.includes(node.type)
     );
 
     return agentNodes.map((node) => {
+      // Handle system workflow agents with predefined names
+      const systemAgentNames: Record<string, string> = {
+        system_workflow_agent_confluence: "Confluence Documentation Agent",
+      };
+      if (systemAgentNames[node.type]) {
+        return systemAgentNames[node.type];
+      }
+
       // Get the agent name from the node data
       const agentName = node.data?.agentName;
       if (agentName) {
@@ -502,11 +567,10 @@ const Workflows = () => {
                             </p>
                             <div className="flex items-center gap-2">
                               <div
-                                className={`w-2 h-2 rounded-full ${
-                                  workflow.is_paused
-                                    ? "bg-red-500"
-                                    : "bg-green-500"
-                                } ${!workflow.is_paused ? "animate-pulse" : ""}`}
+                                className={`w-2 h-2 rounded-full ${workflow.is_paused
+                                  ? "bg-red-500"
+                                  : "bg-green-500"
+                                  } ${!workflow.is_paused ? "animate-pulse" : ""}`}
                               />
                               <span className="text-sm text-gray-700 font-medium text-left">
                                 {workflow.is_paused ? "Paused" : "Active"}

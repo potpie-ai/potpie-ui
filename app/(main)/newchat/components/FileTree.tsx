@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { ChevronRight, ChevronDown, Folder, File, Loader2, Search, X, Settings, Regex } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -585,7 +585,6 @@ const FileTree: React.FC<FileTreeProps> = ({
         if (!debouncedSearchQuery) return [];
 
         const lowerQuery = debouncedSearchQuery.toLowerCase();
-        const results: FileNode[] = [];
 
         // Prioritize name matches over path matches
         const nameMatches: FileNode[] = [];
@@ -611,10 +610,6 @@ const FileTree: React.FC<FileTreeProps> = ({
         // Sort: directories first, then alphabetically
         return sortNodes(combined);
     }, [allNodes, debouncedSearchQuery]);
-
-    const filteredTreeData = useMemo(() => {
-        return filterTreeBySearch(treeData, debouncedSearchQuery);
-    }, [treeData, debouncedSearchQuery]);
 
     if (loading) {
         return (

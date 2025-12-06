@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Plus, Info, Folder, FileText, Hash, Regex, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,19 +32,6 @@ interface FileSelectorProps {
     branchName?: string;
     isParsing?: boolean;
 }
-
-const COMMON_EXTENSIONS = [
-    ".min.js",
-    ".min.css",
-    ".map",
-    ".d.ts",
-    ".pyc",
-    ".pyo",
-    ".class",
-    ".o",
-    ".log",
-    ".lock",
-];
 
 const TagInput = ({
     label,

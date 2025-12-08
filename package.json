@@ -111,8 +111,8 @@
       "mdast-util-to-hast": "13.2.1",
       "undici": "^6.21.2",
       "brace-expansion": "^2.0.2",
-      "js-yaml": ">=4.1.1",
-      "prismjs": ">=1.30.0"
+      "js-yaml": "^4.1.1",
+      "prismjs": "^1.30.0"
     }
   }
 }

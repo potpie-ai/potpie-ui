@@ -211,14 +211,19 @@ export function parseApiError(error: any): string {
           const fieldName = fieldPath[fieldPath.length - 1];
           const nodeId = fieldPath[1]; // Get the node ID
 
+          // Skip if fieldName or nodeId is missing
+          if (!fieldName || !nodeId) {
+            return;
+          }
+
           if (!fieldErrors[nodeId]) {
             fieldErrors[nodeId] = [];
           }
 
           // Create a more readable error message
-          const readableField = fieldName
-            .replace(/([A-Z])/g, " $1")
-            .toLowerCase();
+          const readableField = typeof fieldName === 'string'
+            ? fieldName.replace(/([A-Z])/g, " $1").toLowerCase()
+            : String(fieldName);
           fieldErrors[nodeId].push(`${readableField} is required`);
         }
       });

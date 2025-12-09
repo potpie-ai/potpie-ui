@@ -43,6 +43,67 @@ export function isImageType(mimeType: string): boolean {
   return mimeType in SUPPORTED_IMAGE_TYPES;
 }
 
+const EXTENSION_TO_MIME: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.csv': 'text/csv',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.py': 'text/x-python',
+  '.js': 'text/javascript',
+  '.ts': 'text/typescript',
+  '.tsx': 'text/typescript',
+  '.jsx': 'text/javascript',
+  '.json': 'application/json',
+  '.md': 'text/markdown',
+  '.txt': 'text/plain',
+  '.java': 'text/x-java',
+  '.go': 'text/x-go',
+  '.rs': 'text/x-rust',
+  '.yaml': 'text/yaml',
+  '.yml': 'text/yaml',
+  '.rb': 'text/x-ruby',
+  '.php': 'text/x-php',
+  '.c': 'text/x-c',
+  '.cpp': 'text/x-c++',
+  '.h': 'text/x-c',
+  '.cs': 'text/x-csharp',
+  '.swift': 'text/x-swift',
+  '.kt': 'text/x-kotlin',
+  '.scala': 'text/x-scala',
+  '.sh': 'text/x-shellscript',
+  '.sql': 'text/x-sql',
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.scss': 'text/x-scss',
+  '.less': 'text/x-less',
+  '.vue': 'text/x-vue',
+  '.svelte': 'text/x-svelte',
+};
+
+export function detectFileTypeByExtension(fileName: string): string | null {
+  const ext = '.' + fileName.split('.').pop()?.toLowerCase();
+  return EXTENSION_TO_MIME[ext] || null;
+}
+
+export function getEffectiveMimeType(file: File): string {
+  // Trust browser MIME type if it's specific (not generic)
+  if (file.type && file.type !== 'application/octet-stream' && file.type !== '') {
+    return file.type;
+  }
+  // Fall back to extension-based detection
+  return detectFileTypeByExtension(file.name) || file.type || 'application/octet-stream';
+}
+
+export function isDocumentTypeByFile(file: File): boolean {
+  const mimeType = getEffectiveMimeType(file);
+  return isDocumentType(mimeType);
+}
+
+export function isImageTypeByFile(file: File): boolean {
+  const mimeType = getEffectiveMimeType(file);
+  return isImageType(mimeType);
+}
+
 export function getFileTypeInfo(mimeType: string) {
   if (mimeType in SUPPORTED_DOCUMENT_TYPES) {
     return SUPPORTED_DOCUMENT_TYPES[mimeType as keyof typeof SUPPORTED_DOCUMENT_TYPES];

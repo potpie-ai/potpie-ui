@@ -729,7 +729,9 @@ export default class ChatService {
   // Upload document or image
   static async uploadAttachment(
     file: File,
-    messageId?: string
+    messageId?: string,
+    onProgress?: (progress: number) => void,
+    signal?: AbortSignal
   ): Promise<AttachmentUploadResponse> {
     const headers = await getHeaders();
     const formData = new FormData();
@@ -747,7 +749,16 @@ export default class ChatService {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/upload`,
         formData,
-        { headers: uploadHeaders }
+        {
+          headers: uploadHeaders,
+          signal,
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total && onProgress) {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              onProgress(percentCompleted);
+            }
+          },
+        }
       );
       return response.data;
     } catch (error: any) {

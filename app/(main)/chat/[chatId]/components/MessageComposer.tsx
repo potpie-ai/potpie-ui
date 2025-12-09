@@ -2,6 +2,7 @@ import getHeaders from "@/app/utils/headers.util";
 import { AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { isMultimodalEnabled } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Command,
   CommandEmpty,
@@ -45,6 +46,25 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import { useQuery } from "@tanstack/react-query";
+import { DocumentAttachment, ValidationResponse } from "@/lib/types/attachment";
+import {
+  isDocumentType,
+  isImageType,
+  isDocumentTypeByFile,
+  isImageTypeByFile,
+  detectFileTypeByExtension,
+  MAX_FILE_SIZE,
+  getSupportedFileExtensions
+} from "@/lib/utils/fileTypes";
+import { DocumentAttachmentCard } from "@/components/chat/DocumentAttachmentCard";
+import { ValidationErrorModal } from "@/components/chat/ValidationErrorModal";
+import { ContextUsageIndicator } from "@/components/chat/ContextUsageIndicator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface MessageComposerProps extends React.HTMLAttributes<HTMLDivElement> {
   projectId: string;
@@ -96,6 +116,17 @@ const MessageComposer = ({
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [documents, setDocuments] = useState<DocumentAttachment[]>([]);
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState<{
+    validation: ValidationResponse;
+    file: File;
+  } | null>(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [contextRefreshTrigger, setContextRefreshTrigger] = useState(0);
+  const [uploadAbortController, setUploadAbortController] = useState<AbortController | null>(null);
+  const [uploadLocked, setUploadLocked] = useState(false);
 
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -131,15 +162,30 @@ const MessageComposer = ({
     }
   });
 
-  // Update config when images or nodes change
+  // Update config when images, documents, or nodes change
   useEffect(() => {
     composer.setRunConfig({
       custom: {
         selectedNodes: selectedNodes,
-        images: images
+        images: images,
+        documentIds: documents.map(doc => doc.id),
+        documents: documents // Pass full document objects for display
       }
     });
-  }, [selectedNodes, images, composer]);
+  }, [selectedNodes, images, documents, composer]);
+
+  // Keyboard shortcut for attach (Cmd/Ctrl + U)
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'u' && isMultimodalEnabled()) {
+        e.preventDefault();
+        fileInputRef.current?.click();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Use a flag to prevent double processing
   const processingPaste = useRef(false);
@@ -276,27 +322,39 @@ const MessageComposer = ({
   };
 
   const handleSend = () => {
-    // For now, we'll handle images through the runtime custom config
-    // The actual image handling will be done in the runtime when onNew is called
-    
+    // Ensure config is set with current documents before sending
+    const documentIds = documents.map(doc => doc.id);
+    console.log('[MessageComposer] handleSend - documentIds:', documentIds);
+    console.log('[MessageComposer] handleSend - documents:', documents);
+
+    composer.setRunConfig({
+      custom: {
+        selectedNodes: selectedNodes,
+        images: images,
+        documentIds: documentIds,
+        documents: documents // Pass full document objects for display
+      }
+    });
+
     composer.send();
     setMessage("");
     setSelectedNodes([]);
     setImages([]);
     setImagePreviews([]);
+    setDocuments([]);
   };
 
   const handleImageSelect = (files: FileList | null) => {
     if (!files) return;
-    
-    const newImages = Array.from(files).filter(file => 
+
+    const newImages = Array.from(files).filter(file =>
       file.type.startsWith('image/')
     );
-    
+
     if (newImages.length === 0) return;
-    
+
     setImages(prev => [...prev, ...newImages]);
-    
+
     // Generate previews
     newImages.forEach(file => {
       const reader = new FileReader();
@@ -307,6 +365,107 @@ const MessageComposer = ({
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleDocumentSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    // Prevent multiple simultaneous uploads
+    if (uploadLocked || validating || uploadingDocument) {
+      toast.info("Please wait", {
+        description: "An upload is already in progress.",
+      });
+      return;
+    }
+
+    const file = files[0]; // Single document at a time for now
+
+    // Client-side validation
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("File too large", {
+        description: `Maximum file size is 10MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB.`,
+      });
+      return;
+    }
+
+    if (!isDocumentTypeByFile(file)) {
+      toast.error("Unsupported file type", {
+        description: "Supported formats: PDF, DOCX, CSV, XLSX, code files (.py, .js, .ts, etc.), and markdown.",
+      });
+      return;
+    }
+
+    // Start upload process - set lock
+    setUploadLocked(true);
+    setValidating(true);
+
+    try {
+      const validation = await ChatService.validateDocument(conversation_id, file);
+
+      if (!validation.can_upload) {
+        // Show error modal
+        setValidationError({ validation, file });
+        return;
+      }
+
+      // Show warning if usage will be high
+      if (validation.usage_after_upload && validation.usage_after_upload > 80) {
+        console.warn(`High context usage after upload: ${validation.usage_after_upload}%`);
+      }
+
+      // Upload the document
+      setValidating(false);
+      setUploadingDocument(true);
+      setUploadProgress(0);
+
+      const controller = new AbortController();
+      setUploadAbortController(controller);
+
+      try {
+        const uploadResult = await ChatService.uploadAttachment(
+          file,
+          undefined,
+          (progress) => setUploadProgress(progress),
+          controller.signal
+        );
+
+        // Get full metadata including token count
+        const attachmentInfo = await ChatService.getAttachmentInfo(uploadResult.id);
+
+        // Add to documents state
+        const documentAttachment: DocumentAttachment = {
+          ...uploadResult,
+          file,
+          token_count: attachmentInfo.file_metadata.token_count,
+          metadata: attachmentInfo.file_metadata,
+        };
+
+        setDocuments(prev => [...prev, documentAttachment]);
+
+        // Trigger context refresh
+        setContextRefreshTrigger(prev => prev + 1);
+      } catch (error: any) {
+        if (error.name === 'AbortError' || error.name === 'CanceledError') {
+          // User cancelled, already handled
+          return;
+        }
+        console.error('Document upload error:', error);
+        toast.error("Upload failed", {
+          description: error.message || "Failed to upload document. Please try again.",
+        });
+      } finally {
+        setUploadAbortController(null);
+        setUploadingDocument(false);
+      }
+    } catch (error: any) {
+      console.error('Document validation/upload error:', error);
+      toast.error("Upload failed", {
+        description: error.message || "Failed to upload document. Please try again.",
+      });
+    } finally {
+      setValidating(false);
+      setUploadLocked(false);
+    }
   };
 
   const handleImagePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
@@ -402,8 +561,18 @@ const MessageComposer = ({
     setIsDragOver(false);
 
     const files = e.dataTransfer.files;
-    if (files) {
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+
+    if (isImageTypeByFile(file)) {
       handleImageSelect(files);
+    } else if (isDocumentTypeByFile(file)) {
+      handleDocumentSelect(files);
+    } else {
+      toast.error("Unsupported file type", {
+        description: "Drop an image or document (PDF, DOCX, CSV, code files, etc.)",
+      });
     }
   };
 
@@ -505,9 +674,75 @@ const MessageComposer = ({
     }
   };
 
+  const handleCloseValidationModal = () => {
+    setValidationError(null);
+  };
+
+  const handleRemoveDocument = (index: number) => {
+    const removedDoc = documents[index];
+    setDocuments(prev => prev.filter((_, i) => i !== index));
+
+    // Trigger context refresh
+    setContextRefreshTrigger(prev => prev + 1);
+
+    toast("Document removed", {
+      description: removedDoc.file_name,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          setDocuments(prev => [
+            ...prev.slice(0, index),
+            removedDoc,
+            ...prev.slice(index)
+          ]);
+          setContextRefreshTrigger(prev => prev + 1);
+        },
+      },
+      duration: 5000,
+    });
+  };
+
+  const handleCancelUpload = () => {
+    if (uploadAbortController) {
+      uploadAbortController.abort();
+      setUploadAbortController(null);
+    }
+    setUploadingDocument(false);
+    setValidating(false);
+    setUploadProgress(0);
+    toast.info("Upload cancelled");
+  };
+
   return (
-    <div className="flex flex-col w-full p-2">
-      {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
+    <>
+      {/* Validation Error Modal */}
+      {validationError && (
+        <ValidationErrorModal
+          open={!!validationError}
+          onClose={handleCloseValidationModal}
+          validation={validationError.validation}
+          fileName={validationError.file.name}
+          fileSize={validationError.file.size}
+          onViewAttachments={() => {
+            handleCloseValidationModal();
+            // Scroll to documents section if any exist
+            if (documents.length > 0) {
+              containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }}
+          onChangeModel={() => {
+            handleCloseValidationModal();
+            // Find and click the model selector trigger
+            const modelTrigger = document.querySelector('[class*="DialogTrigger"]') as HTMLButtonElement;
+            if (modelTrigger) {
+              setTimeout(() => modelTrigger.click(), 100);
+            }
+          }}
+        />
+      )}
+
+      <div className="flex flex-col w-full p-2">
+        {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
       <div className="flex flex-row">
         {/* display selected nodes */}
         {selectedNodes.map((node) => (
@@ -543,8 +778,59 @@ const MessageComposer = ({
         {isMultimodalEnabled() && isDragOver && (
           <div className="flex items-center justify-center w-full py-8 text-blue-600">
             <div className="text-center">
-              <ImageIcon className="w-8 h-8 mx-auto mb-2" />
-              <p className="text-sm font-medium">Drop images here to upload</p>
+              <Paperclip className="w-8 h-8 mx-auto mb-2" />
+              <p className="text-sm font-medium">Drop files here to upload</p>
+              <p className="text-xs text-blue-400 mt-1">Images, PDFs, documents, or code files</p>
+            </div>
+          </div>
+        )}
+
+        {/* Document Attachments */}
+        {documents.length > 0 && (
+          <div className="w-full px-4 space-y-2">
+            <div className="text-xs font-medium text-gray-600">
+              Documents ({documents.length})
+            </div>
+            {documents.map((doc, index) => (
+              <DocumentAttachmentCard
+                key={doc.id}
+                attachment={doc}
+                onRemove={() => handleRemoveDocument(index)}
+                onDownload={() => {
+                  ChatService.downloadAttachment(doc.id, doc.file_name);
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Validation/Upload Loading State */}
+        {validating && (
+          <div className="w-full px-4 py-2 text-sm text-gray-600 flex items-center gap-2">
+            <Loader2Icon className="w-4 h-4 animate-spin" />
+            <span>Validating document...</span>
+          </div>
+        )}
+        {uploadingDocument && (
+          <div className="w-full px-4 py-2">
+            <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+              <div className="flex items-center gap-2">
+                <Loader2Icon className="w-4 h-4 animate-spin" />
+                <span>Uploading... {uploadProgress}%</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelUpload}
+                className="text-xs text-red-500 hover:text-red-700 hover:underline"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
             </div>
           </div>
         )}
@@ -577,19 +863,45 @@ const MessageComposer = ({
               <input
                 type="file"
                 ref={fileInputRef}
-                onChange={(e) => handleImageSelect(e.target.files)}
-                accept="image/*"
-                multiple
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
+
+                  const file = files[0];
+                  if (isImageTypeByFile(file)) {
+                    handleImageSelect(files);
+                  } else if (isDocumentTypeByFile(file)) {
+                    handleDocumentSelect(files);
+                  } else {
+                    toast.error("Unsupported file type", {
+                      description: "Please select an image or document file.",
+                    });
+                  }
+
+                  // Reset input
+                  e.target.value = '';
+                }}
+                accept={getSupportedFileExtensions()}
+                multiple={false}
                 className="hidden"
               />
-              <button
-                type="button"
-                title="Attach Images"
-                className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Paperclip className="w-4 h-4" />
-              </button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Paperclip className="w-4 h-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Attach files</p>
+                    <p className="text-xs text-gray-400">⌘U / Ctrl+U</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           )}
           
@@ -605,10 +917,18 @@ const MessageComposer = ({
             className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
           />
         </div>
-        
-        <ComposerAction disabled={isDisabled} />
+
+        {/* Bottom action bar with context indicator */}
+        <div className="flex items-center justify-between w-full">
+          <ContextUsageIndicator
+            conversationId={conversation_id}
+            refreshTrigger={contextRefreshTrigger}
+          />
+          <ComposerAction disabled={isDisabled} />
+        </div>
       </div>
     </div>
+    </>
   );
 };
 

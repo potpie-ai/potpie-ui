@@ -92,6 +92,9 @@ export const generateMockUser = () => {
     displayName: "Local Dev User",
     emailVerified: true,
     isAnonymous: false,
+    phoneNumber: null,
+    photoURL: null,
+    providerId: "password",
     metadata: {
       creationTime: "2023-01-01T00:00:00Z",
       lastSignInTime: "2023-01-01T00:00:00Z",
@@ -130,6 +133,20 @@ export const generateMockUser = () => {
       displayName: "Local Dev User",
       emailVerified: true,
     }),
+    // Firebase internal methods required for auth state management
+    _stopProactiveRefresh: () => {},
+    _startProactiveRefresh: () => {},
+    stsTokenManager: {
+      refreshToken: "mock-refresh-token",
+      accessToken: "mock-access-token",
+      expirationTime: Date.now() + 3600000,
+    },
+    proactiveRefresh: {
+      user: null,
+      isRunning: false,
+      timerId: null,
+      errorBackoff: 30000,
+    },
   };
 };
 

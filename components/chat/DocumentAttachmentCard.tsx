@@ -71,6 +71,7 @@ export const DocumentAttachmentCard: FC<DocumentAttachmentCardProps> = ({
             onClick={onDownload}
             className="p-1.5 hover:bg-gray-200 rounded transition-colors"
             title="Download"
+            aria-label={`Download ${attachment.file_name}`}
           >
             <Download className="w-4 h-4" />
           </button>
@@ -81,6 +82,7 @@ export const DocumentAttachmentCard: FC<DocumentAttachmentCardProps> = ({
           onClick={onRemove}
           className="p-1.5 hover:bg-red-100 text-red-600 rounded transition-colors"
           title="Remove"
+          aria-label={`Remove ${attachment.file_name}`}
         >
           <X className="w-4 h-4" />
         </button>

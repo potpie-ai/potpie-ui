@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/tooltip";
 import { ChevronDown, ChevronRight, FolderTree, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import FileTree from "./FileTree";
+import FileTree, { calculateFileCounts } from "./FileTree";
+import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 
 export interface ParseFilters {
     excluded_directories: string[];
@@ -118,12 +119,14 @@ const TagInput = ({
 };
 
 // Exclusion Summary Component
-const ExclusionSummary = ({ filters, onRemoveDirectory, onRemoveFile, onRemoveExtension, onClearAll }: {
+const ExclusionSummary = ({ filters, onRemoveDirectory, onRemoveFile, onRemoveExtension, onClearAll, totalFiles, filesToParse }: {
     filters: ParseFilters;
     onRemoveDirectory: (index: number) => void;
     onRemoveFile: (index: number) => void;
     onRemoveExtension: (index: number) => void;
     onClearAll: () => void;
+    totalFiles?: number;
+    filesToParse?: number;
 }) => {
     // Separate patterns (containing *) from static file paths
     const patterns = filters.excluded_files.filter(f => f.includes('*'));
@@ -157,6 +160,25 @@ const ExclusionSummary = ({ filters, onRemoveDirectory, onRemoveFile, onRemoveEx
                     Clear all
                 </button>
             </div>
+
+            {/* File Count Summary */}
+            {totalFiles !== undefined && filesToParse !== undefined && (
+                <div className="mx-4 mb-3 px-3 py-1.5 rounded-md bg-gray-50 border border-gray-200">
+                    <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-3">
+                            <span className="text-gray-500">Total: <span className="font-medium text-gray-700">{totalFiles.toLocaleString()}</span></span>
+                            <span className="text-gray-300">•</span>
+                            <span className="text-gray-500">To Parse: <span className="font-medium text-green-600">{filesToParse.toLocaleString()}</span></span>
+                            {totalFiles > filesToParse && (
+                                <>
+                                    <span className="text-gray-300">•</span>
+                                    <span className="text-gray-500">Excluded: <span className="font-medium text-orange-600">{(totalFiles - filesToParse).toLocaleString()}</span></span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="max-h-[290px] min-h-[200px] overflow-y-auto px-4 pb-4 space-y-4">
                 {/* Extensions - broadest impact */}
@@ -321,6 +343,7 @@ const ExclusionSummary = ({ filters, onRemoveDirectory, onRemoveFile, onRemoveEx
 
 const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoName, branchName, isParsing }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [fileCounts, setFileCounts] = useState<{ totalFiles: number; filesToParse: number } | null>(null);
 
     // Collapse when parsing starts
     useEffect(() => {
@@ -407,6 +430,7 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
                                         branchName={branchName}
                                         filters={filters}
                                         setFilters={setFilters}
+                                        onFileCountsChange={setFileCounts}
                                     />
                                 ) : (
                                     <div className="text-center p-8 text-gray-500 text-sm">
@@ -442,6 +466,8 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
                                     excluded_files: [],
                                     excluded_extensions: []
                                 })}
+                                totalFiles={fileCounts?.totalFiles}
+                                filesToParse={fileCounts?.filesToParse}
                             />
                         </div>
                     </div>

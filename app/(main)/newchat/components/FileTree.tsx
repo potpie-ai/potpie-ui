@@ -31,6 +31,7 @@ interface FileTreeProps {
     branchName: string;
     filters: ParseFilters;
     setFilters: (filters: ParseFilters) => void;
+    onFileCountsChange?: (counts: { totalFiles: number; filesToParse: number }) => void;
 }
 
 // Sort nodes: directories first, then files, alphabetically within each group
@@ -247,11 +248,39 @@ const FileTreeNode = ({
     );
 };
 
+// Export function to calculate file counts based on filters
+export const calculateFileCounts = (
+    allNodes: FileNode[],
+    filters: ParseFilters,
+    isPathActive: (node: FileNode, directories: string[], files: string[], extensions: string[]) => boolean
+): { totalFiles: number; filesToParse: number } => {
+    const totalFiles = allNodes.filter(node => node.type === "file").length;
+    let filesToParse = 0;
+
+    allNodes.forEach(node => {
+        if (node.type !== "file") return;
+
+        const isExcluded = isPathActive(
+            node,
+            filters.excluded_directories,
+            filters.excluded_files,
+            filters.excluded_extensions
+        );
+
+        if (!isExcluded) {
+            filesToParse++;
+        }
+    });
+
+    return { totalFiles, filesToParse };
+};
+
 const FileTree: React.FC<FileTreeProps> = ({
     repoName,
     branchName,
     filters,
     setFilters,
+    onFileCountsChange,
 }) => {
     const [treeData, setTreeData] = useState<FileNode[]>([]);
     const [loading, setLoading] = useState(false);
@@ -404,6 +433,27 @@ const FileTree: React.FC<FileTreeProps> = ({
 
         return selected;
     }, [allNodes, filters]);
+
+    // Calculate and emit file counts whenever they change
+    useEffect(() => {
+        if (!onFileCountsChange) return;
+
+        const totalFiles = allNodes.filter(node => node.type === "file").length;
+        let filesToParse = 0;
+
+        allNodes.forEach(node => {
+            if (node.type !== "file") return;
+            const isExcluded = isPathActive(
+                node,
+                filters.excluded_directories,
+                filters.excluded_files,
+                filters.excluded_extensions
+            );
+            if (!isExcluded) filesToParse++;
+        });
+
+        onFileCountsChange({ totalFiles, filesToParse });
+    }, [allNodes, filters, onFileCountsChange]);
 
     // Maximum results to show (prevents UI from freezing on huge repos)
     const MAX_SEARCH_RESULTS = 200;

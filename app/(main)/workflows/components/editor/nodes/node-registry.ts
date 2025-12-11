@@ -34,6 +34,8 @@ import { prMergedTriggerNodeMetadata } from "./triggers/github/pr-merged-trigger
 import { issueAddedTriggerNodeMetadata } from "./triggers/github/issue-added-trigger";
 import { issueCreatedTriggerNodeMetadata } from "./triggers/sentry/issue-created-trigger";
 import { webhookTriggerNodeMetadata } from "./triggers/webhook";
+import { approvalNodeMetadata } from "./manual-steps/approval-node";
+import { inputNodeMetadata } from "./manual-steps/input-node";
 
 export interface NodeInfo {
   type: string;
@@ -67,6 +69,8 @@ export const availableNodes: NodeInfo[] = [
   agentNodeMetadata,
   actionAgentNodeMetadata,
   ifConditionNodeMetadata,
+  approvalNodeMetadata,
+  inputNodeMetadata,
 ];
 
 // Export individual metadata for direct access if needed
@@ -82,4 +86,6 @@ export {
   agentNodeMetadata,
   actionAgentNodeMetadata,
   ifConditionNodeMetadata,
+  approvalNodeMetadata,
+  inputNodeMetadata,
 };

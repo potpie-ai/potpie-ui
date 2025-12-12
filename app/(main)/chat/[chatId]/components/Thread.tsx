@@ -65,22 +65,45 @@ export const Thread: FC<ThreadProps> = ({
 
   useEffect(() => {
     const state = runtime.getState();
-    const hasMessages = state.messages && state.messages.length > 0;
-    setIsInitialLoading(!hasMessages);
+    // Check if messages array exists (even if empty) - this means history load has completed
+    const messagesLoaded = Array.isArray(state.messages);
+    
+    // If messages have been loaded (array exists), we're no longer in initial loading
+    // This handles both empty chats ([]) and chats with messages
+    if (messagesLoaded) {
+      setIsInitialLoading(false);
+      return; // Early return if already loaded
+    }
 
+    // Safety timeout: Clear loading after 10 seconds if history never loads
+    // This prevents infinite loading in case of network errors or adapter failures
+    const timeoutId = setTimeout(() => {
+      setIsInitialLoading((prev) => {
+        // Only clear if still loading
+        if (prev) {
+          console.warn("History load timeout - clearing initial loading state");
+          return false;
+        }
+        return prev;
+      });
+    }, 10000);
+
+    // Messages haven't loaded yet, subscribe to changes
     const unsubscribe = runtime.subscribe(() => {
       const nextState = runtime.getState();
-      if (
-        isInitialLoading &&
-        nextState.messages &&
-        nextState.messages.length > 0
-      ) {
+      // Once messages array exists (history load completed), clear loading
+      // This works for both empty chats ([]) and chats with messages
+      if (Array.isArray(nextState.messages)) {
+        clearTimeout(timeoutId);
         setIsInitialLoading(false);
       }
     });
 
-    return unsubscribe;
-  }, [runtime, isInitialLoading]);
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
+  }, [runtime]);
   
   // Loading state for background tasks (not for normal streaming)
   if (backgroundTaskActive && !sessionResuming) {

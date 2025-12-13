@@ -14,15 +14,7 @@ import {
   type AttachmentAdapter,
   type PendingAttachment,
 } from "@assistant-ui/react";
-import { useEffect, useCallback, useMemo } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { RootState, AppDispatch } from "@/lib/state/store";
-import {
-  setPendingMessage,
-  setBackgroundTaskActive,
-  setSessionResuming,
-  setActiveSession,
-} from "@/lib/state/Reducers/chat";
+import { useEffect, useCallback, useMemo, useState, useRef } from "react";
 import ChatService from "@/services/ChatService";
 import { SessionInfo } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
@@ -56,15 +48,22 @@ interface BackendMessage {
   created_at?: string;
 }
 
+// Return type for the hook
+export interface ChatRuntimeResult {
+  runtime: ReturnType<typeof useLocalRuntime>;
+  isSessionResuming: boolean;
+  isBackgroundTaskActive: boolean;
+}
+
 // Create the adapter that bridges our Redis backend to assistant-ui
 const createChatAdapter = (
   chatId: string,
-  backgroundTaskActive: boolean,
+  isBackgroundTaskActiveRef: React.MutableRefObject<boolean>,
 ): ChatModelAdapter => {
   return {
     async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
       // Prevent new messages during background tasks
-      if (backgroundTaskActive) {
+      if (isBackgroundTaskActiveRef.current) {
         console.warn("Cannot send message while background task is active");
         throw new Error("Background task is active");
       }
@@ -504,11 +503,17 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
 };
 
 // Hook to create and manage the runtime
-export function useChatRuntime(chatId: string | null | undefined) {
-  const dispatch: AppDispatch = useDispatch();
-  const { pendingMessage, backgroundTaskActive, sessionResuming } = useSelector(
-    (state: RootState) => state.chat
-  );
+// Returns runtime along with session states for components to use
+export function useChatRuntime(chatId: string | null | undefined): ChatRuntimeResult {
+  // Local state for session management (no Redux)
+  const [isSessionResuming, setIsSessionResuming] = useState(false);
+  const [isBackgroundTaskActive, setIsBackgroundTaskActive] = useState(false);
+  
+  // Use ref for the adapter to avoid stale closure issues
+  const isBackgroundTaskActiveRef = useRef(isBackgroundTaskActive);
+  useEffect(() => {
+    isBackgroundTaskActiveRef.current = isBackgroundTaskActive;
+  }, [isBackgroundTaskActive]);
 
   // Resume active session helper
   const resumeActiveSession = useCallback(
@@ -516,29 +521,30 @@ export function useChatRuntime(chatId: string | null | undefined) {
       try {
         if (!chatId) return;
 
-        dispatch(setSessionResuming(true));
+        setIsSessionResuming(true);
 
-        // Load existing messages first
-        const messages = await ChatService.loadMessages(chatId, 0, 1000);
-        const convertedMessages = messages.map(convertToThreadMessage);
+        // Resume the session stream from backend
+        await ChatService.resumeActiveSession(
+          chatId,
+          sessionInfo.sessionId,
+          (message: string, tool_calls: any[], citations: string[]) => {
+            // The history adapter will reload messages after resume completes
+            // This callback handles streaming updates during resume
+          }
+        );
 
-        // TODO: Implement session resumption with streaming
-        // This will need custom handling as it's not a standard append operation
-        // For now, we'll just load the messages
-
-        dispatch(setBackgroundTaskActive(false));
-        dispatch(setSessionResuming(false));
-        dispatch(setActiveSession(null));
+        setIsBackgroundTaskActive(false);
+        setIsSessionResuming(false);
       } catch (error) {
         console.error("Error resuming session:", error);
-        dispatch(setBackgroundTaskActive(false));
-        dispatch(setSessionResuming(false));
+        setIsBackgroundTaskActive(false);
+        setIsSessionResuming(false);
       }
     },
-    [chatId, dispatch]
+    [chatId]
   );
 
-  // Handle active session detection
+  // Handle active session detection on mount
   useEffect(() => {
     const checkActiveSession = async () => {
       if (!chatId) return;
@@ -546,9 +552,7 @@ export function useChatRuntime(chatId: string | null | undefined) {
       try {
         const activeSession = await ChatService.detectActiveSession(chatId);
         if (activeSession && activeSession.status === "active") {
-          dispatch(setActiveSession(activeSession));
-          dispatch(setBackgroundTaskActive(true));
-
+          setIsBackgroundTaskActive(true);
           // Resume active session
           await resumeActiveSession(activeSession);
         }
@@ -558,14 +562,13 @@ export function useChatRuntime(chatId: string | null | undefined) {
     };
 
     checkActiveSession();
-  }, [chatId, dispatch, resumeActiveSession]);
+  }, [chatId, resumeActiveSession]);
 
-  // Create the chat adapter - handle null chatId
+  // Create the chat adapter - use ref to avoid recreation on state change
   const adapter = useMemo(() => {
-    // chatId || "" will always be a string, but TypeScript needs help with narrowing in useMemo
     const safeChatId: string = (chatId || "") as string;
-    return createChatAdapter(safeChatId, backgroundTaskActive);
-  }, [chatId, backgroundTaskActive]);
+    return createChatAdapter(safeChatId, isBackgroundTaskActiveRef);
+  }, [chatId]); // Only recreate when chatId changes, not backgroundTaskActive
 
   // Create the history adapter
   const historyAdapter = useMemo(() => {
@@ -591,18 +594,9 @@ export function useChatRuntime(chatId: string | null | undefined) {
         },
   });
 
-  // Handle pending message
-  useEffect(() => {
-    if (
-      pendingMessage &&
-      pendingMessage !== "" &&
-      !backgroundTaskActive &&
-      chatId
-    ) {
-      // This will be handled by the runtime when it's ready
-      dispatch(setPendingMessage(""));
-    }
-  }, [pendingMessage, backgroundTaskActive, chatId, dispatch]);
-
-  return runtime;
+  return {
+    runtime,
+    isSessionResuming,
+    isBackgroundTaskActive,
+  };
 }

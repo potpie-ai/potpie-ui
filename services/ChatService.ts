@@ -5,10 +5,6 @@ import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 
 export default class ChatService {
-  /**
-   * Helper function to extract complete JSON objects from a streaming buffer
-   * Handles concatenated JSON objects without newlines
-   */
   private static extractJsonObjects(input: string): { objects: string[]; remaining: string } {
     const objects: string[] = [];
     let depth = 0;

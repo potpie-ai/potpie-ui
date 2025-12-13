@@ -21,6 +21,7 @@ import {
   ComposerPrimitive,
   ThreadPrimitive,
   useComposerRuntime,
+  useThreadRuntime,
 } from "@assistant-ui/react";
 import { ComposerAddAttachment, ComposerAttachments } from "@/components/assistant-ui/attachment";
 import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
@@ -38,8 +39,6 @@ import ChatService from "@/services/ChatService";
 import Image from "next/image";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useSelector } from "react-redux";
-import { RootState } from "@/lib/state/store";
 import { useQuery } from "@tanstack/react-query";
 
 interface MessageComposerProps {
@@ -64,16 +63,28 @@ const MessageComposer = ({
   disabled,
   conversation_id,
 }: MessageComposerProps) => {
-  const { backgroundTaskActive } = useSelector((state: RootState) => state.chat);
-  
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>([]);
   const [message, setMessage] = useState("");
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  
+  // Use thread runtime to check if streaming is in progress
+  const threadRuntime = useThreadRuntime();
+  const [isThreadRunning, setIsThreadRunning] = useState(false);
+  
+  // Subscribe to thread running state
+  useEffect(() => {
+    const unsubscribe = threadRuntime.subscribe(() => {
+      setIsThreadRunning(threadRuntime.getState().isRunning);
+    });
+    // Set initial state
+    setIsThreadRunning(threadRuntime.getState().isRunning);
+    return unsubscribe;
+  }, [threadRuntime]);
 
-  const isDisabled = disabled || backgroundTaskActive || isEnhancing;
+  const isDisabled = disabled || isThreadRunning || isEnhancing;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -402,8 +413,7 @@ const MessageComposer = ({
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
           <ComposerPrimitive.Cancel 
-            disabled={disabled}
-            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer"
           >
             <CircleStopIcon />
           </ComposerPrimitive.Cancel>

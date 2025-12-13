@@ -9,9 +9,7 @@ import {
   type ToolCallMessagePartComponent,
 } from "@assistant-ui/react";
 import type { PropsWithChildren } from "react";
-import { useEffect, useMemo, useState, type FC, useCallback } from "react";
-import { useSelector } from "react-redux";
-import { RootState } from "@/lib/state/store";
+import { useEffect, useMemo, useState, useRef, type FC, useCallback } from "react";
 import {
   AlertTriangle,
   ArrowDownIcon,
@@ -23,7 +21,7 @@ import {
 import { isMultimodalEnabled } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { MarkdownText } from "@/components/assistant-ui/markdown-text";
+import { MarkdownText, StandaloneMarkdown } from "@/components/assistant-ui/markdown-text";
 import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
 import MessageComposer from "./MessageComposer";
 import { motion } from "motion/react";
@@ -35,13 +33,14 @@ import {
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
-import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 
 interface ThreadProps {
   projectId: string;
   writeDisabled: boolean;
   userImageURL: string;
   conversation_id: string;
+  isSessionResuming: boolean;
+  isBackgroundTaskActive: boolean;
 }
 
 export const Thread: FC<ThreadProps> = ({
@@ -49,10 +48,9 @@ export const Thread: FC<ThreadProps> = ({
   writeDisabled,
   userImageURL,
   conversation_id,
+  isSessionResuming,
+  isBackgroundTaskActive,
 }) => {
-  const { backgroundTaskActive, sessionResuming } = useSelector(
-    (state: RootState) => state.chat
-  );
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const runtime = useThreadRuntime();
 
@@ -106,7 +104,7 @@ export const Thread: FC<ThreadProps> = ({
   }, [runtime]);
   
   // Loading state for background tasks (not for normal streaming)
-  if (backgroundTaskActive && !sessionResuming) {
+  if (isBackgroundTaskActive && !isSessionResuming) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -422,10 +420,7 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
             </AccordionTrigger>
             <AccordionContent className="pt-2 pb-0 px-0">
               <div className="text-xs text-foreground bg-background/60 rounded-md px-4 py-3 max-h-[350px] overflow-y-auto">
-                <SharedMarkdown
-                  content={details_summary}
-                  className="markdown-content break-words text-xs"
-                />
+                <StandaloneMarkdown text={details_summary} className="markdown-content break-words text-xs" />
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -457,6 +452,8 @@ const CustomToolGroup: FC<
   const [accordionValue, setAccordionValue] = useState("tool-results");
   const [accordionTransitionDone, setAccordionTransitionDone] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const toolGroupRef = useRef<HTMLDivElement>(null);
+  const prevToolCallCountRef = useRef(0);
 
   // Get tool calls from THIS message's content (not the thread's last message)
   const toolCalls = message.content
@@ -470,15 +467,20 @@ const CustomToolGroup: FC<
     }>;
 
   // Check if all tool calls IN THIS MESSAGE are completed
-  const allCompleted = toolCalls.length > 0 && toolCalls.every((call) => {
+  const allToolCallsHaveResults = toolCalls.length > 0 && toolCalls.every((call) => {
     const result = call.result as any;
     const streamState = call.streamState as any;
     const state = streamState ?? result;
     const isError = call.isError ?? result?.isError ?? (state?.event_type === "error");
-    return state?.event_type === "result" && !isError;
+    return state?.event_type === "result" || isError;
   });
 
-  // Track running state - ONLY for THIS message
+  // Check message status - 'running' means still streaming, anything else means done
+  // Status types: "running" | "requires-action" | "incomplete" | "complete" (on ThreadAssistantMessage)
+  const messageStatus = message.status;
+  const isMessageStillRunning = messageStatus?.type === "running";
+  
+  // Track thread running state - ONLY for THIS message
   useEffect(() => {
     // Only track running state if this is the last message
     if (!message.isLast) {
@@ -494,21 +496,69 @@ const CustomToolGroup: FC<
       setIsRunning(running);
     });
     
+    // Set initial state
+    const initialState = threadRuntime.getState();
+    const lastMessage = initialState.messages.at(-1);
+    setIsRunning(lastMessage?.id === message.id && initialState.isRunning);
+    
     return unsubscribe;
   }, [message.isLast, message.id, threadRuntime]);
 
-  // Auto-close accordion when all tool calls are completed and thread is not running
+  // For non-last messages (historical), they're always complete
+  // For last message: still streaming if thread running OR message status is "running"
+  const isStillStreaming = message.isLast ? (isRunning || isMessageStillRunning) : false;
+  
+  // Completed when: all tool calls have results AND not streaming anymore
+  const isCompleted = allToolCallsHaveResults && !isStillStreaming;
+
+  // Auto-scroll when new tool calls are added or updated
+  useEffect(() => {
+    if (!message.isLast || !isStillStreaming) return;
+    
+    // Check if tool calls count changed or content updated
+    if (toolCalls.length > prevToolCallCountRef.current) {
+      prevToolCallCountRef.current = toolCalls.length;
+      
+      // Scroll to make tool group visible
+      const viewport = document.querySelector(".thread-viewport");
+      if (viewport) {
+        // Smooth scroll to bottom with a small delay for DOM update
+        requestAnimationFrame(() => {
+          viewport.scrollTo({
+            top: viewport.scrollHeight,
+            behavior: "smooth",
+          });
+        });
+      }
+    }
+  }, [toolCalls.length, isStillStreaming, message.isLast]);
+
+  // Also scroll when tool call results update
+  useEffect(() => {
+    if (!message.isLast || !isStillStreaming) return;
+    
+    const viewport = document.querySelector(".thread-viewport");
+    if (viewport) {
+      requestAnimationFrame(() => {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: "smooth",
+        });
+      });
+    }
+  }, [toolCalls.map(tc => tc.streamState?.event_type).join(","), isStillStreaming, message.isLast]);
+
+  // Auto-close accordion when completed
   useEffect(() => {
     if (accordionTransitionDone) return;
-    // Only auto-close for this message's tool calls
-    if (allCompleted && !isRunning) {
+    if (isCompleted) {
       const timer = setTimeout(() => {
         setAccordionValue("");
         setAccordionTransitionDone(true);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [allCompleted, isRunning, accordionTransitionDone]);
+  }, [isCompleted, accordionTransitionDone]);
 
   // Show tool calls even while running (they should appear during streaming)
   // Only hide if there are no tool calls at all
@@ -516,6 +566,7 @@ const CustomToolGroup: FC<
 
   return (
     <motion.div
+      ref={toolGroupRef}
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
@@ -524,13 +575,30 @@ const CustomToolGroup: FC<
       <Accordion
         type="single"
         collapsible
-        value={accordionValue}
-        onValueChange={(value) => setAccordionValue(value)}
+        value={isStillStreaming ? "tool-results" : accordionValue}
+        onValueChange={(value) => {
+          // Only allow manual control when not streaming
+          if (!isStillStreaming) {
+            setAccordionValue(value);
+          }
+        }}
       >
         <AccordionItem value="tool-results" className="border-b-0">
           <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
-            <div className="italic mr-2">
-              {allCompleted ? "Reasoning completed" : "Reasoning in progress"}
+            <div className="flex items-center gap-2 italic mr-2">
+              {isStillStreaming ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Reasoning in progress</span>
+                </>
+              ) : isCompleted ? (
+                <>
+                  <CheckIcon className="h-4 w-4 text-green-600" />
+                  <span>Reasoning completed</span>
+                </>
+              ) : (
+                <span>Reasoning</span>
+              )}
             </div>
           </AccordionTrigger>
           <AccordionContent>

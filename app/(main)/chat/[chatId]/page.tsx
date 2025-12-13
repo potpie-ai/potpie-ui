@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "@/lib/state/store";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
 import {
   Dialog,
@@ -43,7 +43,6 @@ const ChatV2 = () => {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const { backgroundTaskActive } = useSelector((state: RootState) => state.chat);
   const [errorState, setErrorState] = useState({
     isError: false,
     message: "",
@@ -54,7 +53,8 @@ const ChatV2 = () => {
   const isPollingRef = useRef(false);
 
   // Call hook before any early returns
-  const runtime = useChatRuntime(params.chatId);
+  // Returns runtime + session states for background task handling
+  const { runtime, isSessionResuming, isBackgroundTaskActive } = useChatRuntime(params.chatId);
 
   const parseRepo = async () => {
     // Guard: prevent overlapping polls and bail if projectId is missing
@@ -201,6 +201,8 @@ const ChatV2 = () => {
             writeDisabled={false}
             userImageURL={profilePicUrl}
             conversation_id={currentConversationId}
+            isSessionResuming={isSessionResuming}
+            isBackgroundTaskActive={isBackgroundTaskActive}
           />
         </AssistantRuntimeProvider>
       </div>

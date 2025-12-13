@@ -83,7 +83,7 @@
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^9.0.1",
     "vaul": "^0.9.9",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
     "zod": "^3.25.76"
   },
   "devDependencies": {

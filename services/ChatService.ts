@@ -40,6 +40,7 @@ export default class ChatService {
         }
         depth++;
       } else if (char === "}") {
+        if (depth === 0) continue;
         depth--;
         if (depth === 0 && startIndex !== -1) {
           objects.push(input.slice(startIndex, i + 1));

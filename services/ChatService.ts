@@ -615,6 +615,63 @@ export default class ChatService {
       let currentMessage = "";
       let currentCitations: string[] = [];
       let currentToolCalls: any[] = [];
+      let buffer = ""; // Buffer for incomplete JSON chunks
+
+      const processJsonSegment = (jsonStr: string) => {
+        if (!jsonStr) return;
+
+        try {
+          const data = JSON.parse(jsonStr);
+
+          if (data.message !== undefined) {
+            const messageWithEmojis = data.message.replace(
+              /\\u[\dA-F]{4}/gi,
+              (match: string) =>
+                String.fromCodePoint(
+                  parseInt(match.replace(/\\u/g, ""), 16)
+                )
+            );
+            currentMessage += messageWithEmojis;
+            onMessageUpdate(
+              currentMessage,
+              currentToolCalls,
+              currentCitations
+            );
+          }
+
+          if (data.tool_calls !== undefined) {
+            currentToolCalls.push(...data.tool_calls);
+            onMessageUpdate(
+              currentMessage,
+              currentToolCalls,
+              currentCitations
+            );
+          }
+
+          if (data.citations !== undefined) {
+            currentCitations = data.citations;
+            onMessageUpdate(
+              currentMessage,
+              currentToolCalls,
+              currentCitations
+            );
+          }
+        } catch (e) {
+          // Try to recover by extracting multiple JSON objects
+          const extracted = ChatService.extractJsonObjects(jsonStr);
+          if (extracted.objects.length > 1) {
+            extracted.objects.forEach(processJsonSegment);
+            if (extracted.remaining.trim()) {
+              console.warn(
+                "Residual data after recovering JSON chunk in regenerate:",
+                extracted.remaining,
+              );
+            }
+            return;
+          }
+          console.warn("Failed to parse JSON chunk in regenerate:", jsonStr, e);
+        }
+      };
 
       if (reader) {
         try {
@@ -622,49 +679,23 @@ export default class ChatService {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value);
+            // Decode chunk and add to buffer
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
 
-            chunk.split(/(?<=})\s*(?={)/).forEach((jsonStr) => {
-              try {
-                const data = JSON.parse(jsonStr);
+            // Extract and process complete JSON objects from buffer
+            const extracted = ChatService.extractJsonObjects(buffer);
+            buffer = extracted.remaining;
+            extracted.objects.forEach(processJsonSegment);
+          }
 
-                if (data.message !== undefined) {
-                  const messageWithEmojis = data.message.replace(
-                    /\\u[\dA-F]{4}/gi,
-                    (match: string) =>
-                      String.fromCodePoint(
-                        parseInt(match.replace(/\\u/g, ""), 16)
-                      )
-                  );
-                  currentMessage += messageWithEmojis;
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
-                }
+          // Process any remaining complete JSON in buffer after stream ends
+          const extracted = ChatService.extractJsonObjects(buffer);
+          buffer = extracted.remaining;
+          extracted.objects.forEach(processJsonSegment);
 
-                if (data.tool_calls !== undefined) {
-                  currentToolCalls.push(...data.tool_calls);
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
-                }
-
-                if (data.citations !== undefined) {
-                  currentCitations = data.citations;
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
-                }
-              } catch (e) {
-                // Silently handle parsing errors
-              }
-            });
+          if (buffer.trim()) {
+            console.warn("Unprocessed JSON buffer after regenerate stream end:", buffer);
           }
         } finally {
           reader.releaseLock();

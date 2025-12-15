@@ -128,15 +128,20 @@ const MessageComposer = ({
   useEffect(() => {
     const unsubscribe =
       composer.unstable_on?.("send", () => {
+        // Clear composer text
+        composer.setText("");
+        // Clear composer run config
         composer.setRunConfig({
           custom: {
             selectedNodes: [],
           },
         });
+        // Clear React state
         setSelectedNodes([]);
         setNodeOptions([]);
         setSelectedNodeIndex(-1);
         setMessage("");
+        // Clear refs
         messageRef.current = "";
         lastSyncedComposerText.current = "";
       }) ?? undefined;
@@ -306,19 +311,8 @@ const MessageComposer = ({
   };
 
   const handleSend = () => {
+    // Only send the message - let the "send" event handler manage cleanup
     composer.send();
-
-    composer.setText("");
-    composer.setRunConfig({
-      custom: {
-        selectedNodes: [],
-      },
-    });
-
-    setMessage("");
-    setSelectedNodes(() => []);
-    setNodeOptions([]);
-    setSelectedNodeIndex(-1);
   };
 
   const handleEnhancePrompt = async () => {

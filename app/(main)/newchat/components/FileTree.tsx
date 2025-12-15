@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { ChevronRight, ChevronDown, Folder, File, Loader2, Search, X, Settings, Regex } from "lucide-react";
+import { minimatch } from "minimatch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -357,47 +358,27 @@ const FileTree: React.FC<FileTreeProps> = ({
 
     // Helper to match glob patterns (supports * and **)
     const matchesGlobPattern = (filePath: string, pattern: string): boolean => {
-        // If it's an exact match, return true
-        if (filePath === pattern) return true;
-
-        // If pattern doesn't contain wildcards, check for exact match or as suffix
-        if (!pattern.includes('*')) {
-            // Check if it matches the filename exactly
-            const fileName = filePath.split('/').pop() || '';
-            return fileName === pattern || filePath === pattern;
-        }
-
-        // Convert glob pattern to regex
-        // Escape special regex characters except * and **
-        let regexPattern = pattern
-            .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape special chars
-            .replace(/\*\*/g, '{{GLOBSTAR}}')     // Temp placeholder for **
-            .replace(/\*/g, '[^/]*')              // * matches anything except /
-            .replace(/{{GLOBSTAR}}/g, '.*');      // ** matches anything including /
-
-        // If pattern doesn't start with *, it should match from start or after /
-        if (!pattern.startsWith('*')) {
-            regexPattern = '(^|/)' + regexPattern;
-        }
-
-        // Pattern should match to end of string or filename
-        regexPattern = regexPattern + '$';
-
         try {
-            const regex = new RegExp(regexPattern);
-            return regex.test(filePath);
-        } catch {
-            // If regex fails, fall back to simple includes
-            return filePath.includes(pattern.replace(/\*/g, ''));
+            // dot: true allows matching files/folders that start with .
+            // matchBase: false means patterns are matched from the start of the path
+            return minimatch(filePath, pattern, {
+                dot: true,
+                matchBase: false,
+                nocomment: true,
+            });
+        } catch (error) {
+            // If minimatch fails, fall back to exact match
+            console.warn('Glob pattern matching failed:', error);
+            return filePath === pattern;
         }
     };
 
     // Helper to check if path is excluded/included by filters
     const isPathActive = (node: FileNode, directories: string[], files: string[], extensions: string[]) => {
         // Check if path matches any file pattern (supports globs)
+        // Only match against full path for proper root-relative behavior
         const matchesFilePattern = files.some(pattern =>
-            matchesGlobPattern(node.path, pattern) ||
-            matchesGlobPattern(node.name, pattern)
+            matchesGlobPattern(node.path, pattern)
         );
         if (matchesFilePattern) return true;
 
@@ -469,8 +450,8 @@ const FileTree: React.FC<FileTreeProps> = ({
         for (const node of allNodes) {
             if (results.length >= MAX_SEARCH_RESULTS) break;
 
-            if (matchesGlobPattern(node.path, trimmedPattern) ||
-                matchesGlobPattern(node.name, trimmedPattern)) {
+            // Only match against full path for consistent root-relative behavior
+            if (matchesGlobPattern(node.path, trimmedPattern)) {
                 results.push(node);
             }
         }

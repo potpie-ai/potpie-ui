@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { ChevronRight, ChevronDown, Folder, File, Loader2, Search, X, Settings, Regex } from "lucide-react";
 import { minimatch } from "minimatch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -374,7 +374,7 @@ const FileTree: React.FC<FileTreeProps> = ({
     };
 
     // Helper to check if path is excluded/included by filters
-    const isPathActive = (node: FileNode, directories: string[], files: string[], extensions: string[]) => {
+    const isPathActive = useCallback((node: FileNode, directories: string[], files: string[], extensions: string[]) => {
         // Check if path matches any file pattern (supports globs)
         // Only match against full path for proper root-relative behavior
         const matchesFilePattern = files.some(pattern =>
@@ -394,7 +394,7 @@ const FileTree: React.FC<FileTreeProps> = ({
         }
 
         return false;
-    };
+    }, []);
 
     // Calculate selected paths based on filters
     const selectedPaths = useMemo(() => {
@@ -413,7 +413,7 @@ const FileTree: React.FC<FileTreeProps> = ({
         });
 
         return selected;
-    }, [allNodes, filters]);
+    }, [allNodes, filters, isPathActive]);
 
     // Calculate and emit file counts whenever they change
     useEffect(() => {
@@ -434,7 +434,7 @@ const FileTree: React.FC<FileTreeProps> = ({
         });
 
         onFileCountsChange({ totalFiles, filesToParse });
-    }, [allNodes, filters, onFileCountsChange]);
+    }, [allNodes, filters, onFileCountsChange, isPathActive]);
 
     // Maximum results to show (prevents UI from freezing on huge repos)
     const MAX_SEARCH_RESULTS = 200;
@@ -472,35 +472,41 @@ const FileTree: React.FC<FileTreeProps> = ({
     };
 
     // Transform tree data to ensure all nodes have paths
-    const addPathsToTree = (nodes: FileNode[], parentPath: string = ""): FileNode[] => {
-        return nodes.map(node => {
-            const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
-            return {
-                name: node.name,
-                path: node.path || nodePath, // Use existing path or build from parent
-                type: node.type,
-                children: node.children ? addPathsToTree(node.children, nodePath) : undefined
-            };
-        });
-    };
+    const addPathsToTree = useCallback((nodes: FileNode[], parentPath: string = ""): FileNode[] => {
+        const recursiveAdd = (nodes: FileNode[], parentPath: string = ""): FileNode[] => {
+            return nodes.map(node => {
+                const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
+                return {
+                    name: node.name,
+                    path: node.path || nodePath, // Use existing path or build from parent
+                    type: node.type,
+                    children: node.children ? recursiveAdd(node.children, nodePath) : undefined
+                };
+            });
+        };
+        return recursiveAdd(nodes, parentPath);
+    }, []);
 
-    const filterEmptyDirectories = (nodes: FileNode[]): FileNode[] => {
-        const filteredNodes: FileNode[] = [];
+    const filterEmptyDirectories = useCallback((nodes: FileNode[]): FileNode[] => {
+        const recursiveFilter = (nodes: FileNode[]): FileNode[] => {
+            const filteredNodes: FileNode[] = [];
 
-        for (const node of nodes) {
-            if (node.type === "file") {
-                filteredNodes.push(node);
-            } else if (node.type === "directory") {
-                const children = node.children || [];
-                const filteredChildren = filterEmptyDirectories(children);
+            for (const node of nodes) {
+                if (node.type === "file") {
+                    filteredNodes.push(node);
+                } else if (node.type === "directory") {
+                    const children = node.children || [];
+                    const filteredChildren = recursiveFilter(children);
 
-                if (filteredChildren.length > 0) {
-                    filteredNodes.push({ ...node, children: filteredChildren });
+                    if (filteredChildren.length > 0) {
+                        filteredNodes.push({ ...node, children: filteredChildren });
+                    }
                 }
             }
-        }
-        return filteredNodes;
-    };
+            return filteredNodes;
+        };
+        return recursiveFilter(nodes);
+    }, []);
 
     useEffect(() => {
         const fetchTree = async () => {
@@ -525,7 +531,7 @@ const FileTree: React.FC<FileTreeProps> = ({
         };
 
         fetchTree();
-    }, [repoName, branchName]);
+    }, [repoName, branchName, addPathsToTree, filterEmptyDirectories]);
 
     const handleToggle = (node: FileNode, checked: boolean) => {
         const newFilters = { ...filters };
@@ -752,7 +758,7 @@ const FileTree: React.FC<FileTreeProps> = ({
                         </div>
                     ) : patternMatches.length === 0 ? (
                         <div className="text-gray-500 p-4 text-sm text-center">
-                            No files matching pattern "{patternQuery}"
+                            No files matching pattern &quot;{patternQuery}&quot;
                         </div>
                     ) : (
                         <div className="space-y-0.5">
@@ -778,7 +784,7 @@ const FileTree: React.FC<FileTreeProps> = ({
                         </div>
                     ) : getSearchResults.length === 0 ? (
                         <div className="text-gray-500 p-4 text-sm text-center">
-                            No files matching "{searchQuery}"
+                            No files matching &quot;{searchQuery}&quot;
                         </div>
                     ) : (
                         <div className="space-y-0.5">

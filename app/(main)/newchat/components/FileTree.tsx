@@ -491,7 +491,7 @@ const FileTree: React.FC<FileTreeProps> = ({
     };
 
     // Transform tree data to ensure all nodes have paths
-    const addPathsToTree = (nodes: any[], parentPath: string = ""): FileNode[] => {
+    const addPathsToTree = (nodes: FileNode[], parentPath: string = ""): FileNode[] => {
         return nodes.map(node => {
             const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
             return {

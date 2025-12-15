@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Plus, Info, Folder, FileText, Hash, Regex, Trash2 } from "lucide-react";
+import { X, Plus, Info, Folder, FileText, Hash, Regex, Trash2, ChevronDown, ChevronRight, FolderTree, Settings2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ChevronDown, ChevronRight, FolderTree, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import FileTree, { calculateFileCounts } from "./FileTree";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";

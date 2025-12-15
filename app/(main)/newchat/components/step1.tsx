@@ -57,6 +57,7 @@ import { ParsingStatusEnum } from "@/lib/Constants";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import ParsingProgress from "./ParsingProgress";
+import FileSelector, { ParseFilters } from "./FileSelector";
 
 const repoLinkSchema = z.object({
   repoLink: z
@@ -96,6 +97,11 @@ const Step1: React.FC<Step1Props> = ({
 
   const dispatch = useDispatch();
 
+  const [filters, setFilters] = useState<ParseFilters>({
+    excluded_directories: [],
+    excluded_files: [],
+    excluded_extensions: [],
+  });
 
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [isPublicRepoDailog, setIsPublicRepoDailog] = useState(false);
@@ -134,7 +140,8 @@ const Step1: React.FC<Step1Props> = ({
     try {
       const parseResponse = await BranchAndRepositoryService.parseRepo(
         repo_name,
-        branch_name
+        branch_name,
+        filters
       );
       const projectId = parseResponse.project_id;
       const initialStatus = parseResponse.status;
@@ -173,7 +180,7 @@ const Step1: React.FC<Step1Props> = ({
       
       const parseResponse = await axios.post(
         `${baseUrl}/api/v1/parse`,
-        { repo_path, branch_name },
+        { repo_path, branch_name, filters },
         { headers }
       );
       
@@ -325,6 +332,37 @@ const Step1: React.FC<Step1Props> = ({
   useEffect(() => {
     setIsParseDisabled(!repoName || !branchName || parsingStatus !== "");
   }, [repoName, branchName, parsingStatus, inputValue, isValidLink]);
+
+  // Fetch existing filters when repo and branch are selected
+  useEffect(() => {
+    const fetchExistingFilters = async () => {
+      // Reset filters first when repo/branch changes
+      const defaultFilters = {
+        excluded_directories: [],
+        excluded_files: [],
+        excluded_extensions: [],
+      };
+      setFilters(defaultFilters);
+
+      if (repoName && branchName) {
+        try {
+          const statusResponse = await BranchAndRepositoryService.checkParsingStatus(repoName, branchName);
+          if (statusResponse?.current_filters) {
+            const existingFilters = statusResponse.current_filters;
+            setFilters({
+              excluded_directories: existingFilters.excluded_directories || [],
+              excluded_files: existingFilters.excluded_files || [],
+              excluded_extensions: existingFilters.excluded_extensions || [],
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching existing filters:", error);
+        }
+      }
+    };
+
+    fetchExistingFilters();
+  }, [repoName, branchName]);
 
   useEffect(() => {
     if(isPublicRepoDailog){
@@ -604,6 +642,8 @@ const Step1: React.FC<Step1Props> = ({
           )}
         </div>
       </div>
+      
+      <FileSelector filters={filters} setFilters={setFilters} repoName={repoName} branchName={branchName} isParsing={parsingStatus !== ""} />
       
       {/* Parsing Status with new ParsingProgress component */}
       {parsingStatus && (

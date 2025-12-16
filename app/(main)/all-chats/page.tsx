@@ -80,11 +80,19 @@ const AllChats = () => {
   };
 
   const handleChatClick = (chat: any) => {
+    if (!chat?.id) {
+      console.warn("[AllChats] handleChatClick invoked without chat id", chat);
+      toast.error("Unable to open this chat. Please try again.");
+      return;
+    }
+    console.log("[AllChats] Navigating to chat", {
+      chatId: chat.id,
+      agentId: chat.agent_id,
+      repository: chat.repository,
+      branch: chat.branch,
+      projectId: chat.project_ids?.[0],
+    });
     dispatch(setChat({ agentId: chat.agent_id, temporaryContext: { branch: chat.branch, repo: chat.repository, projectId: chat.project_ids[0] }, selectedNodes: [], title: chat.title, chatFlow: "EXISTING_CHAT" }));
-  };
-
-  const navigateToChat = (chat: any) => {
-    handleChatClick(chat);
     router.push(`/chat/${chat.id}`);
   };
 
@@ -117,12 +125,12 @@ const AllChats = () => {
                 <TableRow
                   key={chat.id}
                   className="hover:bg-red border-b border-gray-200 text-black cursor-pointer"
-                  onClick={() => navigateToChat(chat)}
+                  onClick={() => handleChatClick(chat)}
                   tabIndex={0}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      navigateToChat(chat);
+                      handleChatClick(chat);
                     }
                   }}
                 >
@@ -131,6 +139,7 @@ const AllChats = () => {
                       href={`/chat/${chat.id}`}
                       onClick={(event) => {
                         event.stopPropagation();
+                        event.preventDefault();
                         handleChatClick(chat);
                       }}
                       className="block w-full h-full"
@@ -143,6 +152,7 @@ const AllChats = () => {
                       href={`/chat/${chat.id}`}
                       onClick={(event) => {
                         event.stopPropagation();
+                        event.preventDefault();
                         handleChatClick(chat);
                       }}
                       className="block w-full h-full"
@@ -155,6 +165,7 @@ const AllChats = () => {
                       href={`/chat/${chat.id}`}
                       onClick={(event) => {
                         event.stopPropagation();
+                        event.preventDefault();
                         handleChatClick(chat);
                       }}
                       className="block w-full h-full"
@@ -167,6 +178,7 @@ const AllChats = () => {
                       href={`/chat/${chat.id}`}
                       onClick={(event) => {
                         event.stopPropagation();
+                        event.preventDefault();
                         handleChatClick(chat);
                       }}
                       className="block w-full h-full"
@@ -179,6 +191,7 @@ const AllChats = () => {
                       href={`/chat/${chat.id}`}
                       onClick={(event) => {
                         event.stopPropagation();
+                        event.preventDefault();
                         handleChatClick(chat);
                       }}
                       className="block w-full h-full"

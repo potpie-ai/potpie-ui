@@ -4,6 +4,8 @@ import { LinearTriggerNode } from "./triggers/linear/linear-trigger";
 import { AgentNode } from "./agents/agent";
 import { ActionAgentNode } from "./agents/action-agent";
 import { IfConditionNode } from "./flow-controls/if-condition";
+import { ApprovalNode } from "./manual-steps/approval-node";
+import { InputNode } from "./manual-steps/input-node";
 import { X } from "lucide-react";
 
 export const SwitchComponent = ({ data }: { data: WorkflowNode }) => {
@@ -28,6 +30,16 @@ export const SwitchComponent = ({ data }: { data: WorkflowNode }) => {
       }
     case "flow_control":
       return <IfConditionNode data={data} />;
+    case "manual_step":
+      // Handle different manual step types
+      switch (data.type) {
+        case "manual_step_approval":
+          return <ApprovalNode data={data} />;
+        case "manual_step_input":
+          return <InputNode data={data} />;
+        default:
+          return <ApprovalNode data={data} />;
+      }
   }
 };
 

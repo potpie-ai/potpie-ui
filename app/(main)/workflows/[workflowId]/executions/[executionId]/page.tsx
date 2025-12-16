@@ -4,6 +4,7 @@ import {
   Workflow,
   WorkflowExecution,
   ExecutionTree,
+  HITLRequest,
 } from "@/services/WorkflowService";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -37,6 +38,7 @@ export default function ExecutionDetailPage() {
   const [executionTree, setExecutionTree] = useState<
     ExecutionTree | undefined
   >();
+  const [hitlRequests, setHitlRequests] = useState<HITLRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -70,6 +72,17 @@ export default function ExecutionDetailPage() {
         } catch (error) {
           console.error("Error fetching execution tree:", error);
           // Tree fetch is optional, so we don't show an error toast
+        }
+
+        // Fetch HITL requests for this execution
+        try {
+          const _hitlRequests = await WorkflowService.listHITLRequests(
+            params.executionId
+          );
+          setHitlRequests(_hitlRequests);
+        } catch (error) {
+          console.error("Error fetching HITL requests:", error);
+          // HITL requests fetch is optional
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -241,6 +254,47 @@ export default function ExecutionDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pending HITL Requests */}
+      {hitlRequests.length > 0 && (
+        <Card className="mb-6 border-yellow-200 bg-yellow-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-yellow-600" />
+              Pending Human-in-the-Loop Requests
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {hitlRequests.map((request) => (
+                <div
+                  key={request.request_id}
+                  className="flex items-center justify-between p-3 bg-white rounded-md border border-yellow-200"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium">
+                        {request.node_type === "approval"
+                          ? "Approval Required"
+                          : "Input Required"}
+                      </span>
+                      <Badge variant="outline" className="bg-yellow-100">
+                        {request.node_id}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">{request.message}</p>
+                  </div>
+                  <Link
+                    href={`/workflows/pending-requests/${request.request_id}?executionId=${request.execution_id}&nodeId=${request.node_id}&iteration=${request.iteration}`}
+                  >
+                    <Button size="sm">Respond</Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Execution Tree */}
       {executionTree ? (

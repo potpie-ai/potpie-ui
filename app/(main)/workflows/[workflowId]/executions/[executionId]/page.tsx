@@ -7,6 +7,7 @@ import {
   HITLRequest,
 } from "@/services/WorkflowService";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -79,7 +80,7 @@ export default function ExecutionDetailPage() {
           const _hitlRequests = await WorkflowService.listHITLRequests(
             params.executionId
           );
-          setHitlRequests(_hitlRequests);
+          setHitlRequests(_hitlRequests.requests || []);
         } catch (error) {
           console.error("Error fetching HITL requests:", error);
           // HITL requests fetch is optional

@@ -180,7 +180,6 @@ export default function HITLRequestDetailPage() {
 
       if (result.success) {
         toast.success(result.message || "Response submitted successfully");
-<<<<<<< HEAD
         // Invalidate sidebar count query to update immediately
         if (user?.uid) {
           queryClient.invalidateQueries({ queryKey: ["pendingHITLRequests", user.uid] });

@@ -38,20 +38,14 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { formatLocalTime, formatRelativeTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-<<<<<<< HEAD
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthContext } from "@/contexts/AuthContext";
-=======
->>>>>>> f393226cae28519f381283ef0af8c7a443925b8e
 dayjs.extend(relativeTime);
 
 export default function PendingRequestsPage() {
   const router = useRouter();
-<<<<<<< HEAD
   const queryClient = useQueryClient();
   const { user } = useAuthContext();
-=======
->>>>>>> f393226cae28519f381283ef0af8c7a443925b8e
   const [requests, setRequests] = useState<HITLRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -318,13 +312,10 @@ export default function PendingRequestsPage() {
         setDrawerOpen(false);
         setSelectedRequest(null);
         await loadRequests(); // Refresh the list
-<<<<<<< HEAD
         // Invalidate sidebar count query to update immediately
         if (user?.uid) {
           queryClient.invalidateQueries({ queryKey: ["pendingHITLRequests", user.uid] });
         }
-=======
->>>>>>> f393226cae28519f381283ef0af8c7a443925b8e
       } else {
         toast.error(result.error || "Failed to submit response");
       }

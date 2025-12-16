@@ -16,21 +16,15 @@ import relativeTime from "dayjs/plugin/relativeTime";
 dayjs.extend(relativeTime);
 import { formatRelativeTime } from "@/lib/utils";
 import { toast } from "sonner";
-<<<<<<< HEAD
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthContext } from "@/contexts/AuthContext";
-=======
->>>>>>> f393226cae28519f381283ef0af8c7a443925b8e
 
 export default function HITLRequestDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-<<<<<<< HEAD
   const queryClient = useQueryClient();
   const { user } = useAuthContext();
-=======
->>>>>>> f393226cae28519f381283ef0af8c7a443925b8e
   const requestId = params.requestId as string;
   const executionId = searchParams.get("executionId") || "";
   const nodeId = searchParams.get("nodeId") || "";
@@ -191,8 +185,6 @@ export default function HITLRequestDetailPage() {
         if (user?.uid) {
           queryClient.invalidateQueries({ queryKey: ["pendingHITLRequests", user.uid] });
         }
-=======
->>>>>>> f393226cae28519f381283ef0af8c7a443925b8e
         router.push("/workflows/pending-requests");
       } else {
         toast.error(result.error || "Failed to submit response");

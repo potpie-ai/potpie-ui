@@ -33,6 +33,8 @@ import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Accordion, AccordionTrigger } from "@/components/ui/accordion";
 import { AccordionContent, AccordionItem } from "@radix-ui/react-accordion";
+import { parseHITLMetadata, removeHITLMetadata } from "@/lib/utils/hitlMetadata";
+import { HITLRequestChat } from "./HITLRequestChat";
 
 interface ThreadProps {
   projectId: string;
@@ -452,6 +454,42 @@ const AssistantMessage: FC = () => {
   >([]);
   const [isError, setIsError] = useState(false);
 
+  // Get initial text from message content (for non-streaming messages)
+  const initialText = (message.content[0] as any)?.text || "";
+  
+  // Parse HITL metadata from message text (re-parse when text changes)
+  // Also check initial text in case message is already loaded
+  // IMPORTANT: Parse from raw text BEFORE any markdown processing
+  const hitlMetadata = useMemo(() => {
+    // Try parsing from current text state
+    const parsedFromText = parseHITLMetadata(text);
+    if (parsedFromText) {
+      console.log("✅ [HITL] Parsed metadata from text state:", parsedFromText);
+      return parsedFromText;
+    }
+    // Fallback: check initial message content if runtime text doesn't have it
+    const parsedFromInitial = parseHITLMetadata(initialText);
+    if (parsedFromInitial) {
+      console.log("✅ [HITL] Parsed metadata from initial text:", parsedFromInitial);
+      return parsedFromInitial;
+    }
+    // Debug: log if we see HITL keywords but couldn't parse
+    if ((text || initialText).includes("HITL_METADATA") || (text || initialText).includes("hitl_request_id")) {
+      console.warn("⚠️ [HITL] HITL keywords found but metadata not parsed. Text length:", (text || initialText).length);
+    }
+    return null;
+  }, [text, initialText]);
+  
+  const displayText = useMemo(() => {
+    const textToUse = text || initialText;
+    if (hitlMetadata) {
+      const cleaned = removeHITLMetadata(textToUse);
+      console.log("🧹 [HITL] Removed metadata from display text. Original length:", textToUse.length, "Cleaned length:", cleaned.length);
+      return cleaned;
+    }
+    return textToUse;
+  }, [text, initialText, hitlMetadata]);
+
   useEffect(() => {
     if (isStreaming && text.length < 1200) {
       setToolcallHeading("Reasoning ...");
@@ -469,11 +507,26 @@ const AssistantMessage: FC = () => {
     }
   }, [isStreaming, text, accordianTransitionDone]);
 
+  // Initialize text from message content for all messages
+  useEffect(() => {
+    const msgText = (message.content[0] as any)?.text || "";
+    if (msgText && msgText !== text) {
+      setText(msgText);
+      // Debug: Check if this message has HITL metadata
+      if (msgText.includes("HITL_METADATA") || msgText.includes("hitl_request_id")) {
+        console.log("📥 [HITL] Initialized text from message content. Length:", msgText.length);
+        const metadata = parseHITLMetadata(msgText);
+        console.log("📥 [HITL] Parsed metadata on init:", metadata);
+      }
+    }
+  }, [message.content, message.id]);
+
   useEffect(() => {
     if (!message.isLast) return;
 
     const unsubscribeRuntime = runtime.subscribe(() => {
-      setText((runtime.getState().content[0] as any)?.text || "");
+      const runtimeText = (runtime.getState().content[0] as any)?.text || "";
+      setText(runtimeText);
       const tool_calls = runtime
         .getState()
         .content.filter((content) => content.type === "tool-call");
@@ -535,6 +588,52 @@ const AssistantMessage: FC = () => {
           <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
         </Avatar>
         <div className="rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
+          {/* Render HITL request if metadata is present */}
+          {hitlMetadata && !isRunning ? (
+            <div className="mb-4">
+              <HITLRequestChat
+                metadata={hitlMetadata}
+                onResponseSubmitted={() => {
+                  // Optionally refresh messages or show success state
+                  console.log("✅ HITL response submitted");
+                }}
+              />
+            </div>
+          ) : (() => {
+            // Debug: Check if message contains HITL metadata but component isn't rendering
+            const currentText = text || initialText;
+            const hasHitlKeywords = currentText.includes("HITL_METADATA") || currentText.includes("hitl_request_id");
+            if (hasHitlKeywords && !hitlMetadata) {
+              console.error("❌ [HITL] HITL keywords found but metadata not parsed!");
+              console.error("❌ [HITL] Text snippet:", currentText.substring(
+                Math.max(0, currentText.indexOf("HITL") - 100),
+                Math.min(currentText.length, currentText.indexOf("HITL") + 600)
+              ));
+              return (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-800">
+                    ⚠️ HITL request detected but could not be parsed. Check browser console for details.
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
+          {/* Fallback: If HITL keywords are present but metadata wasn't parsed, show a warning */}
+          {(() => {
+            const hasHitlKeywords = text.includes("HITL_METADATA") || text.includes("hitl_request_id");
+            if (hasHitlKeywords && !hitlMetadata && !isRunning) {
+              console.error("❌ [HITL Error] HITL keywords found but metadata not parsed. Text:", text);
+              return (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ HITL request detected but could not be parsed. Please check the browser console for details.
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
           {toolsState.length > 0 && !isRunning && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
@@ -616,7 +715,7 @@ const AssistantMessage: FC = () => {
               </Accordion>
             </motion.div>
           )}
-          {!isRunning && text && (
+          {!isRunning && displayText && !hitlMetadata && (
             <div>
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
@@ -627,8 +726,14 @@ const AssistantMessage: FC = () => {
                 }}
                 className="overflow-hidden"
               >
-                <MarkdownComponent content={{ text: text }} />
+                <MarkdownComponent content={{ text: displayText }} />
               </motion.div>
+            </div>
+          )}
+          {/* Show a brief message if HITL request is present (the HITLRequestChat component shows the full UI) */}
+          {!isRunning && hitlMetadata && displayText && (
+            <div className="text-sm text-muted-foreground mb-2">
+              {/* Optionally show a brief preview, but HITLRequestChat will show the full interactive UI */}
             </div>
           )}
           {(isRunning || !text) && !isError && (

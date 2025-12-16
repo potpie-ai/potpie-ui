@@ -114,7 +114,6 @@ export default function PendingRequestsPage() {
         if (user?.uid) {
           queryClient.invalidateQueries({ queryKey: ["pendingHITLRequests", user.uid] });
         }
-=======
 >>>>>>> f393226cae28519f381283ef0af8c7a443925b8e
       } else {
         toast.error(result.error || "Failed to delete request");

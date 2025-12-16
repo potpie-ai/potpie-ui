@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import React, { useState, useEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import debounce from "debounce";
-import Link from "next/link";
 import { useDispatch } from "react-redux";
 import { setChat } from "@/lib/state/Reducers/chat";
 import {
@@ -134,71 +133,19 @@ const AllChats = () => {
                     }
                   }}
                 >
+                  <TableCell>{chat.title}</TableCell>
                   <TableCell>
-                    <Link
-                      href={`/chat/${chat.id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        handleChatClick(chat);
-                      }}
-                      className="block w-full h-full"
-                    >
-                      {chat.title}
-                    </Link>
+                    {chat.agent_id
+                      .split("_")
+                      .map(
+                        (word: string) =>
+                          word.charAt(0).toUpperCase() + word.slice(1)
+                      )
+                      .join(" ")}
                   </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/chat/${chat.id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        handleChatClick(chat);
-                      }}
-                      className="block w-full h-full"
-                    >
-                      {chat.agent_id.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/chat/${chat.id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        handleChatClick(chat);
-                      }}
-                      className="block w-full h-full"
-                    >
-                      {chat?.repository}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/chat/${chat.id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        handleChatClick(chat);
-                      }}
-                      className="block w-full h-full"
-                    >
-                      {chat?.branch}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/chat/${chat.id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        handleChatClick(chat);
-                      }}
-                      className="block w-full h-full"
-                    >
-                      {new Date(chat.created_at).toLocaleString()}
-                    </Link>
-                  </TableCell>
+                  <TableCell>{chat?.repository}</TableCell>
+                  <TableCell>{chat?.branch}</TableCell>
+                  <TableCell>{new Date(chat.created_at).toLocaleString()}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-5">
                       <div className="flex gap-3">

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LucideEdit, LucideTrash } from "lucide-react";
 import ChatService from "@/services/ChatService"; 
+import { useRouter } from "next/navigation";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -28,6 +29,7 @@ const AllChats = () => {
   const dispatch = useDispatch();
   const [title, setTitle] = useState("");
   const [inputValue, setInputValue] = useState(title);
+  const router = useRouter();
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["all-chats"],
@@ -81,6 +83,11 @@ const AllChats = () => {
     dispatch(setChat({ agentId: chat.agent_id, temporaryContext: { branch: chat.branch, repo: chat.repository, projectId: chat.project_ids[0] }, selectedNodes: [], title: chat.title, chatFlow: "EXISTING_CHAT" }));
   };
 
+  const navigateToChat = (chat: any) => {
+    handleChatClick(chat);
+    router.push(`/chat/${chat.id}`);
+  };
+
   return (
     <div className="m-10">
       <div className="flex w-full mx-auto items-center space-x-2">
@@ -107,23 +114,86 @@ const AllChats = () => {
             {data
               .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Sort by created_at in descending order
               .map((chat: any) => (
-                <TableRow key={chat.id} className="hover:bg-red border-b border-gray-200 text-black">
-                  <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)}>{chat.title}</Link></TableCell>
+                <TableRow
+                  key={chat.id}
+                  className="hover:bg-red border-b border-gray-200 text-black cursor-pointer"
+                  onClick={() => navigateToChat(chat)}
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      navigateToChat(chat);
+                    }
+                  }}
+                >
                   <TableCell>
-                    <Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)}>
+                    <Link
+                      href={`/chat/${chat.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleChatClick(chat);
+                      }}
+                      className="block w-full h-full"
+                    >
+                      {chat.title}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/chat/${chat.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleChatClick(chat);
+                      }}
+                      className="block w-full h-full"
+                    >
                       {chat.agent_id.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                     </Link>
                   </TableCell>
-                  <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)}>{chat?.repository}</Link></TableCell>
-                  <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)}>{chat?.branch}</Link></TableCell>
-                  <TableCell><Link href={`/chat/${chat.id}`} onClick={() => handleChatClick(chat)}>{new Date(chat.created_at).toLocaleString()}</Link></TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/chat/${chat.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleChatClick(chat);
+                      }}
+                      className="block w-full h-full"
+                    >
+                      {chat?.repository}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/chat/${chat.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleChatClick(chat);
+                      }}
+                      className="block w-full h-full"
+                    >
+                      {chat?.branch}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/chat/${chat.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleChatClick(chat);
+                      }}
+                      className="block w-full h-full"
+                    >
+                      {new Date(chat.created_at).toLocaleString()}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-5">
                       <div className="flex gap-3">
                         <Dialog>
                           <DialogTrigger>
                             <Button
-                              onClick={() => {
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 setTitle(chat.title);
                                 setInputValue(chat.title);
                               }}
@@ -151,9 +221,14 @@ const AllChats = () => {
                           </DialogContent>
                         </Dialog>
                       </div>
-                      <Button variant="outline" className="configure-button hover:bg-gray-200" onClick={() => {
-                        handleDeleteChat(chat.id);
-                      }}>
+                      <Button
+                        variant="outline"
+                        className="configure-button hover:bg-gray-200"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteChat(chat.id);
+                        }}
+                      >
                         <LucideTrash className="h-4 w-4" />
                       </Button>
                     </div>

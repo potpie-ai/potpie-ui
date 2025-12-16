@@ -30,7 +30,7 @@ export function parseHITLMetadata(messageText: string): HITLMetadata | null {
   // Try multiple regex patterns to handle different formatting
   const patterns = [
     /<!--\s*HITL_METADATA:\s*({[\s\S]*?})\s*-->/g,  // Standard format with any whitespace (non-greedy)
-    /<!--\s*HITL_METADATA:\s*({.*})\s*-->/s,  // Greedy match for single-line
+    /<!--\s*HITL_METADATA:\s*({[\s\S]*})-->/g,  // Greedy match for multi-line
     /<!--HITL_METADATA:\s*({[\s\S]*?})-->/g,  // No spaces around comment
     /HITL_METADATA:\s*({[\s\S]*?})(?=\s*-->)/,  // More flexible - match before -->
   ];
@@ -98,7 +98,7 @@ export function removeHITLMetadata(messageText: string): string {
   if (!messageText) return messageText;
 
   // Remove the HTML comment containing HITL metadata
-  const regex = /<!--\s*HITL_METADATA:\s*{.*?}\s*-->/s;
+  const regex = /<!--\s*HITL_METADATA:\s*{[\s\S]*?}\s*-->/g;
   return messageText.replace(regex, "").trim();
 }
 

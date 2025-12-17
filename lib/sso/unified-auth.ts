@@ -15,7 +15,7 @@ export class UnifiedAuthClient {
    */
   async ssoLogin(
     email: string,
-    ssoProvider: 'google' | 'azure',
+    ssoProvider: 'google',
     idToken: string,
     providerData?: Record<string, any>
   ): Promise<SSOLoginResponse> {

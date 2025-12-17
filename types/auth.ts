@@ -1,7 +1,6 @@
 export type ProviderType = 
   | 'firebase_github' 
-  | 'sso_google' 
-  | 'sso_azure';
+  | 'sso_google';
 
 export type SSOLoginStatus = 
   | 'success' 

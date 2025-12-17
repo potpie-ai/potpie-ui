@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, GitBranch, Github } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -19,8 +19,6 @@ import {
 } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 
 interface RepoIdentifier {
   full_name?: string | null;
@@ -58,27 +56,69 @@ const NewTask = () => {
   const { data: UserBranch, isLoading: UserBranchLoading } = useQuery({
     queryKey: ["user-branch", selectedRepo],
     queryFn: () => {
-      return BranchAndRepositoryService.getBranchList(selectedRepo).then(
-        (data) => {
-          if (data?.length === 1) {
-            setSelectedBranch(data[0]);
-          }
-          return data;
-        },
-      );
+      return BranchAndRepositoryService.getBranchList(selectedRepo);
     },
     enabled: !!selectedRepo && selectedRepo !== "",
   });
 
-  const handleSend = () => {
-    alert("button pressed");
+  // Auto-select first branch when branches are loaded
+  useEffect(() => {
+    if (UserBranch && UserBranch.length >= 1 && !selectedBranch) {
+      setSelectedBranch(UserBranch[0]);
+    }
+  }, [UserBranch]);
+
+  // Reset branch when repo changes
+  useEffect(() => {
+    setSelectedBranch("");
+  }, [selectedRepo]);
+
+  const handleSend = async () => {
+    if (!selectedRepo || !message.trim()) {
+      alert("Please select a repository and enter a message");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_WORKFLOWS_URL || "http://localhost:8002"}/api/v1/horizontal-plan`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            repo_name: selectedRepo,
+            branch: selectedBranch,
+            user_prompt: message.trim(),
+            qa_list: [""],
+            context_text: "",
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail?.message || "Failed to create plan");
+      }
+
+      alert(
+        `Plan created successfully!\n\nPlan ID: ${data.plan_id}\nStatus: ${data.status}\n\nMessage: ${data.message}`,
+      );
+
+      // Clear the message after successful submission
+      setMessage("");
+    } catch (error: any) {
+      alert(`Error creating plan: ${error.message}`);
+    }
   };
 
   return (
     <div className="relative flex flex-col h-full min-h-[80vh] px-4 md:px-10 py-6 items-center justify-center">
-      <h1 className="absolute top-1/4 text-4xl font-semibold">
-        Bake your new task!
-      </h1>
+      <div className="absolute top-1/4 text-center">
+        <h1 className="text-4xl font-semibold mb-2">Bake your new task!</h1>
+      </div>
       {/* Input Area with Repo/Branch Selection */}
       <div className="w-full max-w-3xl">
         <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white shadow-sm overflow-visible">
@@ -201,7 +241,7 @@ const NewTask = () => {
             <Button
               className="ml-auto h-8 px-3"
               size="sm"
-              disabled={!message.trim()}
+              disabled={!selectedRepo || !message.trim()}
               onClick={handleSend}
             >
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.5} />

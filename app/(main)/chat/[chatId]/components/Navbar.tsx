@@ -47,12 +47,14 @@ const Navbar = ({
   chatTitle,
   disableShare = false,
   className,
+  showTitle: showTitleProp,
 }: {
   showShare?: boolean;
   hidden?: boolean;
   chatTitle?: string;
   disableShare?: boolean;
   className?: string;
+  showTitle?: boolean;
 }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
@@ -66,7 +68,7 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
-  const showTitle = pathname.split("/").pop() !== "newchat";
+  const showTitle = showTitleProp !== undefined ? showTitleProp : pathname.split("/").pop() !== "newchat";
   const [shareWithLink, setShareWithLink] = useState(false);
   const [accessList, setAccessList] = useState<string[]>([]);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);

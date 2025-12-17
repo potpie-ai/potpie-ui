@@ -10,6 +10,7 @@ import {
   MessagesSquare,
   Zap,
   Plug,
+  Cookie,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -137,6 +138,17 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         icons: <Plug size={20} strokeWidth={1.5} />,
         title: "Integrations",
         href: "/integrations",
+        disabled: false,
+      },
+    ],
+  },
+  {
+    title: "Tasks",
+    links: [
+      {
+        icons: <Cookie size={20} strokeWidth={1.5} />,
+        title: "New Task",
+        href: "/new_task",
         disabled: false,
       },
     ],

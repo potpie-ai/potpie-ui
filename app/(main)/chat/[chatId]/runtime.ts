@@ -10,6 +10,8 @@ import {
 } from "@assistant-ui/react";
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import WorkflowService from "@/services/WorkflowService";
+import { parseHITLMetadata } from "@/lib/utils/hitlMetadata";
 
 const convertMessage = (message: ThreadMessageLike) => {
   return message;
@@ -69,15 +71,26 @@ export function PotpieRuntime(chatId: string) {
 
       setExtras({ loading: true, streaming: false, error: false });
 
-      // Check for active session first
-      const activeSession = await ChatService.detectActiveSession(chatId);
-      if (activeSession && activeSession.status === 'active') {
-        dispatch(setActiveSession(activeSession));
-        dispatch(setBackgroundTaskActive(true));
+      // Check for active session first (only for regular conversations, not workflow conversations)
+      // Workflow conversations may not support active sessions, so handle 404 gracefully
+      try {
+        const activeSession = await ChatService.detectActiveSession(chatId);
+        if (activeSession && activeSession.status === 'active') {
+          dispatch(setActiveSession(activeSession));
+          dispatch(setBackgroundTaskActive(true));
 
-        // Resume active session instead of loading historical messages
-        await resumeActiveSession(activeSession);
-        return;
+          // Resume active session instead of loading historical messages
+          await resumeActiveSession(activeSession);
+          return;
+        }
+      } catch (error: any) {
+        // 404 is expected for workflow conversations - just continue with normal message loading
+        if (error?.response?.status === 404) {
+          console.log("No active session found (this is normal for workflow conversations)");
+        } else {
+          console.warn("Error checking for active session:", error);
+        }
+        // Continue with normal message loading
       }
 
       // Standard message loading if no active session
@@ -258,6 +271,118 @@ export function PotpieRuntime(chatId: string) {
     const textContent = message.content.find(c => c.type === "text");
     if (!textContent) {
       throw new Error("Message must contain text content");
+    }
+
+    // Check if this is a response to a HITL request
+    // Look through all assistant messages (most recent first) to find HITL metadata
+    const assistantMessages = messages
+      .slice()
+      .reverse()
+      .filter((msg) => msg.role === "assistant");
+    
+    let hitlMetadata = null;
+    for (const assistantMsg of assistantMessages) {
+      const assistantText = (assistantMsg.content.find((c: any) => c.type === "text") as any)?.text || "";
+      const parsed = parseHITLMetadata(assistantText);
+      if (parsed) {
+        hitlMetadata = parsed;
+        console.log("📝 [HITL] Found HITL request in assistant message:", hitlMetadata.hitl_request_id);
+        break; // Use the most recent HITL request
+      }
+    }
+    
+    if (hitlMetadata) {
+      console.log("📝 [HITL] Detected HITL request in conversation, processing user response...");
+      console.log("📝 [HITL] Request ID:", hitlMetadata.hitl_request_id);
+      console.log("📝 [HITL] Node type:", hitlMetadata.hitl_node_type);
+      console.log("📝 [HITL] User response:", textContent.text);
+        
+        try {
+          // Parse the user's response based on node type
+          let responseData: Record<string, any> = {};
+          
+          if (hitlMetadata.hitl_node_type === "approval") {
+            // For approval, check if message contains "approve" or "reject"
+            const lowerText = textContent.text.toLowerCase().trim();
+            if (lowerText.includes("approve") || lowerText === "yes" || lowerText === "y") {
+              responseData = { approved: true };
+            } else if (lowerText.includes("reject") || lowerText === "no" || lowerText === "n") {
+              responseData = { approved: false };
+            } else {
+              // Default to approve if unclear
+              responseData = { approved: true };
+            }
+          } else if (hitlMetadata.hitl_node_type === "input") {
+            // For input, try to parse JSON or extract field values
+            const userText = textContent.text.trim();
+            
+            // Try to parse as JSON first
+            try {
+              const parsed = JSON.parse(userText);
+              if (typeof parsed === "object" && parsed !== null) {
+                responseData = parsed;
+              }
+            } catch {
+              // Not JSON, try to parse field:value format
+              if (hitlMetadata.hitl_fields && hitlMetadata.hitl_fields.length > 0) {
+                // If only one field, use the entire text as value
+                if (hitlMetadata.hitl_fields.length === 1) {
+                  responseData[hitlMetadata.hitl_fields[0].name] = userText;
+                } else {
+                  // Multiple fields - try to parse "field1: value1, field2: value2" format
+                  const pairs = userText.split(",").map(p => p.trim());
+                  for (const pair of pairs) {
+                    const [key, ...valueParts] = pair.split(":").map(s => s.trim());
+                    if (key && valueParts.length > 0) {
+                      responseData[key] = valueParts.join(":").trim();
+                    }
+                  }
+                  // If parsing failed, use first field
+                  if (Object.keys(responseData).length === 0 && hitlMetadata.hitl_fields[0]) {
+                    responseData[hitlMetadata.hitl_fields[0].name] = userText;
+                  }
+                }
+              } else {
+                // No fields defined, use raw text
+                responseData = { input: userText };
+              }
+            }
+          }
+          
+          // Submit HITL response
+          const result = await WorkflowService.submitHITLResponse(
+            hitlMetadata.hitl_execution_id,
+            hitlMetadata.hitl_node_id,
+            hitlMetadata.hitl_iteration,
+            {
+              response_data: responseData,
+            }
+          );
+          
+          if (result.success) {
+            console.log("✅ [HITL] Response submitted successfully via chat");
+            console.log("✅ [HITL] Response data:", responseData);
+            // Don't send the message to chat - it's already handled by HITL
+            // Just show a success message
+            const successMessage: ThreadMessageLike = {
+              role: "assistant",
+              content: [{ type: "text", text: "✅ Your response has been submitted. The workflow will continue." }],
+            };
+            setMessages((currentMessages) => [...currentMessages, successMessage]);
+            setIsRunning(false);
+            setExtras({ loading: false, streaming: false, error: false });
+            return; // Exit early - don't send to chat
+          } else {
+            console.error("❌ [HITL] Failed to submit response:", result.error);
+            // Continue with normal chat flow if HITL submission fails
+          }
+        } catch (error) {
+          console.error("❌ [HITL] Error processing HITL response:", error);
+          console.error("❌ [HITL] Error details:", error);
+          // Continue with normal chat flow if there's an error
+        }
+    } else {
+      console.log("ℹ️ [HITL] No HITL metadata found in assistant messages. Checking", assistantMessages.length, "messages.");
     }
 
     // Only extract images if multimodal enabled

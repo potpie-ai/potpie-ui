@@ -15,6 +15,7 @@ import { RootState } from "@/lib/state/store";
 import {
   ArrowDownIcon,
   CheckIcon,
+  CheckCircle,
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
@@ -33,7 +34,7 @@ import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Accordion, AccordionTrigger } from "@/components/ui/accordion";
 import { AccordionContent, AccordionItem } from "@radix-ui/react-accordion";
-import { parseHITLMetadata, removeHITLMetadata } from "@/lib/utils/hitlMetadata";
+import { parseHITLMetadata, removeHITLMetadata, HITLMetadata } from "@/lib/utils/hitlMetadata";
 import { HITLRequestChat } from "./HITLRequestChat";
 
 interface ThreadProps {
@@ -348,6 +349,60 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
   const textContent = message.content.find(c => c.type === "text");
   const imageContent = message.content.filter(c => c.type === "image");
   
+  // Get text for HITL detection
+  const messageText = (textContent as any)?.text || "";
+  
+  // Parse HITL metadata from user message (HITL requests may appear as user messages from backend)
+  const hitlMetadata = useMemo(() => {
+    if (!messageText) return null;
+    console.log("🔍 [HITL UserMessage] Checking for metadata in user message. Length:", messageText.length);
+    
+    const parsed = parseHITLMetadata(messageText);
+    if (parsed) {
+      console.log("✅ [HITL UserMessage] Parsed metadata:", parsed.hitl_request_id);
+      return parsed;
+    }
+    
+    // Manual extraction fallback
+    if (messageText.includes("HITL_METADATA") || messageText.includes("hitl_request_id")) {
+      const hitlIndex = messageText.indexOf("HITL_METADATA");
+      if (hitlIndex > -1) {
+        const snippet = messageText.substring(
+          Math.max(0, hitlIndex - 20),
+          Math.min(messageText.length, hitlIndex + 3000)
+        );
+        const jsonStart = snippet.indexOf('{');
+        const jsonEnd = snippet.lastIndexOf('}');
+        if (jsonStart > 0 && jsonEnd > jsonStart) {
+          try {
+            let jsonStr = snippet.substring(jsonStart, jsonEnd + 1).trim();
+            const extracted = JSON.parse(jsonStr);
+            if (extracted.hitl_request_id && extracted.hitl_execution_id) {
+              console.log("✅ [HITL UserMessage] Manually extracted metadata:", extracted.hitl_request_id);
+              return extracted as HITLMetadata;
+            }
+          } catch (e) {
+            console.error("❌ [HITL UserMessage] Manual extraction failed:", e);
+          }
+        }
+      }
+    }
+    return null;
+  }, [messageText]);
+  
+  // Clean text for display (remove HITL metadata)
+  const displayText = useMemo(() => {
+    if (!messageText) return "";
+    if (messageText.includes("HITL_METADATA") || messageText.includes("hitl_request_id")) {
+      const cleaned = removeHITLMetadata(messageText);
+      console.log("🧹 [HITL UserMessage] Removed metadata. Original:", messageText.length, "Cleaned:", cleaned.length);
+      return cleaned;
+    }
+    return messageText;
+  }, [messageText]);
+  
+  const hasHitlKeywords = messageText.includes("HITL_METADATA") || messageText.includes("hitl_request_id");
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -357,29 +412,59 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          {/* Only render image previews if multimodal enabled and images exist */}
-          {isMultimodalEnabled() && imageContent.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {imageContent.map((img: any, index: number) => (
-                <div key={index} className="relative">
-                  <img
-                    src={img.image}
-                    alt={`Uploaded ${index + 1}`}
-                    className="w-16 h-16 object-cover rounded-lg border border-gray-300"
-                  />
-                </div>
-              ))}
+          {/* Render HITL component if metadata is present (HITL requests may appear as user messages) */}
+          {hitlMetadata ? (
+            <div className="mb-4 w-full">
+              <HITLRequestChat
+                metadata={hitlMetadata}
+                onResponseSubmitted={() => {
+                  console.log("✅ HITL response submitted from user message");
+                  if (typeof window !== 'undefined' && (window as any).queryClient) {
+                    (window as any).queryClient.invalidateQueries({ queryKey: ['pendingHITLRequests'] });
+                  }
+                }}
+              />
             </div>
-          )}
-          
-          {/* Render text content */}
-          {textContent && (
-            <div className="break-words">{(textContent as any).text}</div>
-          )}
-          
-          {/* Fallback: if no custom content, use original */}
-          {imageContent.length === 0 && !textContent && (
-            <MessagePrimitive.Content />
+          ) : hasHitlKeywords ? (
+            // Metadata exists but parsing failed - show warning
+            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800 mb-2">
+                ⚠️ HITL request detected but metadata parsing failed.
+              </p>
+              <a 
+                href="/workflows/pending-requests"
+                className="text-sm text-blue-600 hover:text-blue-800 underline"
+              >
+                View pending requests
+              </a>
+            </div>
+          ) : (
+            <>
+              {/* Only render image previews if multimodal enabled and images exist */}
+              {isMultimodalEnabled() && imageContent.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {imageContent.map((img: any, index: number) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={img.image}
+                        alt={`Uploaded ${index + 1}`}
+                        className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Render text content (cleaned of HITL metadata) */}
+              {displayText && (
+                <div className="break-words">{displayText}</div>
+              )}
+              
+              {/* Fallback: if no custom content, use original */}
+              {imageContent.length === 0 && !displayText && (
+                <MessagePrimitive.Content />
+              )}
+            </>
           )}
         </div>
       </MessagePrimitive.Root>
@@ -390,6 +475,37 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     </motion.div>
   );
 };
+
+// Helper function to format response text for display
+function formatResponseText(
+  responseData: Record<string, any>,
+  action?: string,
+  nodeType?: string
+): string {
+  if (nodeType === "approval") {
+    return responseData.approved ? "Approved" : "Rejected";
+  }
+  
+  if (action === "requested_changes") {
+    return "Requested changes";
+  }
+  
+  if (action === "approved") {
+    return "Approved and continuing";
+  }
+  
+  // Format input fields
+  const fields = Object.entries(responseData)
+    .filter(([key]) => key !== "needs_changes" && key !== "changes")
+    .map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return `${key}: ${value.join(", ")}`;
+      }
+      return `${key}: ${value}`;
+    });
+  
+  return fields.length > 0 ? fields.join(", ") : "Submitted";
+}
 
 const ThreadScrollToBottom: FC = () => {
   const threadRuntime = useThreadRuntime();
@@ -453,6 +569,10 @@ const AssistantMessage: FC = () => {
     { id: string; message: string; status: string; details_summary: string }[]
   >([]);
   const [isError, setIsError] = useState(false);
+  const [hitlResponseSubmitted, setHitlResponseSubmitted] = useState<{
+    data: Record<string, any>;
+    action?: string;
+  } | null>(null);
 
   // Get initial text from message content (for non-streaming messages)
   const initialText = (message.content[0] as any)?.text || "";
@@ -461,6 +581,9 @@ const AssistantMessage: FC = () => {
   // Also check initial text in case message is already loaded
   // IMPORTANT: Parse from raw text BEFORE any markdown processing
   const hitlMetadata = useMemo(() => {
+    const textToCheck = text || initialText;
+    console.log("🔍 [HITL] Checking for metadata in text. Length:", textToCheck.length, "Has HITL keywords:", textToCheck.includes("HITL_METADATA"));
+    
     // Try parsing from current text state
     const parsedFromText = parseHITLMetadata(text);
     if (parsedFromText) {
@@ -473,18 +596,56 @@ const AssistantMessage: FC = () => {
       console.log("✅ [HITL] Parsed metadata from initial text:", parsedFromInitial);
       return parsedFromInitial;
     }
-    // Debug: log if we see HITL keywords but couldn't parse
-    if ((text || initialText).includes("HITL_METADATA") || (text || initialText).includes("hitl_request_id")) {
-      console.warn("⚠️ [HITL] HITL keywords found but metadata not parsed. Text length:", (text || initialText).length);
+    // If regex parsing failed but keywords exist, try manual extraction
+    if (textToCheck.includes("HITL_METADATA") || textToCheck.includes("hitl_request_id")) {
+      console.warn("⚠️ [HITL] Regex parsing failed, trying manual extraction. Text length:", textToCheck.length);
+      const hitlIndex = textToCheck.indexOf("HITL_METADATA");
+      if (hitlIndex > -1) {
+        // Extract a larger snippet to ensure we get the full JSON
+        const snippet = textToCheck.substring(
+          Math.max(0, hitlIndex - 20),
+          Math.min(textToCheck.length, hitlIndex + 3000)
+        );
+        
+        // Find the JSON object boundaries
+        const jsonStart = snippet.indexOf('{');
+        const jsonEnd = snippet.lastIndexOf('}');
+        if (jsonStart > 0 && jsonEnd > jsonStart) {
+          try {
+            // Extract and parse JSON
+            let jsonStr = snippet.substring(jsonStart, jsonEnd + 1);
+            // Clean up any trailing characters
+            jsonStr = jsonStr.trim();
+            const extracted = JSON.parse(jsonStr);
+            if (extracted.hitl_request_id && extracted.hitl_execution_id) {
+              console.log("✅ [HITL] Manually extracted metadata in useMemo:", extracted);
+              return extracted as HITLMetadata;
+            }
+          } catch (e) {
+            console.error("❌ [HITL] Manual extraction in useMemo failed:", e);
+            const jsonPreview = snippet.substring(jsonStart, Math.min(jsonStart + 500, jsonEnd + 1));
+            console.error("❌ [HITL] JSON string preview:", jsonPreview);
+          }
+        } else {
+          console.warn("⚠️ [HITL] Could not find JSON boundaries. HitlIndex:", hitlIndex, "Snippet length:", snippet.length);
+        }
+      }
     }
     return null;
   }, [text, initialText]);
   
   const displayText = useMemo(() => {
     const textToUse = text || initialText;
-    if (hitlMetadata) {
+    // Always try to remove metadata, even if parsing failed
+    // This ensures the HTML comment doesn't show in the UI
+    if (textToUse.includes("HITL_METADATA") || textToUse.includes("hitl_request_id")) {
       const cleaned = removeHITLMetadata(textToUse);
       console.log("🧹 [HITL] Removed metadata from display text. Original length:", textToUse.length, "Cleaned length:", cleaned.length);
+      if (cleaned.length < textToUse.length) {
+        console.log("✅ [HITL] Successfully removed metadata");
+      } else {
+        console.warn("⚠️ [HITL] Metadata removal didn't change text length - regex might not be matching");
+      }
       return cleaned;
     }
     return textToUse;
@@ -589,46 +750,95 @@ const AssistantMessage: FC = () => {
         </Avatar>
         <div className="rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
           {/* Render HITL request if metadata is present */}
-          {hitlMetadata && !isRunning ? (
-            <div className="mb-4">
-              <HITLRequestChat
-                metadata={hitlMetadata}
-                onResponseSubmitted={() => {
-                  // Optionally refresh messages or show success state
-                  console.log("✅ HITL response submitted");
-                }}
-              />
-            </div>
-          ) : (() => {
-            // Debug: Check if message contains HITL metadata but component isn't rendering
-            const currentText = text || initialText;
-            const hasHitlKeywords = currentText.includes("HITL_METADATA") || currentText.includes("hitl_request_id");
-            if (hasHitlKeywords && !hitlMetadata) {
-              console.error("❌ [HITL] HITL keywords found but metadata not parsed!");
-              console.error("❌ [HITL] Text snippet:", currentText.substring(
-                Math.max(0, currentText.indexOf("HITL") - 100),
-                Math.min(currentText.length, currentText.indexOf("HITL") + 600)
-              ));
+          {/* Check if HITL keywords exist even if parsing failed */}
+          {(() => {
+            const hasHitlKeywords = (text || initialText).includes("HITL_METADATA") || (text || initialText).includes("hitl_request_id");
+            console.log("🎨 [HITL] Rendering check - hasHitlKeywords:", hasHitlKeywords, "hitlMetadata:", !!hitlMetadata, "isRunning:", isRunning, "text length:", (text || initialText).length);
+            
+            // Use the parsed metadata (which includes manual extraction from useMemo)
+            let metadataToUse = hitlMetadata;
+            
+            // If parsing failed but keywords exist, try one more time with the raw text
+            // Remove isRunning check - HITL messages are complete, not streaming
+            if (hasHitlKeywords && !metadataToUse) {
+              console.warn("⚠️ [HITL] Parsing failed in useMemo, trying one more time in render");
+              const rawText = text || initialText;
+              metadataToUse = parseHITLMetadata(rawText);
+              if (metadataToUse) {
+                console.log("✅ [HITL] Successfully parsed in render:", metadataToUse.hitl_request_id);
+              } else {
+                // Last resort: try manual extraction
+                const hitlIndex = rawText.indexOf("HITL_METADATA");
+                if (hitlIndex > -1) {
+                  const snippet = rawText.substring(
+                    Math.max(0, hitlIndex - 20),
+                    Math.min(rawText.length, hitlIndex + 3000)
+                  );
+                  const jsonStart = snippet.indexOf('{');
+                  const jsonEnd = snippet.lastIndexOf('}');
+                  if (jsonStart > 0 && jsonEnd > jsonStart) {
+                    try {
+                      let jsonStr = snippet.substring(jsonStart, jsonEnd + 1).trim();
+                      const extracted = JSON.parse(jsonStr);
+                      if (extracted.hitl_request_id && extracted.hitl_execution_id) {
+                        console.log("✅ [HITL] Manually extracted metadata in render:", extracted.hitl_request_id);
+                        metadataToUse = extracted as HITLMetadata;
+                      }
+                    } catch (e) {
+                      console.error("❌ [HITL] Manual extraction in render failed:", e);
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Render HITL component if metadata is found (regardless of isRunning - HITL messages are complete)
+            if (metadataToUse) {
+              // Show interactive HITL component - hide the raw text
+              console.log("✅ [HITL] Rendering HITLRequestChat component with metadata:", metadataToUse.hitl_request_id);
               return (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                  <p className="text-sm text-red-800">
-                    ⚠️ HITL request detected but could not be parsed. Check browser console for details.
-                  </p>
+                <div className="mb-4 w-full">
+                  <HITLRequestChat
+                    metadata={metadataToUse}
+                    onResponseSubmitted={(responseData, action) => {
+                      // Store the submitted response to show in chat
+                      setHitlResponseSubmitted({ data: responseData, action });
+                      // Refresh pending requests count and show success
+                      console.log("✅ HITL response submitted", responseData, action);
+                      // Optionally invalidate queries to refresh sidebar count
+                      if (typeof window !== 'undefined' && (window as any).queryClient) {
+                        (window as any).queryClient.invalidateQueries({ queryKey: ['pendingHITLRequests'] });
+                      }
+                    }}
+                  />
                 </div>
               );
-            }
-            return null;
-          })()}
-          {/* Fallback: If HITL keywords are present but metadata wasn't parsed, show a warning */}
-          {(() => {
-            const hasHitlKeywords = text.includes("HITL_METADATA") || text.includes("hitl_request_id");
-            if (hasHitlKeywords && !hitlMetadata && !isRunning) {
-              console.error("❌ [HITL Error] HITL keywords found but metadata not parsed. Text:", text);
+            } else if (hasHitlKeywords) {
+              // Metadata exists but all parsing attempts failed - show a link to pending requests
+              console.error("❌ [HITL] All parsing attempts failed - hasHitlKeywords:", hasHitlKeywords, "metadataToUse:", metadataToUse);
+              const rawText = text || initialText;
+              const hitlIndex = rawText.indexOf("HITL_METADATA");
+              let requestId = "unknown";
+              if (hitlIndex > -1) {
+                const preview = rawText.substring(hitlIndex, Math.min(hitlIndex + 500, rawText.length));
+                console.error("❌ [HITL] Raw metadata preview:", preview);
+                // Try to extract request_id from the preview
+                const requestIdMatch = preview.match(/"hitl_request_id"\s*:\s*"([^"]+)"/);
+                if (requestIdMatch) {
+                  requestId = requestIdMatch[1];
+                }
+              }
               return (
                 <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ HITL request detected but could not be parsed. Please check the browser console for details.
+                  <p className="text-sm text-yellow-800 mb-2">
+                    ⚠️ HITL request detected but metadata parsing failed.
                   </p>
+                  <a 
+                    href={`/workflows/pending-requests/${requestId}`}
+                    className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Click here to view and respond to this request
+                  </a>
                 </div>
               );
             }
@@ -715,27 +925,53 @@ const AssistantMessage: FC = () => {
               </Accordion>
             </motion.div>
           )}
-          {!isRunning && displayText && !hitlMetadata && (
-            <div>
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                transition={{
-                  height: { duration: 1, ease: "backInOut" },
-                  opacity: { duration: 0.3, delay: 0.5 },
-                }}
-                className="overflow-hidden"
-              >
-                <MarkdownComponent content={{ text: displayText }} />
-              </motion.div>
+          {/* Show submitted response if HITL was responded to */}
+          {hitlResponseSubmitted && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="text-green-700 font-medium">
+                  {hitlResponseSubmitted.action === "approved" ? "Approved" :
+                   hitlResponseSubmitted.action === "rejected" ? "Rejected" :
+                   hitlResponseSubmitted.action === "requested_changes" ? "Changes Requested" :
+                   "Response Submitted"}
+                </span>
+              </div>
+              <div className="text-sm text-gray-700">
+                <strong>Response:</strong> {formatResponseText(hitlResponseSubmitted.data, hitlResponseSubmitted.action, hitlMetadata?.hitl_node_type)}
+              </div>
             </div>
           )}
-          {/* Show a brief message if HITL request is present (the HITLRequestChat component shows the full UI) */}
-          {!isRunning && hitlMetadata && displayText && (
-            <div className="text-sm text-muted-foreground mb-2">
-              {/* Optionally show a brief preview, but HITLRequestChat will show the full interactive UI */}
-            </div>
-          )}
+          {/* Show markdown content (cleaned of HITL metadata) */}
+          {/* ALWAYS hide markdown when HITL keywords are detected - component will show instead */}
+          {(() => {
+            const hasHitlKeywords = (text || initialText).includes("HITL_METADATA") || (text || initialText).includes("hitl_request_id");
+            
+            // NEVER show markdown if HITL keywords are present and not yet responded to - the component handles display
+            if (hasHitlKeywords && !hitlResponseSubmitted) {
+              return null; // Component is rendered above, don't show markdown
+            }
+            
+            // Only show markdown if there are no HITL keywords
+            if (!isRunning && displayText && displayText.trim()) {
+              return (
+                <div>
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    transition={{
+                      height: { duration: 1, ease: "backInOut" },
+                      opacity: { duration: 0.3, delay: 0.5 },
+                    }}
+                    className="overflow-hidden"
+                  >
+                    <MarkdownComponent content={{ text: displayText }} />
+                  </motion.div>
+                </div>
+              );
+            }
+            return null;
+          })()}
           {(isRunning || !text) && !isError && (
             <motion.div
               initial={{ opacity: 0, x: -20 }}

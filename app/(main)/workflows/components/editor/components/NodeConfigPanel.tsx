@@ -52,6 +52,10 @@ export const NodeConfigPanel: FC<NodeConfigPanelProps> = ({
   }, [selectedNode.data?.data]);
 
   const handleConfigChange = (newConfig: any) => {
+    console.log(
+      `🔧 [NodeConfigPanel] Config changed for node ${selectedNode.id}:`,
+      newConfig
+    );
     setConfig(newConfig);
     onConfigChange(newConfig);
   };

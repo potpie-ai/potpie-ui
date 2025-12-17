@@ -129,7 +129,27 @@ const Chat = () => {
         })
       );
 
-      setProjectId(info.project_ids[0]);
+      // For workflow conversations, project_ids may be empty
+      // Only set projectId and check parsing status if project_ids exists and is not empty
+      if (info.project_ids && info.project_ids.length > 0 && info.project_ids[0]) {
+        setProjectId(info.project_ids[0]);
+        
+        // Only check parsing status for conversations with projects (not workflow conversations)
+        try {
+          const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
+            info.project_ids[0]
+          );
+          setParsingStatus(parsingStatus);
+        } catch (error) {
+          console.warn("Error fetching parsing status (this is normal for workflow conversations):", error);
+          setParsingStatus(ParsingStatusEnum.READY); // Set to ready for workflow conversations
+        }
+      } else {
+        // Workflow conversation - no project, skip parsing status check
+        setProjectId("");
+        setParsingStatus(ParsingStatusEnum.READY);
+      }
+      
       setInfoLoaded(true);
 
       if (!info.is_creator) {
@@ -137,11 +157,6 @@ const Chat = () => {
           setProfilePicUrl(profilePicture as string);
         });
       }
-
-      const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
-        info.project_ids[0]
-      );
-      setParsingStatus(parsingStatus);
     } catch (error) {
       console.error("Error loading conversation info:", error);
       toast.error("Failed to load conversation info");
@@ -153,6 +168,13 @@ const Chat = () => {
   }, [currentConversationId]);
 
   useEffect(() => {
+    // Only check parsing status for conversations with projects (not workflow conversations)
+    if (!projectId || projectId === "") {
+      // Workflow conversation - no parsing needed, keep dialog closed
+      setIsDialogOpen(false);
+      return;
+    }
+    
     if (
       parsingStatus === ParsingStatusEnum.ERROR ||
       (parsingStatus !== ParsingStatusEnum.READY &&

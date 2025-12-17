@@ -13,10 +13,13 @@ export interface HITLMetadata {
     name: string;
     type: string;
     required?: boolean;
+    options?: string[];
   }>;
   hitl_approvers?: string[];
   hitl_assignee?: string;
   hitl_timeout_action?: string;
+  hitl_loop_back_node_id?: string;
+  hitl_loop_back_condition?: string;
 }
 
 /**
@@ -29,10 +32,16 @@ export function parseHITLMetadata(messageText: string): HITLMetadata | null {
   // Look for HITL_METADATA in HTML comment
   // Try multiple regex patterns to handle different formatting
   const patterns = [
-    /<!--\s*HITL_METADATA:\s*({[\s\S]*?})\s*-->/g,  // Standard format with any whitespace (non-greedy)
-    /<!--\s*HITL_METADATA:\s*({[\s\S]*})-->/g,  // Greedy match for multi-line
-    /<!--HITL_METADATA:\s*({[\s\S]*?})-->/g,  // No spaces around comment
-    /HITL_METADATA:\s*({[\s\S]*?})(?=\s*-->)/,  // More flexible - match before -->
+    // Most specific: match the exact format with balanced braces (non-greedy, dotall)
+    /<!--\s*HITL_METADATA:\s*(\{(?:[^{}]|(?:\{[^{}]*\}))*\})\s*-->/gs,
+    // Standard format with any whitespace (non-greedy, dotall)
+    /<!--\s*HITL_METADATA:\s*({[\s\S]*?})\s*-->/gs,
+    // Greedy match for multi-line (dotall)
+    /<!--\s*HITL_METADATA:\s*({[\s\S]*})-->/gs,
+    // No spaces around comment (dotall)
+    /<!--HITL_METADATA:\s*({[\s\S]*?})-->/gs,
+    // More flexible - match before --> (dotall)
+    /HITL_METADATA:\s*({[\s\S]*?})(?=\s*-->)/gs,
   ];
 
   for (const regex of patterns) {
@@ -68,22 +77,42 @@ export function parseHITLMetadata(messageText: string): HITLMetadata | null {
   // Debug: log if we're looking at a message that might contain HITL metadata
   if (messageText.includes("HITL_METADATA") || messageText.includes("hitl_request_id")) {
     const hitlIndex = messageText.indexOf("HITL_METADATA");
+    // Get a larger snippet to ensure we capture the full JSON
     const preview = messageText.substring(
-      Math.max(0, hitlIndex - 50), 
-      Math.min(messageText.length, hitlIndex + 600)
+      Math.max(0, hitlIndex - 20), 
+      Math.min(messageText.length, hitlIndex + 3000)
     );
-    console.warn("⚠️ [HITL] HITL metadata found in text but regex didn't match. Preview:", preview);
-    // Try to manually extract JSON
+    console.warn("⚠️ [HITL] HITL metadata found in text but regex didn't match. Preview length:", preview.length);
+    
+    // Try to manually extract JSON with better brace matching
     const jsonStart = preview.indexOf('{');
-    const jsonEnd = preview.lastIndexOf('}');
-    if (jsonStart > 0 && jsonEnd > jsonStart) {
-      try {
-        const manualJson = preview.substring(jsonStart, jsonEnd + 1);
-        const metadata = JSON.parse(manualJson);
-        console.log("✅ [HITL] Manually extracted and parsed metadata:", metadata);
-        return metadata as HITLMetadata;
-      } catch (e) {
-        console.warn("⚠️ [HITL] Manual extraction also failed:", e);
+    if (jsonStart > 0) {
+      // Find the matching closing brace by counting braces
+      let braceCount = 0;
+      let jsonEnd = -1;
+      for (let i = jsonStart; i < preview.length; i++) {
+        if (preview[i] === '{') braceCount++;
+        if (preview[i] === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            jsonEnd = i;
+            break;
+          }
+        }
+      }
+      
+      if (jsonEnd > jsonStart) {
+        try {
+          const manualJson = preview.substring(jsonStart, jsonEnd + 1);
+          const metadata = JSON.parse(manualJson);
+          if (metadata.hitl_request_id && metadata.hitl_execution_id) {
+            console.log("✅ [HITL] Manually extracted and parsed metadata:", metadata);
+            return metadata as HITLMetadata;
+          }
+        } catch (e) {
+          console.warn("⚠️ [HITL] Manual extraction also failed:", e);
+          console.warn("⚠️ [HITL] JSON preview:", preview.substring(jsonStart, Math.min(jsonStart + 200, jsonEnd + 1)));
+        }
       }
     }
   }

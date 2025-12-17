@@ -34,7 +34,7 @@ import {
   ExternalLink,
   Info,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import WorkflowService from "@/services/WorkflowService";
 
 // Webhook icon component
@@ -48,8 +48,8 @@ const WebhookIcon = ({
 
 // Webhook trigger config interface
 export interface WebhookTriggerConfigProps {
-  config: { hash?: string };
-  onConfigChange: (config: { hash?: string }) => void;
+  config: { hash?: string; webhook_url?: string };
+  onConfigChange: (config: { hash?: string; webhook_url?: string }) => void;
   readOnly?: boolean;
   workflowId?: string;
   workflow?: any;
@@ -66,21 +66,79 @@ export const WebhookTriggerConfigComponent: FC<WebhookTriggerConfigProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
+  const [localWebhookUrl, setLocalWebhookUrl] = useState<string>("");
+
+  // Update local webhook URL when config changes
+  // Also extract hash from webhook_url if hash is missing
+  useEffect(() => {
+    const url = config.webhook_url || (config.hash
+      ? `${process.env.NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL || process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/webhook/${config.hash}`
+      : "");
+    setLocalWebhookUrl(url);
+    
+    // If hash is missing but webhook_url exists, extract and set the hash
+    // Only do this once to avoid infinite loops
+    if (!config.hash && config.webhook_url && !readOnly) {
+      const match = config.webhook_url.match(/\/webhook\/([a-f0-9\-]+)/);
+      if (match && match[1]) {
+        const extractedHash = match[1];
+        console.log(
+          `🔧 [Webhook Config] Extracting hash ${extractedHash} from webhook_url and updating config`
+        );
+        // Update config with extracted hash (this will trigger onConfigChange)
+        const newConfig = { ...config, hash: extractedHash };
+        onConfigChange(newConfig);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.hash, config.webhook_url, readOnly]);
 
   const handleChange = (key: string, value: any) => {
     if (readOnly) return;
-    onConfigChange({ ...config, [key]: value });
+    const newConfig = { ...config, [key]: value };
+    console.log(
+      `🔧 [Webhook Config] Updating config: key=${key}, value=${value}, newConfig=`,
+      newConfig
+    );
+    onConfigChange(newConfig);
+    // Immediately update local state for webhook_url to show it right away
+    if (key === "webhook_url") {
+      setLocalWebhookUrl(value);
+    } else if (key === "hash" && !config.webhook_url) {
+      // If hash changed but no webhook_url, reconstruct URL
+      const url = `${process.env.NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL || process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/webhook/${value}`;
+      setLocalWebhookUrl(url);
+    }
   };
 
   const generateWebhook = async () => {
     if (isGenerating) return;
     setIsGenerating(true);
     try {
+      console.log("🔧 [Webhook Config] Attempting to generate webhook...");
       const result =
         await WorkflowService.refreshTriggerHash("trigger_webhook");
+      console.log("🔧 [Webhook Config] Webhook generation result:", result);
+      console.log(
+        `🔧 [Webhook Config] Current config before update:`,
+        config
+      );
+      // Update hash first
       handleChange("hash", result.trigger_hash);
+      // Store the webhook_url from API response to use the correct URL
+      // This ensures we use the backend's BASE_URL (which has the ngrok URL)
+      if (result.webhook_url) {
+        console.log(
+          "🔧 [Webhook Config] Setting webhook_url from API:",
+          result.webhook_url
+        );
+        handleChange("webhook_url", result.webhook_url);
+      }
+      console.log(
+        `🔧 [Webhook Config] Config after webhook generation should have hash=${result.trigger_hash} and webhook_url=${result.webhook_url}`
+      );
     } catch (error) {
-      console.error("Failed to generate webhook:", error);
+      console.error("❌ [Webhook Config] Failed to generate webhook:", error);
     } finally {
       setIsGenerating(false);
     }
@@ -103,10 +161,10 @@ export const WebhookTriggerConfigComponent: FC<WebhookTriggerConfigProps> = ({
     await generateWebhook();
   };
 
-  // Only use config.hash for the webhook URL
-  const webhookUrl = config.hash
+  // Use local webhook URL state (which updates immediately) or fall back to constructing from config
+  const webhookUrl = localWebhookUrl || config.webhook_url || (config.hash
     ? `${process.env.NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL || process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/webhook/${config.hash}`
-    : "";
+    : "");
 
   return (
     <div className="space-y-4">
@@ -264,10 +322,14 @@ export const webhookTriggerNodeMetadata = {
 
 // Webhook trigger node component
 export const WebhookTriggerNode: FC<{
-  data: WorkflowNode & { data: { hash?: string } };
+  data: WorkflowNode & { data: { hash?: string; webhook_url?: string } };
 }> = ({ data }) => {
   const colors = getNodeColors(data.group);
-  const { hash } = data.data || {};
+  // Get hash and webhook_url from data.data - this will update when config changes
+  const { hash, webhook_url } = data.data || {};
+  
+  // Determine if webhook is generated (has hash or webhook_url)
+  const isWebhookGenerated = !!(hash || webhook_url);
 
   return (
     <div className="w-full">
@@ -305,7 +367,7 @@ export const WebhookTriggerNode: FC<{
         {/* Webhook Status */}
         <div className="flex flex-col gap-1 mt-3">
           <div className="text-xs text-gray-500">Webhook Status</div>
-          {!hash ? (
+          {!isWebhookGenerated ? (
             <div className="flex items-center text-red-600 text-sm">
               <AlertTriangle className="w-4 h-4 mr-1" />
               <span>Webhook not generated</span>

@@ -148,7 +148,7 @@ export const SidebarItems: { title: string; links: any[] }[] = [
       {
         icons: <Cookie size={20} strokeWidth={1.5} />,
         title: "New Task",
-        href: "/new_task",
+        href: "/newtask",
         disabled: false,
       },
     ],

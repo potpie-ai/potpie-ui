@@ -42,7 +42,29 @@ function WorkEmailSSOContent({ email, onNeedsLinking, onSuccess }: WorkEmailSSOP
             headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
           }
         );
-        const userInfo = await userInfoResponse.json();
+
+        // Check if response is successful before parsing JSON
+        if (!userInfoResponse.ok) {
+          const errorText = await userInfoResponse.text();
+          const errorMessage = `Failed to fetch user info from Google: ${userInfoResponse.status} ${userInfoResponse.statusText}${errorText ? ` - ${errorText}` : ''}`;
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Google userinfo API error:', errorMessage);
+          }
+          toast.error('Google sign-in failed. Please try again.');
+          return;
+        }
+
+        // Parse JSON only if response is successful
+        let userInfo;
+        try {
+          userInfo = await userInfoResponse.json();
+        } catch (jsonError: any) {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Failed to parse Google userinfo response:', jsonError);
+          }
+          toast.error('Invalid response from Google. Please try again.');
+          return;
+        }
 
         // Verify email matches
         if (userInfo.email.toLowerCase() !== email.toLowerCase()) {
@@ -66,8 +88,10 @@ function WorkEmailSSOContent({ email, onNeedsLinking, onSuccess }: WorkEmailSSOP
 
         handleSSOResponse(response);
       } catch (error: any) {
-        console.error('Google SSO error:', error);
-        toast.error(error.response?.data?.error || 'Google sign-in failed');
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Google SSO error:', error);
+        }
+        toast.error('Google sign-in failed. Please try again.');
       }
     },
     onError: () => {

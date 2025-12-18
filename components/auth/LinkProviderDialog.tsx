@@ -25,35 +25,22 @@ export function LinkProviderDialog({
 
   const handleConfirm = async () => {
     if (!linkingData.linking_token) {
-      console.error('No linking token provided');
       return;
     }
 
-    console.log('=== LINK PROVIDER DIALOG - CONFIRM ===');
-    console.log('Linking token:', linkingData.linking_token);
-    console.log('Full linking data:', linkingData);
-
     setIsLinking(true);
     try {
-      console.log('Calling authClient.confirmLinking...');
-      const result = await authClient.confirmLinking(linkingData.linking_token);
-      console.log('confirmLinking result:', result);
+      await authClient.confirmLinking(linkingData.linking_token);
       toast.success('Account linked successfully!');
       onLinked();
       onClose();
     } catch (error: any) {
-      console.error('=== LINKING ERROR ===');
-      console.error('Error object:', error);
-      console.error('Error message:', error.message);
-      console.error('Error response:', error.response);
-      console.error('Error response data:', error.response?.data);
-      console.error('Error response status:', error.response?.status);
-      console.error('Error response headers:', error.response?.headers);
-      console.error('Full error:', JSON.stringify(error, null, 2));
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Account linking failed:', error.message);
+      }
       toast.error(getUserFriendlyError(error));
     } finally {
       setIsLinking(false);
-      console.log('=== END LINK PROVIDER DIALOG - CONFIRM ===');
     }
   };
 
@@ -62,7 +49,10 @@ export function LinkProviderDialog({
       try {
         await authClient.cancelLinking(linkingData.linking_token);
       } catch (error) {
-        console.error('Cancel linking error:', error);
+        // Silently handle cancel errors - user is already canceling
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Cancel linking error:', error);
+        }
       }
     }
     onClose();

@@ -150,46 +150,6 @@ const Onboarding = () => {
     checkAuth();
   }, [email, router]);
 
-  // Check if GitHub is already linked (only after onboarding is submitted)
-  useEffect(() => {
-    const checkGithubLinked = async () => {
-      // Only check GitHub link status after onboarding is submitted
-      // This prevents errors for new users who don't exist in the database yet
-      if (!uid || !isAuthenticated || !onboardingSubmitted) return;
-      
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
-        
-        const token = await user.getIdToken();
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-        const response = await axios.get(
-          `${baseUrl}/api/v1/providers/me`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        
-        const hasGithub = response.data.providers?.some(
-          (p: any) => p.provider_type === 'firebase_github'
-        );
-        console.log("GitHub link check - hasGithub:", hasGithub, "providers:", response.data.providers);
-        setHasGithubLinked(hasGithub || false);
-      } catch (error: any) {
-        // Silently handle errors - user might not exist yet or endpoint might fail
-        // This is expected for new users who haven't linked GitHub yet
-        if (error.response?.status !== 404 && error.response?.status !== 401) {
-          console.warn("Error checking GitHub link (non-critical):", error.response?.status, error.message);
-        }
-        // Assume not linked if check fails
-        setHasGithubLinked(false);
-      }
-    };
-    
-    if (isAuthenticated && onboardingSubmitted) {
-      checkGithubLinked();
-    }
-  }, [uid, isAuthenticated, onboardingSubmitted]);
 
   const handleCheckoutRedirect = async (uid: string) => {
     try {
@@ -243,10 +203,6 @@ const Onboarding = () => {
 
       try {
         await setDoc(doc(db, "users", uid), userDoc);
-        // Small delay for smooth transition
-        await new Promise(resolve => setTimeout(resolve, 300));
-        setOnboardingSubmitted(true);
-        console.log("Onboarding submitted. hasGithubLinked:", hasGithubLinked);
         toast.success("Onboarding information saved!");
       } catch (firebaseError: any) {
         console.error("Firebase Error:", firebaseError);
@@ -260,8 +216,40 @@ const Onboarding = () => {
         );
       }
 
+      // Check GitHub link status synchronously before setting onboardingSubmitted
+      let githubLinked = false;
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          const token = await user.getIdToken();
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+          const response = await axios.get(
+            `${baseUrl}/api/v1/providers/me`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          
+          githubLinked = response.data.providers?.some(
+            (p: any) => p.provider_type === 'firebase_github'
+          ) || false;
+        }
+      } catch (error: any) {
+        // Silently handle errors - user might not exist yet or endpoint might fail
+        // This is expected for new users who haven't linked GitHub yet
+        if (process.env.NODE_ENV === 'development' && error.response?.status !== 404 && error.response?.status !== 401) {
+          console.warn("Error checking GitHub link (non-critical):", error.response?.status, error.message);
+        }
+        // Assume not linked if check fails
+        githubLinked = false;
+      }
+
+      // Set onboardingSubmitted after checking GitHub status
+      setOnboardingSubmitted(true);
+      setHasGithubLinked(githubLinked);
+
       // If GitHub is already linked, proceed to next step
-      if (hasGithubLinked) {
+      if (githubLinked) {
         proceedToNextStep();
       }
       // Otherwise, wait for GitHub linking (handled by linkGithub function)

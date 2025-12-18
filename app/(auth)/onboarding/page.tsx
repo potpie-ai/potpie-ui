@@ -108,23 +108,29 @@ const Onboarding = () => {
             const authenticatedEmail = user.email || "";
             const urlEmail = email || "";
             
+            // Compute company name from authenticated email
+            const newCompanyName = authenticatedEmail ? extractCompanyNameFromEmail(authenticatedEmail) : "";
+            
             // If emails don't match, prefer the authenticated user's email
             // This handles cases where SSO login doesn't set URL params correctly
             if (authenticatedEmail && authenticatedEmail !== urlEmail && urlEmail) {
               console.warn(`Email mismatch: URL has ${urlEmail}, but authenticated as ${authenticatedEmail}. Using authenticated email.`);
               // Update form data with authenticated email and auto-populate company name
-              const newCompanyName = extractCompanyNameFromEmail(authenticatedEmail);
               setFormData(prev => ({ 
                 ...prev, 
                 email: authenticatedEmail,
                 companyName: prev.companyName || newCompanyName
               }));
-            } else if (authenticatedEmail && !formData.companyName) {
+            } else if (authenticatedEmail && newCompanyName) {
               // If company name is empty, try to extract from authenticated email
-              const newCompanyName = extractCompanyNameFromEmail(authenticatedEmail);
-              if (newCompanyName) {
-                setFormData(prev => ({ ...prev, companyName: newCompanyName }));
-              }
+              // Use functional updater to check current state and only update if needed
+              setFormData(prev => {
+                // Only update if company name is empty and we have a new company name
+                if (!prev.companyName && newCompanyName && newCompanyName !== prev.companyName) {
+                  return { ...prev, companyName: newCompanyName };
+                }
+                return prev;
+              });
             }
             
             setIsAuthenticated(true);

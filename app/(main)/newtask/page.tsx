@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -95,8 +95,8 @@ const NewTask = () => {
       // Save to session storage
       saveMockTaskToSession(mockTask.task_id, mockTask);
 
-      // Redirect to plan overview page
-      router.push(`/task/${mockTask.task_id}/plan_overview`);
+      // Redirect to user Q&A page
+      router.push(`/task/${mockTask.task_id}/userqa`);
     } catch (error: unknown) {
       const taskError = error as TaskError;
       toast.error(
@@ -131,16 +131,30 @@ const NewTask = () => {
       {/* Input Area with Repo/Branch Selection */}
       <div className={`w-full ${NEW_TASK_CONSTANTS.UI.MAX_WIDTH}`}>
         <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white shadow-sm overflow-visible">
-          {/* Textarea */}
-          <textarea
-            placeholder={NEW_TASK_CONSTANTS.PLACEHOLDERS.MESSAGE}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className={`flex-1 ${NEW_TASK_CONSTANTS.UI.TEXTAREA_MIN_HEIGHT} ${NEW_TASK_CONSTANTS.UI.TEXTAREA_MAX_HEIGHT} resize-none border-0 focus-visible:outline-none bg-transparent text-sm px-1 py-2`}
-            onKeyDown={handleKeyDown}
-            aria-label="Task message"
-            disabled={isSubmitting}
-          />
+          {/* Textarea with Send Button */}
+          <div className="relative">
+            <textarea
+              placeholder={NEW_TASK_CONSTANTS.PLACEHOLDERS.MESSAGE}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className={`w-full ${NEW_TASK_CONSTANTS.UI.TEXTAREA_MIN_HEIGHT} ${NEW_TASK_CONSTANTS.UI.TEXTAREA_MAX_HEIGHT} resize-none border-0 focus-visible:outline-none bg-transparent text-sm px-1 py-2 pr-10`}
+              onKeyDown={handleKeyDown}
+              aria-label="Task message"
+              disabled={isSubmitting}
+            />
+            <Button
+              className="absolute bottom-2 right-2 h-8 px-2"
+              size="sm"
+              disabled={!selectedRepo || !message.trim() || isSubmitting}
+              onClick={handleSend}
+              aria-label="Create task"
+            >
+              <ArrowUp
+                className={NEW_TASK_CONSTANTS.STYLING.ICON_SIZE}
+                strokeWidth={NEW_TASK_CONSTANTS.STYLING.ICON_STROKE_WIDTH}
+              />
+            </Button>
+          </div>
 
           {/* Repo/Branch Dropdowns Row */}
           <div className="flex items-center gap-2">
@@ -179,20 +193,6 @@ const NewTask = () => {
               getItemValue={(branch) => branch}
               getItemDisplay={(branch) => branch}
             />
-
-            {/* Send Button */}
-            <Button
-              className="ml-auto h-8 px-3"
-              size="sm"
-              disabled={!selectedRepo || !message.trim() || isSubmitting}
-              onClick={handleSend}
-              aria-label="Create task"
-            >
-              <ArrowRight
-                className={NEW_TASK_CONSTANTS.STYLING.ICON_SIZE}
-                strokeWidth={NEW_TASK_CONSTANTS.STYLING.ICON_STROKE_WIDTH}
-              />
-            </Button>
           </div>
         </div>
 

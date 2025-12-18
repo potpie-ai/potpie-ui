@@ -110,7 +110,23 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
             headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
           }
         );
-        const userInfo = await userInfoResponse.json();
+
+        // Check if response is successful before parsing JSON
+        if (!userInfoResponse.ok) {
+          const errorText = await userInfoResponse.text();
+          const errorMessage = `Failed to fetch user info from Google: ${userInfoResponse.status} ${userInfoResponse.statusText}${errorText ? ` - ${errorText}` : ''}`;
+          console.error('Google userinfo API error:', errorMessage);
+          throw new Error(errorMessage);
+        }
+
+        // Parse JSON only if response is successful
+        let userInfo;
+        try {
+          userInfo = await userInfoResponse.json();
+        } catch (jsonError: any) {
+          console.error('Failed to parse Google userinfo response:', jsonError);
+          throw new Error('Invalid response from Google userinfo API');
+        }
 
         // Send to backend
         const response = await authClient.ssoLogin(

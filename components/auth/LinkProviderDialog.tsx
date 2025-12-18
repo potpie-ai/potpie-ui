@@ -7,6 +7,7 @@ import { authClient } from '@/lib/sso/unified-auth';
 import { toast } from 'sonner';
 import type { SSOLoginResponse } from '@/types/auth';
 import { getUserFriendlyError, getUserFriendlyProviderName } from '@/lib/utils/errorMessages';
+import { Zap, Check } from 'lucide-react';
 
 interface LinkProviderDialogProps {
   isOpen: boolean;
@@ -76,19 +77,7 @@ export function LinkProviderDialog({
           <div className="flex items-start space-x-3">
             <div className="flex-shrink-0">
               <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="w-6 h-6 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
+                <Zap className="w-6 h-6 text-blue-600" />
               </div>
             </div>
             <div className="flex-1">
@@ -108,21 +97,15 @@ export function LinkProviderDialog({
             <h4 className="text-sm font-medium text-gray-900 mb-2">After linking:</h4>
             <ul className="space-y-1 text-sm text-gray-600">
               <li className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
+                <Check className="w-4 h-4 mr-2 text-green-500" />
                 Sign in with {existingProviderNames} or {newProviderType}
               </li>
               <li className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
+                <Check className="w-4 h-4 mr-2 text-green-500" />
                 All your data stays in one account
               </li>
               <li className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
+                <Check className="w-4 h-4 mr-2 text-green-500" />
                 Manage providers in account settings
               </li>
             </ul>

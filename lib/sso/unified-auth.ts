@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { SSOLoginResponse, UserAccount, AuthProvider } from '@/types/auth';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8000';
 
 export class UnifiedAuthClient {
   private baseURL: string;

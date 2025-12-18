@@ -6,6 +6,7 @@ import {
   ExecutionTree,
 } from "@/services/WorkflowService";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -70,6 +71,17 @@ export default function ExecutionDetailPage() {
         } catch (error) {
           console.error("Error fetching execution tree:", error);
           // Tree fetch is optional, so we don't show an error toast
+        }
+
+        // Fetch HITL requests for this execution
+        try {
+          const _hitlRequests = await WorkflowService.listHITLRequests(
+            params.executionId
+          );
+          setHitlRequests(_hitlRequests.requests || []);
+        } catch (error) {
+          console.error("Error fetching HITL requests:", error);
+          // HITL requests fetch is optional
         }
       } catch (error) {
         console.error("Error fetching data:", error);

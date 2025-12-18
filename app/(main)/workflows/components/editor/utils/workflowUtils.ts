@@ -151,13 +151,40 @@ export const nodesToWorkflowNodes = (
           `Invalid or missing node type for node ${node.id}: ${type}`
         );
       }
+      let nodeData = node.data?.data || {};
+      
+      // For webhook triggers, ensure hash is set (extract from webhook_url if missing)
+      if (type === "trigger_webhook") {
+        // If hash is missing but webhook_url exists, extract hash from URL
+        if (!nodeData.hash && nodeData.webhook_url) {
+          const match = nodeData.webhook_url.match(/\/webhook\/([a-f0-9\-]+)/);
+          if (match && match[1]) {
+            const extractedHash = match[1];
+            console.log(
+              `🔧 [Workflow Utils] Extracted hash ${extractedHash} from webhook_url for node ${node.id}`
+            );
+            nodeData = { ...nodeData, hash: extractedHash };
+          }
+        }
+        
+        // Debug logging for webhook triggers to verify hash is included
+        console.log(
+          `🔍 [Workflow Utils] Webhook trigger node ${node.id}:`,
+          {
+            hash: nodeData.hash,
+            webhook_url: nodeData.webhook_url,
+            fullData: nodeData,
+          }
+        );
+      }
+      
       acc[node.id] = {
         id: node.id,
         type: type as NodeType,
         group: group as NodeGroup,
         category: node.data?.category, // Preserve category for rendering
         position: node.position,
-        data: node.data?.data || {}, // Extract the configuration data
+        data: nodeData, // Extract the configuration data
       };
       return acc;
     },

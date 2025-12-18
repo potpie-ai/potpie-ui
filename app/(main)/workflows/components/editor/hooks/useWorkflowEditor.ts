@@ -652,9 +652,11 @@ export const useWorkflowEditor = ({
           node.id === nodeId
             ? {
                 ...node,
+                // Add a timestamp to force React Flow to detect the change
                 data: {
                   ...node.data,
                   data: config,
+                  _lastUpdated: Date.now(), // Force re-render by changing data reference
                 },
               }
             : node
@@ -668,6 +670,7 @@ export const useWorkflowEditor = ({
           data: {
             ...selectedNode.data,
             data: config,
+            _lastUpdated: Date.now(), // Force re-render by changing data reference
           },
         });
       }
@@ -974,6 +977,18 @@ export const useWorkflowEditor = ({
         "Adjacency list being sent:",
         updatedWorkflow.graph.adjacency_list
       );
+      // Debug: Check for webhook trigger nodes and their hashes
+      const webhookNodes = Object.entries(updatedWorkflow.graph.nodes).filter(
+        ([_, node]: [string, any]) => node.type === "trigger_webhook"
+      );
+      if (webhookNodes.length > 0) {
+        console.log("🔍 [Save] Found webhook trigger nodes:", webhookNodes);
+        webhookNodes.forEach(([nodeId, node]: [string, any]) => {
+          console.log(
+            `  - Node ${nodeId}: hash=${node.data?.hash}, webhook_url=${node.data?.webhook_url}`
+          );
+        });
+      }
     }
 
     try {

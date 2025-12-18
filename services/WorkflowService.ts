@@ -65,6 +65,40 @@ export interface Position {
   y: number;
 }
 
+// --- HITL (Human-in-the-Loop) TYPES ---
+export interface HITLRequest {
+  request_id: string;
+  execution_id: string;
+  node_id: string;
+  iteration: number;
+  node_type: "approval" | "input";
+  message: string;
+  fields?: Array<{
+    name: string;
+    type: string;
+    required?: boolean;
+    options?: string[];
+  }>;
+  timeout_at: string;
+  channel: string;
+  created_at: string;
+  status: string;
+  approvers?: string[];
+  assignee?: string;
+  timeout_action?: string;
+  loop_back_node_id?: string;
+  loop_back_condition?: string;
+  time_remaining_seconds?: number;
+  workflow_id?: string;
+  workflow_title?: string;
+  previous_node_result?: string;
+}
+
+export interface HITLResponseRequest {
+  response_data: Record<string, any>;
+  comment?: string;
+}
+
 export interface WorkflowValidation {
   is_valid: boolean;
   errors: string[];
@@ -823,45 +857,114 @@ export default class WorkflowService {
     }
   }
 
-  // HITL methods (stub - not used in SSO PR)
-  // TODO: Implement when HITL functionality is added
+  // --- HITL (Human-in-the-Loop) METHODS ---
+
+  /**
+   * List HITL requests with pagination
+   */
   static async listHITLRequests(
     executionId?: string,
-    page?: number,
-    pageSize?: number
+    page: number = 1,
+    pageSize: number = 20
   ): Promise<{
     requests: HITLRequest[];
-    total?: number;
-    total_pages?: number;
-    has_next?: boolean;
-    has_previous?: boolean;
+    total: number;
+    total_pages: number;
+    has_next: boolean;
+    has_previous: boolean;
   }> {
-    // Stub implementation - returns empty array
-    return { requests: [], total: 0, total_pages: 0, has_next: false, has_previous: false };
+    try {
+      const headers = await getHeaders();
+      const params: any = { page, page_size: pageSize };
+      if (executionId) {
+        params.execution_id = executionId;
+      }
+
+      const response = await axios.get(`${this.BASE_URL}/workflows/hitl/requests`, {
+        headers,
+        params,
+      });
+
+      return response.data;
+    } catch (error: any) {
+      console.error("Error listing HITL requests:", error);
+      const errorMessage = parseApiError(error);
+      throw error;
+    }
   }
 
+  /**
+   * Get a specific HITL request
+   */
   static async getHITLRequest(
-    executionId: string | number | undefined,
-    nodeId: string | number | undefined,
-    iteration?: number
+    executionId: string,
+    nodeId: string,
+    iteration: number
   ): Promise<HITLRequest> {
-    // Stub implementation - throws error
-    throw new Error("HITL functionality not implemented");
+    try {
+      const headers = await getHeaders();
+      const response = await axios.get(
+        `${this.BASE_URL}/workflows/hitl/requests/${executionId}/${nodeId}/${iteration}`,
+        { headers }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error("Error getting HITL request:", error);
+      const errorMessage = parseApiError(error);
+      throw error;
+    }
   }
 
-  static async deleteHITLRequest(requestId: string): Promise<{ success: boolean; message?: string; error?: string }> {
-    // Stub implementation
-    throw new Error("HITL functionality not implemented");
-  }
-
+  /**
+   * Submit a response to a HITL request
+   */
   static async submitHITLResponse(
-    requestId: string,
-    executionId: string | number | undefined,
-    nodeId: string | number | undefined,
-    response: HITLResponseRequest,
-    iteration?: number
-  ): Promise<any> {
-    // Stub implementation
-    throw new Error("HITL functionality not implemented");
+    executionId: string,
+    nodeId: string,
+    iteration: number,
+    response: HITLResponseRequest
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    queued_nodes?: string[];
+  }> {
+    try {
+      const headers = await getHeaders();
+      const result = await axios.post(
+        `${this.BASE_URL}/workflows/hitl/requests/${executionId}/${nodeId}/${iteration}/respond`,
+        response,
+        { headers }
+      );
+      return result.data || { success: true };
+    } catch (error: any) {
+      console.error("Error submitting HITL response:", error);
+      const errorMessage = parseApiError(error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a HITL request
+   */
+  static async deleteHITLRequest(requestId: string): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.delete(
+        `${this.BASE_URL}/workflows/hitl/requests/${requestId}`,
+        { headers }
+      );
+
+      return response.data || { success: true };
+    } catch (error: any) {
+      console.error("Error deleting HITL request:", error);
+      const errorMessage = parseApiError(error);
+      throw error;
+    }
   }
 }

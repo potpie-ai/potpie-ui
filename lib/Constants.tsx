@@ -128,6 +128,12 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         href: "/workflows",
         disabled: false,
       },
+      {
+        icons: <CircleAlert size={20} strokeWidth={1.5} />,
+        title: "Pending Requests",
+        href: "/workflows/pending-requests",
+        disabled: false,
+      },
     ],
   },
   {

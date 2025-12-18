@@ -43,13 +43,23 @@ export default class ChatService {
       const headers = await getHeaders();
       const response = await axios.get(
         `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/active-session`,
-        { headers }
+        { 
+          headers,
+          // Suppress 404 errors in console - they're expected for workflow conversations
+          validateStatus: (status) => status === 200 || status === 404
+        }
       );
+      if (response.status === 404) {
+        return null; // No active session (normal for workflow conversations)
+      }
       return response.data;
     } catch (error: any) {
+      // 404 is expected for workflow conversations - return null silently
       if (error.response?.status === 404) {
-        return null; // No active session
+        return null;
       }
+      // Only log non-404 errors
+      console.warn("Error detecting active session (non-404):", error);
       throw error;
     }
   }

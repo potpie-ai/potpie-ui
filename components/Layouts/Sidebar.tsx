@@ -22,6 +22,7 @@ import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { clearChat } from "@/lib/state/Reducers/chat";
+import WorkflowService from "@/services/WorkflowService";
 import {
   Card,
   CardContent,
@@ -69,6 +70,16 @@ export function AppSidebar() {
       ),
     enabled: !!userId && !!userSubscription,
   });
+
+  // Fetch pending HITL requests count for sidebar notification
+  const { data: pendingRequestsData } = useQuery({
+    queryKey: ["pendingHITLRequests", userId],
+    queryFn: () => WorkflowService.listHITLRequests(undefined, 1, 1),
+    enabled: !!userId,
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  const pendingRequestsCount = pendingRequestsData?.total || 0;
 
   useEffect(() => {
     if (!usageLoading) {
@@ -152,6 +163,8 @@ export function AppSidebar() {
               <SidebarMenu>
                 {item.links.map((link) => {
                   const isActive = pathname === link.href.split("/").pop();
+                  // Show pending requests count badge for "Pending Requests" link
+                  const showPendingCount = link.href === "/workflows/pending-requests" && pendingRequestsCount > 0;
                   return (
                     <SidebarMenuItem key={link.title}>
                       <SidebarMenuButton
@@ -168,7 +181,12 @@ export function AppSidebar() {
                             {link.icons && <span>{link.icons}</span>}
                             <span>{link.title}</span>
                           </div>
-                          {link.description && (
+                          {showPendingCount && (
+                            <span className="border border-primary text-black group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 font-semibold">
+                              {pendingRequestsCount}
+                            </span>
+                          )}
+                          {link.description && !showPendingCount && (
                             <span className="border border-primary text-black group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300">
                               {link.description}
                             </span>

@@ -167,6 +167,10 @@ export const NodePaletteContainer: FC<NodePaletteContainerProps> = ({
 
   const handleConfigChange = (config: any) => {
     if (selectedNode && onNodeConfigChange) {
+      console.log(
+        `🔧 [NodePaletteContainer] Calling onNodeConfigChange for node ${selectedNode.id} with config:`,
+        config
+      );
       onNodeConfigChange(selectedNode.id, config);
     }
   };

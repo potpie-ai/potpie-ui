@@ -106,7 +106,7 @@ export function LinkProviderDialog({
                 <span className="font-semibold">{linkingData.email}</span> already has an account
               </p>
               <p className="text-sm text-gray-600 mb-3">
-                You're currently signed in with: <span className="font-medium">{existingProviderNames}</span>
+                You&apos;re currently signed in with: <span className="font-medium">{existingProviderNames}</span>
               </p>
               <p className="text-sm text-gray-600">
                 Would you like to link your {newProviderType} account to enable signing in with both methods?

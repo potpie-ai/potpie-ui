@@ -24,6 +24,7 @@ export interface SSOLoginResponse {
   email: string;
   display_name?: string;
   access_token?: string;
+  firebase_token?: string;
   message: string;
   linking_token?: string;
   existing_providers?: string[];

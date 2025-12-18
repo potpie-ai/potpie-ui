@@ -10,21 +10,32 @@ import {
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 
-import { LucideCheck, LucideGithub } from "lucide-react";
+import { LucideGithub } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import { LinkProviderDialog } from '@/components/auth/LinkProviderDialog';
+import { DirectSSOButtons } from '@/components/auth/DirectSSOButtons';
+import type { SSOLoginResponse } from '@/types/auth';
+import { validateWorkEmail } from "@/lib/utils/emailValidation";
 
 export default function Signin() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const source = searchParams.get("source");
   const agent_id = searchParams.get("agent_id");
   const redirectUrl = searchParams.get("redirect");
+  
+  // SSO state
+  const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(null);
+  const [showLinkingDialog, setShowLinkingDialog] = React.useState(false);
 
   // Extract agent_id from redirect URL if present
   let redirectAgent_id = "";
@@ -42,7 +53,7 @@ export default function Signin() {
   const finalAgent_id = agent_id || redirectAgent_id;
 
   const formSchema = z.object({
-    email: z.string().email(),
+    email: z.string().email("Please enter a valid email address"),
     password: z.string().min(6, { message: "Password is required" }),
   });
   const form = useForm<z.infer<typeof formSchema>>({
@@ -66,6 +77,14 @@ export default function Signin() {
   };
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    // Validate work email
+    const emailValidation = validateWorkEmail(data.email);
+    if (!emailValidation.isValid) {
+      form.setError("email", { message: emailValidation.errorMessage });
+      // Don't show toast - inline error is sufficient
+      return;
+    }
+
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -85,12 +104,37 @@ export default function Signin() {
           .catch((e) => {
             toast.error("Signup call unsuccessful");
           });
-        toast.success("Logged in successfully as " + user.displayName);
+        toast.success("Logged in successfully as " + (user.displayName || user.email));
       })
-      .catch((error) => {
+      .catch(async (error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
-        toast.error(errorMessage);
+        
+        // If invalid credentials, check if user might have signed up with SSO
+        if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password' || errorCode === 'auth/user-not-found') {
+          try {
+            // Check if user exists with SSO by calling backend
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+            const checkResponse = await axios.get(
+              `${baseUrl}/api/v1/account/check-email?email=${encodeURIComponent(data.email)}`,
+              { validateStatus: () => true } // Don't throw on any status
+            );
+            
+            if (checkResponse.status === 200 && checkResponse.data?.has_sso) {
+              const friendlyError = 'This email is registered with Google SSO. Please sign in with Google instead.';
+              form.setError("email", { message: friendlyError });
+              // Don't show toast - inline error is sufficient
+              return;
+            }
+          } catch (checkError) {
+            // If check fails, fall through to default error
+            console.error("Error checking SSO status:", checkError);
+          }
+        }
+        
+        const friendlyError = getUserFriendlyError(error);
+        form.setError("email", { message: friendlyError });
+        // Don't show toast - inline error is sufficient
       });
   };
 
@@ -160,7 +204,7 @@ export default function Signin() {
             );
           } catch (e: any) {
             console.error("API error:", e);
-            toast.error("Sign-in unsuccessful");
+            toast.error(getUserFriendlyError(e));
           }
         }
       })
@@ -169,11 +213,41 @@ export default function Signin() {
         const errorMessage = error.message;
         const email = error.customData?.email;
         const credential = GithubAuthProvider.credentialFromError(error);
-        toast.error(errorMessage);
+        const friendlyError = getUserFriendlyError(error);
+        toast.error(friendlyError);
       });
   };
+
+  // SSO handlers
+  const handleSSONeedsLinking = (response: SSOLoginResponse) => {
+    setLinkingData(response);
+    setShowLinkingDialog(true);
+  };
+
+  const handleSSOLinked = () => {
+    // After linking, redirect based on context
+    if (source === "vscode") {
+      router.push('/newchat');
+    } else if (finalAgent_id) {
+      router.push(`/shared-agent?agent_id=${finalAgent_id}`);
+    } else {
+      router.push('/newchat');
+    }
+  };
+
+  const handleSSOSuccess = () => {
+    // For existing users signing in via SSO
+    if (source === "vscode") {
+      router.push('/newchat');
+    } else if (finalAgent_id) {
+      router.push(`/shared-agent?agent_id=${finalAgent_id}`);
+    } else {
+      router.push('/newchat');
+    }
+  };
+
   return (
-    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative">
+    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition">
       <div className="flex items-center justify-center w-1/2 h-full p-6">
         <div className="relative h-full w-full rounded-lg overflow-hidden">
           <Image
@@ -214,13 +288,77 @@ export default function Signin() {
             dashboard
           </p>
         </div> */}
-          <Button
-            onClick={() => onGithub()}
-            className="mt-14 gap-2 w-60 hover:bg-black bg-gray-800"
-          >
-            <LucideGithub className=" rounded-full border border-white p-1" />
-            Signin with GitHub
-          </Button>
+          <div className="w-60 mt-14 space-y-6">
+            {/* GitHub Sign-in */}
+            <Button
+              onClick={() => onGithub()}
+              className="gap-2 w-full h-12 hover:bg-black bg-gray-800"
+            >
+              <LucideGithub className="rounded-full border border-white p-1" />
+              Sign in with GitHub
+            </Button>
+
+            {/* SSO Buttons */}
+            <DirectSSOButtons
+              onNeedsLinking={handleSSONeedsLinking}
+              onSuccess={handleSSOSuccess}
+            />
+
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="bg-white px-3 text-gray-500 font-medium">or</span>
+              </div>
+            </div>
+
+            {/* Email/Password Form */}
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div>
+                <input
+                  type="email"
+                  placeholder="you@company.com"
+                  {...form.register("email")}
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all duration-300 placeholder:text-gray-400 text-gray-900 input-error ${
+                    form.formState.errors.email
+                      ? "border-red-500"
+                      : "border-gray-200"
+                  }`}
+                />
+                {form.formState.errors.email && (
+                  <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
+                    {form.formState.errors.email.message}
+                  </p>
+                )}
+              </div>
+              <div>
+                <input
+                  type="password"
+                  placeholder="Password"
+                  {...form.register("password")}
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all duration-300 placeholder:text-gray-400 text-gray-900 input-error ${
+                    form.formState.errors.password
+                      ? "border-red-500"
+                      : "border-gray-200"
+                  }`}
+                />
+                {form.formState.errors.password && (
+                  <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
+                    {form.formState.errors.password.message}
+                  </p>
+                )}
+              </div>
+              <Button
+                type="submit"
+                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm hover:shadow-md transition-all duration-200"
+              >
+                Sign in
+              </Button>
+            </form>
+          </div>
+          
           <div className="mt-4 text-center text-sm text-black">
             Don&apos;t have an account?{" "}
             <Link href="/sign-up" className="underline">
@@ -229,6 +367,19 @@ export default function Signin() {
           </div>
         </div>
       </div>
+
+      {/* Link Provider Dialog */}
+      {linkingData && (
+        <LinkProviderDialog
+          isOpen={showLinkingDialog}
+          onClose={() => {
+            setShowLinkingDialog(false);
+            setLinkingData(null);
+          }}
+          linkingData={linkingData}
+          onLinked={handleSSOLinked}
+        />
+      )}
     </section>
   );
 }

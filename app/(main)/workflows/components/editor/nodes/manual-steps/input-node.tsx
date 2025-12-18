@@ -253,7 +253,7 @@ export const InputConfigComponent: FC<InputConfigProps> = ({
               className="mt-1"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Field name in the response that triggers loop back (default: "needs_changes"). 
+              Field name in the response that triggers loop back (default: &quot;needs_changes&quot;). 
               When this field is true, the workflow will route back to the loop back node.
             </p>
           </div>

@@ -203,6 +203,36 @@ export enum Permission {
   WRITE_LINEAR = "write_linear",
 }
 
+// HITL types (stub - not used in SSO PR)
+// TODO: Remove when HITL functionality is implemented
+export interface HITLRequest {
+  request_id: string;
+  execution_id: string;
+  node_id: string;
+  node_type: string;
+  message: string;
+  status: string;
+  time_remaining_seconds?: number;
+  iteration?: number;
+  loop_back_node_id?: string;
+  fields?: Array<{
+    name: string;
+    type: string;
+    required?: boolean;
+    options?: string[];
+  }>;
+  [key: string]: any; // Allow additional properties for pre-existing code
+}
+
+export interface HITLResponseRequest {
+  request_id?: string;
+  response?: string;
+  approved?: boolean;
+  response_data?: Record<string, any>;
+  comment?: string;
+  [key: string]: any; // Allow additional properties for pre-existing code
+}
+
 // Interface for triggers
 export interface Trigger {
   id: string;
@@ -791,5 +821,47 @@ export default class WorkflowService {
 
       throw error;
     }
+  }
+
+  // HITL methods (stub - not used in SSO PR)
+  // TODO: Implement when HITL functionality is added
+  static async listHITLRequests(
+    executionId?: string,
+    page?: number,
+    pageSize?: number
+  ): Promise<{
+    requests: HITLRequest[];
+    total?: number;
+    total_pages?: number;
+    has_next?: boolean;
+    has_previous?: boolean;
+  }> {
+    // Stub implementation - returns empty array
+    return { requests: [], total: 0, total_pages: 0, has_next: false, has_previous: false };
+  }
+
+  static async getHITLRequest(
+    executionId: string | number | undefined,
+    nodeId: string | number | undefined,
+    iteration?: number
+  ): Promise<HITLRequest> {
+    // Stub implementation - throws error
+    throw new Error("HITL functionality not implemented");
+  }
+
+  static async deleteHITLRequest(requestId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    // Stub implementation
+    throw new Error("HITL functionality not implemented");
+  }
+
+  static async submitHITLResponse(
+    requestId: string,
+    executionId: string | number | undefined,
+    nodeId: string | number | undefined,
+    response: HITLResponseRequest,
+    iteration?: number
+  ): Promise<any> {
+    // Stub implementation
+    throw new Error("HITL functionality not implemented");
   }
 }

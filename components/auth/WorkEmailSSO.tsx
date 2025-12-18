@@ -173,9 +173,12 @@ export function WorkEmailSSO({ email, onNeedsLinking, onSuccess }: WorkEmailSSOP
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID;
 
   if (!googleClientId) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Google SSO not configured: NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID is missing');
+    }
     return (
       <div className="text-red-600 text-sm">
-        Google SSO not configured. Please set NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID
+        Google SSO is not configured
       </div>
     );
   }

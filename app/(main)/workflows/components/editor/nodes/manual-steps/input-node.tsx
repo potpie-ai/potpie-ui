@@ -19,7 +19,7 @@ interface InputNodeData {
   input_fields?: InputField[];
   assignee?: string;
   timeout_hours?: number;
-  channel?: "email" | "app";
+  channel?: "email" | "app" | "chat" | "slack";
   loop_back_node_id?: string;
   loop_back_condition?: string;
 }
@@ -200,17 +200,23 @@ export const InputConfigComponent: FC<InputConfigProps> = ({
           id="channel"
           value={config.channel || "app"}
           onChange={(e) =>
-            handleChange("channel", e.target.value as "email" | "app")
+            handleChange("channel", e.target.value as "email" | "app" | "chat" | "slack")
           }
           disabled={readOnly}
           className="w-full px-3 py-2 border border-gray-300 rounded-md"
         >
           <option value="app">App (Web UI)</option>
           <option value="email">Email</option>
+          <option value="chat">Chat (In Conversation)</option>
+          <option value="slack">Slack</option>
         </select>
         <p className="text-xs text-gray-500 mt-1">
           {config.channel === "email"
             ? "Request will be sent via email. Make sure SMTP is configured."
+            : config.channel === "chat"
+            ? "Request will appear as a message in the conversation."
+            : config.channel === "slack"
+            ? "Request will be sent via Slack with a link to respond in the app. Make sure SLACK_BOT_TOKEN is configured."
             : "Request will appear in the app's pending requests page."}
         </p>
       </div>

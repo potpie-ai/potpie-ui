@@ -16,15 +16,20 @@ import relativeTime from "dayjs/plugin/relativeTime";
 dayjs.extend(relativeTime);
 import { formatRelativeTime } from "@/lib/utils";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 export default function HITLRequestDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { user } = useAuthContext();
   const requestId = params.requestId as string;
   const executionId = searchParams.get("executionId") || "";
   const nodeId = searchParams.get("nodeId") || "";
   const iteration = parseInt(searchParams.get("iteration") || "0");
+  const action = searchParams.get("action"); // "approve" or "reject" from Slack buttons
 
   const [request, setRequest] = useState<HITLRequest | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,6 +72,21 @@ export default function HITLRequestDetailPage() {
       setLoading(false);
     }
   };
+
+  // Auto-submit if action is provided from Slack button
+  useEffect(() => {
+    if (request && action && !submitting && !loading) {
+      if (action === "approve" && request.node_type === "approval") {
+        // Auto-approve when coming from Slack
+        handleSubmit(true);
+      } else if (action === "reject" && request.node_type === "approval") {
+        // Auto-reject when coming from Slack
+        handleSubmit(false);
+      }
+      // For input nodes, action parameter is ignored - user needs to fill form
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request, action, submitting, loading]);
 
   const handleSubmit = async (approved?: boolean, requestChanges?: boolean) => {
     if (!request) return;
@@ -176,6 +196,10 @@ export default function HITLRequestDetailPage() {
 
       if (result.success) {
         toast.success(result.message || "Response submitted successfully");
+        // Invalidate sidebar count query to update immediately
+        if (user?.uid) {
+          queryClient.invalidateQueries({ queryKey: ["pendingHITLRequests", user.uid] });
+        }
         router.push("/workflows/pending-requests");
       } else {
         toast.error(result.error || "Failed to submit response");

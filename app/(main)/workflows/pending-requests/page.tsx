@@ -38,10 +38,14 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { formatLocalTime, formatRelativeTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuthContext } from "@/contexts/AuthContext";
 dayjs.extend(relativeTime);
 
 export default function PendingRequestsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { user } = useAuthContext();
   const [requests, setRequests] = useState<HITLRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -105,6 +109,10 @@ export default function PendingRequestsPage() {
         setRequestToDelete(null);
         // Refresh from server to ensure consistency
         await loadRequests();
+        // Invalidate sidebar count query to update immediately
+        if (user?.uid) {
+          queryClient.invalidateQueries({ queryKey: ["pendingHITLRequests", user.uid] });
+        }
       } else {
         toast.error(result.error || "Failed to delete request");
         setDeleteDialogOpen(false);
@@ -301,6 +309,10 @@ export default function PendingRequestsPage() {
         setDrawerOpen(false);
         setSelectedRequest(null);
         await loadRequests(); // Refresh the list
+        // Invalidate sidebar count query to update immediately
+        if (user?.uid) {
+          queryClient.invalidateQueries({ queryKey: ["pendingHITLRequests", user.uid] });
+        }
       } else {
         toast.error(result.error || "Failed to submit response");
       }

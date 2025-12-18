@@ -114,7 +114,9 @@ const Onboarding = () => {
             // If emails don't match, prefer the authenticated user's email
             // This handles cases where SSO login doesn't set URL params correctly
             if (authenticatedEmail && authenticatedEmail !== urlEmail && urlEmail) {
-              console.warn(`Email mismatch: URL has ${urlEmail}, but authenticated as ${authenticatedEmail}. Using authenticated email.`);
+              if (process.env.NODE_ENV === 'development') {
+                console.warn(`Email mismatch: URL has ${urlEmail}, but authenticated as ${authenticatedEmail}. Using authenticated email.`);
+              }
               // Update form data with authenticated email and auto-populate company name
               setFormData(prev => ({ 
                 ...prev, 
@@ -142,7 +144,9 @@ const Onboarding = () => {
           }
         });
       } catch (error) {
-        console.error("Auth check error:", error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Auth check error:", error);
+        }
         setAuthError("Authentication error. Please try again.");
       }
     };
@@ -165,7 +169,9 @@ const Onboarding = () => {
         throw new Error("No checkout URL received");
       }
     } catch (error) {
-      console.error("Error getting checkout URL:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error getting checkout URL:", error);
+      }
     }
   };
 
@@ -205,7 +211,9 @@ const Onboarding = () => {
         await setDoc(doc(db, "users", uid), userDoc);
         toast.success("Onboarding information saved!");
       } catch (firebaseError: any) {
-        console.error("Firebase Error:", firebaseError);
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Firebase Error:", firebaseError);
+        }
         if (firebaseError.code === "permission-denied") {
           throw new Error(
             "Unable to save user data. Please try signing out and signing in again."
@@ -254,7 +262,9 @@ const Onboarding = () => {
       }
       // Otherwise, wait for GitHub linking (handled by linkGithub function)
     } catch (error: any) {
-      console.error("Error saving onboarding data:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error saving onboarding data:", error);
+      }
       toast.error(
         error.message || "Error saving onboarding data. Please try again."
       );
@@ -349,7 +359,9 @@ const Onboarding = () => {
         }, 500);
       }
     } catch (error: any) {
-      console.error("GitHub linking error:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("GitHub linking error:", error);
+      }
       if (error.code === "auth/popup-closed-by-user") {
         toast.error("GitHub sign-in was cancelled");
       } else {

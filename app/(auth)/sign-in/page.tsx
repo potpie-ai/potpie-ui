@@ -45,7 +45,9 @@ export default function Signin() {
       const url = new URL(redirectPath, window.location.origin);
       redirectAgent_id = url.searchParams.get("agent_id") || "";
     } catch (e) {
-      console.error("Error parsing redirect URL:", e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error parsing redirect URL:", e);
+      }
     }
   }
 
@@ -94,7 +96,9 @@ export default function Signin() {
           .post(`${baseUrl}/api/v1/signup`, user, { headers: headers })
           .then((res) => {
             if (source === "vscode") {
-              console.log("res.data", res.data);
+              if (process.env.NODE_ENV === 'development') {
+                console.log("res.data", res.data);
+              }
               handleExternalRedirect(res.data.token);
             } else if (finalAgent_id) {
               handleExternalRedirect("");
@@ -128,7 +132,9 @@ export default function Signin() {
             }
           } catch (checkError) {
             // If check fails, fall through to default error
-            console.error("Error checking SSO status:", checkError);
+            if (process.env.NODE_ENV === 'development') {
+              console.error("Error checking SSO status:", checkError);
+            }
           }
         }
         
@@ -203,7 +209,9 @@ export default function Signin() {
               "Logged in successfully as " + result.user.displayName
             );
           } catch (e: any) {
-            console.error("API error:", e);
+            if (process.env.NODE_ENV === 'development') {
+              console.error("API error:", e);
+            }
             toast.error(getUserFriendlyError(e));
           }
         }

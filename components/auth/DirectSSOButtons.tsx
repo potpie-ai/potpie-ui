@@ -24,55 +24,75 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
   const [showLinkingDialog, setShowLinkingDialog] = useState(false);
 
   const handleSSOResponse = async (response: SSOLoginResponse) => {
-    console.log('=== SSO Response Debug ===');
-    console.log('Full SSO Response:', JSON.stringify(response, null, 2));
-    console.log('Response Status:', response.status);
-    console.log('Response user_id:', response.user_id);
-    console.log('Response email:', response.email);
-    console.log('Has onNewUser callback:', !!onNewUser);
-    console.log('Has onSuccess callback:', !!onSuccess);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== SSO Response Debug ===');
+      console.log('Full SSO Response:', JSON.stringify(response, null, 2));
+      console.log('Response Status:', response.status);
+      console.log('Response user_id:', response.user_id);
+      console.log('Response email:', response.email);
+      console.log('Has onNewUser callback:', !!onNewUser);
+      console.log('Has onSuccess callback:', !!onSuccess);
+    }
     
     // Create Firebase session if custom token is provided
     if (response.firebase_token) {
       try {
         await signInWithCustomToken(auth, response.firebase_token);
-        console.log('Firebase session created successfully');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Firebase session created successfully');
+        }
       } catch (error: any) {
-        console.error('Failed to create Firebase session:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to create Firebase session:', error);
+        }
         toast.error(getUserFriendlyError(error));
         return;
       }
     }
     
     if (response.status === 'success') {
-      console.log('→ Handling SUCCESS status - redirecting to success handler');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('→ Handling SUCCESS status - redirecting to success handler');
+      }
       // Only show success toast if not on sign-up page (where we'll show error instead)
       if (!isSignUpPage) {
         toast.success('Signed in successfully');
       }
       if (onSuccess) {
-        console.log('→ Calling onSuccess callback with response');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('→ Calling onSuccess callback with response');
+        }
         // Pass response to onSuccess so it can detect if user already exists
         onSuccess(response);
       } else {
-        console.log('→ No onSuccess callback, redirecting to /newchat');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('→ No onSuccess callback, redirecting to /newchat');
+        }
         router.push('/newchat');
       }
     } else if (response.status === 'needs_linking') {
-      console.log('→ Handling NEEDS_LINKING status - showing linking dialog');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('→ Handling NEEDS_LINKING status - showing linking dialog');
+      }
       setLinkingData(response);
       setShowLinkingDialog(true);
       if (onNeedsLinking) {
         onNeedsLinking(response);
       }
     } else if (response.status === 'new_user') {
-      console.log('→ Handling NEW_USER status - redirecting to onboarding');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('→ Handling NEW_USER status - redirecting to onboarding');
+      }
       toast.success('Welcome! Account created');
       if (onNewUser) {
-        console.log('→ Calling onNewUser callback with response:', response);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('→ Calling onNewUser callback with response:', response);
+        }
         onNewUser(response);
       } else {
-        console.log('→ No onNewUser callback, redirecting to onboarding directly');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('→ No onNewUser callback, redirecting to onboarding directly');
+        }
         // Get URL parameters for plan, prompt, agent_id
         const urlSearchParams = new URLSearchParams(window.location.search);
         const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
@@ -90,14 +110,20 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
         });
         
         const onboardingUrl = `/onboarding?${onboardingParams.toString()}`;
-        console.log('→ Redirecting to onboarding:', onboardingUrl);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('→ Redirecting to onboarding:', onboardingUrl);
+        }
         router.push(onboardingUrl);
       }
     } else {
-      console.error('→ Unknown SSO response status:', response.status);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('→ Unknown SSO response status:', response.status);
+      }
       toast.error('An unexpected error occurred. Please try signing in again.');
     }
-    console.log('=== End SSO Response Debug ===');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== End SSO Response Debug ===');
+    }
   };
 
   const handleGoogleLogin = useGoogleLogin({
@@ -115,7 +141,9 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
         if (!userInfoResponse.ok) {
           const errorText = await userInfoResponse.text();
           const errorMessage = `Failed to fetch user info from Google: ${userInfoResponse.status} ${userInfoResponse.statusText}${errorText ? ` - ${errorText}` : ''}`;
-          console.error('Google userinfo API error:', errorMessage);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Google userinfo API error:', errorMessage);
+          }
           throw new Error(errorMessage);
         }
 
@@ -124,7 +152,9 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
         try {
           userInfo = await userInfoResponse.json();
         } catch (jsonError: any) {
-          console.error('Failed to parse Google userinfo response:', jsonError);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Failed to parse Google userinfo response:', jsonError);
+          }
           throw new Error('Invalid response from Google userinfo API');
         }
 
@@ -144,7 +174,9 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
 
         handleSSOResponse(response);
       } catch (error: any) {
-        console.error('Google SSO error:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Google SSO error:', error);
+        }
         toast.error(getUserFriendlyError(error));
       }
     },

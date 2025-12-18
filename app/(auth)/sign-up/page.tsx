@@ -39,7 +39,9 @@ const Signup = () => {
       const url = new URL(redirectPath, window.location.origin);
       redirectAgent_id = url.searchParams.get("agent_id") || "";
     } catch (e) {
-      console.error("Error parsing redirect URL:", e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error parsing redirect URL:", e);
+      }
     }
   }
 
@@ -197,7 +199,9 @@ const Signup = () => {
         router.push(`/onboarding?${onboardingParams.toString()}`);
       }
     } catch (error: any) {
-      console.error("Signup error:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Signup error:", error);
+      }
       const friendlyError = getUserFriendlyError(error);
       
       if (error.code === "auth/email-already-in-use") {

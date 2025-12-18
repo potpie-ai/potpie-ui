@@ -187,7 +187,14 @@ const Signup = () => {
         }
       } else {
         toast.success("Account created successfully");
-        router.push(`/onboarding?uid=${user.uid}&email=${encodeURIComponent(user.email || "")}&name=${encodeURIComponent(user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(agent_id)}`);
+        const onboardingParams = new URLSearchParams();
+        onboardingParams.append('uid', user.uid);
+        if (user.email) onboardingParams.append('email', user.email);
+        if (user.displayName) onboardingParams.append('name', user.displayName);
+        if (plan) onboardingParams.append('plan', plan);
+        if (prompt) onboardingParams.append('prompt', prompt);
+        if (agent_id) onboardingParams.append('agent_id', agent_id);
+        router.push(`/onboarding?${onboardingParams.toString()}`);
       }
     } catch (error: any) {
       console.error("Signup error:", error);

@@ -191,16 +191,16 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
       <div className="space-y-3">
         <button
           onClick={() => handleGoogleLogin()}
-          className="flex items-center justify-center w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-50 transition-colors"
+          className="btn-enterprise flex items-center justify-center w-full h-14 px-5 py-4 gap-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-50 hover:shadow-md text-base"
         >
           <Image
             src="/images/google-g-2015.svg"
             alt="Google"
-            width={20}
-            height={20}
-            className="mr-2"
+            width={24}
+            height={24}
+            className="flex-shrink-0"
           />
-          <span className="text-gray-700 font-medium">Continue with Google</span>
+          <span className="text-gray-700 font-medium text-base">Continue with Google</span>
         </button>
       </div>
 

@@ -1,8 +1,9 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { LucideCheck } from "lucide-react";
+import { LucideCheck, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import React from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -14,9 +15,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
-import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
 import { validateWorkEmail } from "@/lib/utils/emailValidation";
+import AuthService from "@/services/AuthService";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -30,6 +30,7 @@ const Signup = () => {
   const redirectUrl = searchParams.get("redirect");
   const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(null);
   const [showLinkingDialog, setShowLinkingDialog] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   // Extract agent_id from redirect URL if present
   let redirectAgent_id = "";
@@ -149,34 +150,16 @@ const Signup = () => {
       // Create user with Firebase
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const headers = await getHeaders();
 
       // Call signup API
-      const userSignup = await axios.post(
-        `${baseUrl}/api/v1/signup`,
-        {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || user.email?.split("@")[0],
-          emailVerified: user.emailVerified,
-          createdAt: user.metadata?.creationTime
-            ? new Date(user.metadata.creationTime).toISOString()
-            : "",
-          lastLoginAt: user.metadata?.lastSignInTime
-            ? new Date(user.metadata.lastSignInTime).toISOString()
-            : "",
-          providerData: user.providerData,
-        },
-        { headers: headers }
-      );
+      const userSignup = await AuthService.signupWithEmailPassword(user);
 
       const urlSearchParams = new URLSearchParams(window.location.search);
       const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
       const prompt = urlSearchParams.get("prompt") || "";
       const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
 
-      if (userSignup.data.exists) {
+      if (userSignup.exists) {
         toast.success("Welcome back " + (user.displayName || user.email));
         if (agent_id) {
           router.push(`/shared-agent?agent_id=${agent_id}`);
@@ -231,36 +214,38 @@ const Signup = () => {
         </div>
       </div>
 
-      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-14">
-        <div className="flex items-center justify-center flex-row gap-2">
+      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-10">
+        <div className="flex items-center justify-center flex-row gap-3 mb-2">
           <Image
             src={"/images/potpie-blue.svg"}
             width={100}
             height={100}
             alt="logo"
+            className="transition-transform duration-300 hover:scale-105"
           />
-          <h1 className="text-7xl font-bold text-gray-700">potpie</h1>
+          <h1 className="text-7xl font-bold text-gray-800 tracking-tight">potpie</h1>
         </div>
         <div className="flex items-center justify-center flex-col text-border">
-          <h3 className="text-2xl font-bold text-black">Get Started!</h3>
-          <div className="flex items-start justify-start flex-col mt-10 gap-4">
-            <p className="flex items-center justify-center text-start text-black gap-4">
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">Get Started!</h3>
+          <p className="text-gray-600 text-sm mb-8">Create your account to begin</p>
+          <div className="flex items-start justify-start flex-col mt-6 gap-4">
+            <p className="flex items-center justify-center text-start text-gray-700 gap-3 text-sm">
               <LucideCheck
-                size={20}
-                className="bg-primary rounded-full p-[0.5px] text-white"
+                size={18}
+                className="bg-blue-600 rounded-full p-0.5 text-white flex-shrink-0"
               />
               Sign up with your work email to get started
             </p>
-            <p className="flex items-center justify-center text-start text-black gap-4">
+            <p className="flex items-center justify-center text-start text-gray-700 gap-3 text-sm">
               <LucideCheck
-                size={20}
-                className="bg-primary rounded-full p-[0.5px] text-white"
+                size={18}
+                className="bg-blue-600 rounded-full p-0.5 text-white flex-shrink-0"
               />
               We support Google Workspace, Microsoft 365, and Outlook
             </p>
           </div>
 
-          <div className="w-60 mt-14 space-y-6">
+          <div className="w-80 mt-14 space-y-6 form-fade-in">
             {/* SSO Buttons */}
             <DirectSSOButtons
               onNeedsLinking={handleSSONeedsLinking}
@@ -270,59 +255,85 @@ const Signup = () => {
             />
 
             {/* Divider */}
-            <div className="relative my-6">
+            <div className="relative my-8">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-3 text-gray-500 font-medium">or</span>
+                <span className="bg-white px-4 text-gray-500 font-medium">or continue with email</span>
               </div>
             </div>
 
             {/* Email/Password Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <div>
                 <input
                   type="email"
                   placeholder="you@company.com"
                   {...form.register("email")}
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all duration-300 placeholder:text-gray-400 text-gray-900 input-error ${
+                  className={`input-enterprise w-full px-5 py-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
                     form.formState.errors.email
-                      ? "border-red-500"
-                      : "border-gray-200"
+                      ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300 hover:border-gray-400"
                   }`}
                 />
                 {form.formState.errors.email && (
-                  <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
+                  <p className="mt-2 text-sm text-red-600 error-message-enter font-medium">
                     {form.formState.errors.email.message}
                   </p>
                 )}
               </div>
               <div>
-                <input
-                  type="password"
-                  placeholder="Password"
-                  {...form.register("password")}
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all duration-300 placeholder:text-gray-400 text-gray-900 input-error ${
-                    form.formState.errors.password
-                      ? "border-red-500"
-                      : "border-gray-200"
-                  }`}
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password"
+                    {...form.register("password")}
+                    className={`input-enterprise w-full px-5 py-4 pr-14 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
+                      form.formState.errors.password
+                        ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                        : "border-gray-300 hover:border-gray-400"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-6 w-6" />
+                    ) : (
+                      <Eye className="h-6 w-6" />
+                    )}
+                  </button>
+                </div>
                 {form.formState.errors.password && (
-                  <p className="mt-1 text-sm text-red-500 form-error error-message-enter">
+                  <p className="mt-2 text-sm text-red-600 error-message-enter font-medium">
                     {form.formState.errors.password.message}
                   </p>
                 )}
               </div>
               <Button
                 type="submit"
-                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm hover:shadow-md transition-all duration-200"
+                className="btn-enterprise w-full h-14 px-5 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md hover:shadow-lg text-base disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={isLoading}
               >
                 {isLoading ? "Creating account..." : "Sign up"}
               </Button>
             </form>
+          </div>
+          
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Already have an account?{" "}
+              <Link 
+                href="/sign-in" 
+                className="link-smooth text-blue-600 font-semibold hover:text-blue-700"
+              >
+                Sign in
+              </Link>
+            </p>
           </div>
         </div>
       </div>

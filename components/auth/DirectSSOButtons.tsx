@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import { toast } from 'sonner';
-import { signInWithCustomToken } from 'firebase/auth';
+import { signInWithCustomToken, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '@/configs/Firebase-config';
 import { authClient } from '@/lib/sso/unified-auth';
 import { LinkProviderDialog } from './LinkProviderDialog';
@@ -127,64 +126,65 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
     }
   };
 
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        // Get user info from Google
-        const userInfoResponse = await fetch(
-          'https://www.googleapis.com/oauth2/v3/userinfo',
-          {
-            headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-          }
-        );
-
-        // Check if response is successful before parsing JSON
-        if (!userInfoResponse.ok) {
-          const errorText = await userInfoResponse.text();
-          const errorMessage = `Failed to fetch user info from Google: ${userInfoResponse.status} ${userInfoResponse.statusText}${errorText ? ` - ${errorText}` : ''}`;
-          if (process.env.NODE_ENV === 'development') {
-            console.error('Google userinfo API error:', errorMessage);
-          }
-          throw new Error(errorMessage);
-        }
-
-        // Parse JSON only if response is successful
-        let userInfo;
-        try {
-          userInfo = await userInfoResponse.json();
-        } catch (jsonError: any) {
-          if (process.env.NODE_ENV === 'development') {
-            console.error('Failed to parse Google userinfo response:', jsonError);
-          }
-          throw new Error('Invalid response from Google userinfo API');
-        }
-
-        // Send to backend
-        const response = await authClient.ssoLogin(
-          userInfo.email,
-          'google',
-          tokenResponse.access_token,
-          {
-            sub: userInfo.sub,
-            name: userInfo.name,
-            given_name: userInfo.given_name,
-            family_name: userInfo.family_name,
-            picture: userInfo.picture,
-          }
-        );
-
-        handleSSOResponse(response);
-      } catch (error: any) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Google SSO error:', error);
-        }
-        toast.error(getUserFriendlyError(error));
+  const handleGoogleLogin = async () => {
+    try {
+      const googleProvider = new GoogleAuthProvider();
+      // Request additional scopes if needed
+      googleProvider.addScope('profile');
+      googleProvider.addScope('email');
+      
+      // Sign in with Firebase Google provider
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // Extract Google OAuth credential to get the Google OAuth ID token
+      // (not the Firebase ID token - backend expects Google OAuth ID token with issuer: accounts.google.com)
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      
+      if (!credential || !credential.idToken) {
+        throw new Error('Failed to get Google OAuth ID token');
       }
-    },
-    onError: () => {
-      toast.error('Google sign-in was cancelled. Please try again.');
-    },
-  });
+      
+      // This is the Google OAuth ID token (issuer: accounts.google.com) that backend expects
+      const googleIdToken = credential.idToken;
+      
+      // Get user info from the Firebase user object
+      const userInfo = {
+        email: user.email || '',
+        sub: user.uid,
+        name: user.displayName || '',
+        given_name: user.displayName?.split(' ')[0] || '',
+        family_name: user.displayName?.split(' ').slice(1).join(' ') || '',
+        picture: user.photoURL || '',
+      };
+
+      // Send to backend with Google OAuth ID token (JWT with issuer: accounts.google.com)
+      const response = await authClient.ssoLogin(
+        userInfo.email,
+        'google',
+        googleIdToken, // Google OAuth ID token, not Firebase ID token
+        {
+          sub: userInfo.sub,
+          name: userInfo.name,
+          given_name: userInfo.given_name,
+          family_name: userInfo.family_name,
+          picture: userInfo.picture,
+        }
+      );
+
+      handleSSOResponse(response);
+    } catch (error: any) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Google SSO error:', error);
+      }
+      // Handle user cancellation
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        // User cancelled, don't show error
+        return;
+      }
+      toast.error(getUserFriendlyError(error));
+    }
+  };
 
   return (
     <>
@@ -223,27 +223,14 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
 }
 
 export function DirectSSOButtons({ onNeedsLinking, onSuccess, onNewUser, isSignUpPage = false }: DirectSSOButtonsProps) {
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID;
-
-  if (!googleClientId) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Google SSO not configured: NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID is missing');
-    }
-    return (
-      <div className="text-red-600 text-sm">
-        Google SSO is not configured
-      </div>
-    );
-  }
-
+  // Firebase GoogleAuthProvider uses the Firebase project's OAuth config
+  // No need for NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID when using Firebase
   return (
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <DirectSSOButtonsContent
-        onNeedsLinking={onNeedsLinking}
-        onSuccess={onSuccess}
-        onNewUser={onNewUser}
-        isSignUpPage={isSignUpPage}
-      />
-    </GoogleOAuthProvider>
+    <DirectSSOButtonsContent
+      onNeedsLinking={onNeedsLinking}
+      onSuccess={onSuccess}
+      onNewUser={onNewUser}
+      isSignUpPage={isSignUpPage}
+    />
   );
 }

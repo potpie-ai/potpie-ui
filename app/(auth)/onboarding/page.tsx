@@ -389,10 +389,20 @@ const Onboarding = () => {
         <div className="w-full max-w-lg px-6 py-8">
           {/* Progress Indicator */}
           <div className="mb-8">
-            <div className="flex items-center gap-2">
+            <div 
+              className="flex items-center gap-2"
+              role="progressbar"
+              aria-valuemin={1}
+              aria-valuemax={2}
+              aria-valuenow={currentStep}
+              aria-label="Onboarding progress"
+            >
               <div className={`h-1 flex-1 rounded-full ${currentStep >= 1 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
               <div className={`h-1 flex-1 rounded-full ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
             </div>
+            <span className="visually-hidden" aria-live="polite" aria-atomic="true">
+              Step {currentStep} of 2
+            </span>
           </div>
 
         {/* Step 1: Form */}

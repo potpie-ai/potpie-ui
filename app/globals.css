@@ -236,6 +236,32 @@
   }
 }
 
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .form-fade-in,
+  .btn-enterprise,
+  .btn-enterprise::before,
+  .input-enterprise,
+  .input-enterprise:focus,
+  .link-smooth,
+  .link-smooth::after,
+  .error-message-enter,
+  .card-enterprise {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+  
+  .btn-enterprise:hover::before {
+    left: -100% !important;
+  }
+  
+  .link-smooth:hover::after {
+    width: 0 !important;
+  }
+}
+
 /* Enterprise card styling */
 .card-enterprise {
   background: white;
@@ -246,6 +272,19 @@
 
 .card-enterprise:hover {
   box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Visually hidden utility for screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* Node drop animation */

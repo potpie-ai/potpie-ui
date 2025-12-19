@@ -108,7 +108,9 @@ export default function Signin() {
           )
           .then((res) => {
             if (source === "vscode") {
-              console.log("res.data", res.data);
+              if (process.env.NODE_ENV !== 'production') {
+                console.log("res.data", res.data);
+              }
               handleExternalRedirect(res.data.token);
             } else if (finalAgent_id) {
               handleExternalRedirect("");

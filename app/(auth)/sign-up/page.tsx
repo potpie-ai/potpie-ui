@@ -15,9 +15,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
-import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
 import { validateWorkEmail } from "@/lib/utils/emailValidation";
+import AuthService from "@/services/AuthService";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -151,34 +150,16 @@ const Signup = () => {
       // Create user with Firebase
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const headers = await getHeaders();
 
       // Call signup API
-      const userSignup = await axios.post(
-        `${baseUrl}/api/v1/signup`,
-        {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || user.email?.split("@")[0],
-          emailVerified: user.emailVerified,
-          createdAt: user.metadata?.creationTime
-            ? new Date(user.metadata.creationTime).toISOString()
-            : "",
-          lastLoginAt: user.metadata?.lastSignInTime
-            ? new Date(user.metadata.lastSignInTime).toISOString()
-            : "",
-          providerData: user.providerData,
-        },
-        { headers: headers }
-      );
+      const userSignup = await AuthService.signupWithEmailPassword(user);
 
       const urlSearchParams = new URLSearchParams(window.location.search);
       const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
       const prompt = urlSearchParams.get("prompt") || "";
       const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
 
-      if (userSignup.data.exists) {
+      if (userSignup.exists) {
         toast.success("Welcome back " + (user.displayName || user.email));
         if (agent_id) {
           router.push(`/shared-agent?agent_id=${agent_id}`);

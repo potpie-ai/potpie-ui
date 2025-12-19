@@ -11,8 +11,7 @@ import {
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
-import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
+import AuthService from "@/services/AuthService";
 
 import { LucideGithub, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
@@ -81,49 +80,26 @@ export default function Signin() {
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         const user = userCredential.user;
-        const headers = await getHeaders();
         
-        // Send structured payload instead of raw user object
-        const userSignup = await axios
-          .post(
-            `${baseUrl}/api/v1/signup`,
-            {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName || user.email?.split("@")[0] || "",
-              emailVerified: user.emailVerified,
-              createdAt: user.metadata?.creationTime
-                ? new Date(user.metadata.creationTime).toISOString()
-                : "",
-              lastLoginAt: user.metadata?.lastSignInTime
-                ? new Date(user.metadata.lastSignInTime).toISOString()
-                : "",
-              providerData: user.providerData || [],
-              // No accessToken for email/password
-              // No providerUsername for email/password
-            },
-            { headers: headers }
-          )
-          .then((res) => {
-            if (source === "vscode") {
-              if (process.env.NODE_ENV !== 'production') {
-                console.log("res.data", res.data);
-              }
-              handleExternalRedirect(res.data.token);
-            } else if (finalAgent_id) {
-              handleExternalRedirect("");
+        try {
+          const userSignup = await AuthService.signupWithEmailPassword(user);
+          
+          if (source === "vscode") {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log("res.data", userSignup);
             }
-            return res.data;
-          })
-          .catch((e) => {
-            console.error("Signup API error:", e);
-            const errorMessage =
-              e.response?.data?.error || "Signup call unsuccessful";
-            toast.error(errorMessage);
-          });
-        toast.success("Logged in successfully as " + (user.displayName || user.email));
+            if (userSignup.token) {
+              handleExternalRedirect(userSignup.token);
+            }
+          } else if (finalAgent_id) {
+            handleExternalRedirect("");
+          }
+          
+          toast.success("Logged in successfully as " + (user.displayName || user.email));
+        } catch (error: any) {
+          toast.error(error.message || "Signup call unsuccessful");
+        }
       })
       .catch((error) => {
         const errorCode = error.code;
@@ -137,37 +113,21 @@ export default function Signin() {
     signInWithPopup(auth, provider)
       .then(async (result) => {
         const credential = GithubAuthProvider.credentialFromResult(result);
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-        if (credential) {
+        if (credential && credential.accessToken) {
           try {
-            const headers = await getHeaders();
-            const userSignup = await axios.post(
-              `${baseUrl}/api/v1/signup`,
-              {
-                uid: result.user.uid,
-                email: result.user.email,
-                displayName:
-                  result.user.displayName || result.user.email?.split("@")[0],
-                emailVerified: result.user.emailVerified,
-                createdAt: result.user.metadata?.creationTime
-                  ? new Date(result.user.metadata.creationTime).toISOString()
-                  : "",
-                lastLoginAt: result.user.metadata?.lastSignInTime
-                  ? new Date(result.user.metadata.lastSignInTime).toISOString()
-                  : "",
-                providerData: result.user.providerData,
-                accessToken: credential.accessToken,
-                providerUsername: (result as any)._tokenResponse.screenName,
-              },
-              { headers: headers }
+            const userSignup = await AuthService.signupWithGitHub(
+              result.user,
+              credential.accessToken,
+              (result as any)._tokenResponse.screenName
             );
 
             posthog.identify(result.user.uid, {
               email: result.user.email,
               name: result.user?.displayName || "",
             });
+            
             //if this is a new user
-            if (!userSignup.data.exists) {
+            if (!userSignup.exists) {
               // For new users, redirect to onboarding
               toast.success(
                 "Account created successfully as " + result.user.displayName
@@ -187,7 +147,9 @@ export default function Signin() {
             }
 
             if (source === "vscode") {
-              handleExternalRedirect(userSignup.data.token);
+              if (userSignup.token) {
+                handleExternalRedirect(userSignup.token);
+              }
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
@@ -198,10 +160,10 @@ export default function Signin() {
               "Logged in successfully as " + result.user.displayName
             );
           } catch (e: any) {
-            if (process.env.NODE_ENV === 'development') {
+            if (process.env.NODE_ENV !== 'production') {
               console.error("API error:", e);
             }
-            toast.error(getUserFriendlyError(e));
+            toast.error(e.message || "Sign-in unsuccessful");
           }
         }
       })

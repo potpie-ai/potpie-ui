@@ -411,7 +411,7 @@ const Onboarding = () => {
             {/* Title and Subtitle */}
             <div className="mb-8">
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-                Welcome! Let's get you set up
+                Welcome! Let&apos;s get you set up
               </h1>
               <p className="text-gray-600 text-base md:text-lg">
                 We just need a few details to personalize your experience
@@ -623,7 +623,7 @@ const Onboarding = () => {
 
                 {/* Disclaimer */}
                 <p className="text-gray-500 text-sm text-center">
-                  We'll only access repositories you explicitly authorize
+                  We&apos;ll only access repositories you explicitly authorize
                 </p>
               </>
             ) : (

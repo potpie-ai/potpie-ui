@@ -71,8 +71,28 @@ export default function Signin() {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         const user = userCredential.user;
         const headers = await getHeaders();
+        
+        // Send structured payload instead of raw user object
         const userSignup = await axios
-          .post(`${baseUrl}/api/v1/signup`, user, { headers: headers })
+          .post(
+            `${baseUrl}/api/v1/signup`,
+            {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || user.email?.split("@")[0] || "",
+              emailVerified: user.emailVerified,
+              createdAt: user.metadata?.creationTime
+                ? new Date(user.metadata.creationTime).toISOString()
+                : "",
+              lastLoginAt: user.metadata?.lastSignInTime
+                ? new Date(user.metadata.lastSignInTime).toISOString()
+                : "",
+              providerData: user.providerData || [],
+              // No accessToken for email/password
+              // No providerUsername for email/password
+            },
+            { headers: headers }
+          )
           .then((res) => {
             if (source === "vscode") {
               console.log("res.data", res.data);
@@ -83,13 +103,17 @@ export default function Signin() {
             return res.data;
           })
           .catch((e) => {
-            toast.error("Signup call unsuccessful");
+            console.error("Signup API error:", e);
+            const errorMessage =
+              e.response?.data?.error || "Signup call unsuccessful";
+            toast.error(errorMessage);
           });
-        toast.success("Logged in successfully as " + user.displayName);
+        toast.success("Logged in successfully as " + (user.displayName || user.email));
       })
       .catch((error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
+        console.error("Firebase auth error:", errorCode, errorMessage);
         toast.error(errorMessage);
       });
   };

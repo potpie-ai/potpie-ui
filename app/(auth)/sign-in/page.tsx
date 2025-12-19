@@ -24,7 +24,6 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { LinkProviderDialog } from '@/components/auth/LinkProviderDialog';
 import { DirectSSOButtons } from '@/components/auth/DirectSSOButtons';
 import type { SSOLoginResponse } from '@/types/auth';
-import { validateWorkEmail } from "@/lib/utils/emailValidation";
 
 export default function Signin() {
   const router = useRouter();
@@ -80,26 +79,36 @@ export default function Signin() {
   };
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    // Validate work email
-    const emailValidation = validateWorkEmail(data.email);
-    if (!emailValidation.isValid) {
-      form.setError("email", { message: emailValidation.errorMessage });
-      // Don't show toast - inline error is sufficient
-      return;
-    }
-
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
         const user = userCredential.user;
         const headers = await getHeaders();
+        
+        // Send structured payload instead of raw user object
         const userSignup = await axios
-          .post(`${baseUrl}/api/v1/signup`, user, { headers: headers })
+          .post(
+            `${baseUrl}/api/v1/signup`,
+            {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || user.email?.split("@")[0] || "",
+              emailVerified: user.emailVerified,
+              createdAt: user.metadata?.creationTime
+                ? new Date(user.metadata.creationTime).toISOString()
+                : "",
+              lastLoginAt: user.metadata?.lastSignInTime
+                ? new Date(user.metadata.lastSignInTime).toISOString()
+                : "",
+              providerData: user.providerData || [],
+              // No accessToken for email/password
+              // No providerUsername for email/password
+            },
+            { headers: headers }
+          )
           .then((res) => {
             if (source === "vscode") {
-              if (process.env.NODE_ENV === 'development') {
-                console.log("res.data", res.data);
-              }
+              console.log("res.data", res.data);
               handleExternalRedirect(res.data.token);
             } else if (finalAgent_id) {
               handleExternalRedirect("");
@@ -107,41 +116,18 @@ export default function Signin() {
             return res.data;
           })
           .catch((e) => {
-            toast.error("Signup call unsuccessful");
+            console.error("Signup API error:", e);
+            const errorMessage =
+              e.response?.data?.error || "Signup call unsuccessful";
+            toast.error(errorMessage);
           });
         toast.success("Logged in successfully as " + (user.displayName || user.email));
       })
-      .catch(async (error) => {
+      .catch((error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
-        
-        // If invalid credentials, check if user might have signed up with SSO
-        if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password' || errorCode === 'auth/user-not-found') {
-          try {
-            // Check if user exists with SSO by calling backend
-            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-            const checkResponse = await axios.get(
-              `${baseUrl}/api/v1/account/check-email?email=${encodeURIComponent(data.email)}`,
-              { validateStatus: () => true } // Don't throw on any status
-            );
-            
-            if (checkResponse.status === 200 && checkResponse.data?.has_sso) {
-              const friendlyError = 'This email is registered with Google SSO. Please sign in with Google instead.';
-              form.setError("email", { message: friendlyError });
-              // Don't show toast - inline error is sufficient
-              return;
-            }
-          } catch (checkError) {
-            // If check fails, fall through to default error
-            if (process.env.NODE_ENV === 'development') {
-              console.error("Error checking SSO status:", checkError);
-            }
-          }
-        }
-        
-        const friendlyError = getUserFriendlyError(error);
-        form.setError("email", { message: friendlyError });
-        // Don't show toast - inline error is sufficient
+        console.error("Firebase auth error:", errorCode, errorMessage);
+        toast.error(errorMessage);
       });
   };
 

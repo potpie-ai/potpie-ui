@@ -21,21 +21,27 @@ export default class AgentService {
     }
   }
 
-  static async getAgentList(includePublic = false, includeShared = false) {
+  static async getAgentList(
+    includePublic = false,
+    includeShared = false,
+    includeWorkflowAgents = false
+  ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
       console.log("Fetching agent list with params:", {
         includePublic,
         includeShared,
+        includeWorkflowAgents,
       });
       const response: any = await axios.get(
         `${baseUrl}/api/v1/list-available-agents/`,
         {
           params: {
-            list_system_agents: false,
+            list_system_agents: includeWorkflowAgents, // Include system agents when fetching for workflows
             include_public: includePublic,
             include_shared: includeShared,
+            include_workflow_agents: includeWorkflowAgents,
           },
           headers: headers,
         }

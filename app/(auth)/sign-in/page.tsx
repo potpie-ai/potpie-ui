@@ -12,7 +12,6 @@ import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import AuthService from "@/services/AuthService";
-import axios from "axios";
 
 import { LucideGithub, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
@@ -75,39 +74,6 @@ export default function Signin() {
       window.location.href = `/shared-agent?agent_id=${finalAgent_id}`;
     } else if (source === "vscode") {
       window.location.href = `http://localhost:54333/auth/callback?token=${token}`;
-    }
-  };
-
-  // Helper function to check if GitHub is linked
-  const checkGitHubLinked = async (userId: string): Promise<boolean> => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return false;
-      
-      const token = await user.getIdToken();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const response = await axios.get(
-        `${baseUrl}/api/v1/providers/me`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      
-      const hasGithub = response.data.providers?.some(
-        (p: any) => p.provider_type === 'firebase_github'
-      ) || false;
-      
-      // Also check legacy provider_username if available
-      if (!hasGithub && response.data.user?.provider_username) {
-        return true;
-      }
-      
-      return hasGithub;
-    } catch (error: any) {
-      if (process.env.NODE_ENV === 'development' && error.response?.status !== 404 && error.response?.status !== 401) {
-        console.warn("Error checking GitHub link:", error.response?.status, error.message);
-      }
-      return false;
     }
   };
 

@@ -47,7 +47,7 @@ function WorkEmailSSOContent({ email, onNeedsLinking, onSuccess }: WorkEmailSSOP
       
       // Verify email matches
       if (user.email?.toLowerCase() !== email.toLowerCase()) {
-        toast.error('Email does not match. Please use the correct email.');
+        toast.error('Email mismatch! Please use the email you signed up with');
         return;
       }
       
@@ -96,13 +96,31 @@ function WorkEmailSSOContent({ email, onNeedsLinking, onSuccess }: WorkEmailSSOP
         // User cancelled, don't show error
         return;
       }
-      toast.error('Google sign-in failed. Please try again.');
+      toast.error('Google sign-in hiccup! Give it another shot?');
     }
   };
 
   const handleSSOResponse = (response: SSOLoginResponse) => {
     if (response.status === 'success') {
-      toast.success('Signed in successfully');
+      // Check if GitHub needs to be linked
+      if (response.needs_github_linking) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('→ GitHub not linked, redirecting to onboarding');
+        }
+        toast.info('Almost there! Link your GitHub to unlock the magic');
+        
+        // Redirect to onboarding with user info from SSO response
+        const onboardingParams = new URLSearchParams({
+          ...(response.user_id && { uid: response.user_id }),
+          ...(response.email && { email: response.email }),
+          ...(response.display_name && { name: response.display_name }),
+        });
+        
+        router.push(`/onboarding?${onboardingParams.toString()}`);
+        return;
+      }
+      
+      toast.success('Welcome back! Ready to build something amazing?');
       if (onSuccess) {
         onSuccess();
       } else {
@@ -115,7 +133,7 @@ function WorkEmailSSOContent({ email, onNeedsLinking, onSuccess }: WorkEmailSSOP
         onNeedsLinking(response);
       }
     } else if (response.status === 'new_user') {
-      toast.success('Welcome! Account created');
+      toast.success('Welcome to the team! Let\'s get you set up');
       router.push('/onboarding');
     }
   };

@@ -12,6 +12,7 @@ import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import AuthService from "@/services/AuthService";
+import axios from "axios";
 
 import { LucideGithub, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
@@ -77,6 +78,39 @@ export default function Signin() {
     }
   };
 
+  // Helper function to check if GitHub is linked
+  const checkGitHubLinked = async (userId: string): Promise<boolean> => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return false;
+      
+      const token = await user.getIdToken();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const response = await axios.get(
+        `${baseUrl}/api/v1/providers/me`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      const hasGithub = response.data.providers?.some(
+        (p: any) => p.provider_type === 'firebase_github'
+      ) || false;
+      
+      // Also check legacy provider_username if available
+      if (!hasGithub && response.data.user?.provider_username) {
+        return true;
+      }
+      
+      return hasGithub;
+    } catch (error: any) {
+      if (process.env.NODE_ENV === 'development' && error.response?.status !== 404 && error.response?.status !== 401) {
+        console.warn("Error checking GitHub link:", error.response?.status, error.message);
+      }
+      return false;
+    }
+  };
+
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
@@ -85,6 +119,30 @@ export default function Signin() {
         try {
           const userSignup = await AuthService.signupWithEmailPassword(user);
           
+          // CRITICAL: Check GitHub linking from backend response
+          // Login cannot succeed unless GitHub is linked
+          if (userSignup.needs_github_linking) {
+            // Redirect to onboarding to link GitHub
+            toast.info('Almost there! Link your GitHub to unlock the magic');
+            const urlSearchParams = new URLSearchParams(window.location.search);
+            const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+            const prompt = urlSearchParams.get("prompt") || "";
+            
+            const onboardingParams = new URLSearchParams({
+              uid: user.uid,
+              ...(user.email && { email: user.email }),
+              ...(user.displayName && { name: user.displayName }),
+              ...(plan && { plan }),
+              ...(prompt && { prompt }),
+              ...(finalAgent_id && { agent_id: finalAgent_id }),
+            });
+            
+            // Use window.location.href for a full page navigation to avoid React hooks issues
+            window.location.href = `/onboarding?${onboardingParams.toString()}`;
+            return;
+          }
+          
+          // GitHub is linked - proceed with normal login flow
           if (source === "vscode") {
             if (process.env.NODE_ENV !== 'production') {
               console.log("res.data", userSignup);
@@ -94,9 +152,11 @@ export default function Signin() {
             }
           } else if (finalAgent_id) {
             handleExternalRedirect("");
+          } else {
+            router.push('/newchat');
           }
           
-          toast.success("Logged in successfully as " + (user.displayName || user.email));
+          toast.success("Welcome back " + (user.displayName || user.email) + "! Ready to build?");
         } catch (error: any) {
           toast.error(error.message || "Signup call unsuccessful");
         }
@@ -126,11 +186,23 @@ export default function Signin() {
               name: result.user?.displayName || "",
             });
             
+            // CRITICAL: Check GitHub linking from backend response
+            // Even if signing in with GitHub, check the flag for consistency
+            if (userSignup.needs_github_linking) {
+              // Redirect to onboarding to link GitHub (shouldn't happen for GitHub sign-in, but handle it)
+              toast.info('Almost there! Link your GitHub to unlock the magic');
+              const urlSearchParams = new URLSearchParams(window.location.search);
+              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              const prompt = urlSearchParams.get("prompt") || "";
+
+              return (window.location.href = `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || "")}&name=${encodeURIComponent(result.user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(finalAgent_id || "")}`);
+            }
+            
             //if this is a new user
             if (!userSignup.exists) {
               // For new users, redirect to onboarding
               toast.success(
-                "Account created successfully as " + result.user.displayName
+                "Welcome aboard " + result.user.displayName + "! Let's get started"
               );
 
               const urlSearchParams = new URLSearchParams(
@@ -146,6 +218,8 @@ export default function Signin() {
               return (window.location.href = `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || "")}&name=${encodeURIComponent(result.user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(finalAgent_id || "")}`);
             }
 
+            // For existing users, GitHub is already linked (they signed in with GitHub)
+            // So we can proceed directly
             if (source === "vscode") {
               if (userSignup.token) {
                 handleExternalRedirect(userSignup.token);
@@ -157,7 +231,7 @@ export default function Signin() {
             }
 
             toast.success(
-              "Logged in successfully as " + result.user.displayName
+              "Welcome back " + result.user.displayName + "! Let's build something amazing"
             );
           } catch (e: any) {
             if (process.env.NODE_ENV !== 'production') {
@@ -194,7 +268,29 @@ export default function Signin() {
     }
   };
 
-  const handleSSOSuccess = () => {
+  const handleSSOSuccess = (response?: SSOLoginResponse) => {
+      // Check if GitHub needs to be linked (fallback check, though DirectSSOButtons should handle this)
+      if (response?.needs_github_linking) {
+        // Get URL parameters for plan, prompt, agent_id
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+        const prompt = urlSearchParams.get("prompt") || "";
+        
+        // Redirect to onboarding with user info from SSO response
+        const onboardingParams = new URLSearchParams({
+          ...(response.user_id && { uid: response.user_id }),
+          ...(response.email && { email: response.email }),
+          ...(response.display_name && { name: response.display_name }),
+          ...(plan && { plan }),
+          ...(prompt && { prompt }),
+          ...(finalAgent_id && { agent_id: finalAgent_id }),
+        });
+        
+        // Use window.location.href for a full page navigation to avoid React hooks issues
+        window.location.href = `/onboarding?${onboardingParams.toString()}`;
+        return;
+      }
+    
     // For existing users signing in via SSO
     if (source === "vscode") {
       router.push('/newchat');

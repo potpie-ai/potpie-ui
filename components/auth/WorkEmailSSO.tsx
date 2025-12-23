@@ -116,7 +116,7 @@ function WorkEmailSSOContent({ email, onNeedsLinking, onSuccess }: WorkEmailSSOP
           ...(response.display_name && { name: response.display_name }),
         });
         
-        router.push(`/onboarding?${onboardingParams.toString()}`);
+        window.location.href = `/onboarding?${onboardingParams.toString()}`;
         return;
       }
       

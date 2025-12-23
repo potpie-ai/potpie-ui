@@ -195,7 +195,16 @@ export default function Signin() {
               const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
-              return (window.location.href = `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || "")}&name=${encodeURIComponent(result.user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(finalAgent_id || "")}`);
+              const onboardingParams = new URLSearchParams();
+              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
+              if (result.user.email) onboardingParams.append('email', result.user.email);
+              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
+              if (plan) onboardingParams.append('plan', plan);
+              if (prompt) onboardingParams.append('prompt', prompt);
+              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+
+              window.location.href = `/onboarding?${onboardingParams.toString()}`;
+              return;
             }
             
             //if this is a new user
@@ -215,7 +224,16 @@ export default function Signin() {
               ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
-              return (window.location.href = `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || "")}&name=${encodeURIComponent(result.user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(finalAgent_id || "")}`);
+              const onboardingParams = new URLSearchParams();
+              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
+              if (result.user.email) onboardingParams.append('email', result.user.email);
+              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
+              if (plan) onboardingParams.append('plan', plan);
+              if (prompt) onboardingParams.append('prompt', prompt);
+              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+
+              window.location.href = `/onboarding?${onboardingParams.toString()}`;
+              return;
             }
 
             // For existing users, GitHub is already linked (they signed in with GitHub)

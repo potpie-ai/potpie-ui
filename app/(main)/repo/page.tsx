@@ -12,16 +12,7 @@ import AdditionalContextSection from "./components/AdditionalContextSection";
 import QuestionProgress from "./components/QuestionProgress";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Github, FileText } from "lucide-react";
-
-interface MCQQuestion {
-  id: string;
-  section: string;
-  question: string;
-  options: string[];
-  needsInput: boolean;
-  assumed?: string;
-  reasoning?: string;
-}
+import type { MCQQuestion } from "@/services/QuestionService";
 
 interface QuestionAnswer {
   questionId: string;

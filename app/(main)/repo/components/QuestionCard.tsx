@@ -6,16 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import QuestionAnswerDisplay from "./QuestionAnswerDisplay";
 import QuestionEditMode from "./QuestionEditMode";
-
-interface MCQQuestion {
-  id: string;
-  section: string;
-  question: string;
-  options: string[];
-  needsInput: boolean;
-  assumed?: string;
-  reasoning?: string;
-}
+import type { MCQQuestion } from "@/services/QuestionService";
 
 interface QuestionAnswer {
   questionId: string;

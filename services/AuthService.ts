@@ -61,8 +61,12 @@ export default class AuthService {
       if (process.env.NODE_ENV !== 'production') {
         console.error("Signup API error:", error);
       }
+      // Check for 409 Conflict (GitHub already linked) or other errors
       const errorMessage =
-        error.response?.data?.error || "Signup call unsuccessful";
+        error.response?.data?.error || 
+        error.response?.data?.details ||
+        error.message ||
+        "Signup call unsuccessful";
       throw new Error(errorMessage);
     }
   }
@@ -105,7 +109,13 @@ export default class AuthService {
       if (process.env.NODE_ENV !== 'production') {
         console.error("GitHub signup API error:", error);
       }
-      throw new Error("Sign-in unsuccessful");
+      // Check for 409 Conflict (GitHub already linked) or other errors
+      const errorMessage =
+        error.response?.data?.error || 
+        error.response?.data?.details ||
+        error.message ||
+        "Sign-in unsuccessful";
+      throw new Error(errorMessage);
     }
   }
 

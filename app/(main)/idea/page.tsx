@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Send, Paperclip, Mic, Loader2 } from "lucide-react";
 import Image from "next/image";
 import IdeaInputCard from "./components/IdeaInputCard";
 import RepositorySelector from "./components/RepositorySelector";

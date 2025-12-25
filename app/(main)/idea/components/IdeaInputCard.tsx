@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Paperclip, Mic, Loader2, ChevronDown, Plus, Link2, Check, FolderOpen, Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
-import { toast } from "sonner";
+import { useGithubAppPopup } from "../hooks/useGithubAppPopup";
 
 interface IdeaInputCardProps {
   input: string;
@@ -42,7 +40,7 @@ export default function IdeaInputCard({
 }: IdeaInputCardProps) {
   const router = useRouter();
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
-  const popupRef = useRef<Window | null>(null);
+  const { openGithubPopup } = useGithubAppPopup();
 
   const selectedRepoData = repositories.find(
     (repo) => repo.id?.toString() === selectedRepo
@@ -50,28 +48,9 @@ export default function IdeaInputCard({
 
   const isLocalhost = process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost');
 
-  const openGithubPopup = () => {
-    const githubAppUrl =
-      "https://github.com/apps/" +
-      process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
-      "/installations/select_target?setup_action=install";
-    
+  const handleOpenGithubPopup = () => {
     setRepoDropdownOpen(false);
-    popupRef.current = window.open(
-      githubAppUrl,
-      "_blank",
-      "width=1000,height=700"
-    );
-
-    // Poll for popup closure to refetch repos
-    const checkClosed = setInterval(() => {
-      if (popupRef.current?.closed) {
-        clearInterval(checkClosed);
-        // Trigger a refetch by dispatching a custom event or using query invalidation
-        // The parent component will handle the refetch
-        window.dispatchEvent(new CustomEvent("github-app-installed"));
-      }
-    }, 1000);
+    openGithubPopup();
   };
 
   return (
@@ -178,7 +157,7 @@ export default function IdeaInputCard({
                 <DropdownMenuSeparator className="my-1" />
                 {!isLocalhost && (
                   <DropdownMenuItem
-                    onClick={openGithubPopup}
+                    onClick={handleOpenGithubPopup}
                     className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer rounded-md hover:bg-gray-50 text-gray-700"
                   >
                     <Link2 className="h-4 w-4 text-gray-500" />

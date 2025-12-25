@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Zap, Workflow, Play } from "lucide-react";
-import { Code, Plug, Zap as ZapIcon } from "lucide-react";
+import { Zap, Workflow, Play, Code, Plug } from "lucide-react";
 
 export default function BuildsPage() {
   const router = useRouter();
@@ -99,7 +98,7 @@ export default function BuildsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-xs text-gray-600">
-                <ZapIcon className="h-4 w-4" />
+                <Zap className="h-4 w-4" />
                 <span>Demo mode</span>
               </div>
             </CardContent>

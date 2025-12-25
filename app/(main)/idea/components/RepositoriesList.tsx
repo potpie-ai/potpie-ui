@@ -27,8 +27,9 @@ export default function RepositoriesList({
   onRepoSelect,
   selectedRepo,
 }: RepositoriesListProps) {
-  const popupRef = useRef<Window | null>(null);
   const [repos, setRepos] = useState<Repo[]>([]);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch repositories
   const { data: repositories, isLoading, refetch } = useQuery({
@@ -52,36 +53,84 @@ export default function RepositoriesList({
       if (event.origin === "https://github.com" || event.origin === window.location.origin) {
         // Refetch repositories after installation
         if (event.data?.type === "github-app-installed") {
-          setTimeout(() => {
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+          }
+          timeoutRef.current = setTimeout(() => {
             refetch();
+            timeoutRef.current = null;
           }, 2000);
         }
       }
     };
 
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
   }, [refetch]);
+
+  // Cleanup intervals and timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const popupRef = useRef<Window | null>(null);
 
   const openGithubPopup = () => {
     const githubAppUrl =
       "https://github.com/apps/" +
       process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
       "/installations/select_target?setup_action=install";
-    
+
+    // Clear any existing interval/timeout before opening new popup
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
     popupRef.current = window.open(
       githubAppUrl,
       "_blank",
       "width=1000,height=700"
     );
 
+    if (!popupRef.current) {
+      return;
+    }
+
     // Poll for popup closure to refetch repos
-    const checkClosed = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       if (popupRef.current?.closed) {
-        clearInterval(checkClosed);
+        // Clear interval immediately when popup is closed
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
         // Refetch after a short delay to allow backend to sync
-        setTimeout(() => {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        timeoutRef.current = setTimeout(() => {
           refetch();
+          timeoutRef.current = null;
         }, 2000);
       }
     }, 1000);

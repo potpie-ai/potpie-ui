@@ -60,7 +60,14 @@ export default function QuestionEditMode({
     <div className="space-y-3 mt-2">
       {question.options && question.options.length > 0 ? (
         <>
-          <RadioGroup value={mcqValue} onValueChange={setMcqValue}>
+          <RadioGroup
+            value={mcqValue}
+            onValueChange={(value) => {
+              setMcqValue(value);
+              // Clear custom answer when MCQ option is selected
+              setCustomAnswer("");
+            }}
+          >
             {question.options.map((option, index) => {
               const optionLabel = String.fromCharCode(65 + index); // A, B, C, D
               // Strip prefix if already present (e.g., "A. Monolithic" -> "Monolithic")

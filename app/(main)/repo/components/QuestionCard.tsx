@@ -175,7 +175,7 @@ export default function QuestionCard({
           />
         ) : (
           <>
-            {hasAnswer && (
+            {hasAnswer && answer != null && (
               <QuestionAnswerDisplay
                 answer={answer}
                 question={question}

@@ -203,8 +203,9 @@ export default function RepoPage() {
     }));
 
     // Animate questions appearing one by one
+    const timeoutIds: NodeJS.Timeout[] = [];
     questions.forEach((q: MCQQuestion, index: number) => {
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         setState((prev) => {
           const newVisible = new Set(prev.visibleQuestions);
           newVisible.add(q.id);
@@ -215,7 +216,13 @@ export default function RepoPage() {
           questionsEndRef.current?.scrollIntoView({ behavior: "smooth" });
         }
       }, index * 200);
+      timeoutIds.push(timeoutId);
     });
+
+    // Cleanup: clear all timeouts on unmount or when dependencies change
+    return () => {
+      timeoutIds.forEach((id) => clearTimeout(id));
+    };
   }, [questionsData, existingData]);
 
   // Submit answers mutation

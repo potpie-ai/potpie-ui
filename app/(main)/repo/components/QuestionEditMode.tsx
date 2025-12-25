@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -43,18 +43,27 @@ export default function QuestionEditMode({
   const [mcqValue, setMcqValue] = useState(currentAnswer.mcqAnswer || "");
   const [customAnswer, setCustomAnswer] = useState("");
 
+  // Store onAnswerChange in a ref to avoid dependency issues
+  const onAnswerChangeRef = useRef(onAnswerChange);
+
+  // Update ref when onAnswerChange changes
+  useEffect(() => {
+    onAnswerChangeRef.current = onAnswerChange;
+  }, [onAnswerChange]);
+
   // Helper to strip option prefix (A., B., etc.) if already present
   const stripOptionPrefix = (option: string): string => {
     // Remove patterns like "A. ", "B. ", etc. from the start
     return option.replace(/^[A-Z]\.\s*/, "");
   };
 
+  // Effect depends only on answer values, not onAnswerChange
   useEffect(() => {
-    onAnswerChange({
+    onAnswerChangeRef.current({
       textAnswer: textValue || customAnswer || undefined,
       mcqAnswer: mcqValue || undefined,
     });
-  }, [textValue, mcqValue, customAnswer, onAnswerChange]);
+  }, [textValue, mcqValue, customAnswer]);
 
   return (
     <div className="space-y-3 mt-2">

@@ -38,11 +38,24 @@ export default function QuestionAnswerDisplay({
     // Custom text answer
     displayText = answer.textAnswer;
   } else if (answer.mcqAnswer && question.options) {
-    // MCQ answer - get the option and strip prefix if present
-    const optionIndex = answer.mcqAnswer.charCodeAt(0) - 65;
-    const optionText = question.options[optionIndex] || "";
-    const cleanOption = stripOptionPrefix(optionText);
-    displayText = `${answer.mcqAnswer}. ${cleanOption}`;
+    // MCQ answer - validate before indexing
+    const mcqAnswer = answer.mcqAnswer.trim().toUpperCase();
+    // Check if it's a single uppercase letter (A-Z)
+    if (mcqAnswer.length === 1 && mcqAnswer >= "A" && mcqAnswer <= "Z") {
+      const optionIndex = mcqAnswer.charCodeAt(0) - 65;
+      // Validate index is within bounds
+      if (optionIndex >= 0 && optionIndex < question.options.length) {
+        const optionText = question.options[optionIndex];
+        const cleanOption = stripOptionPrefix(optionText);
+        displayText = `${mcqAnswer}. ${cleanOption}`;
+      } else {
+        // Index out of bounds - fallback to just the letter
+        displayText = mcqAnswer;
+      }
+    } else {
+      // Invalid format - fallback to displaying as-is
+      displayText = answer.mcqAnswer;
+    }
   } else if (answer.mcqAnswer) {
     // Just the letter
     displayText = answer.mcqAnswer;

@@ -47,6 +47,7 @@ export default function ChatbotPanel({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (isGenerating) {
@@ -87,8 +88,24 @@ export default function ChatbotPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
+
+    // Clear any existing timeout before setting a new one
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -101,7 +118,7 @@ export default function ChatbotPanel({
     setIsLoading(true);
 
     // Simulate AI response (in real implementation, this would call an API)
-    setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: "I can help you understand the questions, repository structure, or best practices. What would you like to know?",
@@ -109,6 +126,7 @@ export default function ChatbotPanel({
       };
       setMessages((prev) => [...prev, assistantMessage]);
       setIsLoading(false);
+      timeoutRef.current = null;
     }, 1000);
   };
 

@@ -8,6 +8,19 @@ export function getUserFriendlyError(error: any): string {
     return getUserFriendlyMessage(error);
   }
 
+  // Check for 409 Conflict status (e.g., GitHub account already linked)
+  if (error?.response?.status === 409) {
+    const errorData = error.response.data;
+    // Use the error message from backend, which is user-friendly
+    if (errorData?.error) {
+      return errorData.error;
+    }
+    // Fallback to details if error field not available
+    if (errorData?.details) {
+      return errorData.details;
+    }
+  }
+
   // Extract error message from various error object formats
   let errorMessage = '';
   
@@ -18,6 +31,9 @@ export function getUserFriendlyError(error: any): string {
     errorMessage = error.response.data.error;
   } else if (error?.response?.data?.message) {
     errorMessage = error.response.data.message;
+  } else if (error?.response?.data?.details) {
+    // Check details field as fallback
+    errorMessage = error.response.data.details;
   } else if (error?.message) {
     errorMessage = error.message;
   } else if (typeof error === 'string') {
@@ -81,6 +97,11 @@ function getUserFriendlyMessage(message: string): string {
       return 'The linking request has expired. Please try linking again.';
     }
     return 'Failed to link account. Please try again.';
+  }
+  
+  // GitHub account already linked to another user
+  if (lowerMessage.includes('github account') && lowerMessage.includes('already linked')) {
+    return 'This GitHub account is already linked to another account. Please use a different GitHub account or contact support if you believe this is an error.';
   }
 
   // Network/API errors

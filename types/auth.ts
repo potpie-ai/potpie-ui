@@ -28,6 +28,7 @@ export interface SSOLoginResponse {
   message: string;
   linking_token?: string;
   existing_providers?: string[];
+  needs_github_linking?: boolean;
 }
 
 export interface UserAccount {

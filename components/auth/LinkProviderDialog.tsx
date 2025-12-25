@@ -32,7 +32,7 @@ export function LinkProviderDialog({
     setIsLinking(true);
     try {
       await authClient.confirmLinking(linkingData.linking_token);
-      toast.success('Account linked successfully!');
+      toast.success('Accounts connected! You\'re all set to go');
       onLinked();
       onClose();
     } catch (error: any) {

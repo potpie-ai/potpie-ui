@@ -182,8 +182,12 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
       {/* Pagination Dots */}
       <div className="flex space-x-2 mt-4">
         {AgentTypes && (() => {
-          const totalPages = Math.ceil(AgentTypes.length / visibleCards);
-          const currentPage = Math.floor(currentIndex / visibleCards);
+          const totalPages = visibleCards > 0 ? Math.ceil(AgentTypes.length / visibleCards) : 0;
+          const currentPage = visibleCards > 0 ? Math.floor(currentIndex / visibleCards) : 0;
+          // Guard against invalid array length
+          if (totalPages <= 0 || !isFinite(totalPages)) {
+            return null;
+          }
           return [...Array(totalPages)].map((_, index) => (
             <button
               key={index}

@@ -1,10 +1,9 @@
 "use client";
 import getHeaders from "@/app/utils/headers.util";
 import { Button } from "@/components/ui/button";
-import { doc, setDoc } from "firebase/firestore";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useRef, useState, useEffect } from "react";
-import { db, auth } from "@/configs/Firebase-config";
+import { auth } from "@/configs/Firebase-config";
 import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
 import { LucideGithub, LucideCheck, LoaderCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import axios from "axios";
@@ -67,7 +66,7 @@ const Onboarding = () => {
     companyName: autoCompanyName,
   });
 
-  const uid = searchParams.get("uid");
+  const uidFromUrl = searchParams.get("uid");
 
   const router = useRouter();
 
@@ -79,6 +78,20 @@ const Onboarding = () => {
   const [onboardingSubmitted, setOnboardingSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1); // 1 = form, 2 = GitHub linking
+  
+  // Store the UID from URL params in state to prevent it from changing
+  // This is the Google SSO UID we want to link GitHub to
+  const [targetUserId, setTargetUserId] = useState<string | null>(uidFromUrl);
+  
+  // Update targetUserId when component mounts or URL changes
+  useEffect(() => {
+    if (uidFromUrl) {
+      setTargetUserId(uidFromUrl);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Target user ID (from URL):", uidFromUrl);
+      }
+    }
+  }, [uidFromUrl]);
   const githubAppUrl =
     "https://github.com/apps/" +
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
@@ -177,8 +190,8 @@ const Onboarding = () => {
         );
       }
 
-      if (!uid) {
-        throw new Error("User ID is missing");
+      if (!targetUserId) {
+        throw new Error("User ID is missing. Please sign in again.");
       }
 
       // Validate required fields
@@ -192,27 +205,57 @@ const Onboarding = () => {
         throw new Error("Please fill out all required fields.");
       }
 
-      const userDoc = {
-        uid,
-        ...formData,
-        signedUpAt: new Date().toISOString(),
-      };
-
+      // Save onboarding data via backend API (uses Firebase Admin SDK with full permissions)
       try {
-        await setDoc(doc(db, "users", uid), userDoc);
-        toast.success("Onboarding information saved!");
-      } catch (firebaseError: any) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error("Firebase Error:", firebaseError);
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error("User not authenticated");
         }
-        if (firebaseError.code === "permission-denied") {
-          throw new Error(
-            "Unable to save user data. Please try signing out and signing in again."
-          );
-        }
-        throw new Error(
-          "Error saving user data to database. Please try again."
+
+        // Use the authenticated user's UID instead of URL parameter
+        // This ensures we're saving data for the correct user
+        const authenticatedUid = user.uid;
+
+        const token = await user.getIdToken();
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+        
+        const response = await axios.post(
+          `${baseUrl}/api/v1/user/onboarding`,
+          {
+            uid: authenticatedUid,
+            email: formData.email,
+            name: formData.name,
+            source: formData.source,
+            industry: formData.industry,
+            jobTitle: formData.jobTitle,
+            companyName: formData.companyName,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
         );
+
+        if (response.data.success) {
+          toast.success("Onboarding information saved!");
+        } else {
+          throw new Error(response.data.message || "Failed to save onboarding data");
+        }
+      } catch (error: any) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Error saving onboarding data:", error);
+        }
+        
+        if (error.response?.status === 403) {
+          throw new Error("You can only save onboarding data for your own account");
+        } else if (error.response?.status === 401) {
+          throw new Error("Authentication required. Please sign in again.");
+        } else if (error.response?.data?.detail) {
+          throw new Error(error.response.data.detail);
+        } else if (error.message) {
+          throw new Error(error.message);
+        } else {
+          throw new Error("Error saving user data to database. Please try again.");
+        }
       }
 
       // Check GitHub link status synchronously before setting onboardingSubmitted
@@ -268,12 +311,12 @@ const Onboarding = () => {
   };
 
   const proceedToNextStep = () => {
-    if (!uid) return;
+    if (!targetUserId) return;
     
     if (agent_id) {
       router.push(`/shared-agent?agent_id=${agent_id}`);
     } else if (plan) {
-      handleCheckoutRedirect(uid);
+      handleCheckoutRedirect(targetUserId);
     } else if (prompt) {
       router.push(
         `/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`
@@ -300,6 +343,29 @@ const Onboarding = () => {
     setIsLinkingGithub(true);
 
     try {
+      // CRITICAL: Use the targetUserId from state (stored from URL params)
+      // This is the Google SSO UID that was passed when redirecting to onboarding
+      // This is the user we want to link GitHub to
+      if (!targetUserId) {
+        throw new Error("User ID not found. Please sign in again and try linking GitHub.");
+      }
+      
+      const originalUserUid = targetUserId; // This is the Google SSO UID we want to link to
+      
+      // Verify the user is authenticated before proceeding
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error("No authenticated user found. Please sign in again.");
+      }
+      
+      // Log for debugging - note that currentUser.uid might be different after GitHub popup
+      if (process.env.NODE_ENV === 'development') {
+        console.log("=== GitHub Linking Debug ===");
+        console.log("Target user ID (Google SSO UID from URL):", originalUserUid);
+        console.log("Current auth.currentUser.uid (before popup):", currentUser.uid);
+        console.log("These may differ - we'll use targetUserId for linking");
+      }
+
       const provider = new GithubAuthProvider();
       provider.addScope("read:org");
       provider.addScope("user:email");
@@ -312,15 +378,25 @@ const Onboarding = () => {
         throw new Error("Failed to get GitHub credentials");
       }
 
+      const githubFirebaseUid = result.user.uid; // GitHub Firebase UID (different from Google SSO UID)
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log("GitHub Firebase UID:", githubFirebaseUid);
+        console.log("Linking GitHub to original user UID:", originalUserUid);
+      }
+
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
 
-      // Call signup endpoint which now handles linking GitHub to existing users
+      // Call signup endpoint to link GitHub to the ORIGINAL authenticated user (Google SSO)
+      // Use the captured originalUserUid (not the GitHub Firebase UID) so it links correctly
+      // even if GitHub email differs from SSO email
       await axios.post(
         `${baseUrl}/api/v1/signup`,
         {
-          uid: result.user.uid,
-          email: result.user.email,
+          uid: originalUserUid, // Use ORIGINAL Google SSO UID, not GitHub UID
+          linkToUserId: originalUserUid, // Explicitly specify which user to link to (Google SSO user)
+          email: result.user.email, // GitHub email (may differ from SSO email)
           displayName:
             result.user.displayName || result.user.email?.split("@")[0],
           emailVerified: result.user.emailVerified,
@@ -333,11 +409,12 @@ const Onboarding = () => {
           providerData: result.user.providerData,
           accessToken: credential.accessToken,
           providerUsername: (result as any)._tokenResponse.screenName,
+          githubFirebaseUid: githubFirebaseUid, // Store GitHub Firebase UID for reference
         },
         { headers: headers }
       );
 
-      toast.success("GitHub account linked successfully!");
+      toast.success("GitHub connected! You're all set to code");
       // Small delay for smooth transition
       await new Promise(resolve => setTimeout(resolve, 300));
       setHasGithubLinked(true);
@@ -361,7 +438,7 @@ const Onboarding = () => {
         console.error("GitHub linking error:", error);
       }
       if (error.code === "auth/popup-closed-by-user") {
-        toast.error("GitHub sign-in was cancelled");
+        toast.error("GitHub sign-in cancelled. No worries, try again when ready!");
       } else {
         toast.error(getUserFriendlyError(error));
       }

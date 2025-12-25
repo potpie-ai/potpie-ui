@@ -53,10 +53,46 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
     if (response.status === 'success') {
       if (process.env.NODE_ENV === 'development') {
         console.log('→ Handling SUCCESS status - redirecting to success handler');
+        console.log('→ needs_github_linking:', response.needs_github_linking);
       }
+      
+      // Check if GitHub needs to be linked
+      if (response.needs_github_linking) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('→ GitHub not linked, redirecting to onboarding');
+        }
+        toast.info('Almost there! Link your GitHub to unlock the magic');
+        
+        // Get URL parameters for plan, prompt, agent_id
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+        const prompt = urlSearchParams.get("prompt") || "";
+        const agent_id = urlSearchParams.get("agent_id") || "";
+        
+        // Redirect to onboarding with user info from SSO response
+        const onboardingParams = new URLSearchParams({
+          ...(response.user_id && { uid: response.user_id }),
+          ...(response.email && { email: response.email }),
+          ...(response.display_name && { name: response.display_name }),
+          ...(plan && { plan }),
+          ...(prompt && { prompt }),
+          ...(agent_id && { agent_id }),
+        });
+        
+        const onboardingUrl = `/onboarding?${onboardingParams.toString()}`;
+        if (process.env.NODE_ENV === 'development') {
+          console.log('→ Redirecting to onboarding:', onboardingUrl);
+        }
+        
+        // Use window.location.href for a full page navigation to avoid React hooks issues
+        // This ensures a clean navigation without component state conflicts
+        window.location.href = onboardingUrl;
+        return;
+      }
+      
       // Only show success toast if not on sign-up page (where we'll show error instead)
       if (!isSignUpPage) {
-        toast.success('Signed in successfully');
+        toast.success('Welcome back! Ready to build something amazing?');
       }
       if (onSuccess) {
         if (process.env.NODE_ENV === 'development') {
@@ -68,7 +104,10 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
         if (process.env.NODE_ENV === 'development') {
           console.log('→ No onSuccess callback, redirecting to /newchat');
         }
-        router.push('/newchat');
+        // Use setTimeout to defer navigation and avoid React hooks issues
+        setTimeout(() => {
+          router.push('/newchat');
+        }, 0);
       }
     } else if (response.status === 'needs_linking') {
       if (process.env.NODE_ENV === 'development') {
@@ -83,7 +122,7 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
       if (process.env.NODE_ENV === 'development') {
         console.log('→ Handling NEW_USER status - redirecting to onboarding');
       }
-      toast.success('Welcome! Account created');
+      toast.success('Welcome to the team! Let\'s get you set up');
       if (onNewUser) {
         if (process.env.NODE_ENV === 'development') {
           console.log('→ Calling onNewUser callback with response:', response);
@@ -113,13 +152,14 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
         if (process.env.NODE_ENV === 'development') {
           console.log('→ Redirecting to onboarding:', onboardingUrl);
         }
-        router.push(onboardingUrl);
+        // Use window.location.href for a full page navigation to avoid React hooks issues
+        window.location.href = onboardingUrl;
       }
     } else {
       if (process.env.NODE_ENV === 'development') {
         console.error('→ Unknown SSO response status:', response.status);
       }
-      toast.error('An unexpected error occurred. Please try signing in again.');
+      toast.error('Oops! Something went sideways. Mind trying again?');
     }
     if (process.env.NODE_ENV === 'development') {
       console.log('=== End SSO Response Debug ===');
@@ -137,34 +177,38 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
-      // Extract Google OAuth credential to get the Google OAuth ID token
-      // (not the Firebase ID token - backend expects Google OAuth ID token with issuer: accounts.google.com)
-      const credential = GoogleAuthProvider.credentialFromResult(result);
+      // Get Firebase ID token - this is what we'll use for authentication
+      // Firebase UID will be consistent across all Firebase auth providers
+      const firebaseIdToken = await user.getIdToken();
       
-      if (!credential || !credential.idToken) {
-        throw new Error('Failed to get Google OAuth ID token');
+      if (!firebaseIdToken) {
+        throw new Error('Failed to get Firebase ID token');
       }
       
-      // This is the Google OAuth ID token (issuer: accounts.google.com) that backend expects
-      const googleIdToken = credential.idToken;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Firebase UID:', user.uid);
+        console.log('Firebase Email:', user.email);
+      }
       
       // Get user info from the Firebase user object
       const userInfo = {
         email: user.email || '',
-        sub: user.uid,
+        uid: user.uid,  // Firebase UID - consistent across all providers
         name: user.displayName || '',
         given_name: user.displayName?.split(' ')[0] || '',
         family_name: user.displayName?.split(' ').slice(1).join(' ') || '',
         picture: user.photoURL || '',
       };
 
-      // Send to backend with Google OAuth ID token (JWT with issuer: accounts.google.com)
+      // Send to backend with Firebase ID token
+      // Backend will verify with Firebase Admin SDK and use Firebase UID
       const response = await authClient.ssoLogin(
         userInfo.email,
         'google',
-        googleIdToken, // Google OAuth ID token, not Firebase ID token
+        firebaseIdToken, // Firebase ID token (issuer: securetoken.google.com)
         {
-          sub: userInfo.sub,
+          uid: userInfo.uid,  // Firebase UID
+          sub: userInfo.uid,  // Also send as sub for backward compatibility
           name: userInfo.name,
           given_name: userInfo.given_name,
           family_name: userInfo.family_name,

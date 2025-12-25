@@ -17,6 +17,7 @@ interface SignupPayload {
 interface SignupResponse {
   exists: boolean;
   token?: string;
+  needs_github_linking?: boolean;
 }
 
 interface CheckEmailResponse {

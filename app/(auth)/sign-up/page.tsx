@@ -17,6 +17,7 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { validateWorkEmail } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
+import axios from "axios";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -79,7 +80,7 @@ const Signup = () => {
   const handleSSOSuccess = (response?: SSOLoginResponse) => {
     // If user already exists (trying to sign up again), show message and redirect to sign-in
     if (response && response.status === 'success') {
-      toast.error('You already have an account. Please sign in instead.');
+      toast.error('Hey there! You\'re already part of the crew. Sign in instead!');
       const urlSearchParams = new URLSearchParams(window.location.search);
       const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
       const prompt = urlSearchParams.get("prompt") || "";
@@ -136,6 +137,39 @@ const Signup = () => {
     router.push(`/onboarding?${onboardingParams.toString()}`);
   };
 
+  // Helper function to check if GitHub is linked
+  const checkGitHubLinked = async (userId: string): Promise<boolean> => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return false;
+      
+      const token = await user.getIdToken();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const response = await axios.get(
+        `${baseUrl}/api/v1/providers/me`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      const hasGithub = response.data.providers?.some(
+        (p: any) => p.provider_type === 'firebase_github'
+      ) || false;
+      
+      // Also check legacy provider_username if available
+      if (!hasGithub && response.data.user?.provider_username) {
+        return true;
+      }
+      
+      return hasGithub;
+    } catch (error: any) {
+      if (process.env.NODE_ENV === 'development' && error.response?.status !== 404 && error.response?.status !== 401) {
+        console.warn("Error checking GitHub link:", error.response?.status, error.message);
+      }
+      return false;
+    }
+  };
+
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     // Validate work email
     const emailValidation = validateWorkEmail(data.email);
@@ -159,8 +193,26 @@ const Signup = () => {
       const prompt = urlSearchParams.get("prompt") || "";
       const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
 
+      // CRITICAL: Check GitHub linking from backend response
+      // Login/signup cannot succeed unless GitHub is linked
+      if (userSignup.needs_github_linking) {
+        // Redirect to onboarding to link GitHub
+        toast.info('Almost there! Link your GitHub to unlock the magic');
+        const onboardingParams = new URLSearchParams({
+          uid: user.uid,
+          ...(user.email && { email: user.email }),
+          ...(user.displayName && { name: user.displayName }),
+          ...(plan && { plan }),
+          ...(prompt && { prompt }),
+          ...(agent_id && { agent_id }),
+        });
+        router.push(`/onboarding?${onboardingParams.toString()}`);
+        return;
+      }
+      
       if (userSignup.exists) {
-        toast.success("Welcome back " + (user.displayName || user.email));
+        // Existing user - GitHub is linked, proceed with login
+        toast.success("Welcome back " + (user.displayName || user.email) + "! Let's build something awesome");
         if (agent_id) {
           router.push(`/shared-agent?agent_id=${agent_id}`);
         } else if (plan) {
@@ -171,7 +223,8 @@ const Signup = () => {
           router.push('/newchat');
         }
       } else {
-        toast.success("Account created successfully");
+        // New user - GitHub is linked, proceed to onboarding for other setup
+        toast.success("Account created! Time to make magic happen");
         const onboardingParams = new URLSearchParams();
         onboardingParams.append('uid', user.uid);
         if (user.email) onboardingParams.append('email', user.email);

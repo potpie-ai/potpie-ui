@@ -5,6 +5,8 @@ import {
   onIdTokenChanged as firebaseOnIdTokenChanged,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   signInWithPopup as firebaseSignInWithPopup,
+  setPersistence,
+  browserLocalPersistence,
   NextOrObserver,
   User,
   Unsubscribe
@@ -43,6 +45,15 @@ if (hasRequiredConfig) {
     firebase_app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     db = getFirestore(firebase_app);
     auth = getAuth(firebase_app);
+    
+    // Set persistence to LOCAL (uses IndexedDB) instead of SESSION (sessionStorage)
+    // This is crucial for production environments with storage partitioning (Safari, privacy-focused browsers)
+    // IndexedDB is more reliable than sessionStorage in cross-origin/privacy-protected contexts
+    if (typeof window !== 'undefined') {
+      setPersistence(auth, browserLocalPersistence).catch((error) => {
+        console.error("Error setting Firebase persistence:", error);
+      });
+    }
     
     // Set a global flag to indicate we're NOT using mock authentication
     if (typeof window !== 'undefined') {

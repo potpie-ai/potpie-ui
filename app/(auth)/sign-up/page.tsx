@@ -1,38 +1,37 @@
 "use client";
-import getHeaders from "@/app/utils/headers.util";
 import { Button } from "@/components/ui/button";
-import { auth } from "@/configs/Firebase-config";
-import {
-  arrowcon,
-  chat,
-  cloud,
-  cross,
-  logo60,
-  logoWithText,
-  sendBlue,
-  setting,
-} from "@/public";
-import axios from "axios";
-import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
-import { LucideCheck, LucideGithub } from "lucide-react";
+import { LucideCheck, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
-import { usePostHog } from "posthog-js/react";
-import React, { useRef } from "react";
+import React from "react";
+import Link from "next/link";
 import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import { useRouter, useSearchParams } from "next/navigation";
+import { DirectSSOButtons } from '@/components/auth/DirectSSOButtons';
+import { LinkProviderDialog } from '@/components/auth/LinkProviderDialog';
+import type { SSOLoginResponse } from '@/types/auth';
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/configs/Firebase-config";
+import { validateWorkEmail } from "@/lib/utils/emailValidation";
+import AuthService from "@/services/AuthService";
+import axios from "axios";
+
+const formSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
+});
 
 const Signup = () => {
-  const githubAppUrl =
-    "https://github.com/apps/" +
-    process.env.NEXT_PUBLIC_GITHUB_APP_NAME +
-    "/installations/select_target?setup_action=install";
-  const posthog = usePostHog();
-  const popupRef = useRef<Window | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get("redirect");
+  const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(null);
+  const [showLinkingDialog, setShowLinkingDialog] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   // Extract agent_id from redirect URL if present
   let redirectAgent_id = "";
@@ -42,236 +41,221 @@ const Signup = () => {
       const url = new URL(redirectPath, window.location.origin);
       redirectAgent_id = url.searchParams.get("agent_id") || "";
     } catch (e) {
-      console.error("Error parsing redirect URL:", e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error parsing redirect URL:", e);
+      }
     }
   }
 
-  // Cleanup function for timers and popups
-  React.useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      if (popupRef.current) {
-        popupRef.current.close();
-        popupRef.current = null;
-      }
-    };
-  }, []);
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
-  const cleanupAndNavigate = (path: string) => {
-    // Clean up any existing timers and popups
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (popupRef.current) {
-      popupRef.current.close();
-      popupRef.current = null;
-    }
-    return router.push(path);
+  const handleSSONeedsLinking = (response: SSOLoginResponse) => {
+    setLinkingData(response);
+    setShowLinkingDialog(true);
   };
 
-  const openPopup = async (
-    result: any,
-    plan: string = "",
-    prompt: string = "",
-    agent_id: string = ""
-  ) => {
-    console.log(
-      "[DEBUG] openPopup called with plan:",
-      plan,
-      "prompt:",
-      prompt,
-      "agent_id:",
-      agent_id
-    );
+  const handleSSOLinked = () => {
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+    const prompt = urlSearchParams.get("prompt") || "";
+    const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
 
-    // Clean up any existing timer and popup
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (agent_id) {
+      router.push(`/shared-agent?agent_id=${agent_id}`);
+    } else if (plan) {
+      router.push(`/checkout?plan=${plan}`);
+    } else if (prompt) {
+      router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
+    } else {
+      router.push('/newchat');
     }
-    if (popupRef.current) {
-      popupRef.current.close();
-      popupRef.current = null;
+  };
+
+  const handleSSOSuccess = (response?: SSOLoginResponse) => {
+    // If user already exists (trying to sign up again), show message and redirect to sign-in
+    if (response && response.status === 'success') {
+      toast.error('Hey there! You\'re already part of the crew. Sign in instead!');
+      const urlSearchParams = new URLSearchParams(window.location.search);
+      const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+      const prompt = urlSearchParams.get("prompt") || "";
+      const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
+      
+      // Redirect to sign-in with same parameters
+      const signInParams = new URLSearchParams();
+      if (plan) signInParams.set("plan", plan);
+      if (prompt) signInParams.set("prompt", prompt);
+      if (agent_id) signInParams.set("agent_id", agent_id);
+      if (redirectUrl) signInParams.set("redirect", redirectUrl);
+      
+      const signInUrl = `/sign-in${signInParams.toString() ? `?${signInParams.toString()}` : ''}`;
+      // Small delay for smooth transition
+      setTimeout(() => {
+        router.push(signInUrl);
+      }, 300);
+      return;
     }
+    
+    // Normal success flow (shouldn't happen on sign-up page, but handle it)
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+    const prompt = urlSearchParams.get("prompt") || "";
+    const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
 
-    const popup = window.open(githubAppUrl, "_blank", "noopener,noreferrer");
-
-    if (!popup) {
-      // Popup was blocked
-      toast.error("Please allow popups for GitHub app installation");
-      // For new users, still redirect to onboarding even if popup is blocked
-      return router.push(
-        `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || "")}&name=${encodeURIComponent(result.user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(agent_id)}`
-      );
+    if (agent_id) {
+      router.push(`/shared-agent?agent_id=${agent_id}`);
+    } else if (plan) {
+      router.push(`/checkout?plan=${plan}`);
+    } else if (prompt) {
+      router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
+    } else {
+      router.push('/newchat');
     }
+  };
 
-    popupRef.current = popup;
-    console.log("[DEBUG] GitHub app installation popup opened");
+  const handleSSONewUser = (response: SSOLoginResponse) => {
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+    const prompt = urlSearchParams.get("prompt") || "";
+    const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
 
-    return new Promise((resolve) => {
-      const timer = setInterval(() => {
-        if (popup.closed) {
-          console.log("[DEBUG] GitHub app installation popup closed");
-          clearInterval(timer);
-          timerRef.current = null;
-          // Only redirect to onboarding after popup is closed
-          console.log("[DEBUG] Redirecting to onboarding");
-          resolve(
-            router.push(
-              `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || "")}&name=${encodeURIComponent(result.user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(agent_id)}`
-            )
-          );
-        }
-      }, 500);
-      timerRef.current = timer;
+    // For new users, redirect to onboarding with user info from SSO response
+    const onboardingParams = new URLSearchParams({
+      ...(response.user_id && { uid: response.user_id }),
+      ...(response.email && { email: response.email }),
+      ...(response.display_name && { name: response.display_name }),
+      ...(plan && { plan }),
+      ...(prompt && { prompt }),
+      ...(agent_id && { agent_id }),
     });
+    
+    router.push(`/onboarding?${onboardingParams.toString()}`);
   };
 
-  const provider = new GithubAuthProvider();
-  provider.addScope("read:org");
-  provider.addScope("user:email");
-
-  const onGithub = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-
-    // Capture click event when the action actually happens
-    posthog.capture("github login clicked");
-
+  // Helper function to check if GitHub is linked
+  const checkGitHubLinked = async (userId: string): Promise<boolean> => {
     try {
-      console.log("[DEBUG] Starting GitHub sign in flow");
-      const result = await signInWithPopup(auth, provider);
-      console.log("[DEBUG] Firebase auth successful");
+      const user = auth.currentUser;
+      if (!user) return false;
+      
+      const token = await user.getIdToken();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const headers = await getHeaders();
-
-      try {
-        console.log("[DEBUG] Making signup API call");
-        const userSignup = await axios.post(
-          `${baseUrl}/api/v1/signup`,
-          {
-            uid: result.user.uid,
-            email: result.user.email,
-            displayName:
-              result.user.displayName || result.user.email?.split("@")[0],
-            emailVerified: result.user.emailVerified,
-            createdAt: result.user.metadata?.creationTime
-              ? new Date(result.user.metadata.creationTime).toISOString()
-              : "",
-            lastLoginAt: result.user.metadata?.lastSignInTime
-              ? new Date(result.user.metadata.lastSignInTime).toISOString()
-              : "",
-            providerData: result.user.providerData,
-            accessToken: (result as any)._tokenResponse.oauthAccessToken,
-            providerUsername: (result as any)._tokenResponse.screenName,
-          },
-          { headers: headers }
-        );
-
-        console.log("[DEBUG] Signup API response:", userSignup.data);
-
-        posthog.identify(result.user.uid, {
-          email: result.user.email,
-          name: result.user?.displayName || "",
-        });
-
-        const urlSearchParams = new URLSearchParams(window.location.search);
-        const plan = (
-          urlSearchParams.get("plan") ||
-          urlSearchParams.get("PLAN") ||
-          ""
-        ).toLowerCase();
-        const prompt = urlSearchParams.get("prompt") || "";
-        const agent_id =
-          urlSearchParams.get("agent_id") || redirectAgent_id || "";
-        console.log(
-          "[DEBUG] URL params - plan:",
-          plan,
-          "prompt:",
-          prompt,
-          "agent_id:",
-          agent_id
-        );
-
-        if (userSignup.data.exists) {
-          console.log("[DEBUG] Existing user detected");
-          toast.success("Welcome back " + result.user.displayName);
-
-          // Handle special navigation cases for existing users
-          if (agent_id) {
-            console.log(
-              "[DEBUG] Agent ID parameter detected, redirecting to shared agent"
-            );
-            return cleanupAndNavigate(`/shared-agent?agent_id=${agent_id}`);
-          } else if (plan) {
-            console.log(
-              "[DEBUG] Plan parameter detected, redirecting to checkout"
-            );
-            try {
-              const subUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
-              const response = await axios.get(
-                `${subUrl}/create-checkout-session?user_id=${result.user.uid}&plan_type=${plan}`,
-                { headers: { "Content-Type": "application/json" } }
-              );
-
-              if (response.data.url) {
-                window.location.href = response.data.url;
-              } else {
-                throw new Error("No checkout URL received");
-              }
-            } catch (error) {
-              console.error("Error getting checkout URL:", error);
-              toast.error(
-                "Failed to start checkout process. Please try again."
-              );
-              return cleanupAndNavigate("/newchat");
-            }
-          } else if (prompt) {
-            console.log(
-              "[DEBUG] Prompt parameter detected, redirecting to all-agents with create modal"
-            );
-            return cleanupAndNavigate(
-              `/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`
-            );
-          } else {
-            // Default navigation for existing users
-            return cleanupAndNavigate("/newchat");
-          }
-        } else {
-          console.log(
-            "[DEBUG] New user detected, proceeding with GitHub app installation"
-          );
-          toast.success(
-            "Account created successfully as " + result.user.displayName
-          );
-          await openPopup(result, plan, prompt, agent_id);
+      const response = await axios.get(
+        `${baseUrl}/api/v1/providers/me`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-      } catch (e: any) {
-        console.log("[DEBUG] API error:", e.response?.status, e.message);
-        if (e.response?.status === 409) {
-          console.log(
-            "[DEBUG] 409 Conflict - User exists, redirecting to sign-in"
-          );
-          toast.info("Account already exists. Please sign in.");
-          return cleanupAndNavigate("/sign-in");
-        } else {
-          toast.error("Signup call unsuccessful");
-        }
+      );
+      
+      const hasGithub = response.data.providers?.some(
+        (p: any) => p.provider_type === 'firebase_github'
+      ) || false;
+      
+      // Also check legacy provider_username if available
+      if (!hasGithub && response.data.user?.provider_username) {
+        return true;
       }
-    } catch (e) {
-      console.log("[DEBUG] Firebase auth error:", e);
-      toast.error("Failed to create account");
+      
+      return hasGithub;
+    } catch (error: any) {
+      if (process.env.NODE_ENV === 'development' && error.response?.status !== 404 && error.response?.status !== 401) {
+        console.warn("Error checking GitHub link:", error.response?.status, error.message);
+      }
+      return false;
+    }
+  };
+
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    // Validate work email
+    const emailValidation = validateWorkEmail(data.email);
+    if (!emailValidation.isValid) {
+      form.setError("email", { message: emailValidation.errorMessage });
+      // Don't show toast - inline error is sufficient
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Create user with Firebase
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+
+      // Call signup API
+      const userSignup = await AuthService.signupWithEmailPassword(user);
+
+      const urlSearchParams = new URLSearchParams(window.location.search);
+      const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+      const prompt = urlSearchParams.get("prompt") || "";
+      const agent_id = urlSearchParams.get("agent_id") || redirectAgent_id || "";
+
+      // CRITICAL: Check GitHub linking from backend response
+      // Login/signup cannot succeed unless GitHub is linked
+      if (userSignup.needs_github_linking) {
+        // Redirect to onboarding to link GitHub
+        toast.info('Almost there! Link your GitHub to unlock the magic');
+        const onboardingParams = new URLSearchParams({
+          uid: user.uid,
+          ...(user.email && { email: user.email }),
+          ...(user.displayName && { name: user.displayName }),
+          ...(plan && { plan }),
+          ...(prompt && { prompt }),
+          ...(agent_id && { agent_id }),
+        });
+        router.push(`/onboarding?${onboardingParams.toString()}`);
+        return;
+      }
+      
+      if (userSignup.exists) {
+        // Existing user - GitHub is linked, proceed with login
+        toast.success("Welcome back " + (user.displayName || user.email) + "! Let's build something awesome");
+        if (agent_id) {
+          router.push(`/shared-agent?agent_id=${agent_id}`);
+        } else if (plan) {
+          router.push(`/checkout?plan=${plan}`);
+        } else if (prompt) {
+          router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
+        } else {
+          router.push('/newchat');
+        }
+      } else {
+        // New user - GitHub is linked, proceed to onboarding for other setup
+        toast.success("Account created! Time to make magic happen");
+        const onboardingParams = new URLSearchParams();
+        onboardingParams.append('uid', user.uid);
+        if (user.email) onboardingParams.append('email', user.email);
+        if (user.displayName) onboardingParams.append('name', user.displayName);
+        if (plan) onboardingParams.append('plan', plan);
+        if (prompt) onboardingParams.append('prompt', prompt);
+        if (agent_id) onboardingParams.append('agent_id', agent_id);
+        router.push(`/onboarding?${onboardingParams.toString()}`);
+      }
+    } catch (error: any) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Signup error:", error);
+      }
+      const friendlyError = getUserFriendlyError(error);
+      
+      if (error.code === "auth/email-already-in-use") {
+        toast.error(friendlyError);
+        form.setError("email", { message: "Email already in use" });
+      } else if (error.code === "auth/weak-password") {
+        toast.error(friendlyError);
+        form.setError("password", { message: "Password is too weak" });
+      } else {
+        toast.error(friendlyError);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative">
+    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition">
       <div className="flex items-center justify-center w-1/2 h-full p-6">
         <div className="relative h-full w-full rounded-lg overflow-hidden">
           <Image
@@ -283,45 +267,142 @@ const Signup = () => {
         </div>
       </div>
 
-      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-14">
-        <div className="flex items-center justify-center flex-row gap-2">
+      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-10">
+        <div className="flex items-center justify-center flex-row gap-3 mb-2">
           <Image
             src={"/images/potpie-blue.svg"}
             width={100}
             height={100}
             alt="logo"
+            className="transition-transform duration-300 hover:scale-105"
           />
-          <h1 className="text-7xl font-bold text-gray-700">potpie</h1>
+          <h1 className="text-7xl font-bold text-gray-800 tracking-tight">potpie</h1>
         </div>
         <div className="flex items-center justify-center flex-col text-border">
-          <h3 className="text-2xl font-bold text-black">Get Started!</h3>
-          <div className="flex items-start justify-start flex-col mt-10 gap-4">
-            <p className="flex items-center justify-center text-start text-black gap-4">
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">Get Started!</h3>
+          <p className="text-gray-600 text-sm mb-8">Create your account to begin</p>
+          <div className="flex items-start justify-start flex-col mt-6 gap-4">
+            <p className="flex items-center justify-center text-start text-gray-700 gap-3 text-sm">
               <LucideCheck
-                size={20}
-                className="bg-primary rounded-full p-[0.5px] text-white"
+                size={18}
+                className="bg-blue-600 rounded-full p-0.5 text-white flex-shrink-0"
               />
-              Select the repositories you want to build your AI agents on.
+              Sign up with your work email to get started
             </p>
-            <p className="flex items-center justify-center text-start text-black gap-4">
+            <p className="flex items-center justify-center text-start text-gray-700 gap-3 text-sm">
               <LucideCheck
-                size={20}
-                className="bg-primary rounded-full p-[0.5px] text-white"
+                size={18}
+                className="bg-blue-600 rounded-full p-0.5 text-white flex-shrink-0"
               />
-              You can choose to add more repositories later on from the
-              dashboard
+              We support Google Workspace, Microsoft 365, and Outlook
             </p>
           </div>
-          <Button
-            onClick={() => onGithub()}
-            className="mt-14 gap-2 w-60 hover:bg-black bg-gray-800"
-            disabled={isLoading}
-          >
-            <LucideGithub className="rounded-full border border-white p-1" />
-            {isLoading ? "Signing in..." : "Continue with GitHub"}
-          </Button>
+
+          <div className="w-80 mt-14 space-y-6 form-fade-in">
+            {/* SSO Buttons */}
+            <DirectSSOButtons
+              onNeedsLinking={handleSSONeedsLinking}
+              onSuccess={handleSSOSuccess}
+              onNewUser={handleSSONewUser}
+              isSignUpPage={true}
+            />
+
+            {/* Divider */}
+            <div className="relative my-8">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="bg-white px-4 text-gray-500 font-medium">or continue with email</span>
+              </div>
+            </div>
+
+            {/* Email/Password Form */}
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <div>
+                <input
+                  type="email"
+                  placeholder="you@company.com"
+                  {...form.register("email")}
+                  className={`input-enterprise w-full px-5 py-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
+                    form.formState.errors.email
+                      ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300 hover:border-gray-400"
+                  }`}
+                />
+                {form.formState.errors.email && (
+                  <p className="mt-2 text-sm text-red-600 error-message-enter font-medium">
+                    {form.formState.errors.email.message}
+                  </p>
+                )}
+              </div>
+              <div>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password"
+                    {...form.register("password")}
+                    className={`input-enterprise w-full px-5 py-4 pr-14 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
+                      form.formState.errors.password
+                        ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                        : "border-gray-300 hover:border-gray-400"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-6 w-6" />
+                    ) : (
+                      <Eye className="h-6 w-6" />
+                    )}
+                  </button>
+                </div>
+                {form.formState.errors.password && (
+                  <p className="mt-2 text-sm text-red-600 error-message-enter font-medium">
+                    {form.formState.errors.password.message}
+                  </p>
+                )}
+              </div>
+              <Button
+                type="submit"
+                className="btn-enterprise w-full h-14 px-5 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md hover:shadow-lg text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isLoading}
+              >
+                {isLoading ? "Creating account..." : "Sign up"}
+              </Button>
+            </form>
+          </div>
+          
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Already have an account?{" "}
+              <Link 
+                href="/sign-in" 
+                className="link-smooth text-blue-600 font-semibold hover:text-blue-700"
+              >
+                Sign in
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* Link Provider Dialog */}
+      {linkingData && (
+        <LinkProviderDialog
+          isOpen={showLinkingDialog}
+          onClose={() => {
+            setShowLinkingDialog(false);
+            setLinkingData(null);
+          }}
+          linkingData={linkingData}
+          onLinked={handleSSOLinked}
+        />
+      )}
     </section>
   );
 };

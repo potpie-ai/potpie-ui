@@ -78,7 +78,14 @@ const LinkGithub = () => {
           return res.data;
         })
         .catch((e: any) => {
-          toast.error("Signup call unsuccessful");
+          // Check for 409 Conflict (GitHub already linked)
+          if (e?.response?.status === 409 && e?.response?.data?.error) {
+            toast.error(e.response.data.error);
+          } else if (e?.response?.data?.error) {
+            toast.error(e.response.data.error);
+          } else {
+            toast.error("Signup call unsuccessful");
+          }
         });
       toast.success(
         "Account created successfully as  " + result.user.displayName

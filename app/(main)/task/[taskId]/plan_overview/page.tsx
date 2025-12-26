@@ -303,7 +303,6 @@ const PlanOverviewPage = () => {
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isGenerating, setIsGenerating] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
-  const [showPopup, setShowPopup] = useState(false);
 
   const planContentRef = useRef(null);
 
@@ -340,7 +339,10 @@ const PlanOverviewPage = () => {
   useEffect(() => {
     if (planProgress >= 100 && planContentRef.current) {
       setTimeout(() => {
-        planContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        planContentRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
       }, 100);
     }
   }, [planProgress]);
@@ -376,7 +378,7 @@ const PlanOverviewPage = () => {
     <div className="min-h-screen bg-white text-zinc-900 font-sans selection:bg-zinc-100 antialiased">
       <main className="max-w-3xl mx-auto px-6 py-12">
         <div className="flex justify-between items-start mb-10">
-          <h1 className="text-2xl font-bold text-zinc-900">Task Overview</h1>
+          <h1 className="text-2xl font-bold text-zinc-900">Plan Spec</h1>
           <div className="flex items-center gap-2">
             <Badge icon={Github}>{mockTask.repo}</Badge>
             <Badge icon={GitBranch}>{mockTask.branch}</Badge>
@@ -410,12 +412,25 @@ const PlanOverviewPage = () => {
                     </div>
                   </div>
                 ))}
-              </div>
+            </div>
           </div>
         </section>
 
         {/* Dynamic Progress Indicator */}
-        <section className="mb-16">
+        <section className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap className="w-4 h-4 text-zinc-900" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-900 font-sans">
+              Plan Specification
+            </h2>
+          </div>
+          <p className="text-sm text-zinc-500 mb-6 leading-relaxed">
+            Plan spec is a granular specification of the user prompt and
+            question. These represent the specific goals of the workflow. It
+            also makes approximation on what libraries to use, files to modify
+            and external services that might be used. Make sure that you review
+            the goals of the workflow before your proceed.
+          </p>
           <div className="bg-zinc-50/50 border border-zinc-100 rounded-xl overflow-hidden">
             <div
               onClick={() => setIsPlanExpanded(!isPlanExpanded)}
@@ -514,18 +529,12 @@ const PlanOverviewPage = () => {
             ref={planContentRef}
             className="animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
-            <div className="flex items-center gap-2 mb-8">
-              <Zap className="w-4 h-4 text-zinc-900" />
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-900 font-sans">
-                Task Specification
-              </h2>
-            </div>
             <PlanTabs plan={MOCK_PLAN} />
-            
+
             {/* Action Button */}
             <div className="mt-12 flex justify-end">
               <button
-                onClick={() => setShowPopup(true)}
+                onClick={() => router.push(`/task/${taskId}/plan`)}
                 className="px-6 py-2 bg-zinc-900 text-white rounded-lg font-medium text-sm hover:bg-zinc-800 transition-colors"
               >
                 Generate Detailed Plan
@@ -534,22 +543,6 @@ const PlanOverviewPage = () => {
           </section>
         )}
       </main>
-
-      {/* Simple Popup Modal */}
-      {showPopup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-sm shadow-lg">
-            <h2 className="text-lg font-bold mb-4 text-zinc-900">Details Popup</h2>
-            <p className="text-sm text-zinc-600 mb-6">This is a simple popup. You can add more content here.</p>
-            <button
-              onClick={() => setShowPopup(false)}
-              className="w-full px-4 py-2 bg-zinc-900 text-white rounded-lg font-medium text-sm hover:bg-zinc-800 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Floating Interaction Footer */}
     </div>

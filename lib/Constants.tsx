@@ -10,6 +10,7 @@ import {
   MessagesSquare,
   Zap,
   Plug,
+  Hammer,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -115,6 +116,17 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         icons: <BotIcon size={20} strokeWidth={1.5} />,
         title: "Custom Agents",
         href: "/all-agents",
+        disabled: false,
+      },
+    ],
+  },
+  {
+    title: "Builds",
+    links: [
+      {
+        icons: <Hammer size={20} strokeWidth={1.5} />,
+        title: "Builds",
+        href: "/builds",
         disabled: false,
       },
     ],

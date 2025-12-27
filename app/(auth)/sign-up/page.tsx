@@ -289,13 +289,6 @@ const Signup = () => {
               />
               Sign up with your work email to get started
             </p>
-            <p className="flex items-center justify-center text-start text-gray-700 gap-3 text-sm">
-              <LucideCheck
-                size={18}
-                className="bg-blue-600 rounded-full p-0.5 text-white flex-shrink-0"
-              />
-              We support Google Workspace, Microsoft 365, and Outlook
-            </p>
           </div>
 
           <div className="w-80 mt-14 space-y-6 form-fade-in">

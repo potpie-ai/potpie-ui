@@ -29,6 +29,12 @@ export interface ConnectedIntegrationResponse {
         instance_name: string;
         created_via: string;
         timestamp: string;
+        webhooks?: Array<{
+          id: number | string;
+          url: string;
+          site_id?: string;
+        }>;
+        [key: string]: any;
       };
       unique_identifier: string;
       created_by: string;
@@ -53,6 +59,17 @@ export interface ConnectedIntegration {
   uniqueIdentifier?: string;
   createdAt: string;
   updatedAt: string;
+  metadata?: {
+    instance_name: string;
+    created_via: string;
+    timestamp?: string;
+    webhooks?: Array<{
+      id: number | string;
+      url: string;
+      site_id?: string;
+    }>;
+    [key: string]: any;
+  };
 }
 
 export default class IntegrationService {
@@ -88,6 +105,7 @@ export default class IntegrationService {
         uniqueIdentifier: integration.unique_identifier,
         createdAt: integration.created_at,
         updatedAt: integration.updated_at,
+        metadata: integration.metadata,
       }));
 
       return connectedIntegrations;
@@ -241,6 +259,33 @@ export default class IntegrationService {
         `${baseUrl}/api/v1/integrations/jira/revoke/${userId}`,
         {
           headers: headers,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  static async getJiraProjects(
+    integrationId: string,
+    startAt: number = 0,
+    maxResults: number = 50
+  ): Promise<any> {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+    try {
+      const response = await axios.get(
+        `${baseUrl}/api/v1/integrations/jira/${integrationId}/projects`,
+        {
+          headers: headers,
+          params: {
+            start_at: startAt,
+            max_results: maxResults,
+          },
         }
       );
 

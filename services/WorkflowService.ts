@@ -84,17 +84,21 @@ export type NodeType =
   | "trigger_github_issue_opened"
   | "trigger_linear_issue_created"
   | "trigger_sentry_issue_created"
+  | "trigger_jira_issue_created"
   | "trigger_webhook"
   | "custom_agent"
   | "action_agent"
+  | "system_workflow_agent_confluence"
   | "flow_control_conditional"
   | "flow_control_collect"
   | "flow_control_selector"
   | "manual_step_approval"
-  | "manual_step_input";
+  | "manual_step_input"
+  | "action_confluence_create_page"
+  | "action_slack_send_message";
 
-export type NodeGroup = "github" | "linear" | "sentry" | "default";
-export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step";
+export type NodeGroup = "github" | "linear" | "sentry" | "default" | "jira" | "confluence" | "slack";
+export type NodeCategory = "trigger" | "agent" | "flow_control" | "manual_step" | "action";
 
 export interface WorkflowNode {
   id: string;

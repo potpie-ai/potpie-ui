@@ -34,20 +34,26 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
   workflow,
 }) => {
   const {
-    agents: availableAgents,
+    agents: allAgents,
     loading,
     error,
     refreshAgents,
   } = useAgentData();
 
+  // Filter out system agents and workflow-only agents - only show user's custom agents
+  // System agents have status="SYSTEM", custom agents have deployment status like "RUNNING", "STOPPED", etc.
+  const availableAgents = allAgents.filter(
+    (agent) => !agent.is_workflow_agent && agent.status !== "SYSTEM"
+  );
+
   // Log when using shared agent data
   useEffect(() => {
     if (availableAgents.length > 0) {
       console.log(
-        `[AgentConfigComponent] Using shared agent data with ${availableAgents.length} agents`
+        `[AgentConfigComponent] Using shared agent data with ${availableAgents.length} agents (filtered from ${allAgents.length} total)`
       );
     }
-  }, [availableAgents.length]);
+  }, [availableAgents.length, allAgents.length]);
 
   // Only update config on click, don't re-fetch agents
   const handleSelectAgent = (agentId: string) => {

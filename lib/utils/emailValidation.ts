@@ -22,6 +22,13 @@ export const BLOCKED_DOMAINS = new Set([
   'yahoo.co.in',
   'yahoo.fr',
   'yahoo.de',
+  'yahoo.es',
+  'yahoo.it',
+  'yahoo.ca',
+  'yahoo.com.au',
+  'yahoo.com.br',
+  'yahoo.com.mx',
+  'yahoo.com.sg',
   'ymail.com',
   'rocketmail.com',
   
@@ -61,15 +68,16 @@ export const BLOCKED_DOMAINS = new Set([
 ]);
 
 /**
- * Extracts the domain from an email address (case-insensitive)
- * Handles subdomains correctly - only checks root domain
+ * Extracts the registrable domain from an email address using public suffix list.
+ * Handles multi-part TLDs correctly (e.g., .co.uk, .com.au).
  * 
  * @param email - User's email address
- * @returns The domain in lowercase, or empty string if invalid
+ * @returns The registrable domain in lowercase, or empty string if invalid
  * 
  * @example
  * extractDomain('user@GmAiL.CoM') // returns 'gmail.com'
- * extractDomain('user@eng.company.com') // returns 'company.com' (checks root domain)
+ * extractDomain('user@eng.company.com') // returns 'company.com'
+ * extractDomain('user@gmail.co.uk') // returns 'gmail.co.uk' (not 'co.uk')
  */
 export function extractDomain(email: string): string {
   if (!email || typeof email !== 'string') {
@@ -83,16 +91,28 @@ export function extractDomain(email: string): string {
   
   const domain = parts[1];
   
-  // For subdomains, we only check the root domain
-  // e.g., eng.company.com -> company.com
-  // This allows work email subdomains
-  const domainParts = domain.split('.');
-  if (domainParts.length >= 2) {
-    // Take the last two parts (e.g., 'company.com')
-    return domainParts.slice(-2).join('.');
+  // Use psl library to get the registrable domain (second-level domain)
+  // This properly handles multi-part TLDs like .co.uk, .com.au, etc.
+  try {
+    // Dynamic import to avoid issues if psl is not installed
+    const psl = require('psl');
+    const parsed = psl.parse(domain);
+    // psl.parse returns { domain: 'example.co.uk', subdomain: 'www', ... }
+    // We want the registrable domain which is the domain field
+    const registrableDomain = parsed.domain;
+    // If domain is null or empty, fall back to the original domain
+    return registrableDomain || domain;
+  } catch (error) {
+    // Fallback to simple logic if psl is not available
+    // This is less accurate but won't break if the library isn't installed
+    const domainParts = domain.split('.');
+    if (domainParts.length >= 2) {
+      // Take the last two parts (e.g., 'company.com')
+      // Note: This will fail for multi-part TLDs like .co.uk
+      return domainParts.slice(-2).join('.');
+    }
+    return domain;
   }
-  
-  return domain;
 }
 
 /**

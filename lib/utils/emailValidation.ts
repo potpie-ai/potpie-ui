@@ -3,6 +3,8 @@
  * Blocks generic/personal email providers for new signups
  */
 
+import type { UserCredential } from 'firebase/auth';
+
 // Set of blocked email domains (generic/personal email providers)
 // Using Set for O(1) lookup performance
 export const BLOCKED_DOMAINS = new Set([
@@ -140,7 +142,12 @@ export function isGenericEmail(email: string): boolean {
 }
 
 /**
- * Checks if a Firebase authentication result indicates a new user signup
+ * Checks if a Firebase authentication result indicates a new user signup.
+ * 
+ * ⚠️ Limitations:
+ * - additionalUserInfo.isNewUser only returns true if the current SDK call created the account.
+ *   It returns false if the account was created via Admin SDK, console, backend, or another device.
+ * - For more reliable detection, consider maintaining a server-side flag in your database.
  * 
  * @param result - Firebase UserCredential from signInWithPopup
  * @returns True if new user, false if existing user
@@ -151,31 +158,44 @@ export function isGenericEmail(email: string): boolean {
  *   // Handle new user signup
  * }
  */
-export function isNewUser(result: any): boolean {
-  // Check multiple possible locations for isNewUser flag
-  // Firebase may set this in different places depending on the flow
-  
-  // Method 1: additionalUserInfo (most common)
+export function isNewUser(result: UserCredential): boolean {
+  // Method 1: additionalUserInfo.isNewUser
+  // Note: This only returns true if the current SDK call created the account.
+  // It will be false for accounts created via Admin SDK, console, or backend.
   if (result.additionalUserInfo?.isNewUser === true) {
     return true;
   }
   
-  // Method 2: _tokenResponse (fallback)
-  if (result._tokenResponse?.isNewUser === true) {
-    return true;
-  }
-  
-  // Method 3: Check if user was just created by comparing creation time
-  // If creation time is very recent (within last few seconds), likely new user
-  if (result.user?.metadata?.creationTime) {
-    const creationTime = new Date(result.user.metadata.creationTime).getTime();
-    const now = Date.now();
-    const timeDiff = now - creationTime;
+  // Method 2: Compare creationTime with lastSignInTime metadata
+  // If creationTime and lastSignInTime are very close (within ~1 minute),
+  // it's likely a new user. This handles cases where additionalUserInfo
+  // might not be reliable (e.g., Admin SDK-created accounts).
+  if (result.user?.metadata) {
+    const creationTime = result.user.metadata.creationTime 
+      ? new Date(result.user.metadata.creationTime).getTime() 
+      : null;
+    const lastSignInTime = result.user.metadata.lastSignInTime 
+      ? new Date(result.user.metadata.lastSignInTime).getTime() 
+      : null;
     
-    // If account was created within last 5 seconds, consider it new
-    // This is a heuristic fallback
-    if (timeDiff < 5000) {
-      return true;
+    if (creationTime) {
+      // If lastSignInTime exists and is close to creationTime, likely new user
+      // Use ~1 minute window to account for network lag and clock skew
+      if (lastSignInTime) {
+        const timeDiff = Math.abs(lastSignInTime - creationTime);
+        // If creation and last sign-in are within 60 seconds, consider it new
+        if (timeDiff < 60000) {
+          return true;
+        }
+      } else {
+        // If no lastSignInTime but creationTime is very recent, likely new
+        // Check if account was created within last minute
+        const now = Date.now();
+        const timeDiff = now - creationTime;
+        if (timeDiff < 60000) {
+          return true;
+        }
+      }
     }
   }
   
@@ -183,26 +203,43 @@ export function isNewUser(result: any): boolean {
 }
 
 /**
- * Deletes a Firebase user account and signs them out
- * Used when blocking a user due to policy violations
+ * Deletes a Firebase user account and signs them out.
+ * Used when blocking a user due to policy violations.
  * 
  * @param user - Firebase User object
- * @returns Promise that resolves when user is deleted and signed out
+ * @returns Promise<boolean> - true if deletion succeeded, false if deletion failed.
+ *         Note: A false return means the account may still exist but the user was signed out.
+ *         signOut always runs regardless of deletion outcome.
  */
-export async function deleteUserAndSignOut(user: any): Promise<void> {
+export async function deleteUserAndSignOut(user: any): Promise<boolean> {
   // Import at function level to avoid circular dependencies
   const { signOut } = await import('firebase/auth');
   const { auth } = await import('@/configs/Firebase-config');
   
+  let deletionSucceeded = false;
+  
   try {
     // Delete the user account
     await user.delete();
+    deletionSucceeded = true;
     if (process.env.NODE_ENV === 'development') {
       console.log('Firebase user account deleted successfully');
     }
   } catch (error: any) {
-    // Log error but continue to sign out
-    console.error('Error deleting Firebase user:', error);
+    // Elevate deletion failure to monitoring-friendly severity
+    // Use structured error logging that monitoring tools can capture
+    const errorDetails = {
+      message: 'Failed to delete Firebase user account',
+      error: error?.message || String(error),
+      errorCode: error?.code,
+      userId: user?.uid,
+      email: user?.email,
+      stack: error?.stack,
+    };
+    
+    // Log with error severity for monitoring tools to capture
+    console.error('[ERROR] User deletion failed:', errorDetails);
+    
     // If deletion fails, we still want to sign out
   }
   
@@ -213,6 +250,16 @@ export async function deleteUserAndSignOut(user: any): Promise<void> {
       console.log('User signed out successfully');
     }
   } catch (error: any) {
-    console.error('Error signing out user:', error);
+    // Log sign-out errors but don't affect return value
+    const errorDetails = {
+      message: 'Failed to sign out user',
+      error: error?.message || String(error),
+      errorCode: error?.code,
+      userId: user?.uid,
+      email: user?.email,
+    };
+    console.error('[ERROR] User sign-out failed:', errorDetails);
   }
+  
+  return deletionSucceeded;
 }

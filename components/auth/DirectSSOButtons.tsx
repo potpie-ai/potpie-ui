@@ -200,7 +200,15 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
         }
         
         // Delete Firebase user account and sign out
-        await deleteUserAndSignOut(user);
+        const deletionSucceeded = await deleteUserAndSignOut(user);
+        
+        // Log deletion failure for monitoring (caller can act on result if needed)
+        if (!deletionSucceeded) {
+          console.error('[ERROR] Failed to delete blocked generic email user:', {
+            userId: user?.uid,
+            email: userEmail,
+          });
+        }
         
         // Show error message
         toast.error(

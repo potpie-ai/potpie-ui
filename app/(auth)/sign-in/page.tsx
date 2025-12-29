@@ -153,12 +153,18 @@ export default function Signin() {
           }
           
           // Delete Firebase user account and sign out
-          await deleteUserAndSignOut(result.user);
+          const deletionSucceeded = await deleteUserAndSignOut(result.user);
           
-          // Show error message
-          toast.error(
-            'GitHub sign-up is no longer supported. Please use "Continue with Google" with your work email address. Note: If you previously created an account with GitHub, you can still sign in.'
-          );
+          // Log deletion failure for monitoring (caller can act on result if needed)
+          if (!deletionSucceeded) {
+            console.error('[ERROR] Failed to delete blocked GitHub signup user:', {
+              userId: result.user?.uid,
+              email: result.user?.email,
+            });
+          }
+          
+          // Show concise error message
+          toast.error('GitHub sign-ups are no longer supported — please sign in with Google.');
           
           return; // Don't proceed to backend
         }

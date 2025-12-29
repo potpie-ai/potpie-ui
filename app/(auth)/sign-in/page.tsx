@@ -11,6 +11,7 @@ import {
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
+import { isNewUser, deleteUserAndSignOut } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
 
 import { LucideGithub, Eye, EyeOff } from "lucide-react";
@@ -138,6 +139,37 @@ export default function Signin() {
   const onGithub = async () => {
     signInWithPopup(auth, provider)
       .then(async (result) => {
+        // VALIDATION CHECKPOINT: Block new GitHub signups
+        const isNew = isNewUser(result);
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('GitHub sign-in - Is New User:', isNew);
+        }
+        
+        // Block all new GitHub signups
+        if (isNew) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Blocking new GitHub signup attempt');
+          }
+          
+          // Delete Firebase user account and sign out
+          const deletionSucceeded = await deleteUserAndSignOut(result.user);
+          
+          // Log deletion failure for monitoring (caller can act on result if needed)
+          if (!deletionSucceeded) {
+            console.error('[ERROR] Failed to delete blocked GitHub signup user:', {
+              userId: result.user?.uid,
+              email: result.user?.email,
+            });
+          }
+          
+          // Show concise error message
+          toast.error('GitHub sign-ups are no longer supported — please sign in with Google.');
+          
+          return; // Don't proceed to backend
+        }
+        
+        // Existing users can proceed
         const credential = GithubAuthProvider.credentialFromResult(result);
         if (credential && credential.accessToken) {
           try {
@@ -226,6 +258,12 @@ export default function Signin() {
         }
       })
       .catch((error) => {
+        // Handle user cancellation - don't show error
+        if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+          // User cancelled, don't show error
+          return;
+        }
+        
         const errorCode = error.code;
         const errorMessage = error.message;
         const email = error.customData?.email;

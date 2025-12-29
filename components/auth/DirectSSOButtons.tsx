@@ -9,6 +9,7 @@ import { authClient } from '@/lib/sso/unified-auth';
 import { LinkProviderDialog } from './LinkProviderDialog';
 import type { SSOLoginResponse } from '@/types/auth';
 import { getUserFriendlyError } from '@/lib/utils/errorMessages';
+import { isGenericEmail, isNewUser, deleteUserAndSignOut } from '@/lib/utils/emailValidation';
 import Image from 'next/image';
 
 interface DirectSSOButtonsProps {
@@ -22,6 +23,7 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
   const router = useRouter();
   const [linkingData, setLinkingData] = useState<SSOLoginResponse | null>(null);
   const [showLinkingDialog, setShowLinkingDialog] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSSOResponse = async (response: SSOLoginResponse) => {
     if (process.env.NODE_ENV === 'development') {
@@ -167,6 +169,9 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
   };
 
   const handleGoogleLogin = async () => {
+    if (isLoading) return; // Prevent double-clicks
+    
+    setIsLoading(true);
     try {
       const googleProvider = new GoogleAuthProvider();
       // Request additional scopes if needed
@@ -177,6 +182,47 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
+      // VALIDATION CHECKPOINT: Check if new user and validate email domain
+      const isNew = isNewUser(result);
+      const userEmail = user.email || '';
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Firebase UID:', user.uid);
+        console.log('Firebase Email:', userEmail);
+        console.log('Is New User:', isNew);
+        console.log('Is Generic Email:', isGenericEmail(userEmail));
+      }
+      
+      // Block new users with generic emails
+      if (isNew && isGenericEmail(userEmail)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Blocking new user with generic email:', userEmail);
+        }
+        
+        // Delete Firebase user account and sign out
+        const deletionSucceeded = await deleteUserAndSignOut(user);
+        
+        // Log deletion failure for monitoring (caller can act on result if needed)
+        if (!deletionSucceeded) {
+          console.error('[ERROR] Failed to delete blocked generic email user:', {
+            userId: user?.uid,
+            email: userEmail,
+          });
+        }
+        
+        // Show error message
+        toast.error(
+          'Personal email addresses are not allowed. Please use your work/corporate email to sign in. Examples: yourname@yourcompany.com. Generic email providers (Gmail, Yahoo, Outlook, etc.) cannot be used.'
+        );
+        
+        setIsLoading(false);
+        return;
+      }
+      
+      // Existing users with generic emails are allowed (legacy policy)
+      // New users with work emails are allowed
+      // Continue with authentication
+      
       // Get Firebase ID token - this is what we'll use for authentication
       // Firebase UID will be consistent across all Firebase auth providers
       const firebaseIdToken = await user.getIdToken();
@@ -185,14 +231,9 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
         throw new Error('Failed to get Firebase ID token');
       }
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Firebase UID:', user.uid);
-        console.log('Firebase Email:', user.email);
-      }
-      
       // Get user info from the Firebase user object
       const userInfo = {
-        email: user.email || '',
+        email: userEmail,
         uid: user.uid,  // Firebase UID - consistent across all providers
         name: user.displayName || '',
         given_name: user.displayName?.split(' ')[0] || '',
@@ -224,9 +265,12 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
       // Handle user cancellation
       if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
         // User cancelled, don't show error
+        setIsLoading(false);
         return;
       }
       toast.error(getUserFriendlyError(error));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -235,7 +279,8 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
       <div className="space-y-3">
         <button
           onClick={() => handleGoogleLogin()}
-          className="btn-enterprise flex items-center justify-center w-full h-14 px-5 py-4 gap-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-50 hover:shadow-md text-base"
+          disabled={isLoading}
+          className="btn-enterprise flex items-center justify-center w-full h-14 px-5 py-4 gap-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-50 hover:shadow-md text-base disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Image
             src="/images/google-g-2015.svg"
@@ -244,7 +289,9 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
             height={24}
             className="flex-shrink-0"
           />
-          <span className="text-gray-700 font-medium text-base">Continue with Google</span>
+          <span className="text-gray-700 font-medium text-base">
+            {isLoading ? 'Signing in...' : 'Continue with Google'}
+          </span>
         </button>
       </div>
 

@@ -436,6 +436,27 @@ const FileTree: React.FC<FileTreeProps> = ({
         onFileCountsChange({ totalFiles, filesToParse });
     }, [allNodes, filters, onFileCountsChange, isPathActive]);
 
+    // Calculate and emit file counts whenever they change
+    useEffect(() => {
+        if (!onFileCountsChange) return;
+
+        const totalFiles = allNodes.filter(node => node.type === "file").length;
+        let filesToParse = 0;
+
+        allNodes.forEach(node => {
+            if (node.type !== "file") return;
+            const isExcluded = isPathActive(
+                node,
+                filters.excluded_directories,
+                filters.excluded_files,
+                filters.excluded_extensions
+            );
+            if (!isExcluded) filesToParse++;
+        });
+
+        onFileCountsChange({ totalFiles, filesToParse });
+    }, [allNodes, filters, onFileCountsChange]);
+
     // Maximum results to show (prevents UI from freezing on huge repos)
     const MAX_SEARCH_RESULTS = 200;
 

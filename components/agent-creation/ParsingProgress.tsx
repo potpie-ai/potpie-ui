@@ -8,6 +8,7 @@ export enum ParsingStatusEnum {
   PROCESSING = "processing",
   CLONED = "cloned",
   PARSED = "parsed",
+  INFERRING = "inferring",
   READY = "ready",
   ERROR = "error"
 }
@@ -36,6 +37,8 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
         return "Repository cloned, analyzing code...";
       case ParsingStatusEnum.PARSED:
         return "Code analyzed, finalizing...";
+      case ParsingStatusEnum.INFERRING:
+        return "Enriching codebase with AI insights...";
       case ParsingStatusEnum.READY:
         return "Repository parsed successfully!";
       case ParsingStatusEnum.ERROR:
@@ -58,6 +61,7 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
       case ParsingStatusEnum.PROCESSING:
       case ParsingStatusEnum.CLONED:
       case ParsingStatusEnum.PARSED:
+      case ParsingStatusEnum.INFERRING:
         return <Loader className="h-5 w-5 animate-spin text-blue-500" />;
       default:
         return null;
@@ -96,7 +100,8 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
                 width: status === ParsingStatusEnum.SUBMITTED ? '10%' : 
                        status === ParsingStatusEnum.PROCESSING ? '30%' : 
                        status === ParsingStatusEnum.CLONED ? '60%' : 
-                       status === ParsingStatusEnum.PARSED ? '90%' : '0%' 
+                       status === ParsingStatusEnum.PARSED ? '80%' :
+                       status === ParsingStatusEnum.INFERRING ? '95%' : '0%' 
               }}
             ></div>
           </div>

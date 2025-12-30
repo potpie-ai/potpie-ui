@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, Loader, XCircle } from 'lucide-react';
+import { CheckCircle, Loader, XCircle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ParsingStatusEnum } from '@/lib/Constants';
 
@@ -14,8 +14,31 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
   projectId,
   onRetry 
 }) => {
-  // Format status for display - capitalize first letter
-  const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
+  // Map status enum to human-readable message
+  const getStatusMessage = (status: string) => {
+    switch (status) {
+      case ParsingStatusEnum.SUBMITTED:
+        return "Cloning your repository";
+      case ParsingStatusEnum.CLONED:
+        return "Parsing your code";
+      case ParsingStatusEnum.PARSED:
+        return "Understanding your codebase";
+      case ParsingStatusEnum.PROCESSING:
+        return "Processing your code";
+      case ParsingStatusEnum.INFERRING:
+        return "Enriching with AI insights";
+      case ParsingStatusEnum.READY:
+        return "Ready";
+      case ParsingStatusEnum.ERROR:
+        return "Error";
+      case "loading":
+        return "Loading...";
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1);
+    }
+  };
+
+  const displayStatus = getStatusMessage(status);
   
   if (status === ParsingStatusEnum.READY) {
     return (
@@ -45,13 +68,23 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
       </div>
     );
   }
+
+  if (status === ParsingStatusEnum.INFERRING) {
+    return (
+      <div className="flex justify-start items-center gap-3 mt-2">
+        <Sparkles className="animate-pulse h-4 w-4 text-blue-500" />
+        <span className="text-blue-600">{displayStatus}</span>
+        <span className="text-xs text-muted-foreground">(You can start chatting now!)</span>
+      </div>
+    );
+  }
   
   // For in-progress statuses
   if (status === ParsingStatusEnum.SUBMITTED || 
       status === ParsingStatusEnum.CLONED || 
       status === ParsingStatusEnum.PARSED || 
       status === ParsingStatusEnum.PROCESSING ||
-      status === "loading") { // Include "loading" for backward compatibility
+      status === "loading") {
     return (
       <div className="flex justify-start items-center gap-3 mt-2">
         <Loader className="animate-spin h-4 w-4" />

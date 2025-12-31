@@ -58,7 +58,6 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import ParsingProgress from "./ParsingProgress";
 import FileSelector, { ParseFilters } from "./FileSelector";
-import FileSelector, { ParseFilters } from "./FileSelector";
 
 const repoLinkSchema = z.object({
   repoLink: z
@@ -142,7 +141,6 @@ const Step1: React.FC<Step1Props> = ({
       const parseResponse = await BranchAndRepositoryService.parseRepo(
         repo_name,
         branch_name,
-        filters,
         filters
       );
       const projectId = parseResponse.project_id;

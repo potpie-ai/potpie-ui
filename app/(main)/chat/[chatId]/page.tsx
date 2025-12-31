@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Loader, Sparkles } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { toast } from "sonner";
@@ -156,6 +157,7 @@ const ChatV2 = () => {
     if (
       parsingStatus === ParsingStatusEnum.ERROR ||
       (parsingStatus !== ParsingStatusEnum.READY &&
+        parsingStatus !== ParsingStatusEnum.INFERRING &&
         parsingStatus !== "loading" &&
         projectId)
     ) {
@@ -163,9 +165,32 @@ const ChatV2 = () => {
       if (parsingStatus !== ParsingStatusEnum.ERROR) {
         parseRepo();
       }
-    } else if (parsingStatus === ParsingStatusEnum.READY) {
+    } else if (parsingStatus === ParsingStatusEnum.READY || parsingStatus === ParsingStatusEnum.INFERRING) {
       setIsDialogOpen(false);
     }
+  }, [parsingStatus, projectId]);
+
+  // Poll for status updates when in INFERRING state to detect READY transition
+  useEffect(() => {
+    if (parsingStatus !== ParsingStatusEnum.INFERRING || !projectId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const currentStatus = await BranchAndRepositoryService.getParsingStatus(projectId);
+        if (currentStatus === ParsingStatusEnum.READY) {
+          setParsingStatus(ParsingStatusEnum.READY);
+          // Notify user that inference is complete
+          toast.success("Processing finished! All features are now available.", {
+            description: "Your codebase has been fully analyzed and enriched with AI insights.",
+            duration: 5000,
+          });
+        }
+      } catch (error) {
+        console.error("Error polling parsing status:", error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval);
   }, [parsingStatus, projectId]);
 
   if (errorState.isError)
@@ -194,11 +219,22 @@ const ChatV2 = () => {
         showShare
         hidden={!showNavbar || errorState.isError}
       />
-      <div className="h-[calc(90vh)]">
+      {/* INFERRING Status Banner - positioned below navbar */}
+      {parsingStatus === ParsingStatusEnum.INFERRING && (
+        <div className="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-800 px-4 py-2.5 flex items-center justify-center gap-2">
+          <div className="flex items-center gap-2">
+            <Loader className="h-4 w-4 text-blue-500 animate-pulse" />
+            <span className="text-sm text-blue-700 dark:text-blue-300 font-mono">
+              <span className="font-semibold">[INFERRING]</span> Generating embeddings and metadata. Chat available with limited tool access.
+            </span>
+          </div>
+        </div>
+      )}
+      <div className={parsingStatus === ParsingStatusEnum.INFERRING ? "h-[calc(90vh-40px)]" : "h-[calc(90vh)]"}>
         <AssistantRuntimeProvider runtime={runtime}>
           <Thread
             projectId={projectId}
-            writeDisabled={false}
+            writeDisabled={parsingStatus !== ParsingStatusEnum.READY && parsingStatus !== ParsingStatusEnum.INFERRING}
             userImageURL={profilePicUrl}
             conversation_id={currentConversationId}
             isSessionResuming={isSessionResuming}

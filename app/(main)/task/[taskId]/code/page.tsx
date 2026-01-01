@@ -36,6 +36,8 @@ import {
   Github,
 } from "lucide-react";
 import { MockTaskResponse, getMockTaskFromSession } from "@/lib/mock/taskMock";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
 
 /**
  * VERTICAL TASK EXECUTION ENGINE
@@ -752,6 +754,12 @@ export default function VerticalTaskExecution() {
   const params = useParams();
   const router = useRouter();
   const taskId = params?.taskId as string;
+  const repoBranchByTask = useSelector(
+    (state: RootState) => state.RepoAndBranch.byTaskId
+  );
+  const storedRepoContext = taskId
+    ? repoBranchByTask?.[taskId]
+    : undefined;
 
   const [mockTask, setMockTask] = useState<MockTaskResponse | null>(null);
   const [activeSliceId, setActiveSliceId] = useState(1);
@@ -776,6 +784,39 @@ export default function VerticalTaskExecution() {
       setMockTask(stored);
     }
   }, [taskId]);
+
+  useEffect(() => {
+    if (!storedRepoContext) return;
+    setMockTask((prev) => {
+      const repoName =
+        storedRepoContext.repoName || prev?.repo || "Unknown Repository";
+      const branchName =
+        storedRepoContext.branchName || prev?.branch || "main";
+
+      if (prev) {
+        if (prev.repo === repoName && prev.branch === branchName) {
+          return prev;
+        }
+        return {
+          ...prev,
+          repo: repoName,
+          branch: branchName,
+        };
+      }
+
+      if (!taskId) {
+        return prev;
+      }
+
+      return {
+        task_id: taskId,
+        prompt: "",
+        repo: repoName,
+        branch: branchName,
+        questions: [],
+      };
+    });
+  }, [storedRepoContext, taskId]);
 
   // 1. Reset State when Slice Changes
   useEffect(() => {

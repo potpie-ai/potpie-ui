@@ -2,7 +2,7 @@
 import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
-import { setChat } from "@/lib/state/Reducers/chat";
+import { setChat, clearPendingMessage } from "@/lib/state/Reducers/chat";
 import {
   Dialog,
   DialogClose,
@@ -26,6 +26,8 @@ import { useChatRuntime } from "./runtime";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useParams } from "next/navigation";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
 
 const ChatV2 = () => {
   const params: { chatId: string } = useParams();
@@ -55,6 +57,34 @@ const ChatV2 = () => {
   // Call hook before any early returns
   // Returns runtime + session states for background task handling
   const { runtime, isSessionResuming, isBackgroundTaskActive } = useChatRuntime(params.chatId);
+
+  // Get pending message from Redux
+  const pendingMessage = useSelector((state: RootState) => state.chat.pendingMessage);
+  const hasSentPendingMessage = useRef(false);
+
+  // Send pending message when chat page loads
+  useEffect(() => {
+    if (pendingMessage && !hasSentPendingMessage.current && currentConversationId) {
+      hasSentPendingMessage.current = true;
+      
+      // Send the pending message
+      ChatService.streamMessage(
+        currentConversationId,
+        pendingMessage,
+        [], // No selected nodes
+        [], // No images
+        () => {
+          // Message is streaming, runtime will handle the display
+        }
+      ).catch((error) => {
+        console.error("Error sending pending message:", error);
+        toast.error("Failed to send message. You can retry in the chat.");
+      }).finally(() => {
+        // Clear pending message after sending
+        dispatch(clearPendingMessage());
+      });
+    }
+  }, [pendingMessage, currentConversationId, dispatch]);
 
   const parseRepo = async () => {
     // Guard: prevent overlapping polls and bail if projectId is missing
@@ -115,6 +145,17 @@ const ChatV2 = () => {
 
 
       setIsCreator(info.is_creator);
+
+      // CRITICAL: Verify all required fields exist
+      if (!info.agent_ids || info.agent_ids.length === 0) {
+        throw new Error("Conversation missing agent ID");
+      }
+      if (!info.project_ids || info.project_ids.length === 0) {
+        throw new Error("Conversation missing project ID");
+      }
+      if (!info.title) {
+        console.warn("Conversation missing title, using default");
+      }
 
       if (!list_system_agents.includes(info.agent_ids[0])) {
         setChatAccess(info.access_type);

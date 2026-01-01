@@ -1,3 +1,20 @@
+/**
+ * @deprecated This file is part of Flow A (mock flow) and will be removed in a future version.
+ * 
+ * Flow A has been replaced by Flow B which uses real API integration:
+ * - Entry: /idea (instead of /newtask)
+ * - Q&A: /repo (instead of /task/[taskId]/userqa)
+ * - Spec: /task/[recipeId]/spec (now uses real API instead of mock data)
+ * - Plan: /task/[recipeId]/plan_overview
+ * 
+ * This file should be removed after Flow B is fully tested and stable.
+ * 
+ * @see IMPLEMENTATION_PLAN_FLOW_B_SPEC_INTEGRATION.md
+ * @see /app/(main)/idea/page.tsx - New entry point
+ * @see /app/(main)/repo/page.tsx - Real Q&A flow
+ */
+import { v4 as uuidv4 } from "uuid";
+
 export interface MockQuestion {
   id: string;
   question: string;
@@ -14,9 +31,9 @@ export interface MockTaskResponse {
   questions: MockQuestion[];
 }
 
-// Generate a mock task ID
+// Generate a mock task ID as UUID
 export const generateMockTaskId = (): string => {
-  return `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return uuidv4();
 };
 
 // Generate mock questions based on a query

@@ -1,3 +1,18 @@
+/**
+ * @deprecated This file is part of Flow A (mock flow) and will be removed in a future version.
+ * 
+ * Flow A has been replaced by Flow B which uses real API integration:
+ * - Entry: /idea (instead of /newtask)
+ * - Q&A: /repo (instead of /task/[taskId]/userqa)
+ * - Spec: /task/[recipeId]/spec (now uses real API instead of mock data)
+ * - Plan: /task/[recipeId]/plan_overview
+ * 
+ * This file should be removed after Flow B is fully tested and stable.
+ * 
+ * @see IMPLEMENTATION_PLAN_FLOW_B_SPEC_INTEGRATION.md
+ * @see /app/(main)/idea/page.tsx - New entry point
+ * @see /app/(main)/repo/page.tsx - Real Q&A flow
+ */
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
@@ -9,6 +24,9 @@ import {
   MockTaskResponse,
   getMockTaskFromSession,
 } from "@/lib/mock/taskMock";
+import SpecService from "@/services/SpecService";
+import { QAAnswer } from "@/lib/types/spec";
+import { toast } from "sonner";
 
 // Constants
 const MIN_HEIGHT = "min-h-[80vh]";
@@ -116,17 +134,33 @@ const UserQAPage = () => {
 
     setState((prev) => ({ ...prev, isSubmitting: true, error: null }));
 
-    // Store answers in sessionStorage for plan_overview page
-    sessionStorage.setItem(
-      `task_${taskId}_answers`,
-      JSON.stringify(state.answers),
-    );
-    sessionStorage.setItem(`task_${taskId}_submitted`, "true");
+    try {
+      // Prepare QA answers from state
+      const qaAnswers: QAAnswer[] = mockTask.questions
+        .filter((q) => state.answers[q.id])
+        .map((q) => ({
+          question: q.question,
+          answer: state.answers[q.id],
+        }));
 
-    // Navigate to plan_overview page
-    router.push(`/task/${taskId}/plan_overview`);
+      // Call API to submit QA answers and trigger spec generation
+      await SpecService.submitQAAnswers(taskId, qaAnswers);
 
-    setState((prev) => ({ ...prev, isSubmitting: false }));
+      // Store answers in sessionStorage for spec page (keep existing)
+      sessionStorage.setItem(
+        `task_${taskId}_answers`,
+        JSON.stringify(state.answers),
+      );
+      sessionStorage.setItem(`task_${taskId}_submitted`, "true");
+
+      // Navigate to spec page
+      router.push(`/task/${taskId}/spec`);
+    } catch (error: any) {
+      console.error("Error submitting QA answers:", error);
+      const errorMessage = error.message || "Failed to submit answers. Please try again.";
+      setState((prev) => ({ ...prev, error: errorMessage, isSubmitting: false }));
+      toast.error(errorMessage);
+    }
   }, [mockTask, state.answers, taskId, router]);
 
   if (state.isLoading) {

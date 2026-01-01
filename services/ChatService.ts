@@ -718,20 +718,34 @@ export default class ChatService {
     title: string,
     projectId: string | null,
     agentId: string,
-    isHidden: boolean = false
+    isHidden: boolean = false,
+    repoName?: string | null,
+    branchName?: string | null
   ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
     try {
+      // Build request body with all required fields
+      const requestBody: any = {
+        user_id: userId,
+        title: title,
+        status: "active",
+        project_ids: projectId ? [projectId] : [],
+        agent_ids: [agentId],
+      };
+
+      // CRITICAL: Add repo_name and branch_name if provided
+      // This ensures backend has the context it needs
+      if (repoName) {
+        requestBody.repo_name = repoName;
+      }
+      if (branchName) {
+        requestBody.branch_name = branchName;
+      }
+
       const response = await axios.post(
         `${baseUrl}/api/v1/conversations/`,
-        {
-          user_id: userId,
-          title: title,
-          status: "active",
-          project_ids: projectId ? [projectId] : [],
-          agent_ids: [agentId],
-        },
+        requestBody,
         { 
           headers: headers,
           params: isHidden ? { hidden: true } : undefined

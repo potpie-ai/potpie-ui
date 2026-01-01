@@ -1,17 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Paperclip, Link as LinkIcon, Check } from "lucide-react";
-import { Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 
 interface AdditionalContextSectionProps {
   context: string;
   onContextChange: (context: string) => void;
   onGeneratePlan: () => void;
   isGenerating: boolean;
+  recipeId: string | null;
 }
 
 export default function AdditionalContextSection({
@@ -19,68 +17,49 @@ export default function AdditionalContextSection({
   onContextChange,
   onGeneratePlan,
   isGenerating,
+  recipeId,
 }: AdditionalContextSectionProps) {
   return (
-    <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200">
-      <div className="max-w-4xl mx-auto">
-        <Card className="border-blue-200 bg-gradient-to-br from-card to-card/50">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-blue-600 rounded" />
-              <h2 className="text-sm font-semibold text-gray-900">Additional Context</h2>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="relative">
-              <Textarea
-                value={context}
-                onChange={(e) => onContextChange(e.target.value)}
-                placeholder="Add any additional context, requirements, or notes here..."
-                className="min-h-[80px] text-sm pr-20"
-              />
-              <div className="absolute bottom-2 right-2 flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 rounded-md"
-                  disabled
-                  title="File attachment (coming soon)"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 rounded-md"
-                  disabled
-                  title="Link attachment (coming soon)"
-                >
-                  <LinkIcon className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+    <div className="sticky bottom-0 bg-white border-t border-zinc-100 px-6 py-4">
+      <div className="max-w-3xl mx-auto">
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-xs font-bold text-zinc-900 uppercase tracking-wide mb-1">
+              Additional Context
+            </h2>
+            <p className="text-[10px] text-zinc-400 mb-3">
+              Add any extra requirements, constraints, or notes
+            </p>
+          </div>
+          
+          <Textarea
+            value={context}
+            onChange={(e) => onContextChange(e.target.value)}
+            placeholder="Example: Use TypeScript for type safety, follow RESTful API conventions..."
+            className="min-h-[80px] text-xs resize-none border-zinc-200 focus:border-zinc-300 rounded-lg leading-relaxed"
+          />
+          
+          <div className="flex items-center justify-end">
             <Button
               onClick={onGeneratePlan}
-              disabled={isGenerating}
-              className="w-full h-10 bg-black text-white hover:bg-gray-800"
+              disabled={isGenerating || !recipeId}
+              className="h-8 px-6 bg-[#0575E6] bg-gradient-to-r from-[#0575E6] to-[#021B79] hover:bg-[#0575E6] hover:text-white text-xs font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating Plan...
+                  <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                  Generating...
                 </>
               ) : (
                 <>
-                  <Check className="h-4 w-4 mr-2" />
-                  Generate Implementation Plan →
+                  <Check className="w-3 h-3 mr-1.5" />
+                  Generate Implementation Plan
                 </>
               )}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-
-

@@ -13,23 +13,22 @@ export default function QuestionProgress({ total, answered, skipped = 0 }: Quest
 
   return (
     <div className="flex items-center gap-3">
-      <div className="text-sm text-gray-600">
-        <span>{answered} of {total} answered</span>
+      <div className="text-xs text-zinc-500">
+        <span className="font-bold text-zinc-900">{answered}</span>
+        <span className="text-zinc-400">/{total}</span>
         {skipped > 0 && (
-          <span className="text-gray-400 ml-1">
+          <span className="text-zinc-400 ml-1.5">
             ({skipped} skipped)
           </span>
         )}
       </div>
-      <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div className="w-24 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
         <div
-          className="h-full bg-blue-600 transition-all duration-300"
+          className="h-full bg-zinc-900 transition-all duration-300 rounded-full"
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <div className="text-sm font-medium text-gray-900">{percentage}%</div>
+      <div className="text-xs font-bold text-zinc-900 min-w-[2.5rem] text-right">{percentage}%</div>
     </div>
   );
 }
-
-

@@ -9,8 +9,15 @@ import RepositorySelector from "./components/RepositorySelector";
 import ParsingStatusCard from "./components/ParsingStatusCard";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
+import SpecService from "@/services/SpecService";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/lib/state/store";
+import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
+import { useAuthContext } from "@/contexts/AuthContext";
+import ChatService from "@/services/ChatService";
+import { setPendingMessage, setChat } from "@/lib/state/Reducers/chat";
 
 interface Repo {
   id: string;
@@ -32,6 +39,7 @@ interface IdeaPageState {
   loading: boolean;
   projectId: string | null;
   selectedRepo: string | null;
+  selectedAgent: string | null;
   parsing: boolean;
   parsingProgress: number;
   parsingSteps: string[];
@@ -53,12 +61,15 @@ export default function IdeaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dispatch = useDispatch<AppDispatch>();
+  const { user } = useAuthContext();
 
   const [state, setState] = useState<IdeaPageState>({
     input: "",
     loading: false,
     projectId: null,
     selectedRepo: null,
+    selectedAgent: null, // CHANGED: Was "build", now null - requires explicit selection
     parsing: false,
     parsingProgress: 0,
     parsingSteps: [],
@@ -67,7 +78,6 @@ export default function IdeaPage() {
 
   // Demo mode check
   const isDemoMode = searchParams.get("demo") === "true";
-  const goal = searchParams.get("goal"); // "feature" or "workflow"
 
   // Fetch all repositories
   const { data: allRepositories, isLoading: reposLoading, refetch: refetchRepos } = useQuery({
@@ -220,14 +230,14 @@ export default function IdeaPage() {
   useEffect(() => {
     if (isDemoMode && !state.input) {
       const demoIdeas = {
-        feature: "Integrate payment processing with Stripe. Add a checkout page with credit card validation, handle webhooks for payment status updates, and create an admin dashboard to view transactions.",
-        workflow: "Create an automated workflow that monitors GitHub pull requests, runs tests, and sends Slack notifications when PRs are ready for review.",
-        demo: "Explore the tool with a pre-configured fraud detection pipeline demo showcasing the full workflow. This demo will walk you through the complete process of building, analyzing, and implementing a feature.",
+        ask: "How do I implement authentication in my Next.js app?",
+        build: "Integrate payment processing with Stripe. Add a checkout page with credit card validation, handle webhooks for payment status updates, and create an admin dashboard to view transactions.",
+        debug: "Explore the tool with a pre-configured fraud detection pipeline demo showcasing the full workflow. This demo will walk you through the complete process of building, analyzing, and implementing a feature.",
       };
-      const demoIdea = goal ? demoIdeas[goal as keyof typeof demoIdeas] : demoIdeas.feature;
+      const demoIdea = state.selectedAgent ? demoIdeas[state.selectedAgent as keyof typeof demoIdeas] || demoIdeas.build : demoIdeas.build;
       setState((prev) => ({ ...prev, input: demoIdea }));
     }
-  }, [isDemoMode, goal]);
+  }, [isDemoMode, state.selectedAgent]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -328,25 +338,140 @@ export default function IdeaPage() {
   };
 
   // Handle continue to next page
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!state.projectId) return;
     
     const selectedRepoData = repositories.find(
       (repo) => repo.id?.toString() === state.selectedRepo
     );
     const repoName = selectedRepoData?.full_name || selectedRepoData?.name || "";
+    const matchingProject = projects?.find(
+      (project: any) => project.id?.toString() === state.projectId
+    );
+    const branchName =
+      matchingProject?.branch_name ||
+      selectedRepoData?.default_branch ||
+      selectedRepoData?.branch ||
+      "main";
     
-    const params = new URLSearchParams({
-      projectId: state.projectId,
-    });
-    if (repoName) {
-      params.append("repoName", repoName);
-    }
-    if (state.input) {
-      params.append("featureIdea", state.input);
+    // If "ask" or "debug" agent is selected, create conversation and send message
+    if (state.selectedAgent === "ask" || state.selectedAgent === "debug") {
+      if (!user?.uid) {
+        toast.error("Please sign in to continue");
+        return;
+      }
+
+      try {
+        // Map agent selection to agent IDs
+        const agentIdMap: Record<string, string> = {
+          ask: "codebase_qna_agent",
+          debug: "debugging_agent",
+        };
+        
+        const agentId = agentIdMap[state.selectedAgent];
+        if (!agentId) {
+          toast.error("Invalid agent selection");
+          return;
+        }
+
+        const title = state.selectedAgent === "ask" 
+          ? "Codebase Q&A Chat" 
+          : "Debug Chat";
+
+        console.log("[Idea Page] Creating conversation for agent:", state.selectedAgent);
+        
+        // Create conversation
+        const conversationResponse = await ChatService.createConversation(
+          user.uid,
+          title,
+          state.projectId,
+          agentId,
+          false,
+          repoName,
+          branchName
+        );
+
+        console.log("[Idea Page] Conversation created:", conversationResponse.conversation_id);
+
+        // Set up chat context in Redux
+        dispatch(setChat({
+          chatFlow: "NEW_CHAT",
+          agentId: agentId,
+          temporaryContext: {
+            branch: branchName,
+            repo: repoName,
+            projectId: state.projectId || "",
+          },
+        }));
+
+        // Store pending message if user provided input
+        if (state.input.trim()) {
+          dispatch(setPendingMessage(state.input));
+        }
+
+        // Navigate to chat - the chat page will handle sending the pending message
+        router.push(`/chat/${conversationResponse.conversation_id}`);
+      } catch (error: any) {
+        console.error("[Idea Page] Failed to create conversation:", error);
+        toast.error(error.message || "Failed to create conversation. Please try again.");
+      }
+      return;
     }
     
-    router.push(`/repo?${params.toString()}`);
+    try {
+      // Create recipe when Continue is pressed (for "build" agent)
+      console.log("[Idea Page] Creating recipe before navigating to repo page");
+      const recipeResponse = await SpecService.createRecipe({
+        project_id: state.projectId,
+        user_prompt: state.input || "Implementation plan generation",
+        user_requirements: {},
+      });
+
+      console.log("[Idea Page] Recipe created successfully:", recipeResponse);
+
+      // Validate recipe_id is a valid UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!recipeResponse.recipe_id || !uuidRegex.test(recipeResponse.recipe_id)) {
+        console.error("[Idea Page] Invalid recipe_id from API:", recipeResponse.recipe_id);
+        toast.error("Invalid recipe ID received from server. Please try again.");
+        return;
+      }
+
+      // Store recipe data in localStorage for spec page to retrieve project_id
+      localStorage.setItem(`recipe_${recipeResponse.recipe_id}`, JSON.stringify({
+        recipe_id: recipeResponse.recipe_id,
+        project_id: state.projectId,
+        repo_name: repoName,
+        branch_name: branchName,
+      }));
+
+      dispatch(
+        setRepoAndBranchForTask({
+          taskId: recipeResponse.recipe_id,
+          repoName: repoName || "",
+          branchName,
+          projectId: state.projectId || undefined,
+        })
+      );
+
+      // Navigate to repo page with recipeId in URL
+      const params = new URLSearchParams({
+        projectId: state.projectId,
+        recipeId: recipeResponse.recipe_id,
+      });
+      if (repoName) {
+        params.append("repoName", repoName);
+      }
+      if (state.input) {
+        params.append("featureIdea", state.input);
+      }
+      
+      console.log("[Idea Page] Navigating to repo page with recipeId:", recipeResponse.recipe_id);
+      router.push(`/repo?${params.toString()}`);
+    } catch (error: any) {
+      console.error("[Idea Page] Failed to create recipe:", error);
+      toast.error(error.message || "Failed to create recipe. Please try again.");
+    }
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -354,6 +479,12 @@ export default function IdeaPage() {
 
     if (!state.input.trim()) {
       toast.error("Please describe your feature idea");
+      return;
+    }
+
+    // NEW: Require agent selection
+    if (!state.selectedAgent) {
+      toast.error("Please select an agent (Ask, Build, or Debug)");
       return;
     }
 
@@ -393,25 +524,29 @@ export default function IdeaPage() {
     }
   };
 
+  const handleAgentSelect = (agent: string) => {
+    setState((prev) => ({ ...prev, selectedAgent: agent }));
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 flex relative">
-      {/* Dot Pattern Background */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
+    <div className="min-h-screen bg-white flex relative">
+      {/* Dot Pattern Background - More Visible */}
+      <div className="absolute inset-0 opacity-60 pointer-events-none">
         <div
           className="w-full h-full"
           style={{
-            backgroundImage: `radial-gradient(circle, #9ca3af 1px, transparent 1px)`,
+            backgroundImage: `radial-gradient(circle, #71717a 1px, transparent 1px)`,
             backgroundSize: "20px 20px",
           }}
         />
       </div>
       
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 relative z-10">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 pt-52 pb-4 relative z-10">
         <div className="w-full max-w-4xl space-y-6">
           {/* Logo and Title */}
           <div className="flex flex-col items-center space-y-3">
-            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center">
               <Image
                 src="/images/potpie-blue.svg"
                 alt="Potpie Logo"
@@ -438,6 +573,8 @@ export default function IdeaPage() {
               onRepoSelect={handleRepoSelect}
               repositories={state.linkedRepos}
               reposLoading={reposLoading}
+              selectedAgent={state.selectedAgent}
+              onAgentSelect={handleAgentSelect}
             />
 
             {/* Parsing Status Card */}
@@ -454,4 +591,3 @@ export default function IdeaPage() {
     </div>
   );
 }
-

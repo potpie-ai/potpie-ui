@@ -8,15 +8,15 @@ export default function BuildsPage() {
   const router = useRouter();
 
   const handleBuildFeature = () => {
-    router.push("/idea?goal=feature");
+    router.push("/idea");
   };
 
   const handleBuildWorkflow = () => {
-    router.push("/idea?goal=workflow");
+    router.push("/idea");
   };
 
   const handleDebugError = () => {
-    router.push("/idea?goal=demo&demo=true");
+    router.push("/idea?demo=true");
   };
 
   return (

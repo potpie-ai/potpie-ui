@@ -4,14 +4,16 @@ import { Sparkles } from "lucide-react";
 
 export default function AIAnalysisBanner() {
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-blue-100/50 border border-blue-200 rounded-lg p-4">
+    <div className="bg-zinc-50/50 border border-zinc-100 rounded-xl p-4">
       <div className="flex items-start gap-3">
-        <Sparkles className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-shrink-0 w-6 h-6 bg-zinc-900 rounded flex items-center justify-center mt-0.5">
+          <Sparkles className="w-3.5 h-3.5 text-white" />
+        </div>
         <div className="flex-1">
-          <h3 className="text-sm font-medium text-gray-900 mb-1">
+          <h3 className="text-xs font-bold text-zinc-900 mb-1 uppercase tracking-wide">
             AI Agent Analysis
           </h3>
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-zinc-500 leading-relaxed">
             The AI agent has analyzed your requirements and made assumptions for each question. 
             Hover over any question to edit. Questions marked with &apos;Needs input&apos; require your confirmation.
           </p>
@@ -20,5 +22,3 @@ export default function AIAnalysisBanner() {
     </div>
   );
 }
-
-

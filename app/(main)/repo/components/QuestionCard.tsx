@@ -6,15 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import QuestionAnswerDisplay from "./QuestionAnswerDisplay";
 import QuestionEditMode from "./QuestionEditMode";
-import type { MCQQuestion } from "@/services/QuestionService";
-
-interface QuestionAnswer {
-  questionId: string;
-  textAnswer?: string;
-  mcqAnswer?: string;
-  isEditing: boolean;
-  isUserModified: boolean;
-}
+import type { MCQQuestion, QuestionAnswer } from "@/types/question";
 
 interface QuestionCardProps {
   question: MCQQuestion;
@@ -54,18 +46,18 @@ export default function QuestionCard({
   const hasAnswer = answer?.textAnswer || answer?.mcqAnswer;
 
   // Determine card styling based on state
-  let cardClasses = "p-3 rounded-lg border transition-all duration-200 ";
+  let cardClasses = "p-4 rounded-xl border transition-all duration-200 ";
   if (isSkipped) {
-    cardClasses += "bg-gray-100 border-gray-300 opacity-60";
+    cardClasses += "bg-zinc-50/50 border-zinc-200 opacity-50";
   } else if (isUserEdited) {
-    cardClasses += "bg-blue-50 border-blue-300";
+    cardClasses += "bg-white border-zinc-900 ring-1 ring-zinc-900";
   } else if (isAIAssumed) {
-    cardClasses += "bg-blue-50 border-blue-200";
+    cardClasses += "bg-white border-zinc-200";
   } else {
-    cardClasses += "bg-gray-50/30 border-gray-200/50";
+    cardClasses += "bg-white border-zinc-200";
   }
   if (isHovered && !isSkipped) {
-    cardClasses += " shadow-md";
+    cardClasses += " border-zinc-300";
   }
 
   const handleEdit = () => {
@@ -89,39 +81,43 @@ export default function QuestionCard({
       onMouseEnter={onHover}
       onMouseLeave={onHoverLeave}
     >
-      <div className="space-y-2">
+      <div className="space-y-3">
         {/* Question Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <p className={`text-sm font-medium ${isSkipped ? "text-gray-500 line-through" : "text-gray-900"}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 space-y-2">
+            <div className="flex items-start gap-2 flex-wrap">
+              <p className={`text-sm font-medium leading-relaxed flex-1 ${isSkipped ? "text-zinc-400 line-through" : "text-zinc-900"}`}>
                 {question.question}
               </p>
-              {isSkipped && (
-                <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-gray-200 text-gray-600">
-                  Skipped
-                </Badge>
-              )}
-              {!isSkipped && isAIAssumed && (
-                <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700">
-                  AI
-                </Badge>
-              )}
-              {!isSkipped && isUserEdited && (
-                <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700">
-                  Edited
-                </Badge>
-              )}
-              {!isSkipped && question.needsInput && (
-                <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-700">
-                  Needs Input
-                </Badge>
-              )}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {isSkipped && (
+                  <span className="px-1.5 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Skipped
+                  </span>
+                )}
+                {!isSkipped && isAIAssumed && (
+                  <span className="px-1.5 py-0.5 bg-zinc-900 text-white rounded text-[10px] font-bold uppercase tracking-wider">
+                    AI
+                  </span>
+                )}
+                {!isSkipped && isUserEdited && (
+                  <span className="px-1.5 py-0.5 bg-emerald-500 text-white rounded text-[10px] font-bold uppercase tracking-wider">
+                    Edited
+                  </span>
+                )}
+                {!isSkipped && question.needsInput && (
+                  <span className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                    Needs Input
+                  </span>
+                )}
+              </div>
             </div>
             {!isSkipped && question.reasoning && (
-              <p className="text-xs text-gray-600 mt-1 line-clamp-2">
-                🤖 {question.reasoning}
-              </p>
+              <div className="bg-zinc-50/50 rounded-lg p-3 border-l-2 border-zinc-200">
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  {question.reasoning}
+                </p>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-1">
@@ -177,7 +173,7 @@ export default function QuestionCard({
                 variant="ghost"
                 size="sm"
                 onClick={onToggleOptions}
-                className="text-xs h-7"
+                className="text-xs h-7 hover:bg-zinc-50 text-zinc-500"
               >
                 {isExpanded ? (
                   <>
@@ -187,13 +183,13 @@ export default function QuestionCard({
                 ) : (
                   <>
                     <ChevronDown className="h-3 w-3 mr-1" />
-                    Show options
+                    Show {question.options.length} options
                   </>
                 )}
               </Button>
             )}
             {isExpanded && question.options && (
-              <div className="mt-2 space-y-1 pl-4 border-l-2 border-gray-200">
+              <div className="mt-3 space-y-1.5">
                 {question.options.map((option, index) => {
                   const optionLabel = String.fromCharCode(65 + index); // A, B, C, D
                   const isSelected = answer?.mcqAnswer === optionLabel;
@@ -202,13 +198,13 @@ export default function QuestionCard({
                   return (
                     <div
                       key={index}
-                      className={`text-xs p-2 rounded-md ${
+                      className={`text-xs p-2.5 rounded-lg transition-all ${
                         isSelected
-                          ? "bg-blue-100 text-blue-900 font-medium"
-                          : "text-gray-700"
+                          ? "bg-zinc-900 text-white font-semibold"
+                          : "text-zinc-600 bg-white border border-zinc-200 hover:border-zinc-300"
                       }`}
                     >
-                      <span className="font-medium mr-2">{optionLabel}.</span>
+                      <span className="font-bold mr-2">{optionLabel}.</span>
                       {cleanOption}
                     </div>
                   );

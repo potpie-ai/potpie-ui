@@ -5,16 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Bot, Minimize2, Maximize2, Send, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-
-interface MCQQuestion {
-  id: string;
-  section: string;
-  question: string;
-  options: string[];
-  needsInput: boolean;
-  assumed?: string;
-  reasoning?: string;
-}
+import type { MCQQuestion } from "@/types/question";
 
 interface ChatbotPanelProps {
   projectId: string;
@@ -132,7 +123,7 @@ export default function ChatbotPanel({
 
   if (minimized) {
     return (
-      <div className="w-16 bg-white border-l border-gray-200 flex flex-col items-center py-4">
+      <div className="w-16 bg-white border-l border-zinc-200 flex flex-col items-center py-4">
         <Button
           variant="ghost"
           size="icon"
@@ -146,14 +137,14 @@ export default function ChatbotPanel({
   }
 
   return (
-    <div className="w-[400px] bg-white border-l border-gray-200 flex flex-col">
-      <CardHeader className="border-b border-gray-200 pb-3">
+    <div className="w-[400px] bg-white border-l border-zinc-200 flex flex-col">
+      <CardHeader className="border-b border-zinc-200 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-blue-600" />
+            <Bot className="w-5 h-5 text-zinc-900" />
             <div>
-              <h3 className="text-sm font-semibold">AI Assistant</h3>
-              <p className="text-xs text-gray-500">Ask me anything</p>
+              <h3 className="text-xs font-bold">AI Assistant</h3>
+              <p className="text-[10px] text-zinc-500">Ask me anything</p>
             </div>
           </div>
           <Button
@@ -177,10 +168,10 @@ export default function ChatbotPanel({
               }`}
             >
               <div
-                className={`max-w-[80%] rounded-lg p-2 text-xs ${
+                className={`max-w-[80%] rounded-lg p-2 text-[10px] ${
                   message.sender === "user"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-900"
+                    ? "bg-zinc-900 text-white"
+                    : "bg-zinc-100 text-zinc-900"
                 }`}
               >
                 {message.text}
@@ -189,15 +180,15 @@ export default function ChatbotPanel({
           ))}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg p-2">
-                <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
+              <div className="bg-zinc-100 rounded-lg p-2">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-600" />
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="border-t border-gray-200 p-4">
+        <div className="border-t border-zinc-200 p-4">
           <div className="space-y-2">
             <Textarea
               value={input}
@@ -209,9 +200,9 @@ export default function ChatbotPanel({
                 }
               }}
               placeholder="Ask a question about the repository or plan..."
-              className="min-h-[60px] text-sm resize-none"
+              className="min-h-[60px] text-xs resize-none border-zinc-200"
             />
-            <div className="flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center justify-between text-[10px] text-zinc-500">
               <span>Press Enter to send, Shift+Enter for new line</span>
               <Button
                 size="sm"

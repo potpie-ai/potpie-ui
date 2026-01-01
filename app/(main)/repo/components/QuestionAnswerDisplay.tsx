@@ -1,22 +1,6 @@
 "use client";
 
-interface MCQQuestion {
-  id: string;
-  section: string;
-  question: string;
-  options: string[];
-  needsInput: boolean;
-  assumed?: string;
-  reasoning?: string;
-}
-
-interface QuestionAnswer {
-  questionId: string;
-  textAnswer?: string;
-  mcqAnswer?: string;
-  isEditing: boolean;
-  isUserModified: boolean;
-}
+import type { MCQQuestion, QuestionAnswer } from "@/types/question";
 
 interface QuestionAnswerDisplayProps {
   answer: QuestionAnswer;
@@ -64,8 +48,8 @@ export default function QuestionAnswerDisplay({
   if (!displayText) return null;
 
   return (
-    <div className="p-2 bg-white border border-gray-200 rounded-md">
-      <p className="text-xs text-gray-900">{displayText}</p>
+    <div className="p-3 bg-zinc-50/50 border-l-2 border-zinc-900 rounded-lg">
+      <p className="text-xs text-zinc-900 font-medium leading-relaxed">{displayText}</p>
     </div>
   );
 }

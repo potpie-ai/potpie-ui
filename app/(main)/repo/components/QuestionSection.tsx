@@ -2,24 +2,7 @@
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import QuestionCard from "./QuestionCard";
-
-interface MCQQuestion {
-  id: string;
-  section: string;
-  question: string;
-  options: string[];
-  needsInput: boolean;
-  assumed?: string;
-  reasoning?: string;
-}
-
-interface QuestionAnswer {
-  questionId: string;
-  textAnswer?: string;
-  mcqAnswer?: string;
-  isEditing: boolean;
-  isUserModified: boolean;
-}
+import type { MCQQuestion, QuestionAnswer } from "@/types/question";
 
 interface QuestionSectionProps {
   section: string;
@@ -53,14 +36,11 @@ export default function QuestionSection({
   if (questions.length === 0) return null;
 
   return (
-    <Card className="border-blue-200 bg-gradient-to-br from-card to-card/50">
+    <Card className="border-zinc-200 bg-white rounded-xl">
       <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-1 h-4 bg-blue-600 rounded" />
-          <h2 className="text-sm font-semibold text-gray-900">{section}</h2>
-        </div>
+        <h2 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">{section}</h2>
       </CardHeader>
-      <CardContent className="space-y-2.5">
+      <CardContent className="space-y-3">
         {questions.map((question) => (
           <QuestionCard
             key={question.id}

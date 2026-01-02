@@ -39,9 +39,14 @@ export interface SpecProgress {
 }
 
 export interface QAAnswer {
-  id?: string;
-  question: string;
-  answer: string;
+  id?: string; // Optional, for existing questions
+  question?: string; // For display/legacy support
+  answer?: string; // For display/legacy support
+  question_id?: string; // For backend reference
+  text_answer?: string;
+  mcq_answer?: string;
+  is_user_modified?: boolean;
+  is_skipped?: boolean;
 }
 
 export interface SpecPlanRequest {

@@ -108,80 +108,15 @@ export default function IdeaPage() {
     },
   });
 
-  // Filter repositories to only show parsed ones (repos with status "ready")
-  // Use useMemo to prevent infinite loops - only recompute when dependencies change
+  // Show all repositories (like newchat) - no filtering
+  // Users can parse any repo they want
   const repositories = useMemo(() => {
     if (!allRepositories || allRepositories.length === 0) {
-      console.log("No repositories available");
       return [];
     }
-    if (!projects || projects.length === 0) {
-      console.log("No projects available");
-      return [];
-    }
-    
-    console.log("Filtering repos - allRepositories:", allRepositories);
-    console.log("Filtering repos - projects:", projects);
-    
-    const filtered = allRepositories.filter((repo: Repo) => {
-      const repoFullName = repo.full_name || repo.name;
-      const repoNameOnly = repoFullName?.split("/").pop() || repo.name; // Extract just the repo name
-      const repoId = repo.id?.toString();
-      
-      // Check if repo has a corresponding project with status "ready"
-      const hasReadyProject = projects.some((project: any) => {
-        // Skip projects without repo_name
-        if (!project.repo_name) {
-          return false;
-        }
-        
-        const projectRepoName = project.repo_name;
-        const projectId = project.id?.toString();
-        const projectStatus = project.status;
-        
-        // Only consider projects with status "ready"
-        if (projectStatus !== "ready") {
-          return false;
-        }
-        
-        // Try multiple matching strategies:
-        // 1. Exact match with full_name
-        if (projectRepoName === repoFullName) {
-          console.log("Matched repo by full_name:", repoFullName, "with project:", projectRepoName, "status:", projectStatus);
-          return true;
-        }
-        
-        // 2. Match with just the repo name (without owner)
-        if (projectRepoName === repoNameOnly) {
-          console.log("Matched repo by name only:", repoNameOnly, "with project:", projectRepoName, "status:", projectStatus);
-          return true;
-        }
-        
-        // 3. Match if projectRepoName is contained in repoFullName (e.g., "repo-name" in "owner/repo-name")
-        if (repoFullName && repoFullName.includes(projectRepoName)) {
-          console.log("Matched repo by substring:", repoFullName, "contains project:", projectRepoName, "status:", projectStatus);
-          return true;
-        }
-        
-        // 4. Match if repoNameOnly is contained in projectRepoName
-        if (projectRepoName.includes(repoNameOnly)) {
-          console.log("Matched repo by reverse substring:", projectRepoName, "contains repo:", repoNameOnly, "status:", projectStatus);
-          return true;
-        }
-        
-        return false;
-      });
-      
-      if (!hasReadyProject) {
-        console.log("No ready project found for repo:", repoFullName, "id:", repoId, "nameOnly:", repoNameOnly);
-      }
-      
-      return hasReadyProject;
-    });
-    
-    console.log("Filtered repositories:", filtered);
-    return filtered;
-  }, [allRepositories, projects]);
+    // Return all repositories without filtering
+    return allRepositories;
+  }, [allRepositories]);
 
   // Listen for GitHub app installation completion
   useEffect(() => {

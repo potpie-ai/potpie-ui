@@ -26,6 +26,7 @@ interface IdeaInputCardProps {
   reposLoading: boolean;
   selectedAgent: string | null;
   onAgentSelect: (agent: string) => void;
+  onParseRepo?: () => void;
 }
 
 export default function IdeaInputCard({
@@ -41,6 +42,7 @@ export default function IdeaInputCard({
   reposLoading,
   selectedAgent,
   onAgentSelect,
+  onParseRepo,
 }: IdeaInputCardProps) {
   const router = useRouter();
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
@@ -242,7 +244,11 @@ export default function IdeaInputCard({
                     <DropdownMenuItem
                       onClick={() => {
                         setRepoDropdownOpen(false);
-                        router.push("/newchat");
+                        if (onParseRepo) {
+                          onParseRepo();
+                        } else {
+                          router.push("/newchat");
+                        }
                       }}
                       className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white mt-1"
                     >

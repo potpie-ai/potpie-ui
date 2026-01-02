@@ -1,37 +1,26 @@
-// types/question.ts
-/**
- * Question and Answer type definitions for the repository analysis flow
- */
+import type { MCQQuestion } from "@/services/QuestionService";
 
-/**
- * Multiple Choice Question with AI analysis
- */
-export interface MCQQuestion {
-  id: string;
-  section: string;
-  question: string;
-  options: string[];
-  needsInput: boolean;
-  assumed?: string;
-  reasoning?: string;
-}
+// Re-export MCQQuestion
+export type { MCQQuestion };
 
-/**
- * Answer state for a question
- */
+// QuestionAnswer with camelCase properties for component usage
 export interface QuestionAnswer {
-  questionId: string;
+  question_id?: string;
+  questionId?: string; // For backward compatibility with component state
   textAnswer?: string;
   mcqAnswer?: string;
-  isEditing: boolean;
-  isUserModified: boolean;
+  is_user_modified?: boolean;
+  is_skipped?: boolean;
+  // For internal component state
+  isEditing?: boolean;
+  isUserModified?: boolean;
 }
 
 /**
  * Page state for repository analysis
  */
 export interface RepoPageState {
-  pageState: "generating" | "questions";
+  pageState: "generating" | "questions" | "plan";
   questions: MCQQuestion[];
   visibleQuestions: Set<string>;
   answers: Map<string, QuestionAnswer>;
@@ -48,11 +37,11 @@ export interface RepoPageState {
  * All sections from questions will be displayed regardless of this list
  */
 export const DEFAULT_SECTION_ORDER = [
+  "Overview",
+  "Requirements",
   "Architecture",
-  "Database",
-  "API Design",
-  "Security",
-  "Performance",
-  "Integration",
-] as const;
-
+  "Implementation",
+  "Testing",
+  "Deployment",
+  "Documentation",
+];

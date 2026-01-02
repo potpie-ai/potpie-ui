@@ -26,7 +26,6 @@ import type { MCQQuestion, QuestionAnswer, RepoPageState } from "@/types/questio
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
-import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
 import { useAuthContext } from "@/contexts/AuthContext";
 import ChatService from "@/services/ChatService";
 import { setPendingMessage } from "@/lib/state/Reducers/chat";
@@ -287,10 +286,7 @@ export default function RepoPage() {
         user.uid,
         title,
         projectId,
-        agentId,
-        false,
-        repoName,
-        finalBranchName
+        agentId
       );
     },
     onSuccess: (data) => {
@@ -374,9 +370,11 @@ export default function RepoPage() {
         // Only include questions with answers
         if (answer.textAnswer || answer.mcqAnswer) {
           qaAnswers.push({
-            id: qId, // Include question ID for backend reference
-            question: question.question,
-            answer: answer.textAnswer || answer.mcqAnswer || "",
+            question_id: qId,
+            text_answer: answer.textAnswer,
+            mcq_answer: answer.mcqAnswer,
+            is_user_modified: answer.isUserModified || false,
+            is_skipped: false,
           });
         }
       });
@@ -384,8 +382,10 @@ export default function RepoPage() {
       // Add additional context as a separate QA item if provided
       if (state.additionalContext.trim()) {
         qaAnswers.push({
-          question: "Additional Context",
-          answer: state.additionalContext.trim(),
+          question_id: "additional_context",
+          text_answer: state.additionalContext.trim(),
+          is_user_modified: false,
+          is_skipped: false,
         });
       }
 
@@ -504,14 +504,7 @@ export default function RepoPage() {
     if (!recipeId) return;
     if (!repoName || repoName === "Unknown Repository") return;
 
-    dispatch(
-      setRepoAndBranchForTask({
-        taskId: recipeId,
-        repoName,
-        branchName: branchName || "main",
-        projectId: projectId || undefined,
-      })
-    );
+    // Note: setRepoAndBranchForTask removed - not needed for current flow
   }, [dispatch, recipeId, repoName, branchName, projectId]);
 
   if (!projectId) {

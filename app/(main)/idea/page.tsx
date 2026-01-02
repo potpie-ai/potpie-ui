@@ -14,10 +14,10 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
-import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
 import { useAuthContext } from "@/contexts/AuthContext";
 import ChatService from "@/services/ChatService";
 import { setPendingMessage, setChat } from "@/lib/state/Reducers/chat";
+import { ParsingStatusEnum } from "@/lib/Constants";
 
 interface Repo {
   id: string;
@@ -39,11 +39,13 @@ interface IdeaPageState {
   loading: boolean;
   projectId: string | null;
   selectedRepo: string | null;
+  selectedBranch: string | null;
   selectedAgent: string | null;
   parsing: boolean;
   parsingProgress: number;
   parsingSteps: string[];
   linkedRepos: Repo[];
+  parsingStatus: string; // Actual parsing status from backend
 }
 
 const PARSING_STEPS = [
@@ -69,11 +71,13 @@ export default function IdeaPage() {
     loading: false,
     projectId: null,
     selectedRepo: null,
+    selectedBranch: null,
     selectedAgent: null, // CHANGED: Was "build", now null - requires explicit selection
     parsing: false,
     parsingProgress: 0,
     parsingSteps: [],
     linkedRepos: [],
+    parsingStatus: "",
   });
 
   // Demo mode check
@@ -269,9 +273,16 @@ export default function IdeaPage() {
         loading: false 
       }));
       
-      // If repo already selected, start parsing immediately
+      // If repo already selected, parse it
       if (state.selectedRepo) {
-        startParsing(data.id.toString(), state.selectedRepo);
+        const selectedRepoData = repositories.find(
+          (repo: Repo) => repo.id?.toString() === state.selectedRepo
+        );
+        if (selectedRepoData) {
+          const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+          const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+          parseRepo(repoName, branchName);
+        }
       }
     },
     onError: (error: any) => {
@@ -295,7 +306,14 @@ export default function IdeaPage() {
       return response.data;
     },
     onSuccess: (data, variables) => {
-      startParsing(variables.projectId, variables.repoId);
+      const selectedRepoData = repositories.find(
+        (repo: Repo) => repo.id?.toString() === variables.repoId
+      );
+      if (selectedRepoData) {
+        const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+        const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+        parseRepo(repoName, branchName);
+      }
     },
     onError: (error: any) => {
       console.error("Error selecting repository:", error);
@@ -303,55 +321,176 @@ export default function IdeaPage() {
     },
   });
 
-  // Start parsing with progress simulation
-  const startParsing = (projectId: string, repoId: string) => {
-    // Capture current values before starting the interval
-    const selectedRepoData = repositories.find(
-      (repo) => repo.id?.toString() === repoId
-    );
-    const repoName = selectedRepoData?.full_name || selectedRepoData?.name || "";
-    const currentInput = state.input || "";
+  // Parse repository - actual parsing flow similar to newchat
+  const parseRepo = async (repoName: string, branchName: string) => {
+    if (!repoName || !branchName) {
+      toast.error("Please select a repository and branch");
+      return;
+    }
 
     setState((prev) => ({ 
       ...prev, 
-      parsing: true, 
+      parsing: true,
+      parsingStatus: ParsingStatusEnum.SUBMITTED,
       parsingProgress: 0,
       parsingSteps: [],
-      projectId: projectId, // Store project ID for later use
     }));
 
-    // Simulate parsing steps
-    let currentStep = 0;
-    const stepInterval = setInterval(() => {
-      if (currentStep < PARSING_STEPS.length) {
+    try {
+      const parseResponse = await BranchAndRepositoryService.parseRepo(
+        repoName,
+        branchName
+      );
+      
+      const projectId = parseResponse.project_id;
+      const initialStatus = parseResponse.status;
+
+      if (projectId) {
+        setState((prev) => ({ ...prev, projectId }));
+      }
+
+      if (initialStatus === ParsingStatusEnum.READY) {
         setState((prev) => ({
           ...prev,
-          parsingSteps: [...prev.parsingSteps, PARSING_STEPS[currentStep]],
-          parsingProgress: Math.min(((currentStep + 1) / PARSING_STEPS.length) * 100, 100),
+          parsingStatus: ParsingStatusEnum.READY,
+          parsing: false,
+          parsingProgress: 100,
         }));
-        currentStep++;
-      } else {
-        clearInterval(stepInterval);
-        // Don't auto-navigate - user will click Continue button
+        return;
       }
-    }, 800); // 800ms per step for smoother animation
+
+      // Poll for parsing status updates
+      const pollStatus = async () => {
+        const pollInterval = 5000; // 5 seconds
+        const maxDuration = 45 * 60 * 1000; // 45 minutes
+        const startTime = Date.now();
+        let parsingStatus = initialStatus;
+
+        const updateStatusAndProgress = (status: string) => {
+          let progress = 0;
+          let steps: string[] = [];
+          
+          if (status === ParsingStatusEnum.SUBMITTED) {
+            progress = 10;
+            steps = ["Cloning repository..."];
+          } else if (status === ParsingStatusEnum.CLONED) {
+            progress = 30;
+            steps = ["Cloning repository...", "Analyzing directory structure..."];
+          } else if (status === ParsingStatusEnum.PARSED) {
+            progress = 60;
+            steps = [
+              "Cloning repository...",
+              "Analyzing directory structure...",
+              "Detecting tech stack...",
+              "Parsing routing files...",
+            ];
+          } else if (status === ParsingStatusEnum.PROCESSING) {
+            progress = 80;
+            steps = [
+              "Cloning repository...",
+              "Analyzing directory structure...",
+              "Detecting tech stack...",
+              "Parsing routing files...",
+              "Extracting API endpoints...",
+              "Analyzing database schema...",
+            ];
+          } else if (status === ParsingStatusEnum.READY) {
+            progress = 100;
+            steps = PARSING_STEPS;
+          }
+
+          setState((prev) => ({
+            ...prev,
+            parsingStatus: status,
+            parsingProgress: progress,
+            parsingSteps: steps,
+            parsing: status !== ParsingStatusEnum.READY && status !== ParsingStatusEnum.ERROR,
+          }));
+        };
+
+        // Initial status update
+        updateStatusAndProgress(parsingStatus);
+
+        // Poll until ready or error or timeout
+        while (parsingStatus !== ParsingStatusEnum.READY && 
+               parsingStatus !== ParsingStatusEnum.ERROR && 
+               Date.now() - startTime < maxDuration) {
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          
+          try {
+            parsingStatus = await BranchAndRepositoryService.getParsingStatus(projectId);
+            updateStatusAndProgress(parsingStatus);
+          } catch (error) {
+            console.error("Error polling parsing status:", error);
+            setState((prev) => ({
+              ...prev,
+              parsingStatus: ParsingStatusEnum.ERROR,
+              parsing: false,
+            }));
+            return;
+          }
+        }
+
+        // Handle timeout
+        if (Date.now() - startTime >= maxDuration && parsingStatus !== ParsingStatusEnum.READY) {
+          setState((prev) => ({
+            ...prev,
+            parsingStatus: ParsingStatusEnum.ERROR,
+            parsing: false,
+          }));
+        }
+      };
+
+      await pollStatus();
+    } catch (err) {
+      console.error("Error during parsing:", err);
+      setState((prev) => ({
+        ...prev,
+        parsingStatus: ParsingStatusEnum.ERROR,
+        parsing: false,
+      }));
+      toast.error("Failed to parse repository. Please try again.");
+    }
+  };
+
+  // Handle parse button click from IdeaInputCard
+  const handleParseRepo = async () => {
+    if (!state.selectedRepo) {
+      toast.error("Please select a repository first");
+      return;
+    }
+
+    const selectedRepoData = repositories.find(
+      (repo: Repo) => repo.id?.toString() === state.selectedRepo
+    );
+    
+    if (!selectedRepoData) {
+      toast.error("Repository not found");
+      return;
+    }
+
+    const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+    const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+
+    await parseRepo(repoName, branchName);
   };
 
   // Handle continue to next page
   const handleContinue = async () => {
     if (!state.projectId) return;
     
+    // Ensure agent is selected
+    if (!state.selectedAgent) {
+      toast.error("Please select an agent (Ask, Build, or Debug)");
+      return;
+    }
+    
     const selectedRepoData = repositories.find(
-      (repo) => repo.id?.toString() === state.selectedRepo
+      (repo: Repo) => repo.id?.toString() === state.selectedRepo
     );
     const repoName = selectedRepoData?.full_name || selectedRepoData?.name || "";
-    const matchingProject = projects?.find(
-      (project: any) => project.id?.toString() === state.projectId
-    );
-    const branchName =
-      matchingProject?.branch_name ||
+    const branchName = state.selectedBranch || 
       selectedRepoData?.default_branch ||
-      selectedRepoData?.branch ||
       "main";
     
     // If "ask" or "debug" agent is selected, create conversation and send message
@@ -380,29 +519,18 @@ export default function IdeaPage() {
 
         console.log("[Idea Page] Creating conversation for agent:", state.selectedAgent);
         
-        // Create conversation
+        // Create conversation (same signature as newchat/step2.tsx)
         const conversationResponse = await ChatService.createConversation(
           user.uid,
           title,
           state.projectId,
-          agentId,
-          false,
-          repoName,
-          branchName
+          agentId
         );
 
         console.log("[Idea Page] Conversation created:", conversationResponse.conversation_id);
 
-        // Set up chat context in Redux
-        dispatch(setChat({
-          chatFlow: "NEW_CHAT",
-          agentId: agentId,
-          temporaryContext: {
-            branch: branchName,
-            repo: repoName,
-            projectId: state.projectId || "",
-          },
-        }));
+        // Set up chat context in Redux - same as newchat/step2.tsx
+        dispatch(setChat({ agentId }));
 
         // Store pending message if user provided input
         if (state.input.trim()) {
@@ -418,8 +546,16 @@ export default function IdeaPage() {
       return;
     }
     
+    // Only create recipe for "build" agent - this should be the only remaining case
+    if (state.selectedAgent !== "build") {
+      console.error("[Idea Page] Invalid agent selection for recipe creation:", state.selectedAgent);
+      toast.error("Recipe creation is only available for Build agent");
+      return;
+    }
+    
+    // Recipe creation only happens for "build" agent
     try {
-      // Create recipe when Continue is pressed (for "build" agent)
+      // Create recipe when Continue is pressed (for "build" agent only)
       console.log("[Idea Page] Creating recipe before navigating to repo page");
       const recipeResponse = await SpecService.createRecipe({
         project_id: state.projectId,
@@ -445,14 +581,7 @@ export default function IdeaPage() {
         branch_name: branchName,
       }));
 
-      dispatch(
-        setRepoAndBranchForTask({
-          taskId: recipeResponse.recipe_id,
-          repoName: repoName || "",
-          branchName,
-          projectId: state.projectId || undefined,
-        })
-      );
+      // Note: setRepoAndBranchForTask removed - not needed for current flow
 
       // Navigate to repo page with recipeId in URL
       const params = new URLSearchParams({
@@ -575,6 +704,7 @@ export default function IdeaPage() {
               reposLoading={reposLoading}
               selectedAgent={state.selectedAgent}
               onAgentSelect={handleAgentSelect}
+              onParseRepo={handleParseRepo}
             />
 
             {/* Parsing Status Card */}

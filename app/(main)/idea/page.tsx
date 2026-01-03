@@ -12,11 +12,13 @@ import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import SpecService from "@/services/SpecService";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { CreateRecipeCodegenResponse } from "@/lib/types/spec";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { useAuthContext } from "@/contexts/AuthContext";
 import ChatService from "@/services/ChatService";
 import { setPendingMessage, setChat } from "@/lib/state/Reducers/chat";
+import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
 import { ParsingStatusEnum } from "@/lib/Constants";
 
 interface Repo {
@@ -38,6 +40,7 @@ interface IdeaPageState {
   input: string;
   loading: boolean;
   projectId: string | null;
+  recipeId: string | null; // Changed from projectId for recipe codegen flow
   selectedRepo: string | null;
   selectedBranch: string | null;
   selectedAgent: string | null;
@@ -70,6 +73,7 @@ export default function IdeaPage() {
     input: "",
     loading: false,
     projectId: null,
+    recipeId: null,
     selectedRepo: null,
     selectedBranch: null,
     selectedAgent: null, // CHANGED: Was "build", now null - requires explicit selection
@@ -108,13 +112,16 @@ export default function IdeaPage() {
     },
   });
 
-  // Show all repositories (like newchat) - no filtering
-  // Users can parse any repo they want
+  // Show all repositories - users can parse any repo regardless of status
+  // Use useMemo to prevent infinite loops - only recompute when dependencies change
   const repositories = useMemo(() => {
     if (!allRepositories || allRepositories.length === 0) {
       return [];
     }
-    // Return all repositories without filtering
+    
+    console.log("All repositories:", allRepositories);
+    // Return all repositories - no filtering by project status
+    // Users can select and parse any repository
     return allRepositories;
   }, [allRepositories]);
 
@@ -188,7 +195,7 @@ export default function IdeaPage() {
     }
   }, [state.input]);
 
-  // Create project mutation
+  // Create project mutation (kept for backward compatibility with ask/debug agents)
   const createProjectMutation = useMutation({
     mutationFn: async (idea: string): Promise<Project> => {
       const headers = await getHeaders();
@@ -201,7 +208,7 @@ export default function IdeaPage() {
       );
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: Project) => {
       setState((prev) => ({ 
         ...prev, 
         projectId: data.id.toString(),
@@ -227,6 +234,73 @@ export default function IdeaPage() {
     },
   });
 
+  // Create recipe mutation (for build agent - new recipe codegen flow)
+  const createRecipeMutation = useMutation({
+    mutationFn: async (data: {
+      userPrompt: string;
+      repoSlug: string;
+      branch: string;
+    }): Promise<CreateRecipeCodegenResponse> => {
+      return await SpecService.createRecipeCodegen({
+        user_prompt: data.userPrompt,
+        repo_slug: data.repoSlug,
+        branch: data.branch,
+      });
+    },
+    onSuccess: (data: CreateRecipeCodegenResponse) => {
+      console.log("[Idea Page] Recipe created successfully:", data);
+      
+      setState((prev) => ({ 
+        ...prev, 
+        recipeId: data.recipe_id, // Store recipe_id instead of projectId
+        projectId: data.project_id?.toString() || null, // Also store project_id if available
+        loading: false 
+      }));
+      
+      // Navigate to repo page with recipeId to start question polling
+      if (state.selectedRepo) {
+        const selectedRepoData = repositories.find(
+          (repo: Repo) => repo.id?.toString() === state.selectedRepo
+        );
+        if (selectedRepoData) {
+          const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+          const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+          
+          // Store recipe data in localStorage for spec page
+          localStorage.setItem(`recipe_${data.recipe_id}`, JSON.stringify({
+            recipe_id: data.recipe_id,
+            project_id: data.project_id?.toString() || null,
+            repo_name: repoName,
+            branch_name: branchName,
+          }));
+
+          // Navigate to repo page with recipeId
+          const params = new URLSearchParams({
+            recipeId: data.recipe_id,
+          });
+          if (repoName) {
+            params.append("repoName", repoName);
+          }
+          if (state.input) {
+            params.append("featureIdea", state.input);
+          }
+          
+          console.log("[Idea Page] Navigating to repo page with recipeId:", data.recipe_id);
+          router.push(`/repo?${params.toString()}`);
+        } else {
+          toast.error("Repository data not found. Please try again.");
+        }
+      } else {
+        toast.error("Repository not selected. Please select a repository and try again.");
+      }
+    },
+    onError: (error: any) => {
+      console.error("Error creating recipe:", error);
+      toast.error(error.message || "Failed to create recipe");
+      setState((prev) => ({ ...prev, loading: false }));
+    },
+  });
+
   // Select repository mutation
   const selectRepoMutation = useMutation({
     mutationFn: async ({ projectId, repoId }: { projectId: string; repoId: string }) => {
@@ -240,7 +314,7 @@ export default function IdeaPage() {
       );
       return response.data;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (data: unknown, variables: { projectId: string; repoId: string }) => {
       const selectedRepoData = repositories.find(
         (repo: Repo) => repo.id?.toString() === variables.repoId
       );
@@ -291,6 +365,19 @@ export default function IdeaPage() {
           parsing: false,
           parsingProgress: 100,
         }));
+        
+        // If build agent, automatically create recipe after parsing completes
+        if (state.selectedAgent === "build" && state.input.trim()) {
+          const repoSlug = repoName;
+          const finalBranchName = branchName || "main";
+          
+          console.log("[Idea Page] Parsing complete, creating recipe for build agent");
+          createRecipeMutation.mutate({
+            userPrompt: state.input,
+            repoSlug: repoSlug.trim(),
+            branch: finalBranchName,
+          });
+        }
         return;
       }
 
@@ -374,6 +461,19 @@ export default function IdeaPage() {
             parsing: false,
           }));
         }
+
+        // If parsing completed successfully and build agent, create recipe
+        if (parsingStatus === ParsingStatusEnum.READY && state.selectedAgent === "build" && state.input.trim()) {
+          const repoSlug = repoName;
+          const finalBranchName = branchName || "main";
+          
+          console.log("[Idea Page] Parsing complete, creating recipe for build agent");
+          createRecipeMutation.mutate({
+            userPrompt: state.input,
+            repoSlug: repoSlug.trim(),
+            branch: finalBranchName,
+          });
+        }
       };
 
       await pollStatus();
@@ -412,8 +512,6 @@ export default function IdeaPage() {
 
   // Handle continue to next page
   const handleContinue = async () => {
-    if (!state.projectId) return;
-    
     // Ensure agent is selected
     if (!state.selectedAgent) {
       toast.error("Please select an agent (Ask, Build, or Debug)");
@@ -430,6 +528,11 @@ export default function IdeaPage() {
     
     // If "ask" or "debug" agent is selected, create conversation and send message
     if (state.selectedAgent === "ask" || state.selectedAgent === "debug") {
+      if (!state.projectId) {
+        toast.error("Project ID is required. Please submit your idea first.");
+        return;
+      }
+      
       if (!user?.uid) {
         toast.error("Please sign in to continue");
         return;
@@ -481,47 +584,32 @@ export default function IdeaPage() {
       return;
     }
     
-    // Only create recipe for "build" agent - this should be the only remaining case
-    if (state.selectedAgent !== "build") {
-      console.error("[Idea Page] Invalid agent selection for recipe creation:", state.selectedAgent);
-      toast.error("Recipe creation is only available for Build agent");
-      return;
-    }
-    
-    // Recipe creation only happens for "build" agent
-    try {
-      // Create recipe when Continue is pressed (for "build" agent only)
-      console.log("[Idea Page] Creating recipe before navigating to repo page");
-      const recipeResponse = await SpecService.createRecipe({
-        project_id: state.projectId,
-        user_prompt: state.input || "Implementation plan generation",
-        user_requirements: {},
-      });
-
-      console.log("[Idea Page] Recipe created successfully:", recipeResponse);
-
-      // Validate recipe_id is a valid UUID
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!recipeResponse.recipe_id || !uuidRegex.test(recipeResponse.recipe_id)) {
-        console.error("[Idea Page] Invalid recipe_id from API:", recipeResponse.recipe_id);
-        toast.error("Invalid recipe ID received from server. Please try again.");
+    // For "build" agent, navigate to repo page with recipeId
+    if (state.selectedAgent === "build") {
+      if (!state.recipeId) {
+        toast.error("Recipe ID is required. Please submit your idea first.");
         return;
       }
 
       // Store recipe data in localStorage for spec page to retrieve project_id
-      localStorage.setItem(`recipe_${recipeResponse.recipe_id}`, JSON.stringify({
-        recipe_id: recipeResponse.recipe_id,
+      localStorage.setItem(`recipe_${state.recipeId}`, JSON.stringify({
+        recipe_id: state.recipeId,
         project_id: state.projectId,
         repo_name: repoName,
         branch_name: branchName,
       }));
 
-      // Note: setRepoAndBranchForTask removed - not needed for current flow
+      dispatch(
+        setRepoAndBranchForTask({
+          taskId: state.recipeId, // Use recipeId
+          repoName: repoName || "",
+          branchName,
+        })
+      );
 
       // Navigate to repo page with recipeId in URL
       const params = new URLSearchParams({
-        projectId: state.projectId,
-        recipeId: recipeResponse.recipe_id,
+        recipeId: state.recipeId, // Pass recipeId instead of projectId
       });
       if (repoName) {
         params.append("repoName", repoName);
@@ -530,12 +618,13 @@ export default function IdeaPage() {
         params.append("featureIdea", state.input);
       }
       
-      console.log("[Idea Page] Navigating to repo page with recipeId:", recipeResponse.recipe_id);
+      console.log("[Idea Page] Navigating to repo page with recipeId:", state.recipeId);
       router.push(`/repo?${params.toString()}`);
-    } catch (error: any) {
-      console.error("[Idea Page] Failed to create recipe:", error);
-      toast.error(error.message || "Failed to create recipe. Please try again.");
+      return;
     }
+    
+    console.error("[Idea Page] Invalid agent selection:", state.selectedAgent);
+    toast.error("Invalid agent selection");
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -556,6 +645,78 @@ export default function IdeaPage() {
 
     setState((prev) => ({ ...prev, loading: true }));
 
+    // For build agent, check if repo needs parsing first, then create recipe
+    if (state.selectedAgent === "build") {
+      if (!state.selectedRepo) {
+        toast.error("Please select a repository before submitting");
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const selectedRepoData = repositories.find(
+        (repo: Repo) => repo.id?.toString() === state.selectedRepo
+      );
+      
+      if (!selectedRepoData) {
+        toast.error("Selected repository not found. Please select a repository again.");
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      // Ensure we have a valid repo slug (full_name format: owner/repo-name)
+      const repoSlug = selectedRepoData.full_name || selectedRepoData.name;
+      if (!repoSlug || repoSlug.trim() === "") {
+        toast.error("Repository name is invalid. Please select a valid repository.");
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+
+      // Check if repo has a ready project
+      const repoFullName = selectedRepoData.full_name || selectedRepoData.name;
+      const repoNameOnly = repoFullName?.split("/").pop() || selectedRepoData.name;
+      
+      const hasReadyProject = projects?.some((project: any) => {
+        if (!project.repo_name || project.status !== "ready") {
+          return false;
+        }
+        const projectRepoName = project.repo_name;
+        return (
+          projectRepoName === repoFullName ||
+          projectRepoName === repoNameOnly ||
+          (repoFullName && repoFullName.includes(projectRepoName)) ||
+          projectRepoName.includes(repoNameOnly)
+        );
+      });
+
+      // If repo is not ready, parse it first
+      if (!hasReadyProject) {
+        console.log("[Idea Page] Repo not ready, starting parsing first:", repoFullName);
+        setState((prev) => ({ ...prev, loading: false }));
+        
+        // Start parsing - after parsing completes, user can continue to create recipe
+        await parseRepo(repoFullName, branchName);
+        return;
+      }
+
+      // Repo is ready, create recipe directly
+      console.log("[Idea Page] Repo is ready, creating recipe with:", {
+        userPrompt: state.input,
+        repoSlug,
+        branch: branchName,
+      });
+
+      // Create recipe
+      createRecipeMutation.mutate({
+        userPrompt: state.input,
+        repoSlug: repoSlug.trim(),
+        branch: branchName,
+      });
+      return;
+    }
+
+    // For ask/debug agents, use project creation (existing flow)
     // If project already exists, just select repo if needed
     if (state.projectId && state.selectedRepo) {
       selectRepoMutation.mutate({

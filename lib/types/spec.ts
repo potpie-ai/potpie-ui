@@ -83,3 +83,170 @@ export interface CreateRecipeResponse {
   message: string; // e.g., "Recipe created successfully. Use recipe_id for subsequent operations."
 }
 
+// New recipe codegen types
+export interface CreateRecipeCodegenRequest {
+  user_prompt: string;
+  repo_slug: string;
+  branch?: string;
+  commit?: string;
+  additional_links?: string[];
+}
+
+export interface CreateRecipeCodegenResponse {
+  recipe_id: string;
+  project_id: number;
+  status: string;
+  message: string;
+}
+
+export interface RecipeQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  preferred_option?: string;
+  allow_custom_answer: boolean;
+  optional: boolean;
+  order: number;
+}
+
+export interface RecipeQuestionsResponse {
+  recipe_id: string;
+  recipe_status: 'PENDING_QUESTIONS' | 'QUESTIONS_READY' | 'ERROR';
+  questions: RecipeQuestion[];
+}
+
+export interface SubmitSpecGenerationRequest {
+  recipe_id: string;
+  qa_answers: Array<{
+    question_id: string;
+    answer: string;
+  }>;
+}
+
+export interface SubmitSpecGenerationResponse {
+  recipe_id: string;
+  spec_id: string;
+  status: 'SUBMITTED';
+  message: string;
+}
+
+export interface SpecStatusResponse {
+  recipe_id: string;
+  spec_id: string;
+  spec_gen_status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  step_index: number;
+  progress_percent: number;
+  step_statuses: Record<string, {
+    status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+    message: string;
+  }>;
+  spec_output: SpecOutput | null;
+}
+
+// Plan generation types
+export interface PlanGenerationRequest {
+  spec_id?: string;
+  recipe_id?: string;
+}
+
+export interface PlanSubmitResponse {
+  plan_id: string;
+  status: 'SUBMITTED' | 'ERROR';
+  message: string;
+}
+
+export interface PlanStatusResponse {
+  plan_id: string;
+  spec_id: string;
+  recipe_id: string;
+  plan_gen_status: 'SUBMITTED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  current_step: number;
+  progress_percent: number | null;
+  total_items: number | null;
+  items_completed: number | null;
+  status_message: string;
+  error_message: string | null;
+}
+
+export interface FileReference {
+  path: string;
+  type: 'create' | 'modify' | 'delete';
+}
+
+export interface PlanItem {
+  item_number: number;
+  title: string;
+  detailed_objective: string;
+  implementation_steps: string[];
+  description: string;
+  verification_criteria: string;
+  files: FileReference[];
+  context_handoff: any;
+  reasoning: string;
+  architecture: string;
+}
+
+export interface PlanItemsResponse {
+  plan_id: string;
+  plan_items: PlanItem[];
+  next_start: number | null;
+}
+
+// Task splitting types
+export interface SubmitTaskSplittingRequest {
+  plan_id: string;
+  item_number: number;
+}
+
+export interface SubmitTaskSplittingResponse {
+  task_splitting_id: string;
+  status: 'SUBMITTED' | 'ERROR';
+  message: string;
+}
+
+export interface TaskSplittingStatusResponse {
+  task_splitting_id: string;
+  plan_item_id: number;
+  status: 'SUBMITTED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  current_step: number;
+  codegen_status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+}
+
+export interface TaskTestResult {
+  name: string;
+  status: 'PENDING' | 'PASSED' | 'FAILED';
+}
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  file: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  tests: {
+    total: number;
+    passed: number;
+  };
+  testCode: string;
+  testResults: TaskTestResult[];
+  changes?: Array<{
+    path: string;
+    lang: string;
+    content: string;
+  }>;
+  logs?: string[];
+}
+
+export interface TaskLayer {
+  id: string;
+  title: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  layer_order: number;
+  tasks: TaskItem[];
+}
+
+export interface TaskSplittingItemsResponse {
+  task_splitting_id: string;
+  layers: TaskLayer[];
+  next_layer_order: number | null;
+}
+

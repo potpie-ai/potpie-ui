@@ -24,10 +24,13 @@ import {
 import SpecService from "@/services/SpecService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import QuestionService from "@/services/QuestionService";
+import PlanService from "@/services/PlanService";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { toast } from "sonner";
 import {
   SpecPlanStatusResponse,
+  SpecStatusResponse,
   SpecOutput,
   StepStatusValue,
 } from "@/lib/types/spec";
@@ -276,11 +279,12 @@ const SpecPage = () => {
   } | null>(null);
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [specProgress, setSpecProgress] = useState<SpecPlanStatusResponse | null>(null);
+  const [specProgress, setSpecProgress] = useState<SpecPlanStatusResponse | SpecStatusResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
+  const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
 
   const planContentRef = useRef(null);
   const hasInitializedRef = useRef(false);
@@ -499,13 +503,43 @@ const SpecPage = () => {
   // Poll for spec progress
   useEffect(() => {
     if (!recipeId) return;
-
+    if (hasInitializedRef.current) return;
+    
+    hasInitializedRef.current = true;
+    
     let mounted = true;
     let interval: NodeJS.Timeout;
 
-    const fetchProgress = async () => {
+    const pollSpecProgress = async () => {
       try {
-        const progress = await SpecService.getSpecProgress(recipeId);
+        console.log("[Spec Page] Starting to poll spec progress for recipeId:", recipeId);
+        
+        // Try to get spec_id from previous response if available
+        // Otherwise use recipe_id
+        let progress: SpecStatusResponse | SpecPlanStatusResponse;
+        let currentSpecId: string | null = null;
+        
+        // Check if we have a spec_id stored
+        const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
+        console.log("[Spec Page] Stored spec_id:", storedSpecId);
+        
+        if (storedSpecId) {
+          currentSpecId = storedSpecId;
+          console.log("[Spec Page] Using stored spec_id, calling getSpecProgressBySpecId");
+          progress = await SpecService.getSpecProgressBySpecId(storedSpecId);
+        } else {
+          // Always use new recipe codegen endpoint - don't fall back to old endpoint
+          console.log("[Spec Page] No stored spec_id, calling getSpecProgressByRecipeId");
+          progress = await SpecService.getSpecProgressByRecipeId(recipeId);
+          console.log("[Spec Page] Received progress response:", progress);
+          
+          // Store spec_id for future polling if available
+          if ('spec_id' in progress && progress.spec_id) {
+            currentSpecId = progress.spec_id;
+            localStorage.setItem(`spec_${recipeId}`, progress.spec_id);
+            console.log("[Spec Page] Stored spec_id:", currentSpecId);
+          }
+        }
         
         if (!mounted) return;
 
@@ -513,30 +547,74 @@ const SpecPage = () => {
         setError(null);
         setIsLoading(false);
 
+        // Determine status based on response type
+        const status = 'spec_gen_status' in progress 
+          ? progress.spec_gen_status 
+          : progress.spec_generation_step_status;
+
         // Stop polling when completed or failed
-        if (
-          progress.spec_generation_step_status === 'COMPLETED' ||
-          progress.spec_generation_step_status === 'FAILED'
-        ) {
+        if (status === 'COMPLETED' || status === 'FAILED') {
           if (interval) clearInterval(interval);
-          if (progress.spec_generation_step_status === 'COMPLETED') {
+          if (status === 'COMPLETED') {
             setIsPlanExpanded(false);
           }
+        } else {
+          // Continue polling if in progress
+          if (interval) clearInterval(interval);
+          interval = setInterval(async () => {
+            try {
+              // Always check localStorage for the latest spec_id (in case it was updated)
+              const latestSpecId = localStorage.getItem(`spec_${recipeId}`) || currentSpecId;
+              
+              let updated: SpecStatusResponse | SpecPlanStatusResponse;
+              if (latestSpecId) {
+                console.log("[Spec Page] Polling with spec_id:", latestSpecId);
+                updated = await SpecService.getSpecProgressBySpecId(latestSpecId);
+              } else {
+                console.log("[Spec Page] Polling with recipeId:", recipeId);
+                updated = await SpecService.getSpecProgressByRecipeId(recipeId);
+                
+                // Store spec_id if we got it from the response
+                if ('spec_id' in updated && updated.spec_id) {
+                  localStorage.setItem(`spec_${recipeId}`, updated.spec_id);
+                  currentSpecId = updated.spec_id;
+                  console.log("[Spec Page] Stored spec_id during polling:", currentSpecId);
+                }
+              }
+              
+              if (!mounted) return;
+              
+              console.log("[Spec Page] Updated progress:", updated);
+              setSpecProgress(updated);
+              
+              const updatedStatus = 'spec_gen_status' in updated 
+                ? updated.spec_gen_status 
+                : updated.spec_generation_step_status;
+              
+              console.log("[Spec Page] Updated status:", updatedStatus);
+              
+              if (updatedStatus === 'COMPLETED' || updatedStatus === 'FAILED') {
+                clearInterval(interval);
+                if (updatedStatus === 'COMPLETED') {
+                  setIsPlanExpanded(false);
+                }
+              }
+            } catch (error) {
+              console.error("[Spec Page] Error polling spec progress:", error);
+              if (!mounted) return;
+              // Don't clear interval on error - keep trying
+            }
+          }, 2000); // Poll every 2 seconds
         }
       } catch (err: any) {
         if (!mounted) return;
-        console.error("Failed to fetch progress:", err);
-        setError(err.message || "Failed to fetch progress");
+        console.error("Error fetching spec progress:", err);
+        setError(err.message || "Failed to load spec progress");
         setIsLoading(false);
-        // Continue polling even on error (will retry on next interval)
       }
     };
-
-    // Initial fetch
-    fetchProgress();
-
-    // Poll every 1000ms (1 second)
-    interval = setInterval(fetchProgress, 1000);
+    
+    pollSpecProgress();
 
     return () => {
       mounted = false;
@@ -544,9 +622,35 @@ const SpecPage = () => {
     };
   }, [recipeId]);
 
+  // Calculate progress from API response (support both old and new response formats)
+  const planProgress = specProgress 
+    ? (('progress_percent' in specProgress && specProgress.progress_percent !== null) 
+        ? specProgress.progress_percent 
+        : ('progress_percent' in specProgress ? specProgress.progress_percent : null)) ?? 0
+    : 0;
+  const status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null = specProgress 
+    ? ('spec_gen_status' in specProgress 
+        ? specProgress.spec_gen_status 
+        : ('spec_generation_step_status' in specProgress 
+            ? specProgress.spec_generation_step_status 
+            : null))
+    : null;
+  const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
+  const currentStep = specProgress 
+    ? (('step_index' in specProgress && specProgress.step_index !== null)
+        ? specProgress.step_index
+        : ('step_index' in specProgress ? specProgress.step_index : null)) ?? 0
+    : 0;
+  const stepStatuses: Record<string | number, { status: StepStatusValue; message: string }> | Record<number, { status: StepStatusValue; message: string }> | null = specProgress 
+    ? ('step_statuses' in specProgress 
+        ? specProgress.step_statuses 
+        : ('step_statuses' in specProgress ? specProgress.step_statuses : null)) ?? {}
+    : {};
+  const specOutput: SpecOutput | null = specProgress?.spec_output ?? null;
+
   // Auto-scroll to bottom when plan is generated
   useEffect(() => {
-    if (specProgress?.spec_generation_step_status === 'COMPLETED' && planContentRef.current) {
+    if (status === 'COMPLETED' && planContentRef.current) {
       setTimeout(() => {
         planContentRef.current?.scrollIntoView({
           behavior: "smooth",
@@ -554,12 +658,7 @@ const SpecPage = () => {
         });
       }, 100);
     }
-  }, [specProgress?.spec_generation_step_status]);
-
-  // Calculate progress from API response
-  const planProgress = specProgress?.progress_percent ?? 0;
-  const isGenerating = specProgress?.spec_generation_step_status === 'IN_PROGRESS' || 
-                       specProgress?.spec_generation_step_status === 'PENDING';
+  }, [status]);
 
   if (isLoading && !specProgress) {
     return (
@@ -606,7 +705,7 @@ const SpecPage = () => {
         )}
 
         {/* Failed State */}
-        {specProgress?.spec_generation_step_status === 'FAILED' && (
+        {status === 'FAILED' && (
           <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <X className="w-5 h-5 text-red-600" />
@@ -702,9 +801,9 @@ const SpecPage = () => {
                   <span className="text-sm font-bold text-zinc-900">
                     {isCancelled
                       ? "Stopped"
-                      : specProgress?.spec_generation_step_status === 'COMPLETED'
+                      : status === 'COMPLETED'
                         ? "Plan Ready"
-                        : specProgress?.spec_generation_step_status === 'FAILED'
+                        : status === 'FAILED'
                           ? "Failed"
                           : "Architecting System"}
                   </span>
@@ -725,7 +824,12 @@ const SpecPage = () => {
 
                 <div className="space-y-8 relative">
                   {PLAN_CHAPTERS.map((step, idx) => {
-                    const stepStatus = specProgress?.step_statuses?.[idx];
+                    // Handle both old (Record<number, StepStatus>) and new (Record<string, StepStatus>) formats
+                    const stepStatus = stepStatuses 
+                      ? (typeof stepStatuses[idx] !== 'undefined' 
+                          ? stepStatuses[idx] 
+                          : stepStatuses[idx.toString()])
+                      : undefined;
                     const isDone = stepStatus?.status === 'COMPLETED';
                     const isActive = stepStatus?.status === 'IN_PROGRESS';
                     const isFailed = stepStatus?.status === 'FAILED';
@@ -782,22 +886,54 @@ const SpecPage = () => {
         </section>
 
         {/* Implementation Output */}
-          {specProgress?.spec_generation_step_status === 'COMPLETED' && 
+          {status === 'COMPLETED' && 
            !isCancelled && 
-           specProgress?.spec_output && (
+           specOutput && (
             <section
               ref={planContentRef}
               className="animate-in fade-in slide-in-from-bottom-4 duration-500"
             >
-              <PlanTabs plan={specProgress.spec_output} />
+              <PlanTabs plan={specOutput} />
 
               {/* Action Button */}
               <div className="mt-12 flex justify-end">
                 <button
-                  onClick={() => router.push(`/task/${recipeId}/plan_overview`)}
-                  className="px-6 py-2 bg-[#0575E6] bg-gradient-to-r from-[#0575E6] to-[#021B79] hover:bg-[#0575E6] hover:text-white rounded-lg font-medium text-sm hover:bg-zinc-800 transition-colors text-white"
+                  onClick={async () => {
+                    if (isSubmittingPlan) return;
+                    
+                    setIsSubmittingPlan(true);
+                    try {
+                      // Get spec_id from localStorage or from specProgress
+                      const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
+                      const specId = storedSpecId || (specProgress && 'spec_id' in specProgress ? specProgress.spec_id : null);
+                      
+                      // Submit plan generation request
+                      const response = await PlanService.submitPlanGeneration({
+                        spec_id: specId || undefined,
+                        recipe_id: specId ? undefined : recipeId,
+                      });
+                      
+                      toast.success("Plan generation started successfully");
+                      
+                      // Navigate to plan page with planId
+                      router.push(`/task/${recipeId}/plan?planId=${response.plan_id}${specId ? `&specId=${specId}` : ''}`);
+                    } catch (error: any) {
+                      console.error("Error submitting plan generation:", error);
+                      toast.error(error.message || "Failed to start plan generation");
+                      setIsSubmittingPlan(false);
+                    }
+                  }}
+                  disabled={isSubmittingPlan}
+                  className="px-6 py-2 bg-[#0575E6] bg-gradient-to-r from-[#0575E6] to-[#021B79] hover:bg-[#0575E6] hover:text-white rounded-lg font-medium text-sm hover:bg-zinc-800 transition-colors text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Generate Detailed Plan
+                  {isSubmittingPlan ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Starting Plan Generation...
+                    </>
+                  ) : (
+                    "Generate Detailed Plan"
+                  )}
                 </button>
               </div>
             </section>

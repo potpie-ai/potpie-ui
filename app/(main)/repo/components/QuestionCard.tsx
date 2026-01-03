@@ -198,10 +198,23 @@ export default function QuestionCard({
                   return (
                     <div
                       key={index}
+                      onClick={() => {
+                        if (!isSkipped && !answer?.isEditing) {
+                          onAnswerChange({
+                            mcqAnswer: optionLabel,
+                            textAnswer: undefined,
+                            isUserModified: true,
+                          });
+                          // Don't auto-save - answers will be submitted when generating plan
+                          // onSave() is only needed for the old project-based flow
+                        }
+                      }}
                       className={`text-xs p-2.5 rounded-lg transition-all ${
                         isSelected
                           ? "bg-zinc-900 text-white font-semibold"
                           : "text-zinc-600 bg-white border border-zinc-200 hover:border-zinc-300"
+                      } ${
+                        !isSkipped && !answer?.isEditing ? "cursor-pointer" : "cursor-default"
                       }`}
                     >
                       <span className="font-bold mr-2">{optionLabel}.</span>

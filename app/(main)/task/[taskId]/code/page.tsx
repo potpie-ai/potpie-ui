@@ -38,6 +38,16 @@ import {
 import { MockTaskResponse, getMockTaskFromSession } from "@/lib/mock/taskMock";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
+import TaskSplittingService from "@/services/TaskSplittingService";
+import PlanService from "@/services/PlanService";
+import { useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  TaskSplittingStatusResponse,
+  TaskSplittingItemsResponse,
+  TaskLayer,
+} from "@/lib/types/spec";
 
 /**
  * VERTICAL TASK EXECUTION ENGINE
@@ -491,6 +501,17 @@ const SimpleCodeBlock = ({ code }) => {
   );
 };
 
+// Helper function to map API status to UI status
+const mapApiStatusToUI = (apiStatus: string): string => {
+  const statusMap: Record<string, string> = {
+    'PENDING': 'pending',
+    'IN_PROGRESS': 'running',
+    'COMPLETED': 'completed',
+    'FAILED': 'failed',
+  };
+  return statusMap[apiStatus] || apiStatus.toLowerCase();
+};
+
 // New TaskCard component handling inline expansion
 const TaskCard = ({ task, isExpanded, onToggle }) => {
   const hasChanges = task.changes && task.changes.length > 0;
@@ -498,14 +519,16 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
   const [activeTab, setActiveTab] = React.useState(
     hasChanges ? "diff" : "logs",
   );
-  const isPending = task.status === "pending";
+  // Map API status to UI status
+  const uiStatus = mapApiStatusToUI(task.status);
+  const isPending = uiStatus === "pending";
 
   return (
     <div
       className={`
       bg-white border rounded-xl transition-all duration-300 overflow-hidden
       ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-md" : "border-zinc-200 hover:border-zinc-300"}
-      ${task.status === "running" && !isExpanded ? "shadow-lg shadow-blue-50 border-blue-200" : ""}
+      ${uiStatus === "running" && !isExpanded ? "shadow-lg shadow-blue-50 border-blue-200" : ""}
     `}
     >
       {/* Header (Clickable for toggle) */}
@@ -513,14 +536,14 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
         onClick={onToggle}
         className="p-4 cursor-pointer flex flex-col gap-3 relative"
       >
-        {task.status === "running" && !isExpanded && (
+        {uiStatus === "running" && !isExpanded && (
           <div className="absolute inset-0 bg-black/10 pointer-events-none" />
         )}
 
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div
-              className={`p-1.5 rounded-md ${task.status === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-zinc-100 text-zinc-500"}`}
+              className={`p-1.5 rounded-md ${uiStatus === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-zinc-100 text-zinc-500"}`}
             >
               <Code2 className="w-4 h-4" />
             </div>
@@ -535,7 +558,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
           </div>
 
           <div className="flex items-center gap-3">
-            <StatusBadge status={task.status} tests={task.tests} />
+            <StatusBadge status={uiStatus} tests={task.tests} />
             <ChevronDown
               className={`w-4 h-4 text-zinc-300 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
             />
@@ -543,7 +566,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
         </div>
 
         {/* Mini Progress Bar */}
-        {task.status === "running" && !isExpanded && (
+        {uiStatus === "running" && !isExpanded && (
           <div className="w-full h-1 bg-zinc-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-black transition-all duration-300 ease-out"
@@ -584,7 +607,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
             >
               <TestTube className="w-3 h-3" />
               Verification
-              {task.status === "completed" && (
+              {uiStatus === "completed" && (
                 <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[9px]">
                   {task.tests.passed}/{task.tests.total}
                 </span>
@@ -696,25 +719,27 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                           className="flex items-center justify-between p-3"
                         >
                           <div className="flex items-center gap-3">
-                            {task.status === "completed" ? (
+                            {uiStatus === "completed" ? (
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                             ) : (
                               <Circle className="w-3.5 h-3.5 text-zinc-300" />
                             )}
                             <span
-                              className={`text-[11px] font-medium ${task.status === "completed" ? "text-zinc-900" : "text-zinc-500"}`}
+                              className={`text-[11px] font-medium ${uiStatus === "completed" ? "text-zinc-900" : "text-zinc-500"}`}
                             >
                               {test.name}
                             </span>
                           </div>
                           <span
                             className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                              task.status === "completed"
-                                ? "bg-emerald-100 text-emerald-700"
+                              uiStatus === "completed"
+                                ? test.status === "PASSED"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-red-100 text-red-700"
                                 : "bg-zinc-100 text-zinc-400"
                             }`}
                           >
-                            {task.status === "completed" ? "PASSED" : "PENDING"}
+                            {uiStatus === "completed" ? (test.status === "PASSED" ? "PASSED" : "FAILED") : "PENDING"}
                           </span>
                         </div>
                       ))}
@@ -738,7 +763,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                   </div>
                 )}
 
-                {task.status === "running" && (
+                {uiStatus === "running" && (
                   <div className="animate-pulse text-black">_</div>
                 )}
               </div>
@@ -753,37 +778,130 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
 export default function VerticalTaskExecution() {
   const params = useParams();
   const router = useRouter();
-  const taskId = params?.taskId as string;
+  const searchParams = useSearchParams();
+  // Note: taskId in URL is actually recipeId now
+  const recipeId = params?.taskId as string;
+  const planIdFromUrl = searchParams.get("planId");
+  const itemNumberFromUrl = searchParams.get("itemNumber");
+  
   const repoBranchByTask = useSelector(
     (state: RootState) => state.RepoAndBranch.byTaskId
   );
-  const storedRepoContext = taskId
-    ? repoBranchByTask?.[taskId]
+  const storedRepoContext = recipeId
+    ? repoBranchByTask?.[recipeId]
     : undefined;
 
   const [mockTask, setMockTask] = useState<MockTaskResponse | null>(null);
-  const [activeSliceId, setActiveSliceId] = useState(1);
-  const [completedSlices, setCompletedSlices] = useState([]);
+  const [activeSliceId, setActiveSliceId] = useState(itemNumberFromUrl ? parseInt(itemNumberFromUrl) : 1);
+  const [completedSlices, setCompletedSlices] = useState<number[]>([]);
   const [isRunning, setIsRunning] = useState(false);
 
+  // Task Splitting API State
+  const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
+  const [planItems, setPlanItems] = useState<any[]>([]);
+  const [taskSplittingId, setTaskSplittingId] = useState<string | null>(null);
+  const [taskSplittingStatus, setTaskSplittingStatus] = useState<TaskSplittingStatusResponse | null>(null);
+  const [allLayers, setAllLayers] = useState<TaskLayer[]>([]);
+  const [nextLayerOrder, setNextLayerOrder] = useState<number | null>(0);
+  const [isLoadingLayers, setIsLoadingLayers] = useState(false);
+
   // Graph Loading & Data State
-  const [currentDag, setCurrentDag] = useState([]); // Array of levels
+  const [currentDag, setCurrentDag] = useState<TaskLayer[]>([]); // Array of layers from API
   const [isGraphLoading, setIsGraphLoading] = useState(true); // Start as loading
   const [graphLoadIndex, setGraphLoadIndex] = useState(0); // Tracks how many levels are shown
 
-  const [globalLogs, setGlobalLogs] = useState([]);
+  const [globalLogs, setGlobalLogs] = useState<string[]>([]);
   const [showGlobalLogs, setShowGlobalLogs] = useState(false);
-  const [expandedTaskId, setExpandedTaskId] = useState(null);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
-  const terminalRef = useRef(null);
-  const sidebarRef = useRef(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
+  // Get plan_id from URL or try to get latest plan for recipe
   useEffect(() => {
-    if (taskId) {
-      const stored = getMockTaskFromSession(taskId);
-      setMockTask(stored);
+    if (!planId && recipeId) {
+      // Try to get latest plan for this recipe
+      PlanService.getPlanStatusByRecipeId(recipeId)
+        .then((status) => {
+          if (status.plan_id) {
+            setPlanId(status.plan_id);
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("planId", status.plan_id);
+            // Default to item 1 if no itemNumber specified
+            if (!params.get("itemNumber")) {
+              params.set("itemNumber", "1");
+            }
+            router.replace(`/task/${recipeId}/code?${params.toString()}`);
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching plan status:", error);
+        });
     }
-  }, [taskId]);
+  }, [planId, recipeId]);
+
+  // Submit task splitting when we have planId and itemNumber but no taskSplittingId
+  useEffect(() => {
+    if (!planId || !activeSliceId || taskSplittingId) return;
+
+    // Check if we already have a stored task_splitting_id for this plan item
+    const storedTaskSplittingId = localStorage.getItem(`task_splitting_${planId}_${activeSliceId}`);
+    if (storedTaskSplittingId) {
+      setTaskSplittingId(storedTaskSplittingId);
+      return;
+    }
+
+    // Submit task splitting request
+    const submitTaskSplitting = async () => {
+      try {
+        console.log("[Code Page] Submitting task splitting for planId:", planId, "itemNumber:", activeSliceId);
+        const response = await TaskSplittingService.submitTaskSplitting({
+          plan_id: planId,
+          item_number: activeSliceId,
+        });
+        console.log("[Code Page] Task splitting submitted:", response);
+        setTaskSplittingId(response.task_splitting_id);
+        localStorage.setItem(`task_splitting_${planId}_${activeSliceId}`, response.task_splitting_id);
+        toast.success("Task splitting started");
+      } catch (error: any) {
+        console.error("[Code Page] Error submitting task splitting:", error);
+        toast.error(error.message || "Failed to start task splitting");
+      }
+    };
+
+    submitTaskSplitting();
+  }, [planId, activeSliceId, taskSplittingId]);
+
+  // Fetch plan items for sidebar display
+  useEffect(() => {
+    if (!planId || planItems.length > 0) return;
+
+    const fetchPlanItems = async () => {
+      try {
+        console.log("[Code Page] Fetching plan items for planId:", planId);
+        let allItems: any[] = [];
+        let start = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const response = await PlanService.getPlanItems(planId, start, 20);
+          allItems = [...allItems, ...response.plan_items];
+          if (response.next_start === null) {
+            hasMore = false;
+          } else {
+            start = response.next_start;
+          }
+        }
+
+        console.log("[Code Page] Fetched plan items:", allItems.length);
+        setPlanItems(allItems);
+      } catch (error) {
+        console.error("[Code Page] Error fetching plan items:", error);
+      }
+    };
+
+    fetchPlanItems();
+  }, [planId, planItems.length]);
 
   useEffect(() => {
     if (!storedRepoContext) return;
@@ -804,66 +922,143 @@ export default function VerticalTaskExecution() {
         };
       }
 
-      if (!taskId) {
+      if (!recipeId) {
         return prev;
       }
 
       return {
-        task_id: taskId,
+        task_id: recipeId,
         prompt: "",
         repo: repoName,
         branch: branchName,
         questions: [],
       };
     });
-  }, [storedRepoContext, taskId]);
+  }, [storedRepoContext, recipeId]);
 
   // 1. Reset State when Slice Changes
   useEffect(() => {
     // Only reset if we haven't completed this slice
     if (!completedSlices.includes(activeSliceId)) {
       setCurrentDag([]);
+      setAllLayers([]);
       setGlobalLogs([]);
       setGraphLoadIndex(0);
       setIsRunning(false);
       setIsGraphLoading(true); // Start the step-by-step graph loading
+      setTaskSplittingId(null); // Reset task splitting ID to trigger new submission
+      setTaskSplittingStatus(null); // Reset status
     } else {
       // If revisiting completed slice, show full graph immediately
-      const template = MOCK_DAGS[activeSliceId] || MOCK_DAGS.default;
-      const completeDag = JSON.parse(JSON.stringify(template));
-      completeDag.forEach((l) => {
-        l.status = "completed";
-        l.tasks.forEach((t) => {
-          t.status = "completed";
-          t.tests.passed = t.tests.total;
-        });
-      });
-      setCurrentDag(completeDag);
+      // Try to get stored task_splitting_id for this slice
+      if (planId) {
+        const storedTaskSplittingId = localStorage.getItem(`task_splitting_${planId}_${activeSliceId}`);
+        if (storedTaskSplittingId && storedTaskSplittingId !== taskSplittingId) {
+          setTaskSplittingId(storedTaskSplittingId);
+        }
+      }
+      setCurrentDag(allLayers);
       setIsGraphLoading(false); // Already loaded
-      setGraphLoadIndex(completeDag.length);
+      setGraphLoadIndex(allLayers.length);
     }
-  }, [activeSliceId]);
+  }, [activeSliceId, planId]);
 
-  // 2. Step-by-Step Graph Discovery (Loading Phase)
+  // 2. Poll for task splitting status (5.2 API) - runs when we have taskSplittingId
+  useEffect(() => {
+    if (!taskSplittingId) return;
+
+    let mounted = true;
+    let pollInterval: NodeJS.Timeout;
+
+    const fetchStatusAndLayers = async () => {
+      try {
+        console.log("[Code Page] Polling task splitting status for:", taskSplittingId);
+        const status = await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
+
+        if (!mounted) return;
+
+        console.log("[Code Page] Task splitting status:", status);
+        setTaskSplittingStatus(status);
+
+        // Fetch layers if task splitting is completed or if we need to show progress
+        if (status.status === "COMPLETED" || status.status === "IN_PROGRESS") {
+          await fetchLayersWithPagination();
+        }
+
+        // Stop polling if task splitting is done
+        if (status.status === "COMPLETED" || status.status === "FAILED") {
+          if (pollInterval) clearInterval(pollInterval);
+
+          if (status.status === "COMPLETED") {
+            setIsGraphLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error("[Code Page] Error polling task splitting status:", error);
+      }
+    };
+
+    // Fetch layers with pagination (5.3 API)
+    const fetchLayersWithPagination = async () => {
+      try {
+        console.log("[Code Page] Fetching layers with pagination");
+        let allLayersData: TaskLayer[] = [];
+        let start = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const response = await TaskSplittingService.getTaskSplittingItems(taskSplittingId, start, 10);
+          console.log("[Code Page] Fetched layers:", response.layers.length, "next_layer_order:", response.next_layer_order);
+          allLayersData = [...allLayersData, ...response.layers];
+
+          if (response.next_layer_order === null) {
+            hasMore = false;
+          } else {
+            start = response.next_layer_order;
+          }
+        }
+
+        if (!mounted) return;
+
+        setAllLayers(allLayersData);
+        setNextLayerOrder(null);
+
+        // Update current DAG for display
+        if (allLayersData.length > 0) {
+          setCurrentDag(allLayersData);
+          setGraphLoadIndex(allLayersData.length);
+        }
+      } catch (error) {
+        console.error("[Code Page] Error fetching layers:", error);
+      }
+    };
+
+    // Initial fetch
+    fetchStatusAndLayers();
+
+    // Set up polling
+    pollInterval = setInterval(fetchStatusAndLayers, 2000);
+
+    return () => {
+      mounted = false;
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [taskSplittingId]);
+
+  // 3. Step-by-Step Graph Discovery (Loading Phase) - progressive reveal
   useEffect(() => {
     if (!isGraphLoading) return;
 
-    const template = MOCK_DAGS[activeSliceId] || MOCK_DAGS.default;
+    // Wait for task splitting to complete and layers to be fetched
+    if (taskSplittingStatus?.status !== "COMPLETED" || allLayers.length === 0) {
+      return;
+    }
 
-    if (graphLoadIndex < template.length) {
+    // Load layers progressively
+    if (graphLoadIndex < allLayers.length) {
       const timer = setTimeout(() => {
-        // Load next level from template
-        const nextLevel = JSON.parse(JSON.stringify(template[graphLoadIndex]));
-
-        // Ensure pending state
-        nextLevel.status = "pending";
-        nextLevel.tasks.forEach((t) => {
-          t.status = "pending";
-          t._progress = 0;
-          if (t.changes) t.changes.forEach((c) => (c.content = ""));
-        });
-
-        setCurrentDag((prev) => [...prev, nextLevel]);
+        const nextLayer = allLayers[graphLoadIndex];
+        setCurrentDag((prev) => [...prev, nextLayer]);
         setGraphLoadIndex((prev) => prev + 1);
       }, 600); // 600ms delay between levels appearing
 
@@ -872,109 +1067,89 @@ export default function VerticalTaskExecution() {
       // Done loading graph
       setIsGraphLoading(false);
     }
-  }, [isGraphLoading, graphLoadIndex, activeSliceId]);
+  }, [isGraphLoading, graphLoadIndex, activeSliceId, allLayers, taskSplittingStatus]);
 
-  // 3. Code Generation / Execution Phase
+  // 4. Poll for codegen updates (when running)
   useEffect(() => {
-    if (!isRunning) return;
+    if (!taskSplittingId || !isRunning) return;
 
-    const template = MOCK_DAGS[activeSliceId] || MOCK_DAGS.default;
-    let localDag = [...currentDag];
-    let levelIdx = localDag.findIndex((l) => l.status !== "completed");
+    let mounted = true;
 
-    // Slice Complete?
-    if (levelIdx === -1) {
-      if (!completedSlices.includes(activeSliceId)) {
-        setCompletedSlices((prev) => [...prev, activeSliceId]);
-        setGlobalLogs((prev) => [
-          ...prev,
-          `SUCCESS: Vertical Slice 0${activeSliceId} verified.`,
-        ]);
+    const pollCodegenStatus = async () => {
+      try {
+        const status = await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
 
-        // Auto-advance to next slice
-        if (activeSliceId < SLICES.length) {
-          setTimeout(() => {
-            setActiveSliceId((prev) => prev + 1);
-          }, 1000);
-        } else {
+        if (!mounted) return;
+
+        setTaskSplittingStatus(status);
+
+        // If codegen is in progress or completed, fetch updated layers
+        if (status.codegen_status === "IN_PROGRESS" || status.codegen_status === "COMPLETED") {
+          // Fetch all layers to get updated task statuses
+          let allLayersData: TaskLayer[] = [];
+          let start = 0;
+          let hasMore = true;
+
+          while (hasMore) {
+            const response = await TaskSplittingService.getTaskSplittingItems(taskSplittingId, start, 10);
+            allLayersData = [...allLayersData, ...response.layers];
+            if (response.next_layer_order === null) {
+              hasMore = false;
+            } else {
+              start = response.next_layer_order;
+            }
+          }
+
+          if (!mounted) return;
+
+          setAllLayers(allLayersData);
+          setCurrentDag(allLayersData);
+
+          // Check if all tasks are completed
+          const allCompleted = allLayersData.every(
+            (layer) => {
+              const layerStatus = mapApiStatusToUI(layer.status);
+              return layerStatus === "completed" || layer.tasks.every((task) => {
+                const taskStatus = mapApiStatusToUI(task.status);
+                return taskStatus === "completed";
+              });
+            }
+          );
+
+          if (allCompleted && !completedSlices.includes(activeSliceId)) {
+            setCompletedSlices((prev) => [...prev, activeSliceId]);
+            setGlobalLogs((prev) => [
+              ...prev,
+              `SUCCESS: Vertical Slice ${String(activeSliceId).padStart(2, '0')} verified.`,
+            ]);
+
+            // Auto-advance to next slice if available
+            const nextSlice = planItems.find((item) => item.item_number > activeSliceId);
+            if (nextSlice) {
+              setTimeout(() => {
+                setActiveSliceId(nextSlice.item_number);
+              }, 1000);
+            } else {
+              setIsRunning(false);
+            }
+          }
+        }
+
+        if (status.codegen_status === "COMPLETED" || status.codegen_status === "FAILED") {
           setIsRunning(false);
         }
+      } catch (error) {
+        console.error("Error polling codegen status:", error);
       }
-      return;
-    }
+    };
 
-    const timer = setTimeout(() => {
-      const activeLevel = localDag[levelIdx];
-      const sourceLevel = template.find((l) => l.id === activeLevel.id);
+    const pollInterval = setInterval(pollCodegenStatus, 2000);
 
-      if (activeLevel.status === "pending") {
-        activeLevel.status = "running";
-        activeLevel.tasks.forEach((t) => (t.status = "running"));
-        setGlobalLogs((prev) => [
-          ...prev,
-          `>> Starting Phase: ${activeLevel.title}`,
-        ]);
-      }
-
-      let allTasksDone = true;
-
-      activeLevel.tasks.forEach((task) => {
-        const sourceTask = sourceLevel.tasks.find((t) => t.id === task.id);
-
-        if (task.status === "running") {
-          task._progress = Math.min((task._progress || 0) + 2, 100);
-
-          if (sourceTask.changes) {
-            task.changes = sourceTask.changes.map((change, idx) => {
-              const charCount = Math.floor(
-                change.content.length * (task._progress / 100),
-              );
-              return { ...change, content: change.content.slice(0, charCount) };
-            });
-          }
-
-          if (task._progress < 100) {
-            if (sourceTask.tests.total > 0) {
-              task.tests.passed = Math.floor(
-                sourceTask.tests.total * (task._progress / 100),
-              );
-            }
-            if (sourceTask.logs && sourceTask.logs.length > 0) {
-              const totalLogs = sourceTask.logs.length;
-              const logIndex = Math.floor((totalLogs * task._progress) / 100);
-              if (
-                logIndex > (task._lastLogIndex ?? -1) &&
-                logIndex < totalLogs
-              ) {
-                const logMsg = sourceTask.logs[logIndex];
-                task.logs.push(logMsg);
-                setGlobalLogs((prev) => [...prev, `[${task.file}] ${logMsg}`]);
-                task._lastLogIndex = logIndex;
-              }
-            }
-            allTasksDone = false;
-          } else {
-            task.status = "completed";
-            task.tests.passed = task.tests.total;
-            if (!task._verifiedLog) {
-              setGlobalLogs((prev) => [...prev, `[${task.file}] Verified.`]);
-              task._verifiedLog = true;
-            }
-          }
-        } else if (task.status === "pending") {
-          allTasksDone = false;
-        }
-      });
-
-      if (allTasksDone) {
-        activeLevel.status = "completed";
-      }
-
-      setCurrentDag([...localDag]);
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [isRunning, currentDag, activeSliceId, completedSlices]);
+    return () => {
+      mounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [taskSplittingId, isRunning, activeSliceId, completedSlices, planItems]);
 
   // Auto-scroll logic
   useEffect(() => {
@@ -994,19 +1169,66 @@ export default function VerticalTaskExecution() {
   }, [activeSliceId]);
 
   const isSliceComplete = completedSlices.includes(activeSliceId);
-  const activeSliceMeta = SLICES.find((s) => s.id === activeSliceId);
+  const activeSliceMeta = planItems.find((item) => item.item_number === activeSliceId) || 
+    SLICES.find((s) => s.id === activeSliceId);
 
   // Manual navigation
-  const handleManualSliceChange = (id) => {
+  const handleManualSliceChange = (id: number) => {
     setActiveSliceId(id);
+    // Update URL with itemNumber
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("itemNumber", id.toString());
+    if (planId) {
+      params.set("planId", planId);
+    }
+    router.replace(`/task/${recipeId}/code?${params.toString()}`);
   };
 
-  if (!mockTask) {
+  // Show loading if we don't have planId or recipeId
+  if (!planId && !recipeId) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
           <p>Loading task data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if task splitting is being submitted
+  if (planId && !taskSplittingId && !taskSplittingStatus) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p>Starting task splitting...</p>
+          <p className="text-sm text-zinc-500 mt-2">Preparing execution plan for Slice {String(activeSliceId).padStart(2, '0')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if task splitting is in progress and no layers yet
+  if (taskSplittingStatus?.status === "IN_PROGRESS" && allLayers.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p>Generating task execution plan...</p>
+          <p className="text-sm text-zinc-500 mt-2">Step {taskSplittingStatus.current_step + 1}/2</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if task splitting is submitted and waiting
+  if (taskSplittingStatus?.status === "SUBMITTED" && allLayers.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p>Task splitting submitted, waiting to start...</p>
         </div>
       </div>
     );
@@ -1024,22 +1246,23 @@ export default function VerticalTaskExecution() {
           {/* Continuous Vertical Line */}
           <div
             className="absolute left-[35px] top-6 w-[1px] bg-zinc-200 z-0"
-            style={{ height: `${Math.min(SLICES.length, 8) * 70 - 70}px` }}
+            style={{ height: `${Math.min(planItems.length || SLICES.length, 8) * 70 - 70}px` }}
           />
 
           <div className="space-y-8 relative z-10">
-            {SLICES.map((slice, idx) => {
-              const isCompleted = completedSlices.includes(slice.id);
+            {(planItems.length > 0 ? planItems : SLICES).map((slice: any, idx: number) => {
+              const sliceId = slice.item_number || slice.id;
+              const isCompleted = completedSlices.includes(sliceId);
               const isLocked =
-                idx > 0 && !completedSlices.includes(SLICES[idx - 1].id);
-              const isActive = activeSliceId === slice.id;
+                idx > 0 && !completedSlices.includes((planItems.length > 0 ? planItems : SLICES)[idx - 1]?.item_number || (planItems.length > 0 ? planItems : SLICES)[idx - 1]?.id);
+              const isActive = activeSliceId === sliceId;
 
               return (
                 <div
                   key={slice.id}
                   data-active={isActive}
                   className={`group flex gap-4 ${isLocked ? " pointer-events-none" : "cursor-pointer"}`}
-                  onClick={() => !isLocked && handleManualSliceChange(slice.id)}
+                  onClick={() => !isLocked && handleManualSliceChange(sliceId)}
                 >
                   {/* Timeline Node */}
                   <div
@@ -1057,7 +1280,7 @@ export default function VerticalTaskExecution() {
                     {isCompleted ? (
                       <Check className="w-3.5 h-3.5" />
                     ) : (
-                      <span className="text-[10px] font-bold">{slice.id}</span>
+                      <span className="text-[10px] font-bold">{sliceId}</span>
                     )}
                   </div>
 
@@ -1087,7 +1310,7 @@ export default function VerticalTaskExecution() {
         <header className="h-16 flex items-center justify-between px-8 border-b border-zinc-100">
           <div>
             <h1 className="text-lg font-bold text-zinc-900 tracking-tight">
-              {SLICES.find((s) => s.id === activeSliceId)?.title}
+              {activeSliceMeta?.title || planItems.find((item) => item.item_number === activeSliceId)?.title || `Slice ${activeSliceId}`}
             </h1>
             <div className="flex items-center gap-2">
               <p className="text-[10px] text-zinc-400 font-medium uppercase tracking-widest">
@@ -1175,8 +1398,10 @@ export default function VerticalTaskExecution() {
             {currentDag.length > 0 && (
               <div className="max-w-2xl mx-auto space-y-8 pb-12">
                 {currentDag.map((level, idx) => {
-                  const isActive = level.status === "running";
-                  const isDone = level.status === "completed";
+                  // Map API status to UI status
+                  const levelStatus = mapApiStatusToUI(level.status);
+                  const isActive = levelStatus === "running" || level.status === "IN_PROGRESS";
+                  const isDone = levelStatus === "completed" || level.status === "COMPLETED";
 
                   return (
                     <div
@@ -1266,7 +1491,7 @@ export default function VerticalTaskExecution() {
                             What was done
                           </h4>
                           <p className="text-sm text-zinc-600 leading-relaxed">
-                            {activeSliceMeta.summary}
+                            {activeSliceMeta?.summary || activeSliceMeta?.detailed_objective || "Slice completed successfully"}
                           </p>
                         </div>
                         <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-100">
@@ -1275,7 +1500,7 @@ export default function VerticalTaskExecution() {
                             How to Verify
                           </h4>
                           <p className="text-xs font-mono text-zinc-500">
-                            {activeSliceMeta.verify}
+                            {activeSliceMeta?.verify || activeSliceMeta?.verification_criteria || "All tests passed"}
                           </p>
                         </div>
                       </div>

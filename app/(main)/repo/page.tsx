@@ -12,39 +12,23 @@ import QuestionSection from "./components/QuestionSection";
 import AdditionalContextSection from "./components/AdditionalContextSection";
 import QuestionProgress from "./components/QuestionProgress";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Github, FileText, Loader2, ChevronDown, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { QAAnswer } from "@/lib/types/spec";
+import { Github, FileText, Loader2 } from "lucide-react";
+import { QAAnswer, SubmitSpecGenerationResponse, RecipeQuestionsResponse } from "@/lib/types/spec";
 import type { MCQQuestion, QuestionAnswer, RepoPageState } from "@/types/question";
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
-import { useDispatch } from "react-redux";
-import { AppDispatch } from "@/lib/state/store";
-import { useAuthContext } from "@/contexts/AuthContext";
-import ChatService from "@/services/ChatService";
-import { setPendingMessage } from "@/lib/state/Reducers/chat";
 import { ParsingStatusEnum } from "@/lib/Constants";
 
 export default function RepoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const dispatch = useDispatch<AppDispatch>();
-  const { user } = useAuthContext();
   const projectId = searchParams.get("projectId");
+  const recipeIdFromUrl = searchParams.get("recipeId");
   const repoNameFromUrl = searchParams.get("repoName");
   const featureIdeaFromUrl = searchParams.get("featureIdea");
   const questionsEndRef = useRef<HTMLDivElement>(null);
   
   const [recipeId, setRecipeId] = useState<string | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
-  const [userQuery, setUserQuery] = useState<string>("");
+  const [questionsPolling, setQuestionsPolling] = useState(false);
 
   const [state, setState] = useState<RepoPageState>({
     pageState: "generating",
@@ -59,7 +43,96 @@ export default function RepoPage() {
     isGenerating: false,
   });
 
-  // Generate questions on page load
+  // Fetch questions when recipeId is available (new recipe codegen flow)
+  useEffect(() => {
+    if (!recipeId) return;
+
+    const fetchQuestions = async () => {
+      setQuestionsPolling(true);
+      setState((prev) => ({ ...prev, pageState: "generating" }));
+
+      try {
+        // First, try a direct fetch to see if questions are already available
+        // This handles cases where status has moved to SPEC_IN_PROGRESS but questions exist
+        let questionsData: RecipeQuestionsResponse;
+        try {
+          questionsData = await QuestionService.getRecipeQuestions(recipeId);
+          
+          // If questions are available, use them immediately
+          if (questionsData.questions && questionsData.questions.length > 0) {
+            console.log("[Repo Page] Questions already available, status:", questionsData.recipe_status);
+            // Process questions immediately
+            processQuestions(questionsData);
+            return;
+          }
+        } catch (error) {
+          console.log("[Repo Page] Direct fetch failed, will poll instead:", error);
+        }
+
+        // If direct fetch didn't return questions, poll for them
+        console.log("[Repo Page] Polling for questions...");
+        questionsData = await QuestionService.pollRecipeQuestions(recipeId);
+        processQuestions(questionsData);
+      } catch (error: any) {
+        console.error("Error fetching questions:", error);
+        toast.error(error.message || "Failed to load questions");
+        setState((prev) => ({ ...prev, pageState: "questions" }));
+      } finally {
+        setQuestionsPolling(false);
+      }
+    };
+
+    const processQuestions = (questionsData: RecipeQuestionsResponse) => {
+      // Check if questions are available (regardless of status)
+      // This handles cases where status is SPEC_IN_PROGRESS but questions are still available
+      if (questionsData.questions && questionsData.questions.length > 0) {
+        // Convert RecipeQuestion[] to MCQQuestion[] format
+        const mcqQuestions: MCQQuestion[] = questionsData.questions.map((q) => ({
+          id: q.id,
+          section: "General", // Default section, could be enhanced later
+          question: q.question,
+          options: q.options,
+          needsInput: q.allow_custom_answer,
+          assumed: q.preferred_option,
+        }));
+
+        // Group by section and set state
+        const sectionsMap = new Map<string, MCQQuestion[]>();
+        mcqQuestions.forEach((q) => {
+          if (!sectionsMap.has(q.section)) {
+            sectionsMap.set(q.section, []);
+          }
+          sectionsMap.get(q.section)!.push(q);
+        });
+
+        setState((prev) => ({
+          ...prev,
+          questions: mcqQuestions,
+          sections: sectionsMap,
+          pageState: "questions",
+        }));
+
+        // Animate questions appearing
+        mcqQuestions.forEach((q, index) => {
+          setTimeout(() => {
+            setState((prev) => {
+              const newVisible = new Set(prev.visibleQuestions);
+              newVisible.add(q.id);
+              return { ...prev, visibleQuestions: newVisible };
+            });
+          }, index * 200);
+        });
+      } else {
+        // No questions available
+        console.warn("[Repo Page] No questions available, status:", questionsData.recipe_status);
+        setState((prev) => ({ ...prev, pageState: "questions" }));
+      }
+    };
+
+    fetchQuestions();
+  }, [recipeId]);
+
+  // Generate questions on page load (old flow - kept for backward compatibility)
   const {
     data: questionsData,
     isLoading: questionsLoading,
@@ -73,7 +146,7 @@ export default function RepoPage() {
         featureIdeaFromUrl || undefined
       );
     },
-    enabled: !!projectId,
+    enabled: !!projectId && !recipeId, // Only use old flow if recipeId is not available
     retry: 2,
   });
 
@@ -132,20 +205,19 @@ export default function RepoPage() {
 
   // Recover recipeId from URL (created in idea page)
   useEffect(() => {
-    const existingRecipeId = searchParams.get("recipeId");
-    if (existingRecipeId) {
+    if (recipeIdFromUrl) {
       // Validate it's a UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(existingRecipeId)) {
-        console.log("[Repo Page] Recovered recipeId from URL:", existingRecipeId);
-        setRecipeId(existingRecipeId);
+      if (uuidRegex.test(recipeIdFromUrl)) {
+        console.log("[Repo Page] Recovered recipeId from URL:", recipeIdFromUrl);
+        setRecipeId(recipeIdFromUrl);
       } else {
-        console.warn("[Repo Page] Invalid recipeId format in URL:", existingRecipeId);
+        console.warn("[Repo Page] Invalid recipeId format in URL:", recipeIdFromUrl);
       }
     } else {
       console.warn("[Repo Page] No recipeId in URL - recipe should have been created in idea page");
     }
-  }, [searchParams]);
+  }, [recipeIdFromUrl]);
 
   // Process questions when received
   useEffect(() => {
@@ -241,125 +313,30 @@ export default function RepoPage() {
     },
   });
 
-  // Create conversation mutation for agent selection
-  const createConversationMutation = useMutation({
-    mutationFn: async (agentId: string) => {
-      // Validate all required fields
-      if (!user?.uid) throw new Error("User not authenticated");
-      if (!projectId) throw new Error("Project ID is required");
-      
-      // CRITICAL: Validate repo and branch are available
-      if (!repoName || repoName === "Unknown Repository") {
-        throw new Error("Repository name is required. Please ensure repository is properly selected.");
-      }
-      
-      const finalBranchName = branchName || "main";
-      
-      // CRITICAL: Verify project is parsed and ready
-      try {
-        const status = await BranchAndRepositoryService.getParsingStatus(projectId);
-        if (status !== ParsingStatusEnum.READY) {
-          throw new Error(`Repository parsing status: ${status}. Must be 'ready' to create conversation.`);
-        }
-      } catch (error) {
-        if (error instanceof Error && error.message.includes("parsing status")) {
-          throw error;
-        }
-        throw new Error("Failed to verify repository parsing status");
-      }
-      
-      const title = agentId === "codebase_qna_agent" 
-        ? "Codebase Q&A Chat" 
-        : "Debug Chat";
-      
-      console.log("[Repo Page] Creating conversation with full context:", {
-        userId: user.uid,
-        projectId,
-        repoName,
-        branchName: finalBranchName,
-        agentId,
-        title
-      });
-      
-      // CRITICAL: Pass repo_name and branch_name to ensure backend has context
-      return await ChatService.createConversation(
-        user.uid,
-        title,
-        projectId,
-        agentId
-      );
-    },
-    onSuccess: (data) => {
-      // Clear the query field after successful creation
-      setUserQuery("");
-      router.push(`/chat/${data.conversation_id}`);
-    },
-    onError: (error: Error) => {
-      console.error("[Repo Page] Failed to create conversation:", error);
-      
-      // Clear pending message on error so it doesn't get sent later
-      dispatch(setPendingMessage(""));
-      
-      // Show user-friendly error message
-      if (error.message.includes("Project ID")) {
-        toast.error("Repository not found. Please select a valid repository.");
-      } else if (error.message.includes("not authenticated")) {
-        toast.error("Please sign in to continue.");
-      } else if (error.message.includes("parsing status")) {
-        toast.error(error.message);
-      } else {
-        toast.error(error.message || "Failed to create conversation. Please try again.");
-      }
-    },
-  });
-
-  // Handle agent selection
-  const handleAgentSelect = (agent: string) => {
-    // Validate that user has entered a query
-    if (!userQuery.trim()) {
-      toast.error("Please enter a question or issue description before selecting an agent");
-      return;
-    }
-
-    setSelectedAgent(agent);
-    setAgentDropdownOpen(false);
-    
-    // Store the query in Redux for auto-send in chat page
-    dispatch(setPendingMessage(userQuery.trim()));
-    
-    // Map agent selection to agent IDs
-    const agentIdMap: Record<string, string> = {
-      qna: "codebase_qna_agent",
-      debug: "debugging_agent",
-    };
-    
-    const agentId = agentIdMap[agent];
-    if (agentId) {
-      createConversationMutation.mutate(agentId);
-    }
-  };
 
   // Generate plan mutation
   const generatePlanMutation = useMutation({
     mutationFn: async () => {
-      // Validate recipeId is set and is a valid UUID format
-      if (!recipeId) {
-        console.error("Recipe ID is not set. Current recipeId:", recipeId);
+      // Use recipeId from URL if available (new flow), otherwise fall back to projectId (old flow)
+      const activeRecipeId = recipeId || recipeIdFromUrl;
+      
+      if (!activeRecipeId) {
+        console.error("Recipe ID is not set. Current recipeId:", recipeId, "recipeIdFromUrl:", recipeIdFromUrl);
         throw new Error("Recipe not initialized. Please refresh the page.");
       }
 
       // Validate recipeId is a UUID (basic check - should be 36 chars with dashes)
       // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(recipeId)) {
-        console.error("Invalid recipeId format:", recipeId, "Expected UUID format");
+      if (!uuidRegex.test(activeRecipeId)) {
+        console.error("Invalid recipeId format:", activeRecipeId, "Expected UUID format");
         throw new Error(`Invalid recipe ID format. Please refresh the page and try again.`);
       }
 
-      console.log("Submitting QA answers with recipeId:", recipeId);
+      console.log("Submitting QA answers with recipeId:", activeRecipeId);
 
-      // Collect all answers, excluding skipped questions
-      const qaAnswers: QAAnswer[] = [];
+      // Collect all answers in the new format
+      const qaAnswers: Array<{ question_id: string; answer: string }> = [];
       
       state.answers.forEach((answer, qId) => {
         if (state.skippedQuestions.has(qId)) return;
@@ -367,43 +344,38 @@ export default function RepoPage() {
         const question = state.questions.find(q => q.id === qId);
         if (!question) return;
         
-        // Only include questions with answers
         if (answer.textAnswer || answer.mcqAnswer) {
           qaAnswers.push({
             question_id: qId,
-            text_answer: answer.textAnswer,
-            mcq_answer: answer.mcqAnswer,
-            is_user_modified: answer.isUserModified || false,
-            is_skipped: false,
+            answer: answer.textAnswer || answer.mcqAnswer || "",
           });
         }
       });
       
-      // Add additional context as a separate QA item if provided
+      // Add additional context if provided (as a special question)
       if (state.additionalContext.trim()) {
         qaAnswers.push({
           question_id: "additional_context",
-          text_answer: state.additionalContext.trim(),
-          is_user_modified: false,
-          is_skipped: false,
+          answer: state.additionalContext.trim(),
         });
       }
 
-      // Call spec generation API with recipeId
-      return await SpecService.submitQAAnswers(recipeId, qaAnswers);
+      // Call new spec generation API
+      return await SpecService.submitSpecGeneration({
+        recipe_id: activeRecipeId,
+        qa_answers: qaAnswers,
+      });
     },
-    onSuccess: (response) => {
-      if (response.status === 'spec_generation_started' || 
-          response.status === 'spec_generation_in_progress') {
-        toast.success("Spec generation started successfully");
-        // Navigate to spec page with recipeId (validate it's set)
-        if (!recipeId) {
-          console.error("recipeId is not set after successful submission");
-          toast.error("Navigation failed: Recipe ID missing");
-          return;
-        }
-        router.push(`/task/${recipeId}/spec`);
+    onSuccess: (response: SubmitSpecGenerationResponse) => {
+      toast.success("Spec generation started successfully");
+      // Navigate to spec page with recipeId
+      const activeRecipeId = recipeId || recipeIdFromUrl;
+      if (!activeRecipeId) {
+        console.error("recipeId is not set after successful submission");
+        toast.error("Navigation failed: Recipe ID missing");
+        return;
       }
+      router.push(`/task/${activeRecipeId}/spec`);
     },
     onError: (error: Error) => {
       console.error("Error in generatePlanMutation:", error);
@@ -505,12 +477,13 @@ export default function RepoPage() {
     if (!repoName || repoName === "Unknown Repository") return;
 
     // Note: setRepoAndBranchForTask removed - not needed for current flow
-  }, [dispatch, recipeId, repoName, branchName, projectId]);
+  }, [recipeId, repoName, branchName, projectId]);
 
-  if (!projectId) {
+  // Allow either projectId (old flow) or recipeId (new recipe codegen flow)
+  if (!projectId && !recipeId && !recipeIdFromUrl) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-500">No project ID provided</p>
+        <p className="text-gray-500">No project ID or recipe ID provided</p>
       </div>
     );
   }
@@ -526,105 +499,6 @@ export default function RepoPage() {
                 <h1 className="text-2xl font-bold text-zinc-900">
                   Implementation Plan
                 </h1>
-              </div>
-              {/* Query Input */}
-              <div className="w-full mb-3">
-                <Textarea
-                  value={userQuery}
-                  onChange={(e) => setUserQuery(e.target.value)}
-                  placeholder="Ask a question about your codebase or describe an issue to debug..."
-                  className={`min-h-[80px] resize-none focus:border-zinc-900 ${
-                    selectedAgent !== null && !userQuery.trim()
-                      ? "border-red-500 focus:border-red-600"
-                      : "border-zinc-200"
-                  }`}
-                  maxLength={500}
-                  disabled={createConversationMutation.isPending}
-                />
-                {userQuery.length > 0 && (
-                  <p className="text-xs text-zinc-400 mt-1">
-                    {userQuery.length}/500 characters
-                  </p>
-                )}
-                {selectedAgent !== null && !userQuery.trim() && (
-                  <p className="text-xs text-red-600 mt-1">
-                    Please enter a question before selecting an agent
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mb-3">
-                {/* Agent Selector Dropdown */}
-                <DropdownMenu open={agentDropdownOpen} onOpenChange={setAgentDropdownOpen}>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={`h-8 justify-between gap-2 min-w-[120px] ${
-                        selectedAgent 
-                          ? "bg-zinc-900 border-zinc-900 text-white hover:bg-zinc-800" 
-                          : "border-zinc-200 hover:bg-zinc-50 text-zinc-600"
-                      }`}
-                      disabled={createConversationMutation.isPending}
-                    >
-                      <span className="text-xs font-medium truncate">
-                        {selectedAgent === "qna" 
-                          ? "Q&A" 
-                          : selectedAgent === "debug" 
-                          ? "Debug" 
-                          : "Select agent"}
-                      </span>
-                      <ChevronDown className={`h-3 w-3 flex-shrink-0 ${selectedAgent ? 'text-white' : 'text-zinc-400'}`} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[180px] max-h-[300px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
-                    <div className="space-y-0.5">
-                      <DropdownMenuItem
-                        onClick={() => handleAgentSelect("qna")}
-                        className={`
-                          flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-lg
-                          transition-colors
-                          ${selectedAgent === "qna"
-                            ? 'bg-zinc-50 border border-zinc-200 text-zinc-900' 
-                            : 'hover:bg-zinc-50 text-zinc-900'
-                          }
-                        `}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-medium truncate ${selectedAgent === "qna" ? 'text-zinc-900' : 'text-zinc-700'}`}>
-                              Q&A
-                            </span>
-                            {selectedAgent === "qna" && (
-                              <Check className="h-3.5 w-3.5 text-zinc-900 flex-shrink-0" />
-                            )}
-                          </div>
-                        </div>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleAgentSelect("debug")}
-                        className={`
-                          flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-lg
-                          transition-colors
-                          ${selectedAgent === "debug"
-                            ? 'bg-zinc-50 border border-zinc-200 text-zinc-900' 
-                            : 'hover:bg-zinc-50 text-zinc-900'
-                          }
-                        `}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-medium truncate ${selectedAgent === "debug" ? 'text-zinc-900' : 'text-zinc-700'}`}>
-                              Debug
-                            </span>
-                            {selectedAgent === "debug" && (
-                              <Check className="h-3.5 w-3.5 text-zinc-900 flex-shrink-0" />
-                            )}
-                          </div>
-                        </div>
-                      </DropdownMenuItem>
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
@@ -658,12 +532,14 @@ export default function RepoPage() {
           <div className="max-w-3xl mx-auto space-y-6">
             {state.pageState === "questions" && <AIAnalysisBanner />}
 
-            {/* Loading State */}
-            {questionsLoading && (
+            {/* Loading State - Only show if we don't have questions yet */}
+            {(questionsLoading || (questionsPolling && state.questions.length === 0)) && (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
                   <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto mb-3" />
-                  <p className="text-xs text-zinc-500">Generating questions...</p>
+                  <p className="text-xs text-zinc-500">
+                    {questionsPolling ? "Loading questions..." : "Generating questions..."}
+                  </p>
                 </div>
               </div>
             )}

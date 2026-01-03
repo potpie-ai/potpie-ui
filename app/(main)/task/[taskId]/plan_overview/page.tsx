@@ -28,6 +28,16 @@ import {
 } from "@/lib/mock/taskMock";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
+import SpecService from "@/services/SpecService";
+import {
+  SpecStatusResponse,
+  SpecPlanStatusResponse,
+  SpecOutput,
+} from "@/lib/types/spec";
+import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
+import QuestionService from "@/services/QuestionService";
+import axios from "axios";
+import getHeaders from "@/app/utils/headers.util";
 
 const PLAN_CHAPTERS = [
   {
@@ -304,13 +314,28 @@ const PlanOverviewPage = () => {
     ? repoBranchByTask?.[taskId]
     : undefined;
 
+  // Note: taskId in URL is actually recipeId now
+  const recipeId = taskId;
+  
+  // Debug: Log recipeId to help diagnose "task not found" issues
+  useEffect(() => {
+    if (recipeId) {
+      console.log("[Plan Overview] Recipe ID from URL:", recipeId);
+    } else {
+      console.warn("[Plan Overview] No recipe ID found in URL params. taskId:", taskId);
+    }
+  }, [recipeId, taskId]);
+  
   const [mockTask, setMockTask] = useState<MockTaskResponse | null>(null);
+  const [specOutput, setSpecOutput] = useState<SpecOutput | null>(null);
+  const [specProgress, setSpecProgress] = useState<SpecStatusResponse | SpecPlanStatusResponse | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [planProgress, setPlanProgress] = useState(0);
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isGenerating, setIsGenerating] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const planContentRef = useRef(null);
 
@@ -347,34 +372,123 @@ const PlanOverviewPage = () => {
     });
   }, [storedRepoContext, taskId]);
 
+  // Fetch spec data from API
   useEffect(() => {
-    if (taskId) {
-      const stored = getMockTaskFromSession(taskId);
-      setMockTask(stored);
+    if (!recipeId) return;
 
-      // Load answers from sessionStorage
-      const storedAnswers = sessionStorage.getItem(`task_${taskId}_answers`);
-      if (storedAnswers) {
-        setAnswers(JSON.parse(storedAnswers));
-      }
+    const fetchSpecData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-      // Simulate plan generation progress
-      const interval = setInterval(() => {
-        setPlanProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setIsGenerating(false);
-            setIsPlanExpanded(false);
-            return 100;
+        // Get spec progress from recipe codegen API
+        let progress: SpecStatusResponse | SpecPlanStatusResponse;
+        const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
+        
+        if (storedSpecId) {
+          progress = await SpecService.getSpecProgressBySpecId(storedSpecId);
+        } else {
+          progress = await SpecService.getSpecProgressByRecipeId(recipeId);
+          
+          // Store spec_id if available
+          if ('spec_id' in progress && progress.spec_id) {
+            localStorage.setItem(`spec_${recipeId}`, progress.spec_id);
           }
-          return prev + 5;
-        });
-      }, 250);
+        }
 
-      setIsLoading(false);
-      return () => clearInterval(interval);
-    }
-  }, [taskId]);
+        // Store progress for display
+        setSpecProgress(progress);
+
+        // Extract spec output
+        if (progress.spec_output) {
+          setSpecOutput(progress.spec_output);
+          setIsGenerating(false);
+          setIsPlanExpanded(false);
+          setPlanProgress(100);
+        } else {
+          // If spec is not ready, show generating state
+          const status = 'spec_gen_status' in progress 
+            ? progress.spec_gen_status 
+            : progress.spec_generation_step_status;
+          
+          const progressPercent = progress.progress_percent ?? 0;
+          setPlanProgress(progressPercent);
+          
+          if (status === 'COMPLETED') {
+            setIsGenerating(false);
+            setPlanProgress(100);
+          } else if (status === 'IN_PROGRESS' || status === 'PENDING') {
+            setIsGenerating(true);
+          } else if (status === 'FAILED') {
+            setIsGenerating(false);
+            setError("Spec generation failed");
+          }
+        }
+
+        // Get repo and branch info from localStorage or Redux
+        const storedRecipeData = localStorage.getItem(`recipe_${recipeId}`);
+        let repoName = "Unknown Repository";
+        let branchName = "main";
+        
+        if (storedRecipeData) {
+          try {
+            const parsed = JSON.parse(storedRecipeData);
+            repoName = parsed.repo_name || repoName;
+            branchName = parsed.branch_name || branchName;
+          } catch (e) {
+            console.error("Error parsing stored recipe data:", e);
+          }
+        }
+
+        // Set mockTask for display purposes (using real data)
+        setMockTask({
+          task_id: recipeId,
+          prompt: "",
+          repo: repoName,
+          branch: branchName,
+          questions: [],
+        });
+
+        // Try to get project_id to fetch questions/answers
+        let projectId: string | null = null;
+        if (storedRecipeData) {
+          try {
+            const parsed = JSON.parse(storedRecipeData);
+            projectId = parsed.project_id;
+          } catch (e) {
+            // Ignore
+          }
+        }
+
+        // Fetch questions and answers if project_id is available
+        if (projectId) {
+          try {
+            const questionsData = await QuestionService.getQuestions(projectId);
+            if (questionsData?.answers) {
+              const answersMap: Record<string, string> = {};
+              Object.entries(questionsData.answers).forEach(
+                ([qId, ans]: [string, any]) => {
+                  answersMap[qId] = ans.text_answer || ans.mcq_answer || "";
+                }
+              );
+              setAnswers(answersMap);
+            }
+          } catch (e) {
+            console.error("Error fetching questions:", e);
+            // Non-critical, continue without questions
+          }
+        }
+
+        setIsLoading(false);
+      } catch (err: any) {
+        console.error("Error fetching spec data:", err);
+        setError(err.message || "Failed to load plan overview");
+        setIsLoading(false);
+      }
+    };
+
+    fetchSpecData();
+  }, [recipeId]);
 
   // Auto-scroll to bottom when plan is generated
   useEffect(() => {
@@ -396,19 +510,37 @@ const PlanOverviewPage = () => {
     );
   }
 
-  if (!mockTask) {
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold mb-2">Error loading plan</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => router.push("/idea")}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Go to Idea Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if recipeId is missing from URL (this should be checked first, before loading)
+  if (!recipeId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
         <div className="text-center">
           <h2 className="text-2xl font-semibold mb-2">Task not found</h2>
           <p className="text-gray-600 mb-6">
-            The task data was not found. Please start a new task.
+            The recipe ID was not found in the URL. Please start a new task.
           </p>
           <button
-            onClick={() => router.push("/newtask")}
+            onClick={() => router.push("/idea")}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            Create New Task
+            Go to Idea Page
           </button>
         </div>
       </div>
@@ -420,40 +552,44 @@ const PlanOverviewPage = () => {
       <main className="max-w-3xl mx-auto px-6 py-12">
         <div className="flex justify-between items-start mb-10">
           <h1 className="text-2xl font-bold text-zinc-900">Plan Spec</h1>
-          <div className="flex items-center gap-2">
-            <Badge icon={Github}>{mockTask.repo}</Badge>
-            <Badge icon={GitBranch}>{mockTask.branch}</Badge>
-          </div>
+          {mockTask && (
+            <div className="flex items-center gap-2">
+              <Badge icon={Github}>{mockTask.repo}</Badge>
+              <Badge icon={GitBranch}>{mockTask.branch}</Badge>
+            </div>
+          )}
         </div>
         {/* Project Briefing */}
         <section className="mb-8 pb-8 border-b border-zinc-100">
           <div className="space-y-6">
             <p className="text-base font-medium tracking-tight text-zinc-900 leading-relaxed">
-              {mockTask.prompt}
+              {mockTask?.prompt || "Implementation plan generation"}
             </p>
 
-            <div className="grid grid-cols-1 gap-6 pt-2">
-              {/* Questions as Parameters */}
-              {mockTask.questions
-                .filter((q) => answers[q.id])
-                .map((q) => (
-                  <div key={q.id} className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-zinc-300">
-                        PARAM
-                      </span>
-                      <p className="text-sm font-bold text-zinc-500">
-                        {q.question}
-                      </p>
+            {mockTask && mockTask.questions && mockTask.questions.length > 0 && (
+              <div className="grid grid-cols-1 gap-6 pt-2">
+                {/* Questions as Parameters */}
+                {mockTask.questions
+                  .filter((q) => answers[q.id])
+                  .map((q) => (
+                    <div key={q.id} className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-zinc-300">
+                          PARAM
+                        </span>
+                        <p className="text-sm font-bold text-zinc-500">
+                          {q.question}
+                        </p>
+                      </div>
+                      <div className="pl-14">
+                        <p className="text-sm font-medium text-zinc-900">
+                          {answers[q.id]}
+                        </p>
+                      </div>
                     </div>
-                    <div className="pl-14">
-                      <p className="text-sm font-medium text-zinc-900">
-                        {answers[q.id]}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-            </div>
+                  ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -565,17 +701,27 @@ const PlanOverviewPage = () => {
         </section>
 
         {/* Implementation Output */}
-        {planProgress >= 100 && !isCancelled && (
+        {specOutput && !isCancelled && (
           <section
             ref={planContentRef}
             className="animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
-            <PlanTabs plan={MOCK_PLAN} />
+            <PlanTabs plan={specOutput} />
 
             {/* Action Button */}
             <div className="mt-12 flex justify-end">
               <button
-                onClick={() => router.push(`/task/${taskId}/plan`)}
+                onClick={() => {
+                  // Navigate to plan page with recipeId
+                  const params = new URLSearchParams();
+                  params.set("recipeId", recipeId);
+                  // Also include spec_id if available
+                  const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
+                  if (storedSpecId) {
+                    params.set("specId", storedSpecId);
+                  }
+                  router.push(`/plan?${params.toString()}`);
+                }}
                 className="px-6 py-2 bg-zinc-900 text-white rounded-lg font-medium text-sm hover:bg-zinc-800 transition-colors"
               >
                 Generate Detailed Plan

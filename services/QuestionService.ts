@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { RecipeQuestionsResponse } from "@/lib/types/spec";
 
 export interface MCQQuestion {
   id: string;
@@ -178,6 +179,106 @@ export default class QuestionService {
       return response.data;
     } catch (error) {
       throw new Error(this.getErrorMessage(error, "Failed to generate plan"));
+    }
+  }
+
+  /**
+   * Poll recipe questions until they're ready
+   * @param recipeId - The recipe ID
+   * @param pollInterval - Polling interval in ms (default: 3000)
+   * @param maxAttempts - Maximum polling attempts (default: 60)
+   * @returns Questions when ready
+   */
+  static async pollRecipeQuestions(
+    recipeId: string,
+    pollInterval: number = 3000,
+    maxAttempts: number = 60
+  ): Promise<RecipeQuestionsResponse> {
+    if (!recipeId?.trim()) {
+      throw new Error("Recipe ID is required");
+    }
+
+    const headers = await getHeaders();
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      try {
+        const response = await axios.get<RecipeQuestionsResponse>(
+          `${this.BASE_URL}/recipe/codegen/${recipeId.trim()}/questions`,
+          { headers }
+        );
+
+        const data = response.data;
+
+        // If questions are available (even if status is not QUESTIONS_READY),
+        // return them. This handles cases where status has moved to SPEC_IN_PROGRESS
+        // but questions are still available.
+        if (data.questions && data.questions.length > 0) {
+          return data;
+        }
+
+        // If questions are ready (status), return them
+        if (data.recipe_status === 'QUESTIONS_READY') {
+          return data;
+        }
+
+        // If error status, throw
+        if (data.recipe_status === 'ERROR') {
+          throw new Error("Failed to generate questions");
+        }
+
+        // If status indicates spec generation has started but questions exist, return them
+        // This handles the case where user navigates back to the page after spec gen started
+        if (
+          (data.recipe_status === 'SPEC_IN_PROGRESS' || 
+           data.recipe_status === 'IN_PROGRESS' ||
+           data.recipe_status === 'QUESTIONS_READY') &&
+          data.questions &&
+          data.questions.length > 0
+        ) {
+          return data;
+        }
+
+        // Otherwise, wait and poll again
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        attempts++;
+      } catch (error) {
+        // If it's a 404 or other error, wait and retry
+        if (attempts < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+          attempts++;
+          continue;
+        }
+        throw new Error(this.getErrorMessage(error, "Failed to fetch questions"));
+      }
+    }
+
+    throw new Error("Timeout waiting for questions to be ready");
+  }
+
+  /**
+   * Get recipe questions directly (without polling)
+   * Use this when you know questions might already be available
+   * @param recipeId - The recipe ID
+   * @returns Questions response (may have questions even if status is not QUESTIONS_READY)
+   */
+  static async getRecipeQuestions(
+    recipeId: string
+  ): Promise<RecipeQuestionsResponse> {
+    if (!recipeId?.trim()) {
+      throw new Error("Recipe ID is required");
+    }
+
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get<RecipeQuestionsResponse>(
+        `${this.BASE_URL}/recipe/codegen/${recipeId.trim()}/questions`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(this.getErrorMessage(error, "Failed to fetch questions"));
     }
   }
 }

@@ -10,6 +10,8 @@ import {
   MessagesSquare,
   Zap,
   Plug,
+  Cookie,
+  Hammer,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -120,6 +122,17 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     ],
   },
   {
+    title: "Builds",
+    links: [
+      {
+        icons: <Hammer size={20} strokeWidth={1.5} />,
+        title: "Builds",
+        href: "/builds",
+        disabled: false,
+      },
+    ],
+  },
+  {
     title: "Workflows",
     links: [
       {
@@ -137,6 +150,17 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         icons: <Plug size={20} strokeWidth={1.5} />,
         title: "Integrations",
         href: "/integrations",
+        disabled: false,
+      },
+    ],
+  },
+  {
+    title: "Tasks",
+    links: [
+      {
+        icons: <Cookie size={20} strokeWidth={1.5} />,
+        title: "New Task",
+        href: "/newtask",
         disabled: false,
       },
     ],

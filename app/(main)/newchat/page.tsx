@@ -1,6 +1,6 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
 import Step1 from "./components/step1";
 import Step2 from "./components/step2";
 import { RootState } from "@/lib/state/store";
@@ -8,9 +8,19 @@ import { useSelector } from "react-redux";
 
 const NewChat = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [chatStep, setChatStep] = useState(1);
   const [projectId, setProjectId] = useState<string>("");
   const { title } = useSelector((state: RootState) => state.chat);
+
+  // Check if projectId is in URL (from idea page redirect)
+  useEffect(() => {
+    const urlProjectId = searchParams.get("projectId");
+    if (urlProjectId) {
+      setProjectId(urlProjectId);
+      setChatStep(2); // Skip step1, go directly to step2 (agent selection)
+    }
+  }, [searchParams]);
 
   const gotoChat = (conversation_id: string) => {
     router.push(`/chat/${conversation_id}`);

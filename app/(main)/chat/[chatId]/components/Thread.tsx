@@ -245,7 +245,7 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex items-center justify-end w-full"
+      className="flex items-start justify-end w-full"
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
@@ -254,12 +254,13 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
           
           <MessagePrimitive.Parts
             components={{
+              Text: MarkdownText,
               Image: () => null, //UserMessageAttachments already handles images
             }}
           />
         </div>
       </MessagePrimitive.Root>
-      <Avatar className="mr-4 rounded-md bg-transparent">
+      <Avatar className="mr-4 self-start rounded-md bg-transparent">
         <AvatarImage src={userPhotoURL} alt="User" />
         <AvatarFallback className="bg-gray-400 text-white">U</AvatarFallback>
       </Avatar>
@@ -636,8 +637,8 @@ const AssistantMessage: FC = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "backInOut", stiffness: 50 }}
     >
-      <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative">
-        <Avatar className="mr-4 rounded-none bg-transparent">
+      <MessagePrimitive.Root className="w-11/12 grid items-start grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative">
+        <Avatar className="mr-4 self-start rounded-none bg-transparent">
           <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
           <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
         </Avatar>

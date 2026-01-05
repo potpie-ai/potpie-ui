@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useRef, useState, useEffect } from "react";
 import { auth } from "@/configs/Firebase-config";
-import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
+import { GithubAuthProvider, linkWithPopup } from "firebase/auth";
 import { LucideGithub, LucideCheck, LoaderCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -236,7 +236,7 @@ const Onboarding = () => {
         );
 
         if (response.data.success) {
-          toast.success("Onboarding information saved!");
+        toast.success("Onboarding information saved!");
         } else {
           throw new Error(response.data.message || "Failed to save onboarding data");
         }
@@ -371,17 +371,20 @@ const Onboarding = () => {
       provider.addScope("user:email");
       provider.addScope("repo");
 
-      const result = await signInWithPopup(auth, provider);
+      // Link GitHub to the CURRENT authenticated user (work/SSO) without switching accounts
+      const result = await linkWithPopup(auth.currentUser, provider);
       const credential = GithubAuthProvider.credentialFromResult(result);
       
       if (!credential) {
         throw new Error("Failed to get GitHub credentials");
       }
 
-      const githubFirebaseUid = result.user.uid; // GitHub Firebase UID (different from Google SSO UID)
+      const githubProviderUid =
+        result.user.providerData.find((p) => p.providerId === "github.com")
+          ?.uid || result.user.uid; // GitHub provider UID from providerData
       
       if (process.env.NODE_ENV === 'development') {
-        console.log("GitHub Firebase UID:", githubFirebaseUid);
+        console.log("GitHub provider UID:", githubProviderUid);
         console.log("Linking GitHub to original user UID:", originalUserUid);
       }
 
@@ -409,7 +412,7 @@ const Onboarding = () => {
           providerData: result.user.providerData,
           accessToken: credential.accessToken,
           providerUsername: (result as any)._tokenResponse.screenName,
-          githubFirebaseUid: githubFirebaseUid, // Store GitHub Firebase UID for reference
+          githubFirebaseUid: githubProviderUid, // Store GitHub provider UID for reference
         },
         { headers: headers }
       );

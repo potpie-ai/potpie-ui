@@ -142,6 +142,37 @@ export function isGenericEmail(email: string): boolean {
 }
 
 /**
+ * Validates if an email is a work email (not a generic/personal email provider).
+ * Returns an object with validation result and error message.
+ * 
+ * @param email - User's email address
+ * @returns Object with isValid (boolean) and errorMessage (string | undefined)
+ * 
+ * @example
+ * validateWorkEmail('user@gmail.com') // returns { isValid: false, errorMessage: '...' }
+ * validateWorkEmail('user@company.com') // returns { isValid: true, errorMessage: undefined }
+ */
+export function validateWorkEmail(email: string): { isValid: boolean; errorMessage?: string } {
+  if (!email || typeof email !== 'string') {
+    return {
+      isValid: false,
+      errorMessage: 'Please enter a valid email address',
+    };
+  }
+
+  if (isGenericEmail(email)) {
+    return {
+      isValid: false,
+      errorMessage: 'Personal email addresses are not allowed. Please use your work/corporate email to sign up.',
+    };
+  }
+
+  return {
+    isValid: true,
+  };
+}
+
+/**
  * Checks if a Firebase authentication result indicates a new user signup.
  * 
  * ⚠️ Limitations:

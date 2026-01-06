@@ -27,21 +27,24 @@ export default class SpecService {
    * @returns Recipe creation response with recipe_id
    */
   static async createRecipe(
-    request: CreateRecipeRequest
+    request: CreateRecipeRequest,
   ): Promise<CreateRecipeResponse> {
     try {
       console.log("[SpecService] Creating recipe with request:", request);
-      console.log("[SpecService] API endpoint:", `${this.BASE_URL}/api/v1/recipe`);
-      
+      console.log(
+        "[SpecService] API endpoint:",
+        `${this.BASE_URL}/api/v1/recipe`,
+      );
+
       const headers = await getHeaders();
       console.log("[SpecService] Making POST request to create recipe...");
-      
+
       const response = await axios.post<CreateRecipeResponse>(
         `${this.BASE_URL}/api/v1/recipe`,
         request,
         {
           headers,
-        }
+        },
       );
 
       console.log("[SpecService] Recipe creation response:", response.data);
@@ -63,7 +66,7 @@ export default class SpecService {
    */
   static async submitQAAnswers(
     recipeId: string,
-    qaAnswers: QAAnswer[]
+    qaAnswers: QAAnswer[],
   ): Promise<SpecPlanSubmitResponse> {
     try {
       const headers = await getHeaders();
@@ -77,7 +80,7 @@ export default class SpecService {
         request,
         {
           headers,
-        }
+        },
       );
 
       return response.data;
@@ -94,7 +97,7 @@ export default class SpecService {
    * @returns Current progress and status
    */
   static async getSpecProgress(
-    recipeId: string
+    recipeId: string,
   ): Promise<SpecPlanStatusResponse> {
     try {
       const headers = await getHeaders();
@@ -102,7 +105,7 @@ export default class SpecService {
         `${this.SPEC_URL}/${recipeId}`,
         {
           headers,
-        }
+        },
       );
 
       return response.data;
@@ -119,29 +122,26 @@ export default class SpecService {
    * @returns Recipe creation response with recipe_id
    */
   static async createRecipeCodegen(
-    request: CreateRecipeCodegenRequest
+    request: CreateRecipeCodegenRequest,
   ): Promise<CreateRecipeCodegenResponse> {
     try {
       console.log("[SpecService] Creating recipe codegen with request:", {
         user_prompt: request.user_prompt,
-        repo_slug: request.repo_slug,
-        branch: request.branch,
-        commit: request.commit,
+        project_id: request.project_id,
         additional_links: request.additional_links,
       });
-      
-      // Validate repo_slug is provided
-      if (!request.repo_slug || request.repo_slug.trim() === "") {
-        throw new Error("Repository slug is required");
+
+      if (!request.project_id || request.project_id.trim() === "") {
+        throw new Error("Project ID is required");
       }
 
       const headers = await getHeaders();
       console.log("[SpecService] API endpoint:", `${this.API_BASE}`);
-      
+
       const response = await axios.post<CreateRecipeCodegenResponse>(
         `${this.API_BASE}`,
         request,
-        { headers }
+        { headers },
       );
 
       console.log("[SpecService] Recipe creation response:", response.data);
@@ -160,13 +160,13 @@ export default class SpecService {
    * @returns Questions response with recipe_status and questions array
    */
   static async getRecipeQuestions(
-    recipeId: string
+    recipeId: string,
   ): Promise<RecipeQuestionsResponse> {
     try {
       const headers = await getHeaders();
       const response = await axios.get<RecipeQuestionsResponse>(
         `${this.API_BASE}/${recipeId}/questions`,
-        { headers }
+        { headers },
       );
 
       return response.data;
@@ -183,14 +183,14 @@ export default class SpecService {
    * @returns Response with spec_id and status
    */
   static async submitSpecGeneration(
-    request: SubmitSpecGenerationRequest
+    request: SubmitSpecGenerationRequest,
   ): Promise<SubmitSpecGenerationResponse> {
     try {
       const headers = await getHeaders();
       const response = await axios.post<SubmitSpecGenerationResponse>(
         `${this.API_BASE}/spec`,
         request,
-        { headers }
+        { headers },
       );
 
       return response.data;
@@ -207,13 +207,13 @@ export default class SpecService {
    * @returns Current progress and status
    */
   static async getSpecProgressBySpecId(
-    specId: string
+    specId: string,
   ): Promise<SpecStatusResponse> {
     try {
       const headers = await getHeaders();
       const response = await axios.get<SpecStatusResponse>(
         `${this.API_BASE}/spec/${specId}`,
-        { headers }
+        { headers },
       );
 
       return response.data;
@@ -230,13 +230,13 @@ export default class SpecService {
    * @returns Current progress and status
    */
   static async getSpecProgressByRecipeId(
-    recipeId: string
+    recipeId: string,
   ): Promise<SpecStatusResponse> {
     try {
       const headers = await getHeaders();
       const response = await axios.get<SpecStatusResponse>(
         `${this.API_BASE}/spec/recipe/${recipeId}`,
-        { headers }
+        { headers },
       );
 
       return response.data;
@@ -247,4 +247,3 @@ export default class SpecService {
     }
   }
 }
-

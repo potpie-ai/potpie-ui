@@ -1,6 +1,15 @@
-export type StepStatusValue = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+export type StepStatusValue =
+  | "PENDING"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "FAILED";
 
-export type SpecGenerationStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | null;
+export type SpecGenerationStatus =
+  | "PENDING"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "FAILED"
+  | null;
 
 export interface StepStatus {
   status: StepStatusValue;
@@ -56,7 +65,7 @@ export interface SpecPlanRequest {
 
 export interface SpecPlanSubmitResponse {
   recipe_id: string;
-  status: 'spec_generation_started' | 'spec_generation_in_progress';
+  status: "spec_generation_started" | "spec_generation_in_progress";
   message: string;
 }
 
@@ -86,15 +95,13 @@ export interface CreateRecipeResponse {
 // New recipe codegen types
 export interface CreateRecipeCodegenRequest {
   user_prompt: string;
-  repo_slug: string;
-  branch?: string;
-  commit?: string;
+  project_id: string;
   additional_links?: string[];
 }
 
 export interface CreateRecipeCodegenResponse {
   recipe_id: string;
-  project_id: number;
+  project_id: string;
   status: string;
   message: string;
 }
@@ -111,7 +118,7 @@ export interface RecipeQuestion {
 
 export interface RecipeQuestionsResponse {
   recipe_id: string;
-  recipe_status: 'PENDING_QUESTIONS' | 'QUESTIONS_READY' | 'ERROR';
+  recipe_status: "PENDING_QUESTIONS" | "QUESTIONS_READY" | "ERROR";
   questions: RecipeQuestion[];
 }
 
@@ -126,20 +133,23 @@ export interface SubmitSpecGenerationRequest {
 export interface SubmitSpecGenerationResponse {
   recipe_id: string;
   spec_id: string;
-  status: 'SUBMITTED';
+  status: "SUBMITTED";
   message: string;
 }
 
 export interface SpecStatusResponse {
   recipe_id: string;
   spec_id: string;
-  spec_gen_status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  spec_gen_status: "IN_PROGRESS" | "COMPLETED" | "FAILED";
   step_index: number;
   progress_percent: number;
-  step_statuses: Record<string, {
-    status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
-    message: string;
-  }>;
+  step_statuses: Record<
+    string,
+    {
+      status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+      message: string;
+    }
+  >;
   spec_output: SpecOutput | null;
 }
 
@@ -151,7 +161,7 @@ export interface PlanGenerationRequest {
 
 export interface PlanSubmitResponse {
   plan_id: string;
-  status: 'SUBMITTED' | 'ERROR';
+  status: "SUBMITTED" | "ERROR";
   message: string;
 }
 
@@ -159,7 +169,7 @@ export interface PlanStatusResponse {
   plan_id: string;
   spec_id: string;
   recipe_id: string;
-  plan_gen_status: 'SUBMITTED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  plan_gen_status: "SUBMITTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
   current_step: number;
   progress_percent: number | null;
   total_items: number | null;
@@ -170,10 +180,11 @@ export interface PlanStatusResponse {
 
 export interface FileReference {
   path: string;
-  type: 'create' | 'modify' | 'delete';
+  type: "create" | "modify" | "delete";
 }
 
 export interface PlanItem {
+  id: string;
   item_number: number;
   title: string;
   detailed_objective: string;
@@ -194,34 +205,33 @@ export interface PlanItemsResponse {
 
 // Task splitting types
 export interface SubmitTaskSplittingRequest {
-  plan_id: string;
-  item_number: number;
+  plan_item_id: string;
 }
 
 export interface SubmitTaskSplittingResponse {
   task_splitting_id: string;
-  status: 'SUBMITTED' | 'ERROR';
+  status: "SUBMITTED" | "ERROR";
   message: string;
 }
 
 export interface TaskSplittingStatusResponse {
   task_splitting_id: string;
   plan_item_id: number;
-  status: 'SUBMITTED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  status: "SUBMITTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
   current_step: number;
-  codegen_status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  codegen_status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
 }
 
 export interface TaskTestResult {
   name: string;
-  status: 'PENDING' | 'PASSED' | 'FAILED';
+  status: "PENDING" | "PASSED" | "FAILED";
 }
 
 export interface TaskItem {
   id: string;
   title: string;
   file: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
   tests: {
     total: number;
     passed: number;
@@ -239,7 +249,7 @@ export interface TaskItem {
 export interface TaskLayer {
   id: string;
   title: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
   layer_order: number;
   tasks: TaskItem[];
 }
@@ -249,4 +259,3 @@ export interface TaskSplittingItemsResponse {
   layers: TaskLayer[];
   next_layer_order: number | null;
 }
-

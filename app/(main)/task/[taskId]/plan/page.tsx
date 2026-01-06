@@ -39,6 +39,7 @@ import {
 import { Button } from "@/components/ui/button";
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
+import TaskSplittingService from "@/services/TaskSplittingService";
 import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -1341,7 +1342,18 @@ const PlanPage = () => {
         {isCompleted && planItems.length > 0 && (
           <div className="mt-12 flex justify-end animate-in fade-in slide-in-from-bottom-4 duration-500">
             <Button
-              onClick={() => router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=1`)}
+              onClick={async () => {
+                const firstItem = planItems[0];
+                try {
+                  await TaskSplittingService.submitTaskSplitting({
+                    plan_item_id: firstItem.id,
+                  });
+                  router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
+                } catch (error) {
+                  toast.error("Failed to start implementation");
+                  console.error("Error starting implementation:", error);
+                }
+              }}
               className="bg-zinc-900 hover:bg-zinc-800 text-white px-6 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
             >
               <Rocket className="w-4 h-4" />

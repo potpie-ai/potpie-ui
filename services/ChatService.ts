@@ -5,7 +5,10 @@ import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 
 export default class ChatService {
-  private static extractJsonObjects(input: string): { objects: string[]; remaining: string } {
+  private static extractJsonObjects(input: string): {
+    objects: string[];
+    remaining: string;
+  } {
     const objects: string[] = [];
     let depth = 0;
     let inString = false;
@@ -27,7 +30,7 @@ export default class ChatService {
         continue;
       }
 
-      if (char === "\"") {
+      if (char === '"') {
         inString = !inString;
         continue;
       }
@@ -88,7 +91,9 @@ export default class ChatService {
     }
   }
 
-  static async detectActiveSession(conversationId: string): Promise<SessionInfo | null> {
+  static async detectActiveSession(
+    conversationId: string
+  ): Promise<SessionInfo | null> {
     try {
       const headers = await getHeaders();
       const response = await axios.get(
@@ -104,7 +109,9 @@ export default class ChatService {
     }
   }
 
-  static async checkBackgroundTaskStatus(conversationId: string): Promise<TaskStatus> {
+  static async checkBackgroundTaskStatus(
+    conversationId: string
+  ): Promise<TaskStatus> {
     try {
       const headers = await getHeaders();
       const response = await axios.get(
@@ -117,7 +124,11 @@ export default class ChatService {
     }
   }
 
-  static generateSessionId(conversationId: string, userId: string, prevHumanMessageId?: string): string {
+  static generateSessionId(
+    conversationId: string,
+    userId: string,
+    prevHumanMessageId?: string
+  ): string {
     // Format: conversation:{user_id}:{prev_human_message_id}
     const messageId = prevHumanMessageId || Date.now().toString();
     return `conversation:${userId}:${messageId}`;
@@ -126,8 +137,17 @@ export default class ChatService {
   static async resumeActiveSession(
     conversationId: string,
     sessionId: string,
-    onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void
-  ): Promise<{ success: boolean; reason?: string; message?: string; citations?: string[] }> {
+    onMessageUpdate: (
+      message: string,
+      tool_calls: any[],
+      citations: string[]
+    ) => void
+  ): Promise<{
+    success: boolean;
+    reason?: string;
+    message?: string;
+    citations?: string[];
+  }> {
     try {
       const headers = await getHeaders();
 
@@ -141,7 +161,7 @@ export default class ChatService {
 
       if (response.status === 404) {
         // Session no longer exists or expired
-        return { success: false, reason: 'session_not_found' };
+        return { success: false, reason: "session_not_found" };
       }
 
       if (!response.ok) {
@@ -167,22 +187,42 @@ export default class ChatService {
               const messageWithEmojis = data.message.replace(
                 /\\u[\dA-F]{4}/gi,
                 (match: string) =>
-                  String.fromCodePoint(
-                    parseInt(match.replace(/\\u/g, ""), 16)
-                  )
+                  String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
               );
               currentMessage += messageWithEmojis;
-              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
             }
 
             if (data.tool_calls !== undefined) {
+              // DEBUG: Log raw tool calls from backend (resume)
+              console.log(
+                "[SubAgent Stream] Raw tool_calls received (resume):",
+                {
+                  count: data.tool_calls.length,
+                  tool_calls: data.tool_calls,
+                  full_data: data,
+                }
+              );
+
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
             }
 
             if (data.citations !== undefined) {
               currentCitations = data.citations;
-              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
             }
           } catch (e) {
             // Try to recover by extracting multiple JSON objects
@@ -192,7 +232,7 @@ export default class ChatService {
               if (extracted.remaining.trim()) {
                 console.warn(
                   "Residual data after recovering JSON chunk in resume:",
-                  extracted.remaining,
+                  extracted.remaining
                 );
               }
               return;
@@ -222,7 +262,10 @@ export default class ChatService {
           extracted.objects.forEach(processJsonSegment);
 
           if (buffer.trim()) {
-            console.warn("Unprocessed JSON buffer after resume stream end:", buffer);
+            console.warn(
+              "Unprocessed JSON buffer after resume stream end:",
+              buffer
+            );
           }
         } finally {
           reader.releaseLock();
@@ -232,11 +275,11 @@ export default class ChatService {
       return {
         success: true,
         message: currentMessage,
-        citations: currentCitations
+        citations: currentCitations,
       };
     } catch (error) {
       console.error("Error resuming session:", error);
-      return { success: false, reason: 'network_error' };
+      return { success: false, reason: "network_error" };
     }
   }
 
@@ -258,26 +301,32 @@ export default class ChatService {
     // Check for existing active session if no sessionId provided
     if (!currentSessionId) {
       const activeSession = await this.detectActiveSession(conversationId);
-      if (activeSession && activeSession.status === 'active') {
-        throw new Error("Background task already active. Cannot start new stream.");
+      if (activeSession && activeSession.status === "active") {
+        throw new Error(
+          "Background task already active. Cannot start new stream."
+        );
       }
 
       // Generate new session ID
-      currentSessionId = this.generateSessionId(conversationId, "current_user_id", Date.now().toString());
+      currentSessionId = this.generateSessionId(
+        conversationId,
+        "current_user_id",
+        Date.now().toString()
+      );
     }
 
     try {
       const headers = await getHeaders();
       const formData = new FormData();
 
-      formData.append('content', message);
-      formData.append('node_ids', JSON.stringify(selectedNodes));
-      formData.append('session_id', currentSessionId);
+      formData.append("content", message);
+      formData.append("node_ids", JSON.stringify(selectedNodes));
+      formData.append("session_id", currentSessionId);
 
       // Only process images if multimodal is enabled
       const enabledImages = isMultimodalEnabled() ? images : [];
       enabledImages.forEach((image, index) => {
-        formData.append('images', image);
+        formData.append("images", image);
       });
 
       const response = await this.streamWithRetry(
@@ -295,7 +344,7 @@ export default class ChatService {
       return {
         message: response.message,
         citations: response.citations,
-        sessionId: currentSessionId
+        sessionId: currentSessionId,
       };
     } catch (error) {
       if (
@@ -324,7 +373,11 @@ export default class ChatService {
   static async streamWithRetry(
     url: string,
     options: RequestInit,
-    onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void,
+    onMessageUpdate: (
+      message: string,
+      tool_calls: any[],
+      citations: string[]
+    ) => void,
     maxRetries: number,
     abortSignal?: AbortSignal
   ): Promise<{ message: string; citations: string[] }> {
@@ -359,20 +412,42 @@ export default class ChatService {
               const messageWithEmojis = data.message.replace(
                 /\\u[\dA-F]{4}/gi,
                 (match: string) =>
-                  String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16)),
+                  String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
               );
               currentMessage += messageWithEmojis;
-              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
             }
 
             if (data.tool_calls !== undefined) {
+              // DEBUG: Log raw tool calls from backend (streamMessage)
+              console.log(
+                "[SubAgent Stream] Raw tool_calls received (stream):",
+                {
+                  count: data.tool_calls.length,
+                  tool_calls: data.tool_calls,
+                  full_data: data,
+                }
+              );
+
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
             }
 
             if (data.citations !== undefined) {
               currentCitations = data.citations;
-              onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
             }
           } catch (e) {
             // Try to recover by extracting multiple JSON objects
@@ -382,7 +457,7 @@ export default class ChatService {
               if (extracted.remaining.trim()) {
                 console.warn(
                   "Residual data after recovering JSON chunk:",
-                  extracted.remaining,
+                  extracted.remaining
                 );
               }
               return;
@@ -437,7 +512,6 @@ export default class ChatService {
         }
 
         return { message: currentMessage, citations: currentCitations };
-
       } catch (error) {
         if (
           abortSignal?.aborted ||
@@ -452,7 +526,7 @@ export default class ChatService {
 
         // Exponential backoff: 1s, 2s, 4s
         const delay = Math.pow(2, retries - 1) * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
         console.warn(`Retry ${retries}/${maxRetries} after ${delay}ms delay`);
       }
     }
@@ -477,13 +551,13 @@ export default class ChatService {
             const latestMessage = messages[0];
             return {
               message: latestMessage.text,
-              citations: latestMessage.citations || []
+              citations: latestMessage.citations || [],
             };
           }
         }
 
         // Wait 2 seconds before next poll
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (error) {
         console.error("Error polling for final message:", error);
       }
@@ -507,10 +581,10 @@ export default class ChatService {
     );
 
     return response.data.map(
-      (message: { 
-        id: any; 
-        content: any; 
-        type: string; 
+      (message: {
+        id: any;
+        content: any;
+        type: string;
         citations: any;
         has_attachments?: boolean;
         attachments?: any[];
@@ -598,10 +672,10 @@ export default class ChatService {
           method: "POST",
           headers: {
             ...headers,
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            node_ids: selectedNodes
+            node_ids: selectedNodes,
           }),
         }
       );
@@ -627,34 +701,20 @@ export default class ChatService {
             const messageWithEmojis = data.message.replace(
               /\\u[\dA-F]{4}/gi,
               (match: string) =>
-                String.fromCodePoint(
-                  parseInt(match.replace(/\\u/g, ""), 16)
-                )
+                String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
             );
             currentMessage += messageWithEmojis;
-            onMessageUpdate(
-              currentMessage,
-              currentToolCalls,
-              currentCitations
-            );
+            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
           }
 
           if (data.tool_calls !== undefined) {
             currentToolCalls.push(...data.tool_calls);
-            onMessageUpdate(
-              currentMessage,
-              currentToolCalls,
-              currentCitations
-            );
+            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
           }
 
           if (data.citations !== undefined) {
             currentCitations = data.citations;
-            onMessageUpdate(
-              currentMessage,
-              currentToolCalls,
-              currentCitations
-            );
+            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
           }
         } catch (e) {
           // Try to recover by extracting multiple JSON objects
@@ -664,7 +724,7 @@ export default class ChatService {
             if (extracted.remaining.trim()) {
               console.warn(
                 "Residual data after recovering JSON chunk in regenerate:",
-                extracted.remaining,
+                extracted.remaining
               );
             }
             return;
@@ -695,7 +755,10 @@ export default class ChatService {
           extracted.objects.forEach(processJsonSegment);
 
           if (buffer.trim()) {
-            console.warn("Unprocessed JSON buffer after regenerate stream end:", buffer);
+            console.warn(
+              "Unprocessed JSON buffer after regenerate stream end:",
+              buffer
+            );
           }
         } finally {
           reader.releaseLock();
@@ -732,9 +795,9 @@ export default class ChatService {
           project_ids: projectId ? [projectId] : [],
           agent_ids: [agentId],
         },
-        { 
+        {
           headers: headers,
-          params: isHidden ? { hidden: true } : undefined
+          params: isHidden ? { hidden: true } : undefined,
         }
       );
       return response.data;

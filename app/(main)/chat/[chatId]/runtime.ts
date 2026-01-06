@@ -26,12 +26,24 @@ interface ToolCallResult {
   details: {
     summary: string;
   };
+  accumulated_response?: string; // Accumulated from stream_part chunks
+  is_complete?: boolean; // Whether this is the final part
+  is_streaming?: boolean; // Whether this tool call is currently streaming
 }
 
 interface StreamingToolCallPart extends ToolCallMessagePart {
   streamState?: ToolCallResult;
   result?: ToolCallResult;
   isError?: boolean;
+  timestamp?: number; // When this tool call was first created
+  lastUpdated?: number; // When this tool call was last updated
+}
+
+// Content part with timestamp for ordering
+interface TimestampedContentPart {
+  part: TextMessagePart | StreamingToolCallPart;
+  timestamp: number;
+  type: "text" | "tool-call";
 }
 
 // Type for backend message structure
@@ -58,7 +70,7 @@ export interface ChatRuntimeResult {
 // Create the adapter that bridges our Redis backend to assistant-ui
 const createChatAdapter = (
   chatId: string,
-  isBackgroundTaskActiveRef: React.MutableRefObject<boolean>,
+  isBackgroundTaskActiveRef: React.MutableRefObject<boolean>
 ): ChatModelAdapter => {
   return {
     async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
@@ -89,14 +101,18 @@ const createChatAdapter = (
       const runConfig = (context as { runConfig?: RunConfig }).runConfig;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
-      
+
       // Extract images from message attachments (the assistant-ui way)
       const images: File[] = [];
       if (isMultimodalEnabled() && lastMessage.role === "user") {
         const userMessage = lastMessage as ThreadUserMessage;
         if (userMessage.attachments) {
           userMessage.attachments.forEach((attachment) => {
-            if (attachment.type === "image" && "file" in attachment && attachment.file) {
+            if (
+              attachment.type === "image" &&
+              "file" in attachment &&
+              attachment.file
+            ) {
               images.push(attachment.file);
             }
           });
@@ -106,7 +122,10 @@ const createChatAdapter = (
       // Convert callback-based ChatService to async iterable
       const streamAsyncIterable = async function* () {
         let accumulatedText = "";
+        let previousTextLength = 0;
         let accumulatedToolCalls = new Map<string, StreamingToolCallPart>();
+        // Track content parts in chronological order
+        let contentParts: TimestampedContentPart[] = [];
         let resolveNext: ((value: boolean) => void) | null = null;
         let rejectStream: ((error: Error) => void) | null = null;
         let hasUpdate = false;
@@ -122,10 +141,10 @@ const createChatAdapter = (
         const handleAbort = () => {
           if (aborted) return;
           aborted = true;
-          
+
           // Call stop endpoint
           void ChatService.stopMessage(chatId);
-          
+
           // Break out of the waiting loop
           if (resolveNext) {
             resolveNext(false);
@@ -153,27 +172,77 @@ const createChatAdapter = (
           (message: string, tool_calls: any[], citations: string[]) => {
             if (abortSignal?.aborted || aborted) return;
 
-            // Update accumulated state
-            accumulatedText = message;
+            const now = Date.now();
+
+            // Track text changes - if text has grown, it's a new segment
+            const textChanged = message.length > previousTextLength;
+            let newTextSegment = "";
+
+            if (textChanged && accumulatedText !== message) {
+              // New text segment arrived
+              newTextSegment = message.slice(previousTextLength);
+              previousTextLength = message.length;
+              accumulatedText = message;
+            }
+
+            // Track if we have tool calls in this update
+            const hasToolCalls = tool_calls && tool_calls.length > 0;
+
+            // If we have new text and no tool calls, add it immediately
+            // If we have new text and tool calls, we'll add it before tool calls
+            if (newTextSegment.trim() && !hasToolCalls) {
+              contentParts.push({
+                part: { type: "text" as const, text: newTextSegment },
+                timestamp: now,
+                type: "text",
+              });
+            } else if (newTextSegment.trim() && hasToolCalls) {
+              // Text arrived before tool calls in this callback
+              contentParts.push({
+                part: { type: "text" as const, text: newTextSegment },
+                timestamp: now,
+                type: "text",
+              });
+            }
 
             tool_calls.forEach((toolCallJson) => {
               try {
                 // Detect whether toolCallJson is a string or already an object
-                const parsed = typeof toolCallJson === "string" 
-                  ? JSON.parse(toolCallJson) 
-                  : toolCallJson;
+                const parsed =
+                  typeof toolCallJson === "string"
+                    ? JSON.parse(toolCallJson)
+                    : toolCallJson;
+
+                // DEBUG: Log subagent streaming response
+                console.log("[SubAgent Stream] Tool call update:", {
+                  tool_name: parsed.tool_name,
+                  call_id: parsed.call_id,
+                  event_type: parsed.event_type,
+                  has_stream_part: parsed.stream_part !== undefined,
+                  stream_part_length: parsed.stream_part?.length || 0,
+                  is_complete: parsed.is_complete,
+                  has_tool_response: !!parsed.tool_response,
+                  tool_response_length: parsed.tool_response?.length || 0,
+                  full_data: parsed,
+                });
+
                 const {
                   call_id,
                   tool_name,
                   tool_call_details,
                   event_type,
                   tool_response,
+                  stream_part,
+                  is_complete,
                 } = parsed;
 
                 const rawArgs = tool_call_details?.arguments;
 
-                const previous =
-                  accumulatedToolCalls.get(call_id) ??
+                const previous = accumulatedToolCalls.get(call_id);
+                const isNewToolCall = !previous;
+
+                const toolCallPart: StreamingToolCallPart =
+                  previous ??
                   ({
                     type: "tool-call" as const,
                     toolCallId: call_id,
@@ -186,34 +255,104 @@ const createChatAdapter = (
                       typeof rawArgs === "string"
                         ? rawArgs
                         : JSON.stringify(rawArgs ?? {}, null, 2),
+                    timestamp: now,
+                    lastUpdated: now,
                   } as StreamingToolCallPart);
 
                 const argsValue =
                   rawArgs === undefined
-                    ? previous.args
+                    ? toolCallPart.args
                     : typeof rawArgs === "object" && rawArgs !== null
                       ? rawArgs
                       : {};
 
                 const argsTextValue =
                   rawArgs === undefined
-                    ? previous.argsText
+                    ? toolCallPart.argsText
                     : typeof rawArgs === "string"
                       ? rawArgs
                       : JSON.stringify(rawArgs, null, 2);
 
+                // Handle streaming tool calls
+                let accumulatedResponse = "";
+                let isStreaming = false;
+                let finalResponse = tool_response || "";
+
+                if (stream_part !== undefined && stream_part !== null) {
+                  // This is a streaming update
+                  const previousState = previous?.streamState;
+                  const previousAccumulated =
+                    previousState?.accumulated_response || "";
+
+                  // DEBUG: Log stream part details
+                  console.log("[SubAgent Stream] Stream part received:", {
+                    call_id,
+                    tool_name,
+                    stream_part_length: stream_part.length,
+                    previous_accumulated_length: previousAccumulated.length,
+                    is_complete,
+                  });
+
+                  // Accumulate stream parts
+                  accumulatedResponse = previousAccumulated + stream_part;
+
+                  // Determine final response:
+                  // - If is_complete is true and tool_response is provided, prefer tool_response (authoritative final value)
+                  // - Otherwise, use accumulated response if tool_response is empty or shorter
+                  if (is_complete === true && tool_response) {
+                    // Final chunk: prefer tool_response as it's the authoritative complete response
+                    finalResponse = tool_response;
+                    // Update accumulated to match final response for consistency
+                    accumulatedResponse = tool_response;
+                  } else if (
+                    !tool_response ||
+                    tool_response.length < accumulatedResponse.length
+                  ) {
+                    // Use accumulated response during streaming or if tool_response is partial
+                    finalResponse = accumulatedResponse;
+                  } else {
+                    // tool_response is provided and is longer/complete
+                    finalResponse = tool_response;
+                  }
+
+                  // Check if streaming is complete
+                  isStreaming = !(is_complete === true);
+                } else {
+                  // Regular (non-streaming) tool call
+                  accumulatedResponse = tool_response || "";
+                  finalResponse = tool_response || "";
+                  isStreaming = false;
+                }
+
                 const streamState: ToolCallResult = {
                   event_type,
-                  response: tool_response,
+                  response: finalResponse,
                   details: tool_call_details,
+                  accumulated_response: accumulatedResponse || finalResponse,
+                  is_complete: is_complete !== undefined ? is_complete : true,
+                  is_streaming: isStreaming,
                 };
 
+                // DEBUG: Log final stream state
+                console.log("[SubAgent Stream] Stream state updated:", {
+                  call_id,
+                  tool_name,
+                  event_type,
+                  response_length: finalResponse.length,
+                  accumulated_length:
+                    streamState.accumulated_response?.length || 0,
+                  is_complete: streamState.is_complete,
+                  is_streaming: streamState.is_streaming,
+                });
+
                 const next: StreamingToolCallPart = {
-                  ...previous,
+                  ...toolCallPart,
                   streamState,
                   toolName: tool_name,
                   args: argsValue,
                   argsText: argsTextValue,
+                  timestamp: toolCallPart.timestamp ?? now,
+                  lastUpdated: now,
                 };
 
                 if (event_type === "result" || event_type === "error") {
@@ -225,6 +364,29 @@ const createChatAdapter = (
                 }
 
                 accumulatedToolCalls.set(call_id, next);
+
+                // If this is a new tool call, add it to content parts
+                if (isNewToolCall) {
+                  contentParts.push({
+                    part: next,
+                    timestamp: now,
+                    type: "tool-call",
+                  });
+                } else {
+                  // Update existing tool call in content parts
+                  const existingIndex = contentParts.findIndex(
+                    (cp) =>
+                      cp.type === "tool-call" &&
+                      (cp.part as any).toolCallId === call_id
+                  );
+                  if (existingIndex !== -1) {
+                    contentParts[existingIndex] = {
+                      part: next,
+                      timestamp: contentParts[existingIndex].timestamp, // Keep original timestamp
+                      type: "tool-call",
+                    };
+                  }
+                }
               } catch (e) {
                 console.warn("Error parsing tool call:", e);
               }
@@ -252,13 +414,15 @@ const createChatAdapter = (
 
         // Yield updates as they arrive
         let streamFinished = false;
-        
+
         try {
           while (!streamFinished && !aborted) {
             // Wait for next update or completion
             await Promise.race([
               waitForUpdate,
-              streamPromise.then(() => { streamFinished = true; }),
+              streamPromise.then(() => {
+                streamFinished = true;
+              }),
             ]);
 
             // Check if we were aborted during the wait
@@ -268,28 +432,118 @@ const createChatAdapter = (
 
             if (hasUpdate && !aborted) {
               hasUpdate = false;
-              
-              // Yield current accumulated state
+
+              // Sort content parts by timestamp to maintain chronological order
+              const sortedParts = [...contentParts].sort(
+                (a, b) => a.timestamp - b.timestamp
+              );
+
+              // Build final content array from sorted parts
+              // For text, we need to merge consecutive text segments
+              const finalContent: (TextMessagePart | ToolCallMessagePart)[] =
+                [];
+              let currentTextSegments: string[] = [];
+              let textIndex = 0; // Track position in accumulated text
+
+              for (const { part } of sortedParts) {
+                if (part.type === "text") {
+                  currentTextSegments.push(part.text);
+                  textIndex += part.text.length;
+                } else {
+                  // If we have accumulated text, add it first
+                  if (currentTextSegments.length > 0) {
+                    finalContent.push({
+                      type: "text" as const,
+                      text: currentTextSegments.join(""),
+                    });
+                    currentTextSegments = [];
+                  }
+                  // Add tool call
+                  finalContent.push(part);
+                }
+              }
+
+              // Add any remaining text segments
+              if (currentTextSegments.length > 0) {
+                finalContent.push({
+                  type: "text" as const,
+                  text: currentTextSegments.join(""),
+                });
+              }
+
+              // Fallback: if no content parts but we have text, include it
+              // This handles the case where text arrives but hasn't been added to contentParts yet
+              if (
+                finalContent.length === 0 &&
+                accumulatedText &&
+                contentParts.length === 0
+              ) {
+                finalContent.push({
+                  type: "text" as const,
+                  text: accumulatedText,
+                });
+              }
+
               yield {
-                content: [
-                  ...Array.from(accumulatedToolCalls.values()),
-                  ...(accumulatedText
-                    ? [{ type: "text" as const, text: accumulatedText }]
-                    : []),
-                ] as readonly (TextMessagePart | ToolCallMessagePart)[],
+                content: finalContent as readonly (
+                  | TextMessagePart
+                  | ToolCallMessagePart
+                )[],
               };
             }
           }
-          
+
           // Final yield after stream completes to ensure all content is sent
-          if (!aborted && accumulatedText) {
+          if (!aborted) {
+            // Sort content parts by timestamp
+            const sortedParts = [...contentParts].sort(
+              (a, b) => a.timestamp - b.timestamp
+            );
+
+            // Build final content array
+            const finalContent: (TextMessagePart | ToolCallMessagePart)[] = [];
+            let currentTextSegments: string[] = [];
+
+            for (const { part } of sortedParts) {
+              if (part.type === "text") {
+                currentTextSegments.push(part.text);
+              } else {
+                if (currentTextSegments.length > 0) {
+                  finalContent.push({
+                    type: "text" as const,
+                    text: currentTextSegments.join(""),
+                  });
+                  currentTextSegments = [];
+                }
+                finalContent.push(part);
+              }
+            }
+
+            if (currentTextSegments.length > 0) {
+              finalContent.push({
+                type: "text" as const,
+                text: currentTextSegments.join(""),
+              });
+            }
+
+            // Fallback: if no content parts but we have text, include it
+            // This handles the case where text arrives but hasn't been added to contentParts yet
+            if (
+              finalContent.length === 0 &&
+              accumulatedText &&
+              contentParts.length === 0
+            ) {
+              finalContent.push({
+                type: "text" as const,
+                text: accumulatedText,
+              });
+            }
+
             yield {
-              content: [
-                ...Array.from(accumulatedToolCalls.values()),
-                ...(accumulatedText
-                  ? [{ type: "text" as const, text: accumulatedText }]
-                  : []),
-              ] as readonly (TextMessagePart | ToolCallMessagePart)[],
+              content: finalContent as readonly (
+                | TextMessagePart
+                | ToolCallMessagePart
+              )[],
             };
           }
         } catch (error) {
@@ -447,7 +701,7 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
       // Create object URL for preview
       const objectUrl = URL.createObjectURL(file);
       const attachmentId = crypto.randomUUID();
-      
+
       // Store the URL so we can revoke it later
       objectUrls.set(attachmentId, objectUrl);
 
@@ -496,7 +750,7 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
         file: attachment.file, // Preserve the File object for backend upload
         content: attachment.content || [],
       };
-      
+
       return completeAttachment;
     },
   };
@@ -504,16 +758,63 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
 
 // Hook to create and manage the runtime
 // Returns runtime along with session states for components to use
-export function useChatRuntime(chatId: string | null | undefined): ChatRuntimeResult {
+export function useChatRuntime(
+  chatId: string | null | undefined
+): ChatRuntimeResult {
   // Local state for session management (no Redux)
   const [isSessionResuming, setIsSessionResuming] = useState(false);
   const [isBackgroundTaskActive, setIsBackgroundTaskActive] = useState(false);
-  
+
   // Use ref for the adapter to avoid stale closure issues
   const isBackgroundTaskActiveRef = useRef(isBackgroundTaskActive);
   useEffect(() => {
     isBackgroundTaskActiveRef.current = isBackgroundTaskActive;
   }, [isBackgroundTaskActive]);
+
+  // Ref to store runtime for use in resume callback
+  const runtimeRef = useRef<ReturnType<typeof useLocalRuntime> | null>(null);
+
+  // State to trigger history reload after resume
+  const [historyReloadKey, setHistoryReloadKey] = useState(0);
+
+  // Create the chat adapter - use ref to avoid recreation on state change
+  const adapter = useMemo(() => {
+    const safeChatId: string = (chatId || "") as string;
+    return createChatAdapter(safeChatId, isBackgroundTaskActiveRef);
+  }, [chatId]); // Only recreate when chatId changes, not backgroundTaskActive
+
+  // Create the history adapter - recreate when reload key changes to force reload
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const historyAdapter = useMemo(() => {
+    if (!chatId) {
+      return undefined;
+    }
+    // historyReloadKey is in dependencies to force recreation when it changes
+    // We access it here to satisfy the linter, even though we don't use the value
+    void historyReloadKey;
+    return createHistoryAdapter(chatId);
+  }, [chatId, historyReloadKey]);
+
+  // Create the attachments adapter
+  const attachmentsAdapter = useMemo(() => {
+    return createAttachmentsAdapter();
+  }, []);
+
+  const runtime = useLocalRuntime(adapter, {
+    adapters: historyAdapter
+      ? {
+          history: historyAdapter,
+          attachments: attachmentsAdapter,
+        }
+      : {
+          attachments: attachmentsAdapter,
+        },
+  });
+
+  // Store runtime in ref for use in resume callback
+  useEffect(() => {
+    runtimeRef.current = runtime;
+  }, [runtime]);
 
   // Resume active session helper
   const resumeActiveSession = useCallback(
@@ -523,15 +824,58 @@ export function useChatRuntime(chatId: string | null | undefined): ChatRuntimeRe
 
         setIsSessionResuming(true);
 
+        const runtime = runtimeRef.current;
+        if (!runtime) {
+          console.warn("Runtime not available for resume");
+          setIsSessionResuming(false);
+          return;
+        }
+
+        // Track initial message count
+        const initialMessages = await ChatService.loadMessages(chatId, 0, 1000);
+        let lastMessageCount = initialMessages.length;
+
+        // Set up periodic checking for updates during resume
+        // This allows the UI to show progress as messages are saved to the backend
+        const updateInterval = setInterval(async () => {
+          try {
+            const messages = await ChatService.loadMessages(chatId, 0, 1000);
+            const currentCount = messages.length;
+
+            // If new messages arrived, trigger history reload to show them
+            if (currentCount > lastMessageCount) {
+              lastMessageCount = currentCount;
+              // Trigger history adapter reload by changing the key
+              setHistoryReloadKey((prev) => prev + 1);
+            }
+          } catch (error) {
+            console.warn(
+              "Error checking for message updates during resume:",
+              error
+            );
+          }
+        }, 1500); // Check every 1.5 seconds to avoid too frequent reloads
+
         // Resume the session stream from backend
         await ChatService.resumeActiveSession(
           chatId,
           sessionInfo.sessionId,
           (message: string, tool_calls: any[], citations: string[]) => {
-            // The history adapter will reload messages after resume completes
-            // This callback handles streaming updates during resume
+            // The callback receives streaming updates, but we can't directly inject them
+            // into the runtime. Instead, we rely on the backend saving messages incrementally
+            // and the periodic check above to reload and display them.
+            // This ensures the UI stays in sync with the backend state.
           }
         );
+
+        // Clear the update interval
+        clearInterval(updateInterval);
+
+        // Final reload after resume completes to ensure all messages are displayed
+        const finalMessages = await ChatService.loadMessages(chatId, 0, 1000);
+        if (finalMessages.length > lastMessageCount) {
+          setHistoryReloadKey((prev) => prev + 1);
+        }
 
         setIsBackgroundTaskActive(false);
         setIsSessionResuming(false);
@@ -551,48 +895,23 @@ export function useChatRuntime(chatId: string | null | undefined): ChatRuntimeRe
 
       try {
         const activeSession = await ChatService.detectActiveSession(chatId);
+        // Resume if status is "active" - this means there's an ongoing background task
         if (activeSession && activeSession.status === "active") {
           setIsBackgroundTaskActive(true);
           // Resume active session
           await resumeActiveSession(activeSession);
+        } else {
+          // If status is "completed" or "idle", no need to resume
+          setIsBackgroundTaskActive(false);
         }
       } catch (error) {
         console.error("Error checking active session:", error);
+        setIsBackgroundTaskActive(false);
       }
     };
 
     checkActiveSession();
   }, [chatId, resumeActiveSession]);
-
-  // Create the chat adapter - use ref to avoid recreation on state change
-  const adapter = useMemo(() => {
-    const safeChatId: string = (chatId || "") as string;
-    return createChatAdapter(safeChatId, isBackgroundTaskActiveRef);
-  }, [chatId]); // Only recreate when chatId changes, not backgroundTaskActive
-
-  // Create the history adapter
-  const historyAdapter = useMemo(() => {
-    if (!chatId) {
-      return undefined;
-    }
-    return createHistoryAdapter(chatId);
-  }, [chatId]);
-
-  // Create the attachments adapter
-  const attachmentsAdapter = useMemo(() => {
-    return createAttachmentsAdapter();
-  }, []);
-
-  const runtime = useLocalRuntime(adapter, {
-    adapters: historyAdapter
-      ? {
-          history: historyAdapter,
-          attachments: attachmentsAdapter,
-        }
-      : {
-          attachments: attachmentsAdapter,
-        },
-  });
 
   return {
     runtime,

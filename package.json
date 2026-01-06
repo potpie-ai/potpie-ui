@@ -86,7 +86,8 @@
     "uuid": "^9.0.1",
     "vaul": "^0.9.9",
     "zustand": "^5.0.8",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "psl": "^1.9.0"
   },
   "devDependencies": {
     "@types/dompurify": "^3.2.0",

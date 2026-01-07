@@ -96,8 +96,8 @@ export default function QuestionCard({
                   </span>
                 )}
 
-                {!isSkipped && question.needsInput && (
-                  <span className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                {!isSkipped && question.needsInput && !hasAnswer && (
+                  <span className="px-1.5 py-0.5 bg-accent/20 border border-accent/40 rounded text-[10px] font-bold uppercase tracking-wider text-accent-foreground">
                     Needs Input
                   </span>
                 )}

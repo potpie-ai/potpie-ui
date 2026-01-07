@@ -558,9 +558,16 @@ export default function RepoPage() {
         <div className="mt-6 flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-3xl mx-auto space-y-6">
             <div className="flex justify-between items-start mb-10">
-              <h1 className="text-2xl font-bold text-primary">
-                Clarifying Questions
-              </h1>
+              <div className="flex-1">
+                <h1 className="text-2xl font-bold text-primary mb-3">
+                  Clarifying Questions
+                </h1>
+                {featureIdea && (
+                  <p className="text-sm text-zinc-600 leading-relaxed max-w-2xl">
+                    {featureIdea}
+                  </p>
+                )}
+              </div>
               <div className="flex flex-col items-end gap-4">
                 <div className="flex items-center gap-3">
                   <Badge icon={Github}>{repoName}</Badge>

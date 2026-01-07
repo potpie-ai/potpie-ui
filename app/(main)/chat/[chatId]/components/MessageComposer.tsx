@@ -23,7 +23,10 @@ import {
   useComposerRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import { ComposerAddAttachment, ComposerAttachments } from "@/components/assistant-ui/attachment";
+import {
+  ComposerAddAttachment,
+  ComposerAttachments,
+} from "@/components/assistant-ui/attachment";
 import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import { Dialog } from "@radix-ui/react-dialog";
 import axios from "axios";
@@ -33,8 +36,16 @@ import {
   X,
   Loader2Icon,
   Crown,
+  Zap,
 } from "lucide-react";
-import { FC, useRef, useState, KeyboardEvent, useEffect, useCallback } from "react";
+import {
+  FC,
+  useRef,
+  useState,
+  KeyboardEvent,
+  useEffect,
+  useCallback,
+} from "react";
 import ChatService from "@/services/ChatService";
 import Image from "next/image";
 import MinorService from "@/services/minorService";
@@ -69,11 +80,11 @@ const MessageComposer = ({
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
-  
+
   // Use thread runtime to check if streaming is in progress
   const threadRuntime = useThreadRuntime();
   const [isThreadRunning, setIsThreadRunning] = useState(false);
-  
+
   // Subscribe to thread running state
   useEffect(() => {
     const unsubscribe = threadRuntime.subscribe(() => {
@@ -96,18 +107,21 @@ const MessageComposer = ({
   // Use refs to avoid closure issues and re-render loops
   const messageRef = useRef(message);
   const lastSyncedComposerText = useRef<string>("");
-  
+
   // Keep messageRef in sync with message state
   useEffect(() => {
     messageRef.current = message;
   }, [message]);
-  
+
   useEffect(() => {
     const unsubscribe = composer.subscribe(() => {
       const composerText = composer.getState().text;
       // Only update local state if composer text changed externally (not from our onChange)
       // This prevents re-render loops when typing
-      if (lastSyncedComposerText.current !== composerText && messageRef.current !== composerText) {
+      if (
+        lastSyncedComposerText.current !== composerText &&
+        messageRef.current !== composerText
+      ) {
         lastSyncedComposerText.current = composerText;
         messageRef.current = composerText;
         setMessage(composerText);
@@ -294,7 +308,9 @@ const MessageComposer = ({
                     }
                   }}
                   className={`flex m-1 flex-row cursor-pointer rounded-sm text-s p1 px-2 transition ease-out ${
-                    index === selectedNodeIndex ? "bg-gray-200" : "hover:bg-gray-200"
+                    index === selectedNodeIndex
+                      ? "bg-gray-200"
+                      : "hover:bg-gray-200"
                   }`}
                   onClick={() => handleNodeSelect(node)}
                 >
@@ -406,9 +422,7 @@ const MessageComposer = ({
           </button>
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
-          <ComposerPrimitive.Cancel 
-            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer"
-          >
+          <ComposerPrimitive.Cancel className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer">
             <CircleStopIcon />
           </ComposerPrimitive.Cancel>
         </ThreadPrimitive.If>
@@ -575,12 +589,16 @@ const ModelSelection: FC<{
           onClick={handleModelList}
         >
           <div className="flex flex-row justify-center items-center">
-            <Image
-              height={20}
-              width={20}
-              src={`/chat/${currentModel.provider}.svg`}
-              alt={currentModel.provider.charAt(0)}
-            />
+            {currentModel.provider === "zai" ? (
+              <Zap className="h-5 w-5" />
+            ) : (
+              <Image
+                height={20}
+                width={20}
+                src={`/chat/${currentModel.provider}.svg`}
+                alt={currentModel.provider.charAt(0)}
+              />
+            )}
 
             <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
           </div>
@@ -641,23 +659,30 @@ const ModelSelection: FC<{
                               className={`flex flex-row items-start ${
                                 selectedId === model.id ? "animate-pulse" : ""
                               } ${
-                                !free_models.includes(model.id) && currPlan == "free"
+                                !free_models.includes(model.id) &&
+                                currPlan == "free"
                                   ? "opacity-50"
                                   : ""
                               }`}
                               onSelect={handleModelSelect(model.id)}
                               value={model.name + " " + model.provider}
                             >
-                              <Avatar className="overflow-hidden rounded-full w-10 h-10">
-                                <AvatarImage
-                                  src={`/chat/${model.provider}.svg`}
-                                  alt={model.provider}
-                                  className="w-10 h-10"
-                                />
-                                <AvatarFallback>
-                                  {model.provider.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
+                              {model.provider === "zai" ? (
+                                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800">
+                                  <Zap className="h-5 w-5" />
+                                </div>
+                              ) : (
+                                <Avatar className="overflow-hidden rounded-full w-10 h-10">
+                                  <AvatarImage
+                                    src={`/chat/${model.provider}.svg`}
+                                    alt={model.provider}
+                                    className="w-10 h-10"
+                                  />
+                                  <AvatarFallback>
+                                    {model.provider.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                              )}
                               <div className="flex flex-col">
                                 <div className="flex flex-row items-center">
                                   <span className="ml-2">{model.name}</span>

@@ -328,8 +328,8 @@ const ThreadScrollToBottom: FC = () => {
 // Custom ToolCall component for assistant-ui
 interface ToolCallStreamState {
   event_type: string;
-  response: string;
-  details: { summary: string };
+  response: string; // Maps to tool_response from API (status message)
+  details: { summary: string }; // Maps to tool_call_details.summary from API
   accumulated_response?: string; // Accumulated from stream_part chunks
   is_complete?: boolean; // Whether this is the final part
   is_streaming?: boolean; // Whether this tool call is currently streaming
@@ -341,7 +341,7 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   argsText,
   result,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
   const threadRuntime = useThreadRuntime();
 
   // Get the full message to access the complete tool call part with streamState
@@ -355,25 +355,59 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
     | ToolCallStreamState
     | undefined;
   const resultState = result as any as ToolCallStreamState | undefined;
-  const state = streamState ?? resultState;
+  // Use streamState if available (current streaming state), otherwise use resultState (final state)
+  const currentState = streamState ?? resultState;
 
-  const status = state?.event_type || "";
+  // Track call and result events separately
+  // According to API docs:
+  // - "call" event: tool_response = status message, summary = what tool will do
+  // - "result" event: tool_response = completion message, summary = result details, stream_part = streaming content
+  const [callState, setCallState] = useState<ToolCallStreamState | null>(null);
+  const [resultStateLocal, setResultStateLocal] =
+    useState<ToolCallStreamState | null>(null);
+
+  // Update state based on event_type from the current state
+  useEffect(() => {
+    if (!currentState) return;
+
+    const eventType = currentState.event_type || "";
+
+    if (eventType === "call" || eventType === "delegation_call") {
+      setCallState(currentState);
+    } else if (eventType === "result" || eventType === "delegation_result") {
+      setResultStateLocal(currentState);
+    }
+  }, [currentState]);
 
   // Use accumulated_response if streaming, otherwise use response
-  const isStreamingFromState = state?.is_streaming ?? false;
+  const isStreamingFromState = currentState?.is_streaming ?? false;
   const isComplete =
-    state?.is_complete !== undefined ? state.is_complete : true;
-  const displayText =
-    isStreamingFromState && !isComplete && state?.accumulated_response
-      ? state.accumulated_response
-      : state?.response || "";
+    currentState?.is_complete !== undefined ? currentState.is_complete : true;
+  const eventType = currentState?.event_type || "";
 
-  const messageText = displayText;
-  const details_summary = state?.details?.summary || "";
-  const isError = toolCallPart?.isError ?? resultState?.event_type === "error";
-  const isCompleted = (status === "result" || isComplete) && !isError;
-  const hasDetails = !!details_summary;
-  const hasResult = isCompleted || isError;
+  // Status messages (tool_response from API)
+  const callStatusMessage = callState?.response || "";
+  const resultStatusMessage = resultStateLocal?.response || "";
+
+  // Detailed summaries (tool_call_details.summary from API)
+  const callSummary = callState?.details?.summary || "";
+  const resultSummary = resultStateLocal?.details?.summary || "";
+
+  // Streaming content (accumulated stream_part)
+  const streamingContent = resultStateLocal?.accumulated_response || "";
+
+  const isError = toolCallPart?.isError ?? currentState?.event_type === "error";
+  const isCompleted =
+    (eventType === "result" ||
+      eventType === "delegation_result" ||
+      isComplete) &&
+    !isError;
+  const hasCallInfo = !!(callStatusMessage || callSummary);
+  const hasResultInfo = !!(
+    resultStatusMessage ||
+    resultSummary ||
+    streamingContent
+  );
 
   // Track thread running state
   const [threadIsRunning, setThreadIsRunning] = useState(false);
@@ -409,77 +443,110 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
     message.isLast &&
     threadIsRunning;
 
-  // Auto-expand accordion when result first becomes available or during streaming
-  // But allow manual control after initial expansion
-  const [hasAutoExpanded, setHasAutoExpanded] = useState(false);
+  // Deduplicate status messages - if result message is same as call message, don't show both
+  const showCallStatus =
+    callStatusMessage && callStatusMessage !== resultStatusMessage;
+  const showResultStatus =
+    resultStatusMessage && resultStatusMessage !== callStatusMessage;
 
-  useEffect(() => {
-    if (isToolCallStreaming) {
-      // Keep open during streaming
-      setIsExpanded(true);
-    } else if (hasResult && !hasAutoExpanded) {
-      // Auto-expand once when result first becomes available
-      setIsExpanded(true);
-      setHasAutoExpanded(true);
-    }
-    // Don't interfere if user has manually collapsed it (hasAutoExpanded is true and isExpanded is false)
-  }, [isToolCallStreaming, hasResult, hasAutoExpanded]);
+  // Deduplicate summaries - if they're the same, only show one
+  const showCallSummary =
+    callSummary &&
+    callSummary !== resultSummary &&
+    callSummary !== streamingContent;
+  const showResultSummary =
+    resultSummary &&
+    resultSummary !== callSummary &&
+    resultSummary !== streamingContent;
+
+  // Combine all content for the collapsible block
+  const hasAnyContent = hasCallInfo || hasResultInfo || !isCompleted;
+  const displayStatus = showResultStatus
+    ? resultStatusMessage
+    : showCallStatus
+      ? callStatusMessage
+      : toolName;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -5 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="w-full my-4 border border-border rounded-md p-3 bg-muted/20"
+      className="w-full max-w-2xl my-2 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 border-l-4 border-l-neutral-400 dark:border-l-neutral-500 shadow-sm"
     >
-      <div className="flex items-center gap-2 text-sm">
-        {isError ? (
-          <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
-        ) : isCompleted ? (
-          <CheckIcon className="h-4 w-4 text-green-600 flex-shrink-0" />
-        ) : (
-          <Loader className="h-4 w-4 animate-spin flex-shrink-0" />
-        )}
-        <span className="italic text-foreground/80">
-          {messageText || `Using ${toolName}...`}
-          {isToolCallStreaming && !isCompleted && (
-            <span className="inline-block w-1 h-4 ml-1 bg-current animate-pulse" />
-          )}
-        </span>
-      </div>
+      {hasAnyContent && (
+        <Accordion
+          type="single"
+          collapsible
+          value={isExpanded ? toolCallId : ""}
+          onValueChange={(value) => {
+            setIsExpanded(value === toolCallId);
+          }}
+          className="w-full"
+        >
+          <AccordionItem value={toolCallId} className="border-0">
+            <AccordionTrigger className="py-2 px-3 hover:no-underline text-xs text-muted-foreground flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                {isError ? (
+                  <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                ) : isCompleted ? (
+                  <CheckIcon className="h-3 w-3 text-green-600 flex-shrink-0" />
+                ) : (
+                  <Loader className="h-3 w-3 animate-spin flex-shrink-0" />
+                )}
+                <span className="text-xs text-foreground/70">
+                  {displayStatus}
+                </span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="pt-0 pb-2 px-3">
+              <div className="space-y-2 text-xs">
+                {/* Call Event - Tool execution info */}
+                {showCallStatus && (
+                  <div className="text-foreground/80 italic">
+                    {callStatusMessage}
+                  </div>
+                )}
+                {showCallSummary && (
+                  <div className="text-foreground/70 bg-white/30 dark:bg-neutral-900/30 rounded px-2 py-1.5 border border-neutral-200/50 dark:border-neutral-700/50">
+                    <StandaloneMarkdown
+                      text={callSummary}
+                      className="markdown-content break-words text-xs"
+                    />
+                  </div>
+                )}
 
-      {/* Show collapsible result/details when available */}
-      {hasDetails && hasResult && (
-        <div className="mt-2 ml-6">
-          <Accordion
-            type="single"
-            collapsible
-            value={isExpanded ? toolCallId : ""}
-            onValueChange={(value) => {
-              // Allow manual control - user can collapse/expand
-              setIsExpanded(value === toolCallId);
-              // Once user manually controls it, respect their choice
-              if (value === "") {
-                // User collapsed it - mark that they've taken control
-                setHasAutoExpanded(true);
-              }
-            }}
-          >
-            <AccordionItem value={toolCallId} className="border-0">
-              <AccordionTrigger className="py-1 px-0 hover:no-underline text-xs text-muted-foreground">
-                {isExpanded ? "Hide details" : "Show details"}
-              </AccordionTrigger>
-              <AccordionContent className="pt-2 pb-0 px-0">
-                <div className="text-xs text-foreground bg-muted/30 rounded-md px-3 py-2 max-h-[350px] overflow-y-auto border border-border/50">
-                  <StandaloneMarkdown
-                    text={details_summary}
-                    className="markdown-content break-words text-xs"
-                  />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
+                {/* Result Event - Tool result */}
+                {showResultStatus && (
+                  <div className="text-foreground/90 font-medium">
+                    {resultStatusMessage}
+                  </div>
+                )}
+                {/* Streaming content (from stream_part) */}
+                {streamingContent && (
+                  <div className="text-foreground/90 bg-white/50 dark:bg-neutral-900/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
+                    {isToolCallStreaming && !isCompleted && (
+                      <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
+                    )}
+                    <StandaloneMarkdown
+                      text={streamingContent}
+                      className="markdown-content break-words text-xs"
+                    />
+                  </div>
+                )}
+                {/* Result summary (from tool_call_details.summary) */}
+                {showResultSummary && (
+                  <div className="text-foreground/80 bg-white/30 dark:bg-neutral-900/30 rounded px-2 py-1.5 border border-neutral-200/50 dark:border-neutral-700/50">
+                    <StandaloneMarkdown
+                      text={resultSummary}
+                      className="markdown-content break-words text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
     </motion.div>
   );

@@ -37,11 +37,11 @@ export default function ParsingStatusCard({
       <CardContent className="p-4">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">
+            <h3 className="text-xs font-bold text-foreground uppercase tracking-wide">
               {isComplete ? "Repository analysis complete!" : "Analyzing repository..."}
             </h3>
             {!isComplete && (
-              <Loader2 className="h-4 w-4 animate-spin text-zinc-900" />
+              <Loader2 className="h-4 w-4 animate-spin text-foreground" />
             )}
             {isComplete && (
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -59,17 +59,17 @@ export default function ParsingStatusCard({
                 <div
                   key={`${step}-${index}`}
                   className={`flex items-center gap-2 text-xs ${
-                    isCompleted ? "text-zinc-700" : "text-zinc-400"
+                    isCompleted ? "text-foreground" : "text-zinc-400"
                   }`}
                 >
                   {isCompleted ? (
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
                   ) : isCurrent ? (
-                    <Loader2 className="h-3.5 w-3.5 text-zinc-900 animate-spin flex-shrink-0" />
+                    <Loader2 className="h-3.5 w-3.5 text-foreground animate-spin flex-shrink-0" />
                   ) : (
                     <div className="h-3.5 w-3.5 rounded-full border-2 border-zinc-200 flex-shrink-0" />
                   )}
-                  <span className={isCurrent ? "font-semibold text-zinc-900" : ""}>
+                  <span className={isCurrent ? "font-semibold text-foreground" : ""}>
                     {step}
                   </span>
                 </div>

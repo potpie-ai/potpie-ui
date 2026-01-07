@@ -12,6 +12,7 @@ import {
   Plug,
   Cookie,
   Hammer,
+  SparkleIcon,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -122,12 +123,12 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     ],
   },
   {
-    title: "Builds",
+    title: "Idea",
     links: [
       {
-        icons: <Hammer size={20} strokeWidth={1.5} />,
-        title: "Builds",
-        href: "/builds",
+        icons: <SparkleIcon size={20} strokeWidth={1.5} />,
+        title: "Idea",
+        href: "/idea",
         disabled: false,
       },
     ],
@@ -155,17 +156,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     ],
   },
   {
-    title: "Tasks",
-    links: [
-      {
-        icons: <Cookie size={20} strokeWidth={1.5} />,
-        title: "New Task",
-        href: "/newtask",
-        disabled: false,
-      },
-    ],
-  },
-  {
     title: "Knowledge Base",
     links: [
       {
@@ -174,14 +164,7 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         title: "Repositories",
         href: "/repositories",
         disabled: false,
-      },
-      {
-        icons: <LucideFileText size={20} strokeWidth={1.5} />,
-        title: "Text resources",
-        href: "#",
-        disabled: true,
-        description: "Coming soon",
-      },
+      }
     ],
   },
   {

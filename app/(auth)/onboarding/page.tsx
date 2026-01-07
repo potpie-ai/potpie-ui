@@ -322,7 +322,7 @@ const Onboarding = () => {
         `/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`
       );
     } else {
-      router.push("/newchat");
+      router.push("/idea");
     }
   };
 

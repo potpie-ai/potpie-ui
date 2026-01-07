@@ -9,6 +9,11 @@ import { GeistSans } from "geist/font/sans";
 export const metadata: Metadata = {
   title: "potpie - ai agents for your codebase in minutes",
   description: "Build task-oriented custom agents for your codebase that perform engineering tasks with high precision powered by intelligence and context from your data. Build agents for use cases like system design, debugging, integration testing, onboarding etc.",
+  icons: {
+    icon: "/images/3. Potpie Green.jpg",
+    shortcut: "/images/3. Potpie Green.jpg",
+    apple: "/images/3. Potpie Green.jpg",
+  },
 };
 
 export default function RootLayout({

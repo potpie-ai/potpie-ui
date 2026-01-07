@@ -40,6 +40,7 @@ const ChatV2 = () => {
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
   const { user } = useAuthContext();
+  const [isPreprocessingComplete, setIsPreprocessingComplete] = useState(false);
 
   const [profilePicUrl, setProfilePicUrl] = useState(user.photoURL);
 
@@ -62,29 +63,105 @@ const ChatV2 = () => {
   const pendingMessage = useSelector((state: RootState) => state.chat.pendingMessage);
   const hasSentPendingMessage = useRef(false);
 
-  // Send pending message when chat page loads
-  useEffect(() => {
-    if (pendingMessage && !hasSentPendingMessage.current && currentConversationId) {
-      hasSentPendingMessage.current = true;
+  // Helper function to wait for runtime history to load
+  const waitForHistoryLoad = async (runtime: ReturnType<typeof useChatRuntime>["runtime"]): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!runtime) {
+        resolve(false);
+        return;
+      }
+
+      const thread = runtime.thread;
+      if (!thread) {
+        resolve(false);
+        return;
+      }
+
+      const getMessages = () => thread.getState().messages;
       
-      // Send the pending message
-      ChatService.streamMessage(
-        currentConversationId,
-        pendingMessage,
-        [], // No selected nodes
-        [], // No images
-        () => {
-          // Message is streaming, runtime will handle the display
+      // If messages are already loaded (array exists), resolve immediately
+      if (Array.isArray(getMessages())) {
+        resolve(true);
+        return;
+      }
+      
+      // Otherwise, wait for history adapter to complete
+      const unsubscribe = thread.subscribe(() => {
+        const messages = getMessages();
+        if (Array.isArray(messages)) {
+          unsubscribe();
+          resolve(true);
         }
-      ).catch((error) => {
-        console.error("Error sending pending message:", error);
-        toast.error("Failed to send message. You can retry in the chat.");
-      }).finally(() => {
+      });
+      
+      // Safety timeout - resolve after 10 seconds even if history doesn't load
+      setTimeout(() => {
+        unsubscribe();
+        resolve(false);
+      }, 10000);
+    });
+  };
+
+  // Send pending message when chat page is ready (after ALL preprocessing completes)
+  useEffect(() => {
+    const sendPendingMessageWhenReady = async () => {
+      // Check all prerequisites
+      if (
+        !pendingMessage || 
+        hasSentPendingMessage.current || 
+        !currentConversationId ||
+        !isPreprocessingComplete ||
+        !runtime ||
+        infoLoadedForChat !== currentConversationId
+      ) {
+        return;
+      }
+
+      try {
+        // Wait for runtime history to load
+        const historyLoaded = await waitForHistoryLoad(runtime);
+        
+        if (!historyLoaded) {
+          console.warn("[Chat Page] History load timeout, sending message anyway");
+        }
+
+        // Small delay to ensure everything is fully ready
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        
+        hasSentPendingMessage.current = true;
+        
+        console.log("[Chat Page] All preprocessing complete, sending pending message");
+        
+        // Send the pending message
+        await ChatService.streamMessage(
+          currentConversationId,
+          pendingMessage,
+          [], // No selected nodes
+          [], // No images
+          () => {
+            // Message is streaming, runtime will handle the display
+          }
+        );
+
         // Clear pending message after sending
         dispatch(clearPendingMessage());
-      });
-    }
-  }, [pendingMessage, currentConversationId, dispatch]);
+      } catch (error) {
+        console.error("[Chat Page] Error sending pending message:", error);
+        toast.error("Failed to send message. You can retry in the chat.");
+        hasSentPendingMessage.current = false; // Allow retry
+        dispatch(clearPendingMessage());
+      }
+    };
+
+    sendPendingMessageWhenReady();
+  }, [
+    pendingMessage, 
+    currentConversationId, 
+    infoLoadedForChat, 
+    isPreprocessingComplete,
+    runtime, 
+    dispatch
+  ]);
 
   const parseRepo = async () => {
     // Guard: prevent overlapping polls and bail if projectId is missing
@@ -183,6 +260,9 @@ const ChatV2 = () => {
         info.project_ids[0]
       );
       setParsingStatus(parsingStatus);
+      
+      // Mark preprocessing as complete after all info is loaded
+      setIsPreprocessingComplete(true);
     } catch (error) {
       console.error("Error loading conversation info:", error);
       toast.error("Failed to load conversation info");
@@ -191,6 +271,12 @@ const ChatV2 = () => {
 
   useLayoutEffect(() => {
     loadInfoOnce();
+  }, [currentConversationId]);
+
+  // Reset preprocessing state when conversation changes
+  useEffect(() => {
+    setIsPreprocessingComplete(false);
+    hasSentPendingMessage.current = false;
   }, [currentConversationId]);
 
   useEffect(() => {

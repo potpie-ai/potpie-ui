@@ -18,6 +18,10 @@ import { useEffect, useCallback, useMemo, useState, useRef } from "react";
 import ChatService from "@/services/ChatService";
 import { SessionInfo } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/lib/state/store";
+import { clearPendingMessage } from "@/lib/state/Reducers/chat";
+import { toast } from "sonner";
 
 // Type for tool call result structure from backend
 interface ToolCallResult {
@@ -48,10 +52,24 @@ interface BackendMessage {
   created_at?: string;
 }
 
+// Resume session info interface
+interface ResumeSessionInfo {
+  sessionId: string;
+  cursor: string;
+}
+
+// Streaming state interface (for ongoing streams)
+interface StreamingState {
+  sessionId: string | null;
+  currentCursor: string;
+  isStreaming: boolean;
+  isReconnecting: boolean;
+  reconnectAttempts: number;
+}
+
 // Return type for the hook
 export interface ChatRuntimeResult {
   runtime: ReturnType<typeof useLocalRuntime>;
-  isSessionResuming: boolean;
   isBackgroundTaskActive: boolean;
 }
 
@@ -59,9 +77,92 @@ export interface ChatRuntimeResult {
 const createChatAdapter = (
   chatId: string,
   isBackgroundTaskActiveRef: React.MutableRefObject<boolean>,
+  streamingStateRef: React.MutableRefObject<StreamingState>,
+  resumeSessionRef: React.MutableRefObject<ResumeSessionInfo | null>
 ): ChatModelAdapter => {
   return {
     async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
+      console.log("[Adapter] run() called with messages:", messages.length);
+
+      // Check if this is a resume run FIRST
+      const resumeSession = resumeSessionRef.current;
+
+      // inside createChatAdapter -> run function
+      if (resumeSession) {
+        const { sessionId, cursor } = resumeSession;
+        resumeSessionRef.current = null;
+
+        // 1. A simple queue to bridge callback -> generator
+        const queue: any[] = [];
+        let resolve: ((value: any) => void) | null = null;
+        let finished = false;
+
+        const pushToQueue = (
+          accumulatedText: string,
+          toolCallsMap: Map<string, any>
+        ) => {
+          const content: (TextMessagePart | ToolCallMessagePart)[] = [];
+
+          // Always ensure text is a valid string, even if empty
+          content.push({ type: "text", text: accumulatedText || "" });
+
+          // Ensure tool calls are valid before pushing
+          for (const tool of toolCallsMap.values()) {
+            if (tool.toolCallId && tool.toolName) {
+              content.push(tool);
+            }
+          }
+
+          const chunk = { content };
+          if (resolve) {
+            resolve(chunk);
+            resolve = null;
+          } else {
+            queue.push(chunk);
+          }
+        };
+
+        // 2. Start the backend call
+        ChatService.resumeWithCursor(
+          chatId,
+          sessionId,
+          cursor,
+          (message, tool_calls) => {
+            // Process tool calls into the map (your existing logic is fine here)
+            // ... process tool_calls into a local Map ...
+
+            // Push the current state to the queue
+            pushToQueue(message, processedToolCallsMap);
+          },
+          abortSignal
+        )
+          .then(() => {
+            finished = true;
+            if (resolve) resolve(null);
+          })
+          .catch((err) => {
+            finished = true;
+            if (resolve) resolve(null);
+          });
+
+        // 3. The Generator Loop
+        while (true) {
+          if (queue.length > 0) {
+            yield queue.shift();
+          } else if (finished) {
+            break;
+          } else {
+            const next = await new Promise((res) => {
+              resolve = res;
+            });
+            if (!next) break;
+            yield next;
+          }
+        }
+        return;
+      }
+
+      // NORMAL MODE: Existing code for regular message streaming
       // Prevent new messages during background tasks
       if (isBackgroundTaskActiveRef.current) {
         console.warn("Cannot send message while background task is active");
@@ -89,19 +190,28 @@ const createChatAdapter = (
       const runConfig = (context as { runConfig?: RunConfig }).runConfig;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
-      
+
       // Extract images from message attachments (the assistant-ui way)
       const images: File[] = [];
       if (isMultimodalEnabled() && lastMessage.role === "user") {
         const userMessage = lastMessage as ThreadUserMessage;
         if (userMessage.attachments) {
           userMessage.attachments.forEach((attachment) => {
-            if (attachment.type === "image" && "file" in attachment && attachment.file) {
+            if (
+              attachment.type === "image" &&
+              "file" in attachment &&
+              attachment.file
+            ) {
               images.push(attachment.file);
             }
           });
         }
       }
+
+      // Initialize streaming state
+      streamingStateRef.current.isStreaming = true;
+      streamingStateRef.current.currentCursor = "0-0";
+      streamingStateRef.current.sessionId = null;
 
       // Convert callback-based ChatService to async iterable
       const streamAsyncIterable = async function* () {
@@ -122,10 +232,10 @@ const createChatAdapter = (
         const handleAbort = () => {
           if (aborted) return;
           aborted = true;
-          
+
           // Call stop endpoint
           void ChatService.stopMessage(chatId);
-          
+
           // Break out of the waiting loop
           if (resolveNext) {
             resolveNext(false);
@@ -159,9 +269,10 @@ const createChatAdapter = (
             tool_calls.forEach((toolCallJson) => {
               try {
                 // Detect whether toolCallJson is a string or already an object
-                const parsed = typeof toolCallJson === "string" 
-                  ? JSON.parse(toolCallJson) 
-                  : toolCallJson;
+                const parsed =
+                  typeof toolCallJson === "string"
+                    ? JSON.parse(toolCallJson)
+                    : toolCallJson;
                 const {
                   call_id,
                   tool_name,
@@ -241,24 +352,34 @@ const createChatAdapter = (
               });
             }
           },
-          undefined,
+          streamingStateRef.current.sessionId || undefined,
           abortSignal ?? undefined
-        ).catch((error) => {
-          if (!aborted && rejectStream) {
-            rejectStream(error);
-          }
-          throw error;
-        });
+        )
+          .then((result) => {
+            // Store final session ID
+            streamingStateRef.current.sessionId = result.sessionId;
+            streamingStateRef.current.isStreaming = false;
+            return result;
+          })
+          .catch((error) => {
+            streamingStateRef.current.isStreaming = false;
+            if (!aborted && rejectStream) {
+              rejectStream(error);
+            }
+            throw error;
+          });
 
         // Yield updates as they arrive
         let streamFinished = false;
-        
+
         try {
           while (!streamFinished && !aborted) {
             // Wait for next update or completion
             await Promise.race([
               waitForUpdate,
-              streamPromise.then(() => { streamFinished = true; }),
+              streamPromise.then(() => {
+                streamFinished = true;
+              }),
             ]);
 
             // Check if we were aborted during the wait
@@ -268,7 +389,7 @@ const createChatAdapter = (
 
             if (hasUpdate && !aborted) {
               hasUpdate = false;
-              
+
               // Yield current accumulated state
               yield {
                 content: [
@@ -280,7 +401,7 @@ const createChatAdapter = (
               };
             }
           }
-          
+
           // Final yield after stream completes to ensure all content is sent
           if (!aborted && accumulatedText) {
             yield {
@@ -301,6 +422,7 @@ const createChatAdapter = (
           if (abortSignal) {
             abortSignal.removeEventListener("abort", handleAbort);
           }
+          streamingStateRef.current.isStreaming = false;
         }
       };
 
@@ -447,7 +569,7 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
       // Create object URL for preview
       const objectUrl = URL.createObjectURL(file);
       const attachmentId = crypto.randomUUID();
-      
+
       // Store the URL so we can revoke it later
       objectUrls.set(attachmentId, objectUrl);
 
@@ -496,7 +618,7 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
         file: attachment.file, // Preserve the File object for backend upload
         content: attachment.content || [],
       };
-      
+
       return completeAttachment;
     },
   };
@@ -504,71 +626,41 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
 
 // Hook to create and manage the runtime
 // Returns runtime along with session states for components to use
-export function useChatRuntime(chatId: string | null | undefined): ChatRuntimeResult {
-  // Local state for session management (no Redux)
-  const [isSessionResuming, setIsSessionResuming] = useState(false);
+export function useChatRuntime(
+  chatId: string | null | undefined
+): ChatRuntimeResult {
+  console.log("[Runtime] useChatRuntime called with chatId:", chatId);
+  // Keep only isBackgroundTaskActive
   const [isBackgroundTaskActive, setIsBackgroundTaskActive] = useState(false);
-  
+
+  // Streaming state ref (for ongoing streams)
+  const streamingStateRef = useRef<StreamingState>({
+    sessionId: null,
+    currentCursor: "0-0",
+    isStreaming: false,
+    isReconnecting: false,
+    reconnectAttempts: 0,
+  });
+
   // Use ref for the adapter to avoid stale closure issues
   const isBackgroundTaskActiveRef = useRef(isBackgroundTaskActive);
   useEffect(() => {
     isBackgroundTaskActiveRef.current = isBackgroundTaskActive;
   }, [isBackgroundTaskActive]);
 
-  // Resume active session helper
-  const resumeActiveSession = useCallback(
-    async (sessionInfo: SessionInfo) => {
-      try {
-        if (!chatId) return;
-
-        setIsSessionResuming(true);
-
-        // Resume the session stream from backend
-        await ChatService.resumeActiveSession(
-          chatId,
-          sessionInfo.sessionId,
-          (message: string, tool_calls: any[], citations: string[]) => {
-            // The history adapter will reload messages after resume completes
-            // This callback handles streaming updates during resume
-          }
-        );
-
-        setIsBackgroundTaskActive(false);
-        setIsSessionResuming(false);
-      } catch (error) {
-        console.error("Error resuming session:", error);
-        setIsBackgroundTaskActive(false);
-        setIsSessionResuming(false);
-      }
-    },
-    [chatId]
-  );
-
-  // Handle active session detection on mount
-  useEffect(() => {
-    const checkActiveSession = async () => {
-      if (!chatId) return;
-
-      try {
-        const activeSession = await ChatService.detectActiveSession(chatId);
-        if (activeSession && activeSession.status === "active") {
-          setIsBackgroundTaskActive(true);
-          // Resume active session
-          await resumeActiveSession(activeSession);
-        }
-      } catch (error) {
-        console.error("Error checking active session:", error);
-      }
-    };
-
-    checkActiveSession();
-  }, [chatId, resumeActiveSession]);
+  // Resume session ref - must be before resumeActiveSession
+  const resumeSessionRef = useRef<ResumeSessionInfo | null>(null);
 
   // Create the chat adapter - use ref to avoid recreation on state change
   const adapter = useMemo(() => {
     const safeChatId: string = (chatId || "") as string;
-    return createChatAdapter(safeChatId, isBackgroundTaskActiveRef);
-  }, [chatId]); // Only recreate when chatId changes, not backgroundTaskActive
+    return createChatAdapter(
+      safeChatId,
+      isBackgroundTaskActiveRef,
+      streamingStateRef,
+      resumeSessionRef
+    );
+  }, [chatId]); // Only recreate when chatId changes
 
   // Create the history adapter
   const historyAdapter = useMemo(() => {
@@ -594,167 +686,233 @@ export function useChatRuntime(chatId: string | null | undefined): ChatRuntimeRe
         },
   });
 
-  const onMessage = async (message: string) => {
-    const userMessage: ThreadMessageLike = {
-      role: "user",
-      content: [{ type: "text", text: message }],
-    };
-    setIsRunning(true);
-    setMessages((currentMessages) => [...currentMessages, userMessage]);
+  // Resume active session handler - must be after runtime is created
+  const resumeActiveSession = useCallback(
+    async (
+      sessionInfo: SessionInfo,
+      runtime: ReturnType<typeof useLocalRuntime>
+    ) => {
+      if (!chatId) return;
 
-    setMessages((currentMessages) => {
-      return [...currentMessages, getMessageFromText(undefined, "")];
-    });
-    await ChatService.streamMessage(
-      chatId,
-      message,
-      [], // @ts-ignore
-      [], // No images for this function
-      (message: string, tool_calls: any[]) => {
-        setIsRunning(false);
-        setExtras({ loading: false, streaming: true, error: false });
+      console.log(
+        "[Runtime] Preparing resume for session:",
+        sessionInfo.sessionId
+      );
 
-        setMessages((currentMessages) => {
-          return [
-            ...currentMessages.slice(0, -1),
-            getMessageFromText(currentMessages.at(-1)?.id, message, tool_calls),
-          ];
-        });
+      // Set the resume ref so the Adapter's run() method knows what to do
+      resumeSessionRef.current = {
+        sessionId: sessionInfo.sessionId,
+        cursor: sessionInfo.cursor || "0-0",
+      };
+
+      setIsBackgroundTaskActive(true);
+
+      try {
+        // Access the thread specifically
+        const thread = runtime.thread;
+
+        if (!thread) {
+          console.error("[Runtime] Thread not available on runtime");
+          setIsBackgroundTaskActive(false);
+          return;
+        }
+
+        // Helper to get messages from current state
+        const getMessages = () => thread.getState().messages;
+
+        // Wait for messages to be available (History Load)
+        if (!getMessages() || getMessages().length === 0) {
+          await new Promise<void>((resolve) => {
+            const unsubscribe = thread.subscribe(() => {
+              if (getMessages()?.length > 0) {
+                unsubscribe();
+                resolve();
+              }
+            });
+            setTimeout(() => {
+              unsubscribe();
+              resolve();
+            }, 5000);
+          });
+        }
+
+        const messages = getMessages();
+        const lastMsg = messages?.[messages.length - 1];
+
+        // Trigger the adapter. startRun() will call your Adapter's run()
+        // using the existing messages in the thread as context.
+        // ✅ FIX: Explicitly pass the ID of the user message.
+        // This tells assistant-ui: "Start a run responding TO this specific message."
+        // This bypasses the internal state lookup that was causing the parentId error.
+        if (lastMsg?.role === "user") {
+          console.log(
+            "[Runtime] Triggering startRun to resume stream for message:",
+            lastMsg.id
+          );
+
+          // Passing the ID is the critical part to avoid the 'parentId' TypeError
+          await thread.startRun(lastMsg.id);
+
+          console.log("[Runtime] Resume stream completed");
+        } else {
+          console.log(
+            "[Runtime] Last message is not from user, skipping resume. Role:",
+            lastMsg?.role
+          );
+        }
+
+        // Reset background task state after resume completes
+        // Note: This happens after startRun() completes, which means the adapter has finished streaming
+        setIsBackgroundTaskActive(false);
+      } catch (error) {
+        console.error("[Runtime] Error triggering resume:", error);
+        resumeSessionRef.current = null;
+        setIsBackgroundTaskActive(false);
       }
-    );
-    setIsRunning(false);
-    setExtras({ loading: false, streaming: false, error: false });
-  };
+    },
+    [chatId, runtime]
+  );
 
-  const onNew = async (message: AppendMessage) => {
-    // Prevent new messages during background tasks
-    if (backgroundTaskActive) {
-      console.warn("Cannot send message while background task is active");
-      return;
-    }
+  // Check for active session on mount
+  useEffect(() => {
+    console.log("[Runtime] useEffect triggered, chatId:", chatId);
+    let isMounted = true;
 
-    // Extract text content
-    const textContent = message.content.find(c => c.type === "text");
-    if (!textContent) {
-      throw new Error("Message must contain text content");
-    }
+    const checkAndResume = async () => {
+      if (!chatId) {
+        console.log("[Runtime] No chatId, skipping session check");
+        return;
+      }
 
-    // Only extract images if multimodal enabled
-    const images: File[] = isMultimodalEnabled()
-      ? (message.runConfig?.custom?.images as File[]) || []
-      : [];
+      try {
+        console.log("[Runtime] Checking for active session...");
+        const activeSession = await ChatService.detectActiveSession(chatId);
+        console.log("[Runtime] Active session result:", activeSession);
 
-    // Create image content for display (only if enabled)
-    const imageContent = isMultimodalEnabled()
-      ? images.map(image => ({
-          type: "image" as const,
-          image: URL.createObjectURL(image)
-        }))
-      : [];
+        if (!isMounted) {
+          console.log("[Runtime] Component unmounted, skipping");
+          return;
+        }
 
-    // Create user message with both text and images
-    const userMessage: ThreadMessageLike = {
-      role: "user",
-      content: [
-        { type: "text", text: textContent.text },
-        ...imageContent
-      ],
+        if (!activeSession) {
+          console.log("[Runtime] No active session found");
+          return;
+        }
+
+        if (activeSession.status !== "active") {
+          console.log(
+            "[Runtime] Session status is not active:",
+            activeSession.status
+          );
+          return;
+        }
+
+        console.log(
+          "[Runtime] Active session detected:",
+          activeSession.sessionId
+        );
+
+        // Access the thread from runtime
+        const thread = runtime.thread;
+
+        if (!thread) {
+          console.error("[Runtime] Thread not available on runtime");
+          return;
+        }
+
+        // Ensure history is loaded - use getState() to access messages
+        const getMessages = () => thread.getState().messages;
+        if (!getMessages() || getMessages().length === 0) {
+          // Wait for history load...
+          await new Promise<void>((resolve) => {
+            const unsubscribe = thread.subscribe(() => {
+              const msgs = getMessages();
+              if (msgs && msgs.length > 0) {
+                unsubscribe();
+                resolve();
+              }
+            });
+            setTimeout(() => {
+              unsubscribe();
+              resolve();
+            }, 5000);
+          });
+        }
+
+        if (isMounted) {
+          await resumeActiveSession(activeSession, runtime);
+        }
+      } catch (error) {
+        console.error("[Runtime] Error checking active session:", error);
+      }
     };
-    setIsRunning(true);
-    setMessages((currentMessages) => [...currentMessages, userMessage]);
 
-    setMessages((currentMessages) => {
-      return [...currentMessages, getMessageFromText(undefined, "")];
-    });
-    try {
-      await ChatService.streamMessage(
-        chatId,
-        textContent.text,
-        (message.runConfig?.custom?.selectedNodes as any[]) || [],
-        images, // Pass images to the service
-        (message: string, tool_calls: any[]) => {
-          setIsRunning(false);
-          setExtras({ loading: false, streaming: true, error: false });
+    const timer = setTimeout(checkAndResume, 300);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [chatId, runtime, resumeActiveSession]);
 
-          setMessages((currentMessages) => {
-            return [
-              ...currentMessages.slice(0, -1),
-              getMessageFromText(
-                currentMessages.at(-1)?.id,
-                message,
-                tool_calls
-              ),
-            ];
-          });
-        }
-      );
-    } catch (error) {
-      setIsRunning(false);
-      setExtras({
-        loading: false,
-        streaming: false,
-        error: true,
-      });
-      console.error("Error streaming message:", error);
-      return;
-    }
-    setIsRunning(false);
-    setExtras({ loading: false, streaming: false, error: false });
-  };
-
-  const onReload = async (parentId: string | null) => {
-    setIsRunning(true);
-    try {
-      await ChatService.regenerateMessage(
-        chatId,
-        [],
-        (message: string, tool_calls: any[]) => {
-          setIsRunning(false);
-          setExtras({ loading: false, streaming: true, error: false });
-          setMessages((currentMessages) => {
-            return [
-              ...currentMessages.slice(0, -1),
-              getMessageFromText(
-                currentMessages.at(-1)?.id,
-                message,
-                tool_calls
-              ),
-            ];
-          });
-        }
-      );
-    } catch (error) {
-      setIsRunning(false);
-      setExtras({
-        loading: false,
-        streaming: false,
-        error: true,
-      });
-      console.error("Error streaming message:", error);
-      return;
-    }
-    setIsRunning(false);
-    setExtras({ loading: false, streaming: false, error: false });
-  };
-
-  // Create a wrapper for setMessages that accepts readonly arrays
-  const setMessagesWrapper = (newMessages: readonly ThreadMessageLike[]) => {
-    setMessages([...newMessages]);
-  };
-
-  return useExternalStoreRuntime<ThreadMessageLike>({
-    isRunning,
-    messages,
-    extras,
-    setMessages: setMessagesWrapper,
-    onNew,
-    onReload,
-    convertMessage,
-  });
+  // Handle resume marker in adapter - remove temporary user message
+  // This is handled in the adapter's run() method by checking for resume mode first
 
   return {
     runtime,
-    isSessionResuming,
     isBackgroundTaskActive,
   };
+}
+
+// Hook for handling pending messages from idea page
+export function usePendingMessageHandler(
+  runtime: ReturnType<typeof useLocalRuntime>,
+  chatId: string | null | undefined
+) {
+  const dispatch = useDispatch<AppDispatch>();
+  const pendingMessage = useSelector(
+    (state: RootState) => state.chat.pendingMessage
+  );
+  const hasSentPendingMessage = useRef(false);
+
+  useEffect(() => {
+    if (!pendingMessage || !chatId || hasSentPendingMessage.current) {
+      return;
+    }
+
+    console.log(
+      "[PendingMessage] Detected pending message, sending via runtime:",
+      pendingMessage
+    );
+    hasSentPendingMessage.current = true;
+
+    // Wait for runtime to be ready
+    const sendPendingMessage = async () => {
+      try {
+        // Small delay to ensure runtime is fully initialized
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Send message through runtime's composer
+        // This ensures it goes through the adapter and proper streaming happens
+        runtime.composer.setText(pendingMessage);
+
+        // Trigger send
+        await runtime.composer.send();
+
+        console.log(
+          "[PendingMessage] Successfully sent pending message via runtime"
+        );
+
+        // Clear pending message
+        dispatch(clearPendingMessage());
+      } catch (error) {
+        console.error("[PendingMessage] Error sending pending message:", error);
+        toast.error("Failed to send message. You can retry in the chat.");
+
+        // Clear pending message even on error to prevent infinite retry
+        dispatch(clearPendingMessage());
+      }
+    };
+
+    sendPendingMessage();
+  }, [pendingMessage, chatId, runtime, dispatch]);
 }

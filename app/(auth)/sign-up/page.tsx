@@ -73,7 +73,7 @@ const Signup = () => {
     } else if (prompt) {
       router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
     } else {
-      router.push('/newchat');
+      router.push('/idea');
     }
   };
 
@@ -114,7 +114,7 @@ const Signup = () => {
     } else if (prompt) {
       router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
     } else {
-      router.push('/newchat');
+      router.push('/idea');
     }
   };
 
@@ -220,7 +220,7 @@ const Signup = () => {
         } else if (prompt) {
           router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
         } else {
-          router.push('/newchat');
+          router.push('/idea');
         }
       } else {
         // New user - GitHub is linked, proceed to onboarding for other setup
@@ -288,13 +288,6 @@ const Signup = () => {
                 className="bg-blue-600 rounded-full p-0.5 text-white flex-shrink-0"
               />
               Sign up with your work email to get started
-            </p>
-            <p className="flex items-center justify-center text-start text-gray-700 gap-3 text-sm">
-              <LucideCheck
-                size={18}
-                className="bg-blue-600 rounded-full p-0.5 text-white flex-shrink-0"
-              />
-              We support Google Workspace, Microsoft 365, and Outlook
             </p>
           </div>
 

@@ -119,7 +119,7 @@ export default function Signin() {
           } else if (finalAgent_id) {
             handleExternalRedirect("");
           } else {
-            router.push('/newchat');
+            router.push('/idea');
           }
           
           toast.success("Welcome back " + (user.displayName || user.email) + "! Ready to build?");
@@ -211,7 +211,7 @@ export default function Signin() {
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
-              window.location.href = "/newchat";
+              window.location.href = "/idea";
             }
 
             toast.success(
@@ -244,11 +244,11 @@ export default function Signin() {
   const handleSSOLinked = () => {
     // After linking, redirect based on context
     if (source === "vscode") {
-      router.push('/newchat');
+      router.push('/i');
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push('/newchat');
+      router.push('/i');
     }
   };
 
@@ -277,11 +277,11 @@ export default function Signin() {
     
     // For existing users signing in via SSO
     if (source === "vscode") {
-      router.push('/newchat');
+      router.push('/i');
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push('/newchat');
+      router.push('/i');
     }
   };
 

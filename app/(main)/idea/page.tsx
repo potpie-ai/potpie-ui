@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import Image from "next/image";
+import { Check } from "lucide-react";
 import IdeaInputCard from "./components/IdeaInputCard";
 import RepositorySelector from "./components/RepositorySelector";
 import ParsingStatusCard from "./components/ParsingStatusCard";
@@ -76,7 +77,7 @@ export default function IdeaPage() {
     recipeId: null,
     selectedRepo: null,
     selectedBranch: null,
-    selectedAgent: null, // CHANGED: Was "build", now null - requires explicit selection
+    selectedAgent: "ask", // Default agent is "ask"
     parsing: false,
     parsingProgress: 0,
     parsingSteps: [],
@@ -96,6 +97,62 @@ export default function IdeaPage() {
     },
   });
 
+  // Show all repositories - users can parse any repo regardless of status
+  // Use useMemo to prevent infinite loops - only recompute when dependencies change
+  const repositories = useMemo(() => {
+    if (!allRepositories || allRepositories.length === 0) {
+      return [];
+    }
+    
+    // Return all repositories - no filtering by project status
+    // Users can select and parse any repository
+    return allRepositories;
+  }, [allRepositories]);
+
+  // Get the repo name from selected repo ID
+  const selectedRepoName = useMemo(() => {
+    if (!state.selectedRepo || !repositories.length) return null;
+    
+    const selectedRepoData = repositories.find(
+      (repo: Repo) => repo.id?.toString() === state.selectedRepo
+    );
+    
+    if (!selectedRepoData) return null;
+    
+    return selectedRepoData.full_name || selectedRepoData.name || null;
+  }, [state.selectedRepo, repositories]);
+
+  // Fetch branches for selected repository - same pattern as newchat
+  const { data: branches, isLoading: branchesLoading } = useQuery({
+    queryKey: ["user-branch", selectedRepoName],
+    queryFn: () => {
+      if (!selectedRepoName) return Promise.resolve([]);
+      
+      // Handle GitHub URL format - same as newchat
+      const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
+      const match = selectedRepoName.match(regex);
+      if (match) {
+        const ownerRepo = `${match[1]}/${match[2]}`;
+        return BranchAndRepositoryService.getBranchList(ownerRepo).then((data) => {
+          // Auto-select branch if there's only one
+          if (data?.length === 1 && !state.selectedBranch) {
+            setState((prev) => ({ ...prev, selectedBranch: data[0] }));
+          }
+          return data;
+        });
+      }
+      return BranchAndRepositoryService.getBranchList(selectedRepoName).then((data) => {
+        // Auto-select branch if there's only one
+        if (data?.length === 1 && !state.selectedBranch) {
+          setState((prev) => ({ ...prev, selectedBranch: data[0] }));
+        }
+        return data;
+      });
+    },
+    enabled: !!selectedRepoName && selectedRepoName !== "",
+  });
+
+
   // Fetch projects to identify parsed repos
   const { data: projects, refetch: refetchProjects } = useQuery({
     queryKey: ["user-projects"],
@@ -111,19 +168,6 @@ export default function IdeaPage() {
       }
     },
   });
-
-  // Show all repositories - users can parse any repo regardless of status
-  // Use useMemo to prevent infinite loops - only recompute when dependencies change
-  const repositories = useMemo(() => {
-    if (!allRepositories || allRepositories.length === 0) {
-      return [];
-    }
-    
-    console.log("All repositories:", allRepositories);
-    // Return all repositories - no filtering by project status
-    // Users can select and parse any repository
-    return allRepositories;
-  }, [allRepositories]);
 
   // Listen for GitHub app installation completion
   useEffect(() => {
@@ -194,6 +238,11 @@ export default function IdeaPage() {
       textareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
     }
   }, [state.input]);
+
+  // Helper function to get clean input - no agent prefix needed since it's only visual
+  const getCleanInput = (input: string): string => {
+    return input.trim();
+  };
 
   // Create project mutation (kept for backward compatibility with ask/debug agents)
   const createProjectMutation = useMutation({
@@ -282,7 +331,8 @@ export default function IdeaPage() {
             params.append("repoName", repoName);
           }
           if (state.input) {
-            params.append("featureIdea", state.input);
+            const cleanInput = getCleanInput(state.input);
+            params.append("featureIdea", cleanInput);
           }
           
           console.log("[Idea Page] Navigating to repo page with recipeId:", data.recipe_id);
@@ -370,13 +420,19 @@ export default function IdeaPage() {
         if (state.selectedAgent === "build" && state.input.trim()) {
           const repoSlug = repoName;
           const finalBranchName = branchName || "main";
+          const cleanInput = getCleanInput(state.input);
           
           console.log("[Idea Page] Parsing complete, creating recipe for build agent");
           createRecipeMutation.mutate({
-            userPrompt: state.input,
+            userPrompt: cleanInput,
             repoSlug: repoSlug.trim(),
             branch: finalBranchName,
           });
+        }
+        // If ask/debug agent, automatically create conversation after parsing completes
+        else if ((state.selectedAgent === "ask" || state.selectedAgent === "debug") && projectId) {
+          console.log("[Idea Page] Parsing complete, creating conversation for", state.selectedAgent, "agent");
+          await createConversationAndNavigate(projectId);
         }
         return;
       }
@@ -462,17 +518,26 @@ export default function IdeaPage() {
           }));
         }
 
-        // If parsing completed successfully and build agent, create recipe
-        if (parsingStatus === ParsingStatusEnum.READY && state.selectedAgent === "build" && state.input.trim()) {
-          const repoSlug = repoName;
-          const finalBranchName = branchName || "main";
-          
-          console.log("[Idea Page] Parsing complete, creating recipe for build agent");
-          createRecipeMutation.mutate({
-            userPrompt: state.input,
-            repoSlug: repoSlug.trim(),
-            branch: finalBranchName,
-          });
+        // If parsing completed successfully
+        if (parsingStatus === ParsingStatusEnum.READY) {
+          // For build agent, create recipe
+          if (state.selectedAgent === "build" && state.input.trim()) {
+            const repoSlug = repoName;
+            const finalBranchName = branchName || "main";
+            const cleanInput = getCleanInput(state.input);
+            
+            console.log("[Idea Page] Parsing complete, creating recipe for build agent");
+            createRecipeMutation.mutate({
+              userPrompt: cleanInput,
+              repoSlug: repoSlug.trim(),
+              branch: finalBranchName,
+            });
+          }
+          // For ask/debug agents, create conversation
+          else if ((state.selectedAgent === "ask" || state.selectedAgent === "debug") && projectId) {
+            console.log("[Idea Page] Parsing complete, creating conversation for", state.selectedAgent, "agent");
+            await createConversationAndNavigate(projectId);
+          }
         }
       };
 
@@ -510,6 +575,107 @@ export default function IdeaPage() {
     await parseRepo(repoName, branchName);
   };
 
+  // Helper function to create conversation and navigate (for ask/debug agents)
+  const createConversationAndNavigate = async (projectId: string) => {
+    if (!state.selectedAgent || (state.selectedAgent !== "ask" && state.selectedAgent !== "debug")) {
+      return;
+    }
+    
+    if (!user?.uid) {
+      toast.error("Please sign in to continue");
+      return;
+    }
+
+    try {
+      // Map agent selection to agent IDs
+      const agentIdMap: Record<string, string> = {
+        ask: "codebase_qna_agent",
+        debug: "debugging_agent",
+      };
+      
+      const agentId = agentIdMap[state.selectedAgent];
+      if (!agentId) {
+        toast.error("Invalid agent selection");
+        return;
+      }
+
+      const title = state.selectedAgent === "ask" 
+        ? "Codebase Q&A Chat" 
+        : "Debug Chat";
+
+      console.log("[Idea Page] Creating conversation for agent:", state.selectedAgent, "with projectId:", projectId);
+      
+      // Create conversation (same signature as newchat/step2.tsx)
+      const conversationResponse = await ChatService.createConversation(
+        user.uid,
+        title,
+        projectId,
+        agentId
+      );
+
+      console.log("[Idea Page] Conversation created:", conversationResponse.conversation_id);
+
+      // Set up chat context in Redux - same as newchat/step2.tsx
+      dispatch(setChat({ agentId }));
+
+      // Store pending message if user provided input
+      if (state.input.trim()) {
+        const cleanInput = getCleanInput(state.input);
+        dispatch(setPendingMessage(cleanInput));
+      }
+
+      // Navigate to chat - the chat page will handle sending the pending message
+      router.push(`/chat/${conversationResponse.conversation_id}`);
+    } catch (error: any) {
+      console.error("[Idea Page] Failed to create conversation:", error);
+      toast.error(error.message || "Failed to create conversation. Please try again.");
+    }
+  };
+
+  // Helper function to check if repo is ready and get projectId
+  const getProjectIdForRepo = async (repoName: string, branchName: string): Promise<string | null> => {
+    try {
+      // Check projects list to find ready project for this repo
+      const repoFullName = repoName;
+      const repoNameOnly = repoFullName?.split("/").pop() || repoName;
+      
+      const readyProject = projects?.find((project: any) => {
+        if (!project.repo_name || project.status !== "ready") {
+          return false;
+        }
+        const projectRepoName = project.repo_name;
+        return (
+          projectRepoName === repoFullName ||
+          projectRepoName === repoNameOnly ||
+          (repoFullName && repoFullName.includes(projectRepoName)) ||
+          projectRepoName.includes(repoNameOnly)
+        );
+      });
+
+      if (readyProject?.id) {
+        console.log("[Idea Page] Found ready project in list, projectId:", readyProject.id);
+        return readyProject.id.toString();
+      }
+
+      // Also try checkParsingStatus as additional check
+      try {
+        const statusResponse = await BranchAndRepositoryService.checkParsingStatus(repoName, branchName);
+        if (statusResponse?.status === ParsingStatusEnum.READY) {
+          // If status is ready but we didn't find project in list, try to parse to get projectId
+          // This will return projectId from parse response
+          console.log("[Idea Page] Repo status is ready, but projectId not found in list");
+        }
+      } catch (error) {
+        // Ignore checkParsingStatus errors
+      }
+
+      return null;
+    } catch (error) {
+      console.error("[Idea Page] Error checking repo status:", error);
+      return null;
+    }
+  };
+
   // Handle continue to next page
   const handleContinue = async () => {
     // Ensure agent is selected
@@ -533,54 +699,7 @@ export default function IdeaPage() {
         return;
       }
       
-      if (!user?.uid) {
-        toast.error("Please sign in to continue");
-        return;
-      }
-
-      try {
-        // Map agent selection to agent IDs
-        const agentIdMap: Record<string, string> = {
-          ask: "codebase_qna_agent",
-          debug: "debugging_agent",
-        };
-        
-        const agentId = agentIdMap[state.selectedAgent];
-        if (!agentId) {
-          toast.error("Invalid agent selection");
-          return;
-        }
-
-        const title = state.selectedAgent === "ask" 
-          ? "Codebase Q&A Chat" 
-          : "Debug Chat";
-
-        console.log("[Idea Page] Creating conversation for agent:", state.selectedAgent);
-        
-        // Create conversation (same signature as newchat/step2.tsx)
-        const conversationResponse = await ChatService.createConversation(
-          user.uid,
-          title,
-          state.projectId,
-          agentId
-        );
-
-        console.log("[Idea Page] Conversation created:", conversationResponse.conversation_id);
-
-        // Set up chat context in Redux - same as newchat/step2.tsx
-        dispatch(setChat({ agentId }));
-
-        // Store pending message if user provided input
-        if (state.input.trim()) {
-          dispatch(setPendingMessage(state.input));
-        }
-
-        // Navigate to chat - the chat page will handle sending the pending message
-        router.push(`/chat/${conversationResponse.conversation_id}`);
-      } catch (error: any) {
-        console.error("[Idea Page] Failed to create conversation:", error);
-        toast.error(error.message || "Failed to create conversation. Please try again.");
-      }
+      await createConversationAndNavigate(state.projectId);
       return;
     }
     
@@ -611,12 +730,13 @@ export default function IdeaPage() {
       const params = new URLSearchParams({
         recipeId: state.recipeId, // Pass recipeId instead of projectId
       });
-      if (repoName) {
-        params.append("repoName", repoName);
-      }
-      if (state.input) {
-        params.append("featureIdea", state.input);
-      }
+          if (repoName) {
+            params.append("repoName", repoName);
+          }
+          if (state.input) {
+            const cleanInput = getCleanInput(state.input);
+            params.append("featureIdea", cleanInput);
+          }
       
       console.log("[Idea Page] Navigating to repo page with recipeId:", state.recipeId);
       router.push(`/repo?${params.toString()}`);
@@ -630,7 +750,10 @@ export default function IdeaPage() {
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
-    if (!state.input.trim()) {
+    // Strip agent prefix from input if present
+    const cleanInput = getCleanInput(state.input);
+
+    if (!cleanInput) {
       toast.error("Please describe your feature idea");
       return;
     }
@@ -702,21 +825,60 @@ export default function IdeaPage() {
 
       // Repo is ready, create recipe directly
       console.log("[Idea Page] Repo is ready, creating recipe with:", {
-        userPrompt: state.input,
+        userPrompt: cleanInput,
         repoSlug,
         branch: branchName,
       });
 
       // Create recipe
       createRecipeMutation.mutate({
-        userPrompt: state.input,
+        userPrompt: cleanInput,
         repoSlug: repoSlug.trim(),
         branch: branchName,
       });
       return;
     }
 
-    // For ask/debug agents, use project creation (existing flow)
+    // For ask/debug agents, check repo status and create conversation
+    if (state.selectedAgent === "ask" || state.selectedAgent === "debug") {
+      if (!state.selectedRepo || !state.selectedBranch) {
+        toast.error("Please select a repository and branch");
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const selectedRepoData = repositories.find(
+        (repo: Repo) => repo.id?.toString() === state.selectedRepo
+      );
+      
+      if (!selectedRepoData) {
+        toast.error("Selected repository not found. Please select a repository again.");
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+      const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+
+      // Check if repo is already ready
+      const projectId = await getProjectIdForRepo(repoName, branchName);
+      
+      if (projectId) {
+        // Repo is ready, create conversation immediately
+        console.log("[Idea Page] Repo is ready, creating conversation immediately");
+        setState((prev) => ({ ...prev, loading: false, projectId }));
+        await createConversationAndNavigate(projectId);
+        return;
+      }
+
+      // Repo is not ready, parse it first
+      console.log("[Idea Page] Repo not ready, starting parsing:", repoName);
+      setState((prev) => ({ ...prev, loading: false }));
+      await parseRepo(repoName, branchName);
+      return;
+    }
+
+    // For build agent, use existing flow
     // If project already exists, just select repo if needed
     if (state.projectId && state.selectedRepo) {
       selectRepoMutation.mutate({
@@ -727,7 +889,7 @@ export default function IdeaPage() {
     }
 
     // Create new project
-    createProjectMutation.mutate(state.input);
+    createProjectMutation.mutate(cleanInput);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -738,7 +900,11 @@ export default function IdeaPage() {
   };
 
   const handleRepoSelect = (repoId: string) => {
-    setState((prev) => ({ ...prev, selectedRepo: repoId }));
+    setState((prev) => ({ 
+      ...prev, 
+      selectedRepo: repoId,
+      selectedBranch: null // Reset branch when repo changes
+    }));
     
     // If project exists, start parsing immediately
     if (state.projectId) {
@@ -749,12 +915,16 @@ export default function IdeaPage() {
     }
   };
 
+  const handleBranchSelect = (branch: string) => {
+    setState((prev) => ({ ...prev, selectedBranch: branch }));
+  };
+
   const handleAgentSelect = (agent: string) => {
     setState((prev) => ({ ...prev, selectedAgent: agent }));
   };
 
   return (
-    <div className="min-h-screen bg-white flex relative">
+    <div className="min-h-screen flex relative" style={{ backgroundColor: "#FFF9F5" }}>
       {/* Dot Pattern Background - More Visible */}
       <div className="absolute inset-0 opacity-60 pointer-events-none">
         <div
@@ -767,21 +937,21 @@ export default function IdeaPage() {
       </div>
       
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col items-center justify-start px-4 pt-52 pb-4 relative z-10">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 pt-40 pb-4 relative z-10">
         <div className="w-full max-w-4xl space-y-6">
           {/* Logo and Title */}
           <div className="flex flex-col items-center space-y-3">
             <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center">
               <Image
-                src="/images/potpie-blue.svg"
+                src="/images/Green Icon.svg"
                 alt="Potpie Logo"
                 width={56}
                 height={56}
                 className="w-14 h-14"
               />
             </div>
-            <h1 className="text-xl font-semibold text-gray-900">
-              Let&apos;s cook some ideas!
+            <h1 className="text-3xl font-semibold text-foreground">
+              Always be cooking!
             </h1>
           </div>
 
@@ -798,17 +968,68 @@ export default function IdeaPage() {
               onRepoSelect={handleRepoSelect}
               repositories={state.linkedRepos}
               reposLoading={reposLoading}
+              selectedBranch={state.selectedBranch}
+              onBranchSelect={handleBranchSelect}
+              branches={branches || []}
+              branchesLoading={branchesLoading}
               selectedAgent={state.selectedAgent}
               onAgentSelect={handleAgentSelect}
               onParseRepo={handleParseRepo}
             />
+
+            {/* Agent Selection Tiles - Outside the card (hidden during parsing) */}
+            {!state.parsing && (
+              <div className="flex items-center justify-center gap-3 mt-2">
+                {[
+                  { value: "ask", label: "ask a question", displayLabel: "Ask a question" },
+                  { value: "build", label: "Build a feature", displayLabel: "Build a feature" },
+                  { value: "debug", label: "Debug an issue", displayLabel: "Debug an issue" },
+                ].map((agent) => {
+                  const isSelected = agent.value === state.selectedAgent;
+                  return (
+                    <button
+                      key={agent.value}
+                      type="button"
+                      onClick={() => {
+                        handleAgentSelect(agent.value);
+                        
+                        // Focus the textarea - no text changes, just visual pill
+                        setTimeout(() => {
+                          if (textareaRef.current) {
+                            textareaRef.current.focus();
+                            // Position cursor at the start (after the pill visually)
+                            textareaRef.current.setSelectionRange(0, 0);
+                          }
+                        }, 0);
+                      }}
+                      disabled={state.loading}
+                      className={`
+                        px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200
+                        flex items-center gap-2.5 min-w-[140px] justify-center
+                        ${isSelected
+                          ? 'text-[#00291C] shadow-md scale-105'
+                          : 'bg-zinc-50 text-foreground hover:bg-zinc-100 border-2 border-zinc-200 hover:border-zinc-300'
+                        }
+                        ${state.loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}
+                      `}
+                      style={{
+                        backgroundColor: isSelected ? "var(--accent-color)" : undefined
+                      }}
+                    >
+                      {isSelected && <Check className="h-4 w-4" />}
+                      <span>{agent.displayLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Parsing Status Card */}
             {state.parsing && (
               <ParsingStatusCard
                 steps={state.parsingSteps}
                 progress={state.parsingProgress}
-                onContinue={handleContinue}
+                onContinue={state.selectedAgent === "build" ? handleContinue : undefined}
               />
             )}
           </div>

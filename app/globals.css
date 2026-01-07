@@ -9,7 +9,7 @@
 
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 37%;
+    --foreground: 179 91% 9%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
@@ -22,6 +22,9 @@
     --muted-foreground: 215 20% 65%;
     --accent: 206 84% 92%;
     --accent-foreground: 222 47% 11%;
+    --accent-color: #B4D13F;
+    --foreground-color: #022D2C;
+    --muted-text: #656969;
     --tertiary: 276 48% 87%;
     --border: 214 32% 91%;
     --input: 214 32% 91%;
@@ -49,6 +52,9 @@
     --muted-foreground: 215 20% 65%;
     --accent: 221 83% 53%;
     --accent-foreground: 210 40% 98%;
+    --accent-color: #B4D13F;
+    --foreground-color: #022D2C;
+    --muted-text: #656969;
     --bg-muted: 0 63% 31%;
     --bg-muted-foreground: 210 40% 98%;
     --border: 217 32% 17%;

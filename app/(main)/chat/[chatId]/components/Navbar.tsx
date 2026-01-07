@@ -340,7 +340,7 @@ const Navbar = ({
                     <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
+                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-background p-6">
                   <DialogHeader>
                     <DialogTitle className="text-center font-semibold text-xl">
                       Share Chat with Others
@@ -400,7 +400,7 @@ const Navbar = ({
                               {email !== user?.email && (
                                 <Button
                                   onClick={() => handleDelete(email)}
-                                  className="absolute -top-3 -right-3 bg-white rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
+                                  className="absolute -top-3 -right-3 bg-background rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
                                   aria-label="Delete viewer"
                                 >
                                   <X size={14} />

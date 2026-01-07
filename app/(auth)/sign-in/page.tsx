@@ -350,7 +350,7 @@ export default function Signin() {
                 <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-4 text-gray-500 font-medium">or continue with email</span>
+                <span className="bg-background px-4 text-gray-500 font-medium">or continue with email</span>
               </div>
             </div>
 
@@ -361,7 +361,7 @@ export default function Signin() {
                   type="email"
                   placeholder="you@company.com"
                   {...form.register("email")}
-                  className={`input-enterprise w-full px-5 py-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
+                  className={`input-enterprise w-full px-5 py-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-background shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
                     form.formState.errors.email
                       ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300 hover:border-gray-400"
@@ -379,7 +379,7 @@ export default function Signin() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Password"
                     {...form.register("password")}
-                    className={`input-enterprise w-full px-5 py-4 pr-14 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
+                    className={`input-enterprise w-full px-5 py-4 pr-14 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-background shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
                       form.formState.errors.password
                         ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                         : "border-gray-300 hover:border-gray-400"

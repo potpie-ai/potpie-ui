@@ -145,7 +145,7 @@ const NewTask = () => {
 
       {/* Input Area with Repo/Branch Selection */}
       <div className={`w-full ${NEW_TASK_CONSTANTS.UI.MAX_WIDTH}`}>
-        <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white shadow-sm overflow-visible">
+        <div className="flex flex-col gap-3 p-4 border rounded-xl bg-background shadow-sm overflow-visible">
           {/* Textarea with Send Button */}
           <div className="relative">
             <textarea

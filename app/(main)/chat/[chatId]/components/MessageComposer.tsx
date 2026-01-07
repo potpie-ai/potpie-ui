@@ -387,7 +387,7 @@ const MessageComposer = ({
           <button
             type="button"
             title="Enhance Prompt"
-            className="size-8 p-2 transition ease-in bg-white hover:bg-orange-200 rounded-md flex items-center justify-center"
+            className="size-8 p-2 transition ease-in bg-background hover:bg-orange-200 rounded-md flex items-center justify-center"
             onClick={handleEnhancePrompt}
             disabled={isDisabled}
           >
@@ -399,7 +399,7 @@ const MessageComposer = ({
             type="button"
             disabled={isDisabled}
             title="Send"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-background hover:bg-gray-100"
             onClick={handleSend}
           >
             <SendHorizontalIcon />
@@ -407,7 +407,7 @@ const MessageComposer = ({
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
           <ComposerPrimitive.Cancel 
-            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-background hover:bg-gray-100 border-none cursor-pointer"
           >
             <CircleStopIcon />
           </ComposerPrimitive.Cancel>
@@ -433,7 +433,7 @@ const MessageComposer = ({
               {node.name}
               <button
                 type="button"
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-rose-600 transition hover:bg-white hover:text-rose-800"
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-background/80 text-rose-600 transition hover:bg-background hover:text-rose-800"
                 onClick={() => handleNodeDeselect(node)}
                 aria-label={`Remove ${node.name}`}
               >
@@ -570,7 +570,7 @@ const ModelSelection: FC<{
     <Dialog>
       {currentModel ? (
         <DialogTrigger
-          className="p-2 transition ease-in bg-white hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
+          className="p-2 transition ease-in bg-background hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
           disabled={disabled}
           onClick={handleModelList}
         >

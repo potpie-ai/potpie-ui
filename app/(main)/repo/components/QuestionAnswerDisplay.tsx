@@ -48,8 +48,8 @@ export default function QuestionAnswerDisplay({
   if (!displayText) return null;
 
   return (
-    <div className="p-3 bg-zinc-50/50 border-l-2 border-zinc-900 rounded-lg">
-      <p className="text-xs text-zinc-900 font-medium leading-relaxed">{displayText}</p>
+    <div className="p-3 bg-zinc-50/50 border-l-2 border-primary rounded-lg">
+      <p className="text-xs text-primary font-medium leading-relaxed">{displayText}</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, PanelLeftClose } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -10,6 +10,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { planTypesEnum, SidebarItems } from "@/lib/Constants";
 import Image from "next/image";
@@ -25,6 +26,7 @@ import { clearChat } from "@/lib/state/Reducers/chat";
 
 import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
+import { Button } from "@/components/ui/button";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import formbricksApp from "@formbricks/js";
 import MinorService from "@/services/minorService";
@@ -40,6 +42,7 @@ export function AppSidebar() {
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
   const dispatch: AppDispatch = useDispatch();
+  const { toggleSidebar, open } = useSidebar();
 
   const userId = user?.uid;
   const { total_human_messages } = useSelector(
@@ -111,18 +114,29 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link
-              href="/"
-              className="flex items-center gap-3 font-semibold ml-2 mt-4"
-            >
-              <Image
-                src={"/images/Green Icon.svg"}
-                alt="logo"
-                width={35}
-                height={35}
-              />
-              <span className="text-2xl"><span className="text-foreground">potpie</span><span className="text-accent-color">.</span><span className="text-foreground">ai</span></span>
-            </Link>
+            <div className="flex items-center justify-between w-full ml-2 mt-4">
+              <Link
+                href="/"
+                className="flex items-center gap-3 font-semibold"
+              >
+                <Image
+                  src={"/images/Green Icon.svg"}
+                  alt="logo"
+                  width={35}
+                  height={35}
+                />
+                <span className="text-2xl"><span className="text-foreground">potpie</span><span className="text-accent-color">.</span><span className="text-foreground">ai</span></span>
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 mr-2"
+                onClick={toggleSidebar}
+              >
+                <PanelLeftClose className="h-5 w-5" />
+                <span className="sr-only">Toggle Sidebar</span>
+              </Button>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

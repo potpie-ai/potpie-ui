@@ -89,7 +89,11 @@ export default function IdeaPage() {
   const isDemoMode = searchParams.get("demo") === "true";
 
   // Fetch all repositories
-  const { data: allRepositories, isLoading: reposLoading, refetch: refetchRepos } = useQuery({
+  const {
+    data: allRepositories,
+    isLoading: reposLoading,
+    refetch: refetchRepos,
+  } = useQuery({
     queryKey: ["user-repositories"],
     queryFn: async () => {
       const repos = await BranchAndRepositoryService.getUserRepositories();
@@ -103,7 +107,7 @@ export default function IdeaPage() {
     if (!allRepositories || allRepositories.length === 0) {
       return [];
     }
-    
+
     // Return all repositories - no filtering by project status
     // Users can select and parse any repository
     return allRepositories;
@@ -112,13 +116,13 @@ export default function IdeaPage() {
   // Get the repo name from selected repo ID
   const selectedRepoName = useMemo(() => {
     if (!state.selectedRepo || !repositories.length) return null;
-    
+
     const selectedRepoData = repositories.find(
       (repo: Repo) => repo.id?.toString() === state.selectedRepo
     );
-    
+
     if (!selectedRepoData) return null;
-    
+
     return selectedRepoData.full_name || selectedRepoData.name || null;
   }, [state.selectedRepo, repositories]);
 
@@ -127,31 +131,34 @@ export default function IdeaPage() {
     queryKey: ["user-branch", selectedRepoName],
     queryFn: () => {
       if (!selectedRepoName) return Promise.resolve([]);
-      
+
       // Handle GitHub URL format - same as newchat
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = selectedRepoName.match(regex);
       if (match) {
         const ownerRepo = `${match[1]}/${match[2]}`;
-        return BranchAndRepositoryService.getBranchList(ownerRepo).then((data) => {
+        return BranchAndRepositoryService.getBranchList(ownerRepo).then(
+          (data) => {
+            // Auto-select branch if there's only one
+            if (data?.length === 1 && !state.selectedBranch) {
+              setState((prev) => ({ ...prev, selectedBranch: data[0] }));
+            }
+            return data;
+          }
+        );
+      }
+      return BranchAndRepositoryService.getBranchList(selectedRepoName).then(
+        (data) => {
           // Auto-select branch if there's only one
           if (data?.length === 1 && !state.selectedBranch) {
             setState((prev) => ({ ...prev, selectedBranch: data[0] }));
           }
           return data;
-        });
-      }
-      return BranchAndRepositoryService.getBranchList(selectedRepoName).then((data) => {
-        // Auto-select branch if there's only one
-        if (data?.length === 1 && !state.selectedBranch) {
-          setState((prev) => ({ ...prev, selectedBranch: data[0] }));
         }
-        return data;
-      });
+      );
     },
     enabled: !!selectedRepoName && selectedRepoName !== "",
   });
-
 
   // Fetch projects to identify parsed repos
   const { data: projects, refetch: refetchProjects } = useQuery({
@@ -160,7 +167,9 @@ export default function IdeaPage() {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       try {
-        const response = await axios.get(`${baseUrl}/api/v1/projects/list`, { headers });
+        const response = await axios.get(`${baseUrl}/api/v1/projects/list`, {
+          headers,
+        });
         return response.data || [];
       } catch (error) {
         console.error("Error fetching projects:", error);
@@ -172,7 +181,10 @@ export default function IdeaPage() {
   // Listen for GitHub app installation completion
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin === "https://github.com" || event.origin === window.location.origin) {
+      if (
+        event.origin === "https://github.com" ||
+        event.origin === window.location.origin
+      ) {
         if (event.data?.type === "github-app-installed") {
           setTimeout(() => {
             refetchRepos();
@@ -208,9 +220,9 @@ export default function IdeaPage() {
       setState((prev) => {
         // Only set if not already selected
         if (prev.selectedRepo) return prev;
-        return { 
-          ...prev, 
-          selectedRepo: repositories[0].id.toString() 
+        return {
+          ...prev,
+          selectedRepo: repositories[0].id.toString(),
         };
       });
     }
@@ -221,10 +233,15 @@ export default function IdeaPage() {
     if (isDemoMode && !state.input) {
       const demoIdeas = {
         ask: "How do I implement authentication in my Next.js app?",
-        build: "Integrate payment processing with Stripe. Add a checkout page with credit card validation, handle webhooks for payment status updates, and create an admin dashboard to view transactions.",
-        debug: "Explore the tool with a pre-configured fraud detection pipeline demo showcasing the full workflow. This demo will walk you through the complete process of building, analyzing, and implementing a feature.",
+        build:
+          "Integrate payment processing with Stripe. Add a checkout page with credit card validation, handle webhooks for payment status updates, and create an admin dashboard to view transactions.",
+        debug:
+          "Explore the tool with a pre-configured fraud detection pipeline demo showcasing the full workflow. This demo will walk you through the complete process of building, analyzing, and implementing a feature.",
       };
-      const demoIdea = state.selectedAgent ? demoIdeas[state.selectedAgent as keyof typeof demoIdeas] || demoIdeas.build : demoIdeas.build;
+      const demoIdea = state.selectedAgent
+        ? demoIdeas[state.selectedAgent as keyof typeof demoIdeas] ||
+          demoIdeas.build
+        : demoIdeas.build;
       setState((prev) => ({ ...prev, input: demoIdea }));
     }
   }, [isDemoMode, state.selectedAgent]);
@@ -249,7 +266,7 @@ export default function IdeaPage() {
     mutationFn: async (idea: string): Promise<Project> => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      
+
       const response = await axios.post(
         `${baseUrl}/api/v1/projects/`,
         { idea },
@@ -258,20 +275,22 @@ export default function IdeaPage() {
       return response.data;
     },
     onSuccess: (data: Project) => {
-      setState((prev) => ({ 
-        ...prev, 
+      setState((prev) => ({
+        ...prev,
         projectId: data.id.toString(),
-        loading: false 
+        loading: false,
       }));
-      
+
       // If repo already selected, parse it
       if (state.selectedRepo) {
         const selectedRepoData = repositories.find(
           (repo: Repo) => repo.id?.toString() === state.selectedRepo
         );
         if (selectedRepoData) {
-          const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
-          const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+          const repoName =
+            selectedRepoData.full_name || selectedRepoData.name || "";
+          const branchName =
+            state.selectedBranch || selectedRepoData.default_branch || "main";
           parseRepo(repoName, branchName);
         }
       }
@@ -287,41 +306,58 @@ export default function IdeaPage() {
   const createRecipeMutation = useMutation({
     mutationFn: async (data: {
       userPrompt: string;
-      repoSlug: string;
-      branch: string;
+      projectId: string;
+      additionalLinks?: string[];
     }): Promise<CreateRecipeCodegenResponse> => {
       return await SpecService.createRecipeCodegen({
         user_prompt: data.userPrompt,
-        repo_slug: data.repoSlug,
-        branch: data.branch,
+        project_id: data.projectId,
+        additional_links: data.additionalLinks,
       });
     },
     onSuccess: (data: CreateRecipeCodegenResponse) => {
       console.log("[Idea Page] Recipe created successfully:", data);
-      
-      setState((prev) => ({ 
-        ...prev, 
+
+      const projectId = data.project_id?.toString() || state.projectId;
+
+      setState((prev) => ({
+        ...prev,
         recipeId: data.recipe_id, // Store recipe_id instead of projectId
-        projectId: data.project_id?.toString() || null, // Also store project_id if available
-        loading: false 
+        projectId: projectId || null, // Also store project_id if available
+        loading: false,
       }));
-      
+
       // Navigate to repo page with recipeId to start question polling
       if (state.selectedRepo) {
         const selectedRepoData = repositories.find(
           (repo: Repo) => repo.id?.toString() === state.selectedRepo
         );
         if (selectedRepoData) {
-          const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
-          const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
-          
+          const repoName =
+            selectedRepoData.full_name || selectedRepoData.name || "";
+          const branchName =
+            state.selectedBranch || selectedRepoData.default_branch || "main";
+
           // Store recipe data in localStorage for spec page
-          localStorage.setItem(`recipe_${data.recipe_id}`, JSON.stringify({
-            recipe_id: data.recipe_id,
-            project_id: data.project_id?.toString() || null,
-            repo_name: repoName,
-            branch_name: branchName,
-          }));
+          localStorage.setItem(
+            `recipe_${data.recipe_id}`,
+            JSON.stringify({
+              recipe_id: data.recipe_id,
+              project_id: projectId || null,
+              repo_name: repoName,
+              branch_name: branchName,
+            })
+          );
+
+          // Dispatch to Redux store with recipeId and projectId
+          dispatch(
+            setRepoAndBranchForTask({
+              taskId: data.recipe_id, // Use recipeId as taskId
+              repoName: repoName || "",
+              branchName,
+              projectId: projectId || undefined,
+            })
+          );
 
           // Navigate to repo page with recipeId
           const params = new URLSearchParams({
@@ -334,14 +370,21 @@ export default function IdeaPage() {
             const cleanInput = getCleanInput(state.input);
             params.append("featureIdea", cleanInput);
           }
-          
-          console.log("[Idea Page] Navigating to repo page with recipeId:", data.recipe_id);
+
+          console.log(
+            "[Idea Page] Navigating to repo page with recipeId:",
+            data.recipe_id,
+            "and projectId:",
+            projectId
+          );
           router.push(`/repo?${params.toString()}`);
         } else {
           toast.error("Repository data not found. Please try again.");
         }
       } else {
-        toast.error("Repository not selected. Please select a repository and try again.");
+        toast.error(
+          "Repository not selected. Please select a repository and try again."
+        );
       }
     },
     onError: (error: any) => {
@@ -353,10 +396,16 @@ export default function IdeaPage() {
 
   // Select repository mutation
   const selectRepoMutation = useMutation({
-    mutationFn: async ({ projectId, repoId }: { projectId: string; repoId: string }) => {
+    mutationFn: async ({
+      projectId,
+      repoId,
+    }: {
+      projectId: string;
+      repoId: string;
+    }) => {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      
+
       const response = await axios.post(
         `${baseUrl}/api/v1/repos/select`,
         { project_id: projectId, repo_id: repoId },
@@ -364,19 +413,26 @@ export default function IdeaPage() {
       );
       return response.data;
     },
-    onSuccess: (data: unknown, variables: { projectId: string; repoId: string }) => {
+    onSuccess: (
+      data: unknown,
+      variables: { projectId: string; repoId: string }
+    ) => {
       const selectedRepoData = repositories.find(
         (repo: Repo) => repo.id?.toString() === variables.repoId
       );
       if (selectedRepoData) {
-        const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
-        const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+        const repoName =
+          selectedRepoData.full_name || selectedRepoData.name || "";
+        const branchName =
+          state.selectedBranch || selectedRepoData.default_branch || "main";
         parseRepo(repoName, branchName);
       }
     },
     onError: (error: any) => {
       console.error("Error selecting repository:", error);
-      toast.error(error.response?.data?.detail || "Failed to select repository");
+      toast.error(
+        error.response?.data?.detail || "Failed to select repository"
+      );
     },
   });
 
@@ -387,8 +443,8 @@ export default function IdeaPage() {
       return;
     }
 
-    setState((prev) => ({ 
-      ...prev, 
+    setState((prev) => ({
+      ...prev,
       parsing: true,
       parsingStatus: ParsingStatusEnum.SUBMITTED,
       parsingProgress: 0,
@@ -400,7 +456,7 @@ export default function IdeaPage() {
         repoName,
         branchName
       );
-      
+
       const projectId = parseResponse.project_id;
       const initialStatus = parseResponse.status;
 
@@ -415,23 +471,43 @@ export default function IdeaPage() {
           parsing: false,
           parsingProgress: 100,
         }));
-        
+
         // If build agent, automatically create recipe after parsing completes
-        if (state.selectedAgent === "build" && state.input.trim()) {
+        if (state.selectedAgent === "build" && state.input.trim() && projectId) {
           const repoSlug = repoName;
           const finalBranchName = branchName || "main";
           const cleanInput = getCleanInput(state.input);
-          
-          console.log("[Idea Page] Parsing complete, creating recipe for build agent");
+
+          // Dispatch projectId to Redux store
+          dispatch(
+            setRepoAndBranchForTask({
+              taskId: projectId, // Use projectId as temporary taskId until we have recipeId
+              repoName: repoSlug.trim(),
+              branchName: finalBranchName,
+              projectId,
+            })
+          );
+
+          console.log(
+            "[Idea Page] Parsing complete, creating recipe for build agent with projectId:",
+            projectId
+          );
           createRecipeMutation.mutate({
             userPrompt: cleanInput,
-            repoSlug: repoSlug.trim(),
-            branch: finalBranchName,
+            projectId,
+            additionalLinks: undefined,
           });
         }
         // If ask/debug agent, automatically create conversation after parsing completes
-        else if ((state.selectedAgent === "ask" || state.selectedAgent === "debug") && projectId) {
-          console.log("[Idea Page] Parsing complete, creating conversation for", state.selectedAgent, "agent");
+        else if (
+          (state.selectedAgent === "ask" || state.selectedAgent === "debug") &&
+          projectId
+        ) {
+          console.log(
+            "[Idea Page] Parsing complete, creating conversation for",
+            state.selectedAgent,
+            "agent"
+          );
           await createConversationAndNavigate(projectId);
         }
         return;
@@ -447,13 +523,16 @@ export default function IdeaPage() {
         const updateStatusAndProgress = (status: string) => {
           let progress = 0;
           let steps: string[] = [];
-          
+
           if (status === ParsingStatusEnum.SUBMITTED) {
             progress = 10;
             steps = ["Cloning repository..."];
           } else if (status === ParsingStatusEnum.CLONED) {
             progress = 30;
-            steps = ["Cloning repository...", "Analyzing directory structure..."];
+            steps = [
+              "Cloning repository...",
+              "Analyzing directory structure...",
+            ];
           } else if (status === ParsingStatusEnum.PARSED) {
             progress = 60;
             steps = [
@@ -482,7 +561,9 @@ export default function IdeaPage() {
             parsingStatus: status,
             parsingProgress: progress,
             parsingSteps: steps,
-            parsing: status !== ParsingStatusEnum.READY && status !== ParsingStatusEnum.ERROR,
+            parsing:
+              status !== ParsingStatusEnum.READY &&
+              status !== ParsingStatusEnum.ERROR,
           }));
         };
 
@@ -490,13 +571,16 @@ export default function IdeaPage() {
         updateStatusAndProgress(parsingStatus);
 
         // Poll until ready or error or timeout
-        while (parsingStatus !== ParsingStatusEnum.READY && 
-               parsingStatus !== ParsingStatusEnum.ERROR && 
-               Date.now() - startTime < maxDuration) {
+        while (
+          parsingStatus !== ParsingStatusEnum.READY &&
+          parsingStatus !== ParsingStatusEnum.ERROR &&
+          Date.now() - startTime < maxDuration
+        ) {
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
-          
+
           try {
-            parsingStatus = await BranchAndRepositoryService.getParsingStatus(projectId);
+            parsingStatus =
+              await BranchAndRepositoryService.getParsingStatus(projectId);
             updateStatusAndProgress(parsingStatus);
           } catch (error) {
             console.error("Error polling parsing status:", error);
@@ -510,7 +594,10 @@ export default function IdeaPage() {
         }
 
         // Handle timeout
-        if (Date.now() - startTime >= maxDuration && parsingStatus !== ParsingStatusEnum.READY) {
+        if (
+          Date.now() - startTime >= maxDuration &&
+          parsingStatus !== ParsingStatusEnum.READY
+        ) {
           setState((prev) => ({
             ...prev,
             parsingStatus: ParsingStatusEnum.ERROR,
@@ -521,21 +608,42 @@ export default function IdeaPage() {
         // If parsing completed successfully
         if (parsingStatus === ParsingStatusEnum.READY) {
           // For build agent, create recipe
-          if (state.selectedAgent === "build" && state.input.trim()) {
+          if (state.selectedAgent === "build" && state.input.trim() && projectId) {
             const repoSlug = repoName;
             const finalBranchName = branchName || "main";
             const cleanInput = getCleanInput(state.input);
-            
-            console.log("[Idea Page] Parsing complete, creating recipe for build agent");
+
+            // Dispatch projectId to Redux store
+            dispatch(
+              setRepoAndBranchForTask({
+                taskId: projectId, // Use projectId as temporary taskId until we have recipeId
+                repoName: repoSlug.trim(),
+                branchName: finalBranchName,
+                projectId,
+              })
+            );
+
+            console.log(
+              "[Idea Page] Parsing complete, creating recipe for build agent with projectId:",
+              projectId
+            );
             createRecipeMutation.mutate({
               userPrompt: cleanInput,
-              repoSlug: repoSlug.trim(),
-              branch: finalBranchName,
+              projectId,
+              additionalLinks: undefined,
             });
           }
           // For ask/debug agents, create conversation
-          else if ((state.selectedAgent === "ask" || state.selectedAgent === "debug") && projectId) {
-            console.log("[Idea Page] Parsing complete, creating conversation for", state.selectedAgent, "agent");
+          else if (
+            (state.selectedAgent === "ask" ||
+              state.selectedAgent === "debug") &&
+            projectId
+          ) {
+            console.log(
+              "[Idea Page] Parsing complete, creating conversation for",
+              state.selectedAgent,
+              "agent"
+            );
             await createConversationAndNavigate(projectId);
           }
         }
@@ -563,24 +671,28 @@ export default function IdeaPage() {
     const selectedRepoData = repositories.find(
       (repo: Repo) => repo.id?.toString() === state.selectedRepo
     );
-    
+
     if (!selectedRepoData) {
       toast.error("Repository not found");
       return;
     }
 
     const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
-    const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+    const branchName =
+      state.selectedBranch || selectedRepoData.default_branch || "main";
 
     await parseRepo(repoName, branchName);
   };
 
   // Helper function to create conversation and navigate (for ask/debug agents)
   const createConversationAndNavigate = async (projectId: string) => {
-    if (!state.selectedAgent || (state.selectedAgent !== "ask" && state.selectedAgent !== "debug")) {
+    if (
+      !state.selectedAgent ||
+      (state.selectedAgent !== "ask" && state.selectedAgent !== "debug")
+    ) {
       return;
     }
-    
+
     if (!user?.uid) {
       toast.error("Please sign in to continue");
       return;
@@ -592,19 +704,23 @@ export default function IdeaPage() {
         ask: "codebase_qna_agent",
         debug: "debugging_agent",
       };
-      
+
       const agentId = agentIdMap[state.selectedAgent];
       if (!agentId) {
         toast.error("Invalid agent selection");
         return;
       }
 
-      const title = state.selectedAgent === "ask" 
-        ? "Codebase Q&A Chat" 
-        : "Debug Chat";
+      const title =
+        state.selectedAgent === "ask" ? "Codebase Q&A Chat" : "Debug Chat";
 
-      console.log("[Idea Page] Creating conversation for agent:", state.selectedAgent, "with projectId:", projectId);
-      
+      console.log(
+        "[Idea Page] Creating conversation for agent:",
+        state.selectedAgent,
+        "with projectId:",
+        projectId
+      );
+
       // Create conversation (same signature as newchat/step2.tsx)
       const conversationResponse = await ChatService.createConversation(
         user.uid,
@@ -613,7 +729,10 @@ export default function IdeaPage() {
         agentId
       );
 
-      console.log("[Idea Page] Conversation created:", conversationResponse.conversation_id);
+      console.log(
+        "[Idea Page] Conversation created:",
+        conversationResponse.conversation_id
+      );
 
       // Set up chat context in Redux - same as newchat/step2.tsx
       dispatch(setChat({ agentId }));
@@ -628,17 +747,22 @@ export default function IdeaPage() {
       router.push(`/chat/${conversationResponse.conversation_id}`);
     } catch (error: any) {
       console.error("[Idea Page] Failed to create conversation:", error);
-      toast.error(error.message || "Failed to create conversation. Please try again.");
+      toast.error(
+        error.message || "Failed to create conversation. Please try again."
+      );
     }
   };
 
   // Helper function to check if repo is ready and get projectId
-  const getProjectIdForRepo = async (repoName: string, branchName: string): Promise<string | null> => {
+  const getProjectIdForRepo = async (
+    repoName: string,
+    branchName: string
+  ): Promise<string | null> => {
     try {
       // Check projects list to find ready project for this repo
       const repoFullName = repoName;
       const repoNameOnly = repoFullName?.split("/").pop() || repoName;
-      
+
       const readyProject = projects?.find((project: any) => {
         if (!project.repo_name || project.status !== "ready") {
           return false;
@@ -653,17 +777,26 @@ export default function IdeaPage() {
       });
 
       if (readyProject?.id) {
-        console.log("[Idea Page] Found ready project in list, projectId:", readyProject.id);
+        console.log(
+          "[Idea Page] Found ready project in list, projectId:",
+          readyProject.id
+        );
         return readyProject.id.toString();
       }
 
       // Also try checkParsingStatus as additional check
       try {
-        const statusResponse = await BranchAndRepositoryService.checkParsingStatus(repoName, branchName);
+        const statusResponse =
+          await BranchAndRepositoryService.checkParsingStatus(
+            repoName,
+            branchName
+          );
         if (statusResponse?.status === ParsingStatusEnum.READY) {
           // If status is ready but we didn't find project in list, try to parse to get projectId
           // This will return projectId from parse response
-          console.log("[Idea Page] Repo status is ready, but projectId not found in list");
+          console.log(
+            "[Idea Page] Repo status is ready, but projectId not found in list"
+          );
         }
       } catch (error) {
         // Ignore checkParsingStatus errors
@@ -683,26 +816,26 @@ export default function IdeaPage() {
       toast.error("Please select an agent (Ask, Build, or Debug)");
       return;
     }
-    
+
     const selectedRepoData = repositories.find(
       (repo: Repo) => repo.id?.toString() === state.selectedRepo
     );
-    const repoName = selectedRepoData?.full_name || selectedRepoData?.name || "";
-    const branchName = state.selectedBranch || 
-      selectedRepoData?.default_branch ||
-      "main";
-    
+    const repoName =
+      selectedRepoData?.full_name || selectedRepoData?.name || "";
+    const branchName =
+      state.selectedBranch || selectedRepoData?.default_branch || "main";
+
     // If "ask" or "debug" agent is selected, create conversation and send message
     if (state.selectedAgent === "ask" || state.selectedAgent === "debug") {
       if (!state.projectId) {
         toast.error("Project ID is required. Please submit your idea first.");
         return;
       }
-      
+
       await createConversationAndNavigate(state.projectId);
       return;
     }
-    
+
     // For "build" agent, navigate to repo page with recipeId
     if (state.selectedAgent === "build") {
       if (!state.recipeId) {
@@ -711,12 +844,15 @@ export default function IdeaPage() {
       }
 
       // Store recipe data in localStorage for spec page to retrieve project_id
-      localStorage.setItem(`recipe_${state.recipeId}`, JSON.stringify({
-        recipe_id: state.recipeId,
-        project_id: state.projectId,
-        repo_name: repoName,
-        branch_name: branchName,
-      }));
+      localStorage.setItem(
+        `recipe_${state.recipeId}`,
+        JSON.stringify({
+          recipe_id: state.recipeId,
+          project_id: state.projectId,
+          repo_name: repoName,
+          branch_name: branchName,
+        })
+      );
 
       dispatch(
         setRepoAndBranchForTask({
@@ -730,19 +866,22 @@ export default function IdeaPage() {
       const params = new URLSearchParams({
         recipeId: state.recipeId, // Pass recipeId instead of projectId
       });
-          if (repoName) {
-            params.append("repoName", repoName);
-          }
-          if (state.input) {
-            const cleanInput = getCleanInput(state.input);
-            params.append("featureIdea", cleanInput);
-          }
-      
-      console.log("[Idea Page] Navigating to repo page with recipeId:", state.recipeId);
+      if (repoName) {
+        params.append("repoName", repoName);
+      }
+      if (state.input) {
+        const cleanInput = getCleanInput(state.input);
+        params.append("featureIdea", cleanInput);
+      }
+
+      console.log(
+        "[Idea Page] Navigating to repo page with recipeId:",
+        state.recipeId
+      );
       router.push(`/repo?${params.toString()}`);
       return;
     }
-    
+
     console.error("[Idea Page] Invalid agent selection:", state.selectedAgent);
     toast.error("Invalid agent selection");
   };
@@ -779,9 +918,11 @@ export default function IdeaPage() {
       const selectedRepoData = repositories.find(
         (repo: Repo) => repo.id?.toString() === state.selectedRepo
       );
-      
+
       if (!selectedRepoData) {
-        toast.error("Selected repository not found. Please select a repository again.");
+        toast.error(
+          "Selected repository not found. Please select a repository again."
+        );
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
@@ -789,18 +930,23 @@ export default function IdeaPage() {
       // Ensure we have a valid repo slug (full_name format: owner/repo-name)
       const repoSlug = selectedRepoData.full_name || selectedRepoData.name;
       if (!repoSlug || repoSlug.trim() === "") {
-        toast.error("Repository name is invalid. Please select a valid repository.");
+        toast.error(
+          "Repository name is invalid. Please select a valid repository."
+        );
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
 
-      const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+      const branchName =
+        state.selectedBranch || selectedRepoData.default_branch || "main";
 
       // Check if repo has a ready project
       const repoFullName = selectedRepoData.full_name || selectedRepoData.name;
-      const repoNameOnly = repoFullName?.split("/").pop() || selectedRepoData.name;
-      
-      const hasReadyProject = projects?.some((project: any) => {
+      const repoNameOnly =
+        repoFullName?.split("/").pop() || selectedRepoData.name;
+
+      // Find the ready project and extract projectId
+      const readyProject = projects?.find((project: any) => {
         if (!project.repo_name || project.status !== "ready") {
           return false;
         }
@@ -813,28 +959,54 @@ export default function IdeaPage() {
         );
       });
 
+      const hasReadyProject = !!readyProject;
+      const projectId = readyProject?.id?.toString() || null;
+
       // If repo is not ready, parse it first
       if (!hasReadyProject) {
-        console.log("[Idea Page] Repo not ready, starting parsing first:", repoFullName);
+        console.log(
+          "[Idea Page] Repo not ready, starting parsing first:",
+          repoFullName
+        );
         setState((prev) => ({ ...prev, loading: false }));
-        
+
         // Start parsing - after parsing completes, user can continue to create recipe
         await parseRepo(repoFullName, branchName);
         return;
       }
 
-      // Repo is ready, create recipe directly
+      // Repo is ready, extract projectId and create recipe
+      if (!projectId) {
+        toast.error("Project ID not found. Please try again.");
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      // Store projectId in state
+      setState((prev) => ({ ...prev, projectId }));
+
+      // Dispatch projectId to Redux store
+      dispatch(
+        setRepoAndBranchForTask({
+          taskId: projectId, // Use projectId as temporary taskId until we have recipeId
+          repoName: repoSlug.trim(),
+          branchName,
+          projectId,
+        })
+      );
+
       console.log("[Idea Page] Repo is ready, creating recipe with:", {
         userPrompt: cleanInput,
         repoSlug,
         branch: branchName,
+        projectId,
       });
 
-      // Create recipe
+      // Create recipe with projectId
       createRecipeMutation.mutate({
         userPrompt: cleanInput,
-        repoSlug: repoSlug.trim(),
-        branch: branchName,
+        projectId,
+        additionalLinks: undefined,
       });
       return;
     }
@@ -850,22 +1022,28 @@ export default function IdeaPage() {
       const selectedRepoData = repositories.find(
         (repo: Repo) => repo.id?.toString() === state.selectedRepo
       );
-      
+
       if (!selectedRepoData) {
-        toast.error("Selected repository not found. Please select a repository again.");
+        toast.error(
+          "Selected repository not found. Please select a repository again."
+        );
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
 
-      const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
-      const branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
+      const repoName =
+        selectedRepoData.full_name || selectedRepoData.name || "";
+      const branchName =
+        state.selectedBranch || selectedRepoData.default_branch || "main";
 
       // Check if repo is already ready
       const projectId = await getProjectIdForRepo(repoName, branchName);
-      
+
       if (projectId) {
         // Repo is ready, create conversation immediately
-        console.log("[Idea Page] Repo is ready, creating conversation immediately");
+        console.log(
+          "[Idea Page] Repo is ready, creating conversation immediately"
+        );
         setState((prev) => ({ ...prev, loading: false, projectId }));
         await createConversationAndNavigate(projectId);
         return;
@@ -900,12 +1078,12 @@ export default function IdeaPage() {
   };
 
   const handleRepoSelect = (repoId: string) => {
-    setState((prev) => ({ 
-      ...prev, 
+    setState((prev) => ({
+      ...prev,
       selectedRepo: repoId,
-      selectedBranch: null // Reset branch when repo changes
+      selectedBranch: null, // Reset branch when repo changes
     }));
-    
+
     // If project exists, start parsing immediately
     if (state.projectId) {
       selectRepoMutation.mutate({
@@ -924,7 +1102,10 @@ export default function IdeaPage() {
   };
 
   return (
-    <div className="min-h-screen flex relative" style={{ backgroundColor: "#FFF9F5" }}>
+    <div
+      className="min-h-screen flex relative"
+      style={{ backgroundColor: "#FFF9F5" }}
+    >
       {/* Dot Pattern Background - More Visible */}
       <div className="absolute inset-0 opacity-60 pointer-events-none">
         <div
@@ -935,7 +1116,7 @@ export default function IdeaPage() {
           }}
         />
       </div>
-      
+
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col items-center justify-start px-4 pt-40 pb-4 relative z-10">
         <div className="w-full max-w-4xl space-y-6">
@@ -959,7 +1140,9 @@ export default function IdeaPage() {
           <div className="space-y-3">
             <IdeaInputCard
               input={state.input}
-              onInputChange={(value) => setState((prev) => ({ ...prev, input: value }))}
+              onInputChange={(value) =>
+                setState((prev) => ({ ...prev, input: value }))
+              }
               onKeyDown={handleKeyDown}
               textareaRef={textareaRef}
               loading={state.loading}
@@ -981,9 +1164,21 @@ export default function IdeaPage() {
             {!state.parsing && (
               <div className="flex items-center justify-center gap-3 mt-2">
                 {[
-                  { value: "ask", label: "ask a question", displayLabel: "Ask a question" },
-                  { value: "build", label: "Build a feature", displayLabel: "Build a feature" },
-                  { value: "debug", label: "Debug an issue", displayLabel: "Debug an issue" },
+                  {
+                    value: "ask",
+                    label: "ask a question",
+                    displayLabel: "Ask a question",
+                  },
+                  {
+                    value: "build",
+                    label: "Build a feature",
+                    displayLabel: "Build a feature",
+                  },
+                  {
+                    value: "debug",
+                    label: "Debug an issue",
+                    displayLabel: "Debug an issue",
+                  },
                 ].map((agent) => {
                   const isSelected = agent.value === state.selectedAgent;
                   return (
@@ -992,7 +1187,7 @@ export default function IdeaPage() {
                       type="button"
                       onClick={() => {
                         handleAgentSelect(agent.value);
-                        
+
                         // Focus the textarea - no text changes, just visual pill
                         setTimeout(() => {
                           if (textareaRef.current) {
@@ -1006,14 +1201,17 @@ export default function IdeaPage() {
                       className={`
                         px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200
                         flex items-center gap-2.5 min-w-[140px] justify-center
-                        ${isSelected
-                          ? 'text-[#00291C] shadow-md scale-105'
-                          : 'bg-zinc-50 text-foreground hover:bg-zinc-100 border-2 border-zinc-200 hover:border-zinc-300'
+                        ${
+                          isSelected
+                            ? "text-[#00291C] shadow-md scale-105"
+                            : "bg-zinc-50 text-foreground hover:bg-zinc-100 border-2 border-zinc-200 hover:border-zinc-300"
                         }
-                        ${state.loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}
+                        ${state.loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:scale-105"}
                       `}
                       style={{
-                        backgroundColor: isSelected ? "var(--accent-color)" : undefined
+                        backgroundColor: isSelected
+                          ? "var(--accent-color)"
+                          : undefined,
                       }}
                     >
                       {isSelected && <Check className="h-4 w-4" />}
@@ -1029,7 +1227,9 @@ export default function IdeaPage() {
               <ParsingStatusCard
                 steps={state.parsingSteps}
                 progress={state.parsingProgress}
-                onContinue={state.selectedAgent === "build" ? handleContinue : undefined}
+                onContinue={
+                  state.selectedAgent === "build" ? handleContinue : undefined
+                }
               />
             )}
           </div>

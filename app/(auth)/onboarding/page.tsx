@@ -524,7 +524,7 @@ const Onboarding = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     required
                   />
                 </div>
@@ -538,7 +538,7 @@ const Onboarding = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, source: e.target.value })
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     required
                   >
                     <option value="">Select an option</option>
@@ -561,7 +561,7 @@ const Onboarding = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, industry: e.target.value })
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     required
                   />
                 </div>
@@ -577,7 +577,7 @@ const Onboarding = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, jobTitle: e.target.value })
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     required
                   />
                 </div>
@@ -593,7 +593,7 @@ const Onboarding = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, companyName: e.target.value })
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     required
                   />
                 </div>

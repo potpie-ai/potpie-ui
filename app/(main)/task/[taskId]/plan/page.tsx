@@ -39,6 +39,7 @@ import {
 import { Button } from "@/components/ui/button";
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
+import TaskSplittingService from "@/services/TaskSplittingService";
 import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -500,7 +501,7 @@ const groupFilesByModule = (files: FileItem[] | undefined) => {
   });
 
   return Object.fromEntries(
-    Object.entries(modules).filter(([_, v]) => v.length > 0),
+    Object.entries(modules).filter(([_, v]) => v.length > 0)
   );
 };
 
@@ -637,7 +638,10 @@ const PlanPage = () => {
     enabled: !!(planId || specIdFromUrl || recipeId),
     refetchInterval: (data) => {
       // Poll every 2 seconds if plan is in progress
-      if (data?.plan_gen_status === "IN_PROGRESS" || data?.plan_gen_status === "SUBMITTED") {
+      if (
+        data?.plan_gen_status === "IN_PROGRESS" ||
+        data?.plan_gen_status === "SUBMITTED"
+      ) {
         return 2000;
       }
       return false;
@@ -658,7 +662,12 @@ const PlanPage = () => {
 
   // Auto-submit plan generation if we have recipeId/specId but no planId
   useEffect(() => {
-    if ((recipeId || specIdFromUrl) && !planId && !isLoadingStatus && !statusData) {
+    if (
+      (recipeId || specIdFromUrl) &&
+      !planId &&
+      !isLoadingStatus &&
+      !statusData
+    ) {
       // Submit plan generation
       PlanService.submitPlanGeneration({
         recipe_id: recipeId || undefined,
@@ -684,7 +693,7 @@ const PlanPage = () => {
   // Fetch plan items when plan is completed
   const fetchPlanItems = async (start: number = 0) => {
     if (!planId) return;
-    
+
     try {
       setIsLoadingItems(true);
       const response = await PlanService.getPlanItems(planId, start, 20);
@@ -702,7 +711,11 @@ const PlanPage = () => {
   };
 
   useEffect(() => {
-    if (planStatus?.plan_gen_status === "COMPLETED" && planId && planItems.length === 0) {
+    if (
+      planStatus?.plan_gen_status === "COMPLETED" &&
+      planId &&
+      planItems.length === 0
+    ) {
       fetchPlanItems(0);
     }
   }, [planStatus?.plan_gen_status, planId]);
@@ -726,20 +739,20 @@ const PlanPage = () => {
           <p className="text-zinc-600 mb-6">
             The recipe ID was not found in the URL. Please start a new task.
           </p>
-          <Button onClick={() => router.push("/idea")}>
-            Create New Task
-          </Button>
+          <Button onClick={() => router.push("/idea")}>Create New Task</Button>
         </div>
       </div>
     );
   }
 
-  const isGenerating = planStatus?.plan_gen_status === "IN_PROGRESS" || planStatus?.plan_gen_status === "SUBMITTED";
+  const isGenerating =
+    planStatus?.plan_gen_status === "IN_PROGRESS" ||
+    planStatus?.plan_gen_status === "SUBMITTED";
   const isCompleted = planStatus?.plan_gen_status === "COMPLETED";
   const isFailed = planStatus?.plan_gen_status === "FAILED";
 
   return (
-    <div className="min-h-screen bg-white text-zinc-900 font-sans selection:bg-zinc-100 antialiased">
+    <div className="min-h-screen bg-background text-zinc-900 font-sans selection:bg-zinc-100 antialiased">
       <main className="max-w-2xl mx-auto px-6 py-12 pb-32">
         {/* Intro */}
         <div className="flex justify-between items-start mb-10">
@@ -776,18 +789,27 @@ const PlanPage = () => {
                     </p>
                     {planStatus && (
                       <div className="mt-2">
-                        {(planStatus.progress_percent !== null && planStatus.progress_percent !== undefined) && (
-                          <div className="w-full bg-zinc-200 rounded-full h-2 mb-2">
-                            <div
-                              className="bg-zinc-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${planStatus.progress_percent}%` }}
-                            />
-                          </div>
-                        )}
+                        {planStatus.progress_percent !== null &&
+                          planStatus.progress_percent !== undefined && (
+                            <div className="w-full bg-zinc-200 rounded-full h-2 mb-2">
+                              <div
+                                className="bg-zinc-600 h-2 rounded-full transition-all duration-300"
+                                style={{
+                                  width: `${planStatus.progress_percent}%`,
+                                }}
+                              />
+                            </div>
+                          )}
                         <p className="text-xs text-zinc-600 mt-1">
                           Step {planStatus.current_step + 1}/3
-                          {planStatus.progress_percent !== null && planStatus.progress_percent !== undefined && ` • ${planStatus.progress_percent}%`}
-                          {planStatus.total_items !== null && planStatus.total_items !== undefined && planStatus.items_completed !== null && planStatus.items_completed !== undefined && ` • ${planStatus.items_completed}/${planStatus.total_items} items`}
+                          {planStatus.progress_percent !== null &&
+                            planStatus.progress_percent !== undefined &&
+                            ` • ${planStatus.progress_percent}%`}
+                          {planStatus.total_items !== null &&
+                            planStatus.total_items !== undefined &&
+                            planStatus.items_completed !== null &&
+                            planStatus.items_completed !== undefined &&
+                            ` • ${planStatus.items_completed}/${planStatus.total_items} items`}
                         </p>
                       </div>
                     )}
@@ -807,7 +829,9 @@ const PlanPage = () => {
                       Plan generation failed
                     </p>
                     {planStatus?.error_message && (
-                      <p className="text-xs text-red-700 mt-1">{planStatus.error_message}</p>
+                      <p className="text-xs text-red-700 mt-1">
+                        {planStatus.error_message}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -816,262 +840,281 @@ const PlanPage = () => {
           )}
 
           {/* Plan Items */}
-          {isCompleted && planItems.length > 0 && planItems.map((item, index) => {
-            const isExpanded = expandedId === item.item_number;
-            const modules = groupFilesByModule(item.files);
-            
-            return (
-              <div
-                key={item.item_number}
-                ref={(el) => {
-                  sliceRefs.current[item.item_number] = el;
-                }}
-                className="group animate-in fade-in slide-in-from-bottom-4 duration-500 relative"
-              >
+          {isCompleted &&
+            planItems.length > 0 &&
+            planItems.map((item, index) => {
+              const isExpanded = expandedId === item.item_number;
+              const modules = groupFilesByModule(item.files);
+
+              return (
                 <div
-                  onClick={() => {
-                    const newExpandedId = isExpanded ? null : item.item_number;
-                    setExpandedId(newExpandedId);
-                    if (newExpandedId !== null) {
-                      setTimeout(() => {
-                        const element = sliceRefs.current[item.item_number];
-                        if (element) {
-                          const yOffset = -24;
-                          const y = element.getBoundingClientRect().top + window.scrollY + yOffset;
-                          window.scrollTo({ top: y, behavior: "smooth" });
-                        }
-                      }, 100);
-                    }
+                  key={item.item_number}
+                  ref={(el) => {
+                    sliceRefs.current[item.item_number] = el;
                   }}
-                  className={`
-                    relative bg-white border rounded-xl overflow-hidden cursor-pointer transition-all
+                  className="group animate-in fade-in slide-in-from-bottom-4 duration-500 relative"
+                >
+                  <div
+                    onClick={() => {
+                      const newExpandedId = isExpanded
+                        ? null
+                        : item.item_number;
+                      setExpandedId(newExpandedId);
+                      if (newExpandedId !== null) {
+                        setTimeout(() => {
+                          const element = sliceRefs.current[item.item_number];
+                          if (element) {
+                            const yOffset = -24;
+                            const y =
+                              element.getBoundingClientRect().top +
+                              window.scrollY +
+                              yOffset;
+                            window.scrollTo({ top: y, behavior: "smooth" });
+                          }
+                        }, 100);
+                      }
+                    }}
+                    className={`
+                    relative bg-background border rounded-xl overflow-hidden cursor-pointer transition-all
                     ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-sm" : "border-zinc-200 hover:border-zinc-300"}
                   `}
-                >
-                  {/* Summary Header */}
-                  <div className="p-4 flex gap-4 items-start">
-                    <div className="pt-0.5 shrink-0">
-                      <StatusIcon status="generated" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                          Slice {String(item.item_number).padStart(2, '0')}
-                        </span>
-                        <ChevronDown
-                          className={`w-4 h-4 text-zinc-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                        />
+                  >
+                    {/* Summary Header */}
+                    <div className="p-4 flex gap-4 items-start">
+                      <div className="pt-0.5 shrink-0">
+                        <StatusIcon status="generated" />
                       </div>
-                      <h3 className="text-sm font-bold text-zinc-900 truncate">
-                        {item.title}
-                      </h3>
-                      <p className="text-[11px] text-zinc-500 mt-1 line-clamp-1">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
 
-                  {/* Expanded Detail View */}
-                  {isExpanded && (
-                    <div className="border-t border-zinc-100 bg-zinc-50/50">
-                      {/* 0. Detailed Objective */}
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-white">
-                        <div className="flex items-center gap-2 mb-2">
-                          <AlignLeft className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                            Objective
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                            Slice {String(item.item_number).padStart(2, "0")}
                           </span>
+                          <ChevronDown
+                            className={`w-4 h-4 text-zinc-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          />
                         </div>
-                        <p className="text-xs text-zinc-600 leading-relaxed">
-                          {item.detailed_objective}
+                        <h3 className="text-sm font-bold text-zinc-900 truncate">
+                          {item.title}
+                        </h3>
+                        <p className="text-[11px] text-zinc-500 mt-1 line-clamp-1">
+                          {item.description}
                         </p>
                       </div>
+                    </div>
 
-                      {/* 1. Success Criteria */}
-                      <div className="px-5 py-4 border-b border-zinc-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                            Success Criteria
-                          </span>
-                        </div>
-                        <p className="text-xs font-medium text-zinc-700 bg-white border border-zinc-200 rounded p-2.5 leading-relaxed">
-                          {item.verification_criteria}
-                        </p>
-                      </div>
-
-                      {/* 2. Implementation Details */}
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                        <div className="flex items-center gap-2 mb-3">
-                          <ListTodo className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                            Implementation Details
-                          </span>
-                        </div>
-                        <ul className="space-y-2">
-                          {item.implementation_steps.map((step, i) => (
-                            <li
-                              key={i}
-                              className="flex gap-2 text-xs text-zinc-600 leading-relaxed"
-                            >
-                              <div className="mt-1.5 w-1 h-1 rounded-full bg-zinc-300 shrink-0" />
-                              <span>
-                                <FormattedText text={step} />
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* 3. Architecture Diagram */}
-                      {item.architecture && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-white">
-                          <div className="flex items-center gap-2 mb-3">
-                            <GitMerge className="w-3.5 h-3.5 text-zinc-400" />
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                              Slice Architecture
-                            </span>
-                          </div>
-                          <div className="border border-zinc-100 rounded-lg p-4 bg-white overflow-x-auto">
-                            <MermaidDiagram chart={item.architecture} />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 4. AI Reasoning */}
-                      {item.reasoning && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50">
+                    {/* Expanded Detail View */}
+                    {isExpanded && (
+                      <div className="border-t border-zinc-100 bg-zinc-50/50">
+                        {/* 0. Detailed Objective */}
+                        <div className="px-5 py-4 border-b border-zinc-100 bg-background">
                           <div className="flex items-center gap-2 mb-2">
-                            <BrainCircuit className="w-3.5 h-3.5 text-zinc-400" />
+                            <AlignLeft className="w-3.5 h-3.5 text-zinc-400" />
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                              AI Reasoning
+                              Objective
                             </span>
                           </div>
-                          <ul className="space-y-1.5">
-                            {Array.isArray(item.reasoning) ? (
-                              item.reasoning.map((reason, i) => (
-                                <li
-                                  key={i}
-                                  className="text-[11px] text-zinc-600 flex gap-2 leading-relaxed"
-                                >
-                                  <span className="text-zinc-300 select-none">•</span>
-                                  {reason}
-                                </li>
-                              ))
-                            ) : (
-                              <li className="text-[11px] text-zinc-600 leading-relaxed">
-                                {item.reasoning}
+                          <p className="text-xs text-zinc-600 leading-relaxed">
+                            {item.detailed_objective}
+                          </p>
+                        </div>
+
+                        {/* 1. Success Criteria */}
+                        <div className="px-5 py-4 border-b border-zinc-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                              Success Criteria
+                            </span>
+                          </div>
+                          <p className="text-xs font-medium text-zinc-700 bg-background border border-zinc-200 rounded p-2.5 leading-relaxed">
+                            {item.verification_criteria}
+                          </p>
+                        </div>
+
+                        {/* 2. Implementation Details */}
+                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                          <div className="flex items-center gap-2 mb-3">
+                            <ListTodo className="w-3.5 h-3.5 text-zinc-400" />
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                              Implementation Details
+                            </span>
+                          </div>
+                          <ul className="space-y-2">
+                            {item.implementation_steps.map((step, i) => (
+                              <li
+                                key={i}
+                                className="flex gap-2 text-xs text-zinc-600 leading-relaxed"
+                              >
+                                <div className="mt-1.5 w-1 h-1 rounded-full bg-zinc-300 shrink-0" />
+                                <span>
+                                  <FormattedText text={step} />
+                                </span>
                               </li>
-                            )}
+                            ))}
                           </ul>
                         </div>
-                      )}
 
-                      {/* 5. Files Changeset (Grouped by Module) */}
-                      {item.files && item.files.length > 0 && (
-                        <div className="px-5 py-4 border-b border-zinc-100">
-                          <div className="flex items-center gap-2 mb-3">
-                            <FileCode className="w-3.5 h-3.5 text-zinc-400" />
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                              Specs to Generate
-                            </span>
+                        {/* 3. Architecture Diagram */}
+                        {item.architecture && (
+                          <div className="px-5 py-4 border-b border-zinc-100 bg-background">
+                            <div className="flex items-center gap-2 mb-3">
+                              <GitMerge className="w-3.5 h-3.5 text-zinc-400" />
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                                Slice Architecture
+                              </span>
+                            </div>
+                            <div className="border border-zinc-100 rounded-lg p-4 bg-background overflow-x-auto">
+                              <MermaidDiagram chart={item.architecture} />
+                            </div>
                           </div>
-                          <div className="grid grid-cols-1 gap-3">
-                            {Object.entries(modules).map(([modName, files]) => {
-                              const ModIcon = getModuleIcon(modName);
-                              return (
-                                <div
-                                  key={modName}
-                                  className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80"
-                                >
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <ModIcon className="w-3 h-3 text-zinc-400" />
-                                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                                      {modName}
+                        )}
+
+                        {/* 4. AI Reasoning */}
+                        {item.reasoning && (
+                          <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50">
+                            <div className="flex items-center gap-2 mb-2">
+                              <BrainCircuit className="w-3.5 h-3.5 text-zinc-400" />
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                                AI Reasoning
+                              </span>
+                            </div>
+                            <ul className="space-y-1.5">
+                              {Array.isArray(item.reasoning) ? (
+                                item.reasoning.map((reason, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-[11px] text-zinc-600 flex gap-2 leading-relaxed"
+                                  >
+                                    <span className="text-zinc-300 select-none">
+                                      •
                                     </span>
-                                  </div>
-                                  <ul className="space-y-1.5">
-                                    {files.map((f, i) => (
-                                      <li
-                                        key={i}
-                                        className="flex items-center justify-between text-[10px]"
-                                      >
-                                        <span
-                                          className="font-mono text-zinc-600 truncate max-w-[200px]"
-                                          title={f.path}
-                                        >
-                                          {f.path.split("/").pop()}
+                                    {reason}
+                                  </li>
+                                ))
+                              ) : (
+                                <li className="text-[11px] text-zinc-600 leading-relaxed">
+                                  {item.reasoning}
+                                </li>
+                              )}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* 5. Files Changeset (Grouped by Module) */}
+                        {item.files && item.files.length > 0 && (
+                          <div className="px-5 py-4 border-b border-zinc-100">
+                            <div className="flex items-center gap-2 mb-3">
+                              <FileCode className="w-3.5 h-3.5 text-zinc-400" />
+                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                                Specs to Generate
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3">
+                              {Object.entries(modules).map(
+                                ([modName, files]) => {
+                                  const ModIcon = getModuleIcon(modName);
+                                  return (
+                                    <div
+                                      key={modName}
+                                      className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80"
+                                    >
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <ModIcon className="w-3 h-3 text-zinc-400" />
+                                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                                          {modName}
                                         </span>
-                                        <span
-                                          className={`text-[9px] font-bold px-1 rounded ${
-                                            f.type === "create" || f.type === "Create"
-                                              ? "text-emerald-600 bg-emerald-50"
-                                              : f.type === "modify" || f.type === "Modify"
-                                              ? "text-amber-600 bg-amber-50"
-                                              : "text-red-600 bg-red-50"
-                                          }`}
-                                        >
-                                          {f.type}
-                                        </span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
+                                      </div>
+                                      <ul className="space-y-1.5">
+                                        {files.map((f, i) => (
+                                          <li
+                                            key={i}
+                                            className="flex items-center justify-between text-[10px]"
+                                          >
+                                            <span
+                                              className="font-mono text-zinc-600 truncate max-w-[200px]"
+                                              title={f.path}
+                                            >
+                                              {f.path.split("/").pop()}
+                                            </span>
+                                            <span
+                                              className={`text-[9px] font-bold px-1 rounded ${
+                                                f.type === "create" ||
+                                                f.type === "Create"
+                                                  ? "text-emerald-600 bg-emerald-50"
+                                                  : f.type === "modify" ||
+                                                      f.type === "Modify"
+                                                    ? "text-amber-600 bg-amber-50"
+                                                    : "text-red-600 bg-red-50"
+                                              }`}
+                                            >
+                                              {f.type}
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  );
+                                }
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 6. Context Handoff */}
+                        {item.context_handoff &&
+                          typeof item.context_handoff === "object" && (
+                            <div className="px-5 py-4 border-b border-zinc-100">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Database className="w-3.5 h-3.5 text-zinc-400" />
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                                  Planned Context Handoff
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 gap-1">
+                                {Object.entries(item.context_handoff).map(
+                                  ([key, val], i) => (
+                                    <div
+                                      key={i}
+                                      className="flex items-start gap-2 text-[10px]"
+                                    >
+                                      <span className="font-mono text-zinc-400 shrink-0 mt-[1px]">
+                                        {key}:
+                                      </span>
+                                      <span className="font-semibold text-zinc-700 break-all">
+                                        {Array.isArray(val)
+                                          ? val.join(", ")
+                                          : String(val)}
+                                      </span>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                        {/* 7. Start Implementation Button */}
+                        <div className="px-5 py-4 bg-zinc-50/50">
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(
+                                `/task/${recipeId}/code?planId=${planId}&itemNumber=${item.item_number}`
                               );
-                            })}
-                          </div>
+                            }}
+                            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Rocket className="w-4 h-4" />
+                            Start Implementation for Slice{" "}
+                            {String(item.item_number).padStart(2, "0")}
+                          </Button>
                         </div>
-                      )}
-
-                      {/* 6. Context Handoff */}
-                      {item.context_handoff && typeof item.context_handoff === 'object' && (
-                        <div className="px-5 py-4 border-b border-zinc-100">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Database className="w-3.5 h-3.5 text-zinc-400" />
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                              Planned Context Handoff
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-1 gap-1">
-                            {Object.entries(item.context_handoff).map(
-                              ([key, val], i) => (
-                                <div
-                                  key={i}
-                                  className="flex items-start gap-2 text-[10px]"
-                                >
-                                  <span className="font-mono text-zinc-400 shrink-0 mt-[1px]">
-                                    {key}:
-                                  </span>
-                                  <span className="font-semibold text-zinc-700 break-all">
-                                    {Array.isArray(val) ? val.join(", ") : String(val)}
-                                  </span>
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 7. Start Implementation Button */}
-                      <div className="px-5 py-4 bg-zinc-50/50">
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${item.item_number}`);
-                          }}
-                          className="w-full bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Rocket className="w-4 h-4" />
-                          Start Implementation for Slice {String(item.item_number).padStart(2, '0')}
-                        </Button>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
 
           {/* Empty State / Start Prompt */}
           {!isGenerating && !isCompleted && planItems.length === 0 && (
@@ -1115,14 +1158,17 @@ const PlanPage = () => {
                         const element = sliceRefs.current[slice.id];
                         if (element) {
                           const yOffset = -24;
-                          const y = element.getBoundingClientRect().top + window.scrollY + yOffset;
+                          const y =
+                            element.getBoundingClientRect().top +
+                            window.scrollY +
+                            yOffset;
                           window.scrollTo({ top: y, behavior: "smooth" });
                         }
                       }, 100);
                     }
                   }}
                   className={`
-                    relative bg-white border rounded-xl overflow-hidden cursor-pointer transition-all
+                    relative bg-background border rounded-xl overflow-hidden cursor-pointer transition-all
                     ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-sm" : "border-zinc-200 hover:border-zinc-300"}
                   `}
                 >
@@ -1154,7 +1200,7 @@ const PlanPage = () => {
                   {isExpanded && (
                     <div className="border-t border-zinc-100 bg-zinc-50/50">
                       {/* 0. Detailed Objective */}
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-white">
+                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
                         <div className="flex items-center gap-2 mb-2">
                           <AlignLeft className="w-3.5 h-3.5 text-zinc-400" />
                           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -1174,7 +1220,7 @@ const PlanPage = () => {
                             Success Criteria
                           </span>
                         </div>
-                        <p className="text-xs font-medium text-zinc-700 bg-white border border-zinc-200 rounded p-2.5 leading-relaxed">
+                        <p className="text-xs font-medium text-zinc-700 bg-background border border-zinc-200 rounded p-2.5 leading-relaxed">
                           {slice.verification_criteria}
                         </p>
                       </div>
@@ -1203,14 +1249,14 @@ const PlanPage = () => {
                       </div>
 
                       {/* 3. Architecture Diagram */}
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-white">
+                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
                         <div className="flex items-center gap-2 mb-3">
                           <GitMerge className="w-3.5 h-3.5 text-zinc-400" />
                           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                             Slice Architecture
                           </span>
                         </div>
-                        <div className="border border-zinc-100 rounded-lg p-4 bg-white overflow-x-auto">
+                        <div className="border border-zinc-100 rounded-lg p-4 bg-background overflow-x-auto">
                           <MermaidDiagram chart={slice.architecture} />
                         </div>
                       </div>
@@ -1312,7 +1358,7 @@ const PlanPage = () => {
                                   {Array.isArray(val) ? val.join(", ") : val}
                                 </span>
                               </div>
-                            ),
+                            )
                           )}
                         </div>
                       </div>
@@ -1326,7 +1372,7 @@ const PlanPage = () => {
           {/* Loading State */}
           {isGenerating && (
             <div className="animate-in fade-in zoom-in duration-300 flex items-start gap-4 p-1">
-              <div className="w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin shrink-0 bg-white" />
+              <div className="w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin shrink-0 bg-background" />
               <div className="space-y-2 w-full">
                 <div className="h-4 w-1/3 bg-zinc-100 rounded animate-pulse" />
                 <div className="h-20 w-full bg-zinc-50 rounded-xl border border-zinc-100 animate-pulse" />
@@ -1341,7 +1387,20 @@ const PlanPage = () => {
         {isCompleted && planItems.length > 0 && (
           <div className="mt-12 flex justify-end animate-in fade-in slide-in-from-bottom-4 duration-500">
             <Button
-              onClick={() => router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=1`)}
+              onClick={async () => {
+                const firstItem = planItems[0];
+                try {
+                  await TaskSplittingService.submitTaskSplitting({
+                    plan_item_id: firstItem.id,
+                  });
+                  router.push(
+                    `/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`
+                  );
+                } catch (error) {
+                  toast.error("Failed to start implementation");
+                  console.error("Error starting implementation:", error);
+                }
+              }}
               className="bg-zinc-900 hover:bg-zinc-800 text-white px-6 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
             >
               <Rocket className="w-4 h-4" />

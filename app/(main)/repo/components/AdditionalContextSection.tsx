@@ -20,11 +20,11 @@ export default function AdditionalContextSection({
   recipeId,
 }: AdditionalContextSectionProps) {
   return (
-    <div className="sticky bottom-0 bg-white border-t border-zinc-100 px-6 py-4">
+    <div className="bg-background border-zinc-100 px-6 py-4">
       <div className="max-w-3xl mx-auto">
         <div className="space-y-3">
           <div>
-            <h2 className="text-xs font-bold text-zinc-900 uppercase tracking-wide mb-1">
+            <h2 className="text-xs font-bold text-primary-color uppercase tracking-wide mb-1">
               Additional Context
             </h2>
             <p className="text-[10px] text-zinc-400 mb-3">
@@ -43,7 +43,7 @@ export default function AdditionalContextSection({
             <Button
               onClick={onGeneratePlan}
               disabled={isGenerating || !recipeId}
-              className="h-8 px-6 bg-[#0575E6] bg-gradient-to-r from-[#0575E6] to-[#021B79] hover:bg-[#0575E6] hover:text-white text-xs font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="h-8 px-6 bg-accent-color text-primary-color hover:bg-[#0575E6] hover:text-white text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
                 <>

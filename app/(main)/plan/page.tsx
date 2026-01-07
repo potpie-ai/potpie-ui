@@ -135,9 +135,9 @@ export default function PlanPage() {
   const isFailed = planStatus?.plan_gen_status === "FAILED";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+        <div className="bg-background rounded-lg shadow-sm border border-gray-200 p-8">
           <h1 className="text-2xl font-semibold text-gray-900 mb-4">
             Implementation Plan
           </h1>

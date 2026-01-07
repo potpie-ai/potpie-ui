@@ -138,7 +138,7 @@ export default function RepositoriesList({
 
   if (isLoading) {
     return (
-      <Card className="bg-white border border-gray-200">
+      <Card className="bg-background border border-gray-200">
         <CardContent className="p-4">
           <div className="space-y-2">
             <div className="h-4 bg-gray-200 rounded animate-pulse" />
@@ -150,7 +150,7 @@ export default function RepositoriesList({
   }
 
   return (
-    <Card className="bg-white border border-gray-200">
+    <Card className="bg-background border border-gray-200">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900">

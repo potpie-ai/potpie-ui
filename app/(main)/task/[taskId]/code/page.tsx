@@ -526,7 +526,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
   return (
     <div
       className={`
-      bg-white border rounded-xl transition-all duration-300 overflow-hidden
+      bg-background border rounded-xl transition-all duration-300 overflow-hidden
       ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-md" : "border-zinc-200 hover:border-zinc-300"}
       ${uiStatus === "running" && !isExpanded ? "shadow-lg shadow-blue-50 border-blue-200" : ""}
     `}
@@ -582,7 +582,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
       {isExpanded && (
         <div className="border-t border-zinc-100 bg-zinc-50/50 animate-in slide-in-from-top-2 duration-200">
           {/* Tabs */}
-          <div className="flex items-center gap-1 px-4 border-b border-zinc-100 bg-white">
+          <div className="flex items-center gap-1 px-4 border-b border-zinc-100 bg-background">
             {hasChanges && (
               <button
                 onClick={(e) => {
@@ -644,7 +644,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                   {task.changes.map((change, idx) => (
                     <div
                       key={idx}
-                      className="bg-white rounded-lg border border-zinc-200 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
+                      className="bg-background rounded-lg border border-zinc-200 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
                       style={{ animationDelay: `${idx * 100}ms` }}
                     >
                       <div className="px-3 py-2 bg-zinc-50/80 border-b border-zinc-100 flex items-center justify-between">
@@ -662,7 +662,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                         </div>
                       </div>
                       {change.content ? (
-                        <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed bg-white">
+                        <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed bg-background">
                           {change.content.split("\n").map((line, i) => (
                             <div
                               key={i}
@@ -676,7 +676,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                           ))}
                         </pre>
                       ) : (
-                        <div className="p-4 text-center text-[10px] font-mono text-zinc-400 italic bg-white flex flex-col items-center gap-2">
+                        <div className="p-4 text-center text-[10px] font-mono text-zinc-400 italic bg-background flex flex-col items-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin text-black" />
                           <span className="text-black">Generating diff...</span>
                         </div>
@@ -696,7 +696,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                       Test Suite Definition
                     </span>
                   </div>
-                  <div className="bg-white rounded-lg border border-zinc-200 overflow-hidden relative group">
+                  <div className="bg-background rounded-lg border border-zinc-200 overflow-hidden relative group">
                     <div className="p-4 overflow-x-auto">
                       <SimpleCodeBlock code={task.testCode} />
                     </div>
@@ -711,7 +711,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                       Live Execution Results
                     </span>
                   </div>
-                  <div className="bg-white border border-zinc-200 rounded-lg divide-y divide-zinc-50">
+                  <div className="bg-background border border-zinc-200 rounded-lg divide-y divide-zinc-50">
                     {task.testResults &&
                       task.testResults.map((test, i) => (
                         <div
@@ -1235,7 +1235,7 @@ export default function VerticalTaskExecution() {
   }
 
   return (
-    <div className="h-screen bg-white text-zinc-900 font-sans flex flex-col md:flex-row overflow-hidden relative">
+    <div className="h-screen bg-background text-zinc-900 font-sans flex flex-col md:flex-row overflow-hidden relative">
       {/* --- SIDEBAR: Timeline --- */}
       <aside className="w-80 bg-zinc-50/50 border-r border-zinc-200 flex flex-col z-20 shrink-0">
         <div className="h-16 flex items-center px-6 border-b border-zinc-100 bg-zinc-50/80 backdrop-blur-sm sticky top-0">
@@ -1267,7 +1267,7 @@ export default function VerticalTaskExecution() {
                   {/* Timeline Node */}
                   <div
                     className={`
-                    w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 bg-white relative z-10
+                    w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 bg-background relative z-10
                     ${
                       isCompleted
                         ? "border-emerald-500 text-emerald-500"
@@ -1305,7 +1305,7 @@ export default function VerticalTaskExecution() {
       </aside>
 
       {/* --- MAIN CONTENT: Right Part --- */}
-      <main className="flex-1 flex flex-col h-full min-w-0 bg-white">
+      <main className="flex-1 flex flex-col h-full min-w-0 bg-background">
         {/* Header */}
         <header className="h-16 flex items-center justify-between px-8 border-b border-zinc-100">
           <div>
@@ -1330,7 +1330,7 @@ export default function VerticalTaskExecution() {
                   ${
                     showGlobalLogs
                       ? "bg-zinc-100 border-zinc-200 text-zinc-700"
-                      : "bg-white border-zinc-200 text-zinc-500 hover:text-zinc-700"
+                      : "bg-background border-zinc-200 text-zinc-500 hover:text-zinc-700"
                   }
                 `}
             >
@@ -1353,7 +1353,7 @@ export default function VerticalTaskExecution() {
                      isGraphLoading
                        ? "bg-zinc-100 text-zinc-400 cursor-not-allowed"
                        : isRunning
-                         ? "bg-white border border-zinc-200 text-zinc-900 hover:bg-zinc-50"
+                         ? "bg-background border border-zinc-200 text-zinc-900 hover:bg-zinc-50"
                          : "bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm"
                    }
                  `}
@@ -1417,7 +1417,7 @@ export default function VerticalTaskExecution() {
                         {/* Level Icon */}
                         <div
                           className={`
-                              w-10 h-10 rounded-xl flex items-center justify-center border-2 shrink-0 z-10 bg-white transition-colors duration-300
+                              w-10 h-10 rounded-xl flex items-center justify-center border-2 shrink-0 z-10 bg-background transition-colors duration-300
                               ${isActive ? "border-black text-black shadow-md" : isDone ? "border-emerald-500 text-emerald-600" : "border-zinc-200 text-zinc-300"}
                             `}
                         >
@@ -1471,7 +1471,7 @@ export default function VerticalTaskExecution() {
                 {/* Completion Banner */}
                 {isSliceComplete && activeSliceMeta && (
                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pl-16">
-                    <div className="bg-white rounded-xl border border-emerald-100 shadow-sm overflow-hidden">
+                    <div className="bg-background rounded-xl border border-emerald-100 shadow-sm overflow-hidden">
                       <div className="bg-emerald-50/50 px-6 py-4 border-b border-emerald-100 flex items-center gap-3">
                         <div className="bg-emerald-100 p-2 rounded-full">
                           <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -1513,7 +1513,7 @@ export default function VerticalTaskExecution() {
 
           {/* Terminal */}
           {showGlobalLogs && (
-            <div className="w-80 border-l border-zinc-200 bg-white flex flex-col shrink-0 animate-in slide-in-from-right duration-300">
+            <div className="w-80 border-l border-zinc-200 bg-background flex flex-col shrink-0 animate-in slide-in-from-right duration-300">
               <div className="h-10 border-b border-zinc-100 flex items-center justify-between px-4 bg-zinc-50/50">
                 <div className="flex items-center gap-2">
                   <TerminalSquare className="w-3.5 h-3.5 text-zinc-400" />
@@ -1528,7 +1528,7 @@ export default function VerticalTaskExecution() {
 
               <div
                 ref={terminalRef}
-                className="flex-1 p-4 overflow-y-auto font-mono text-[10px] space-y-2 bg-white"
+                className="flex-1 p-4 overflow-y-auto font-mono text-[10px] space-y-2 bg-background"
               >
                 {globalLogs.length === 0 && (
                   <div className="text-zinc-400 italic text-center mt-10">

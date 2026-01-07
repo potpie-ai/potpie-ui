@@ -452,7 +452,7 @@ const Step1: React.FC<Step1Props> = ({
                     {searchValue.startsWith("https://github.com/") && !process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
                       <Button
                         onClick={() => {handleSetPublicRepoDialog(true);setInputValue(searchValue)}}
-                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-background hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
                       >
                           <Plus className="size-4" /> <p> Public Repository</p>
                       </Button>
@@ -461,7 +461,7 @@ const Step1: React.FC<Step1Props> = ({
                         process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
                       <Button
                         onClick={() => {setIsLocalRepoDailog(true);setLocalRepoPath(searchValue)}}
-                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-background hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
                       >
                           <Plus className="size-4" /> <p> Local Repository</p>
                       </Button>

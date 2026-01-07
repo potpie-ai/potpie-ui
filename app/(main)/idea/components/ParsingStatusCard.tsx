@@ -33,7 +33,7 @@ export default function ParsingStatusCard({
   const isComplete = completedCount >= ALL_STEPS.length;
 
   return (
-    <Card className="bg-white border border-zinc-200 rounded-xl">
+    <Card className="bg-background border border-zinc-200 rounded-xl">
       <CardContent className="p-4">
         <div className="space-y-3">
           <div className="flex items-center justify-between">

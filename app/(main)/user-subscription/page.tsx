@@ -185,7 +185,7 @@ const PricingPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Current Subscription Status */}
         <div className="mb-12 p-6 border rounded-lg">
@@ -205,7 +205,7 @@ const PricingPage = () => {
             {!subscription.isCancelled && subscription.plan !== 'Individual - Free' && (
               <button
                 onClick={handleCancelSubscription}
-                className="bg-white text-red-600 border border-red-600 px-4 py-2 rounded hover:bg-red-50"
+                className="bg-background text-red-600 border border-red-600 px-4 py-2 rounded hover:bg-red-50"
               >
                 Cancel Subscription
               </button>
@@ -247,7 +247,7 @@ const PricingPage = () => {
                 className={`${
                   subscription.plan === plan.name 
                     ? 'bg-primary hover:bg-red-700' 
-                    : 'bg-white text-black border border-gray-300 hover:bg-gray-50'
+                    : 'bg-background text-black border border-gray-300 hover:bg-gray-50'
                 } rounded-md px-4 py-2 w-full block text-center transition-colors`}
               >
                 {getButtonText(plan.name)}

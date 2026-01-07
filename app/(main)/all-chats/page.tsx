@@ -95,12 +95,12 @@ const AllChats = () => {
         <Table className="mt-10">
           <TableHeader className="font-semibold text-red">
             <TableRow className="border-b border-border font-semibold text-red">
-              <TableHead className="w-[200px] text-primary">Title</TableHead>
-              <TableHead className="w-[200px] text-primary">Agent</TableHead>
-              <TableHead className="w-[200px] text-primary">Repository</TableHead>
-              <TableHead className="w-[200px] text-primary">Branch</TableHead>
-              <TableHead className="w-[200px] text-primary">Created At</TableHead>
-              <TableHead className="w-[200px] text-primary text-right">Actions</TableHead>
+              <TableHead className="w-[200px]" style={{ color: 'var(--primary-color)' }}>Title</TableHead>
+              <TableHead className="w-[200px]" style={{ color: 'var(--primary-color)' }}>Agent</TableHead>
+              <TableHead className="w-[200px]" style={{ color: 'var(--primary-color)' }}>Repository</TableHead>
+              <TableHead className="w-[200px]" style={{ color: 'var(--primary-color)' }}>Branch</TableHead>
+              <TableHead className="w-[200px]" style={{ color: 'var(--primary-color)' }}>Created At</TableHead>
+              <TableHead className="w-[200px] text-right" style={{ color: 'var(--primary-color)' }}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -128,7 +128,7 @@ const AllChats = () => {
                                 setInputValue(chat.title);
                               }}
                             >
-                              <LucideEdit className="h-4 w-4" />
+                              <LucideEdit className="h-4 w-4" style={{ color: 'var(--accent-color)' }} />
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-[487px]" showX={false}>
@@ -166,7 +166,7 @@ const AllChats = () => {
         <Skeleton className="h-6 mt-4 w-full" />
       ) : (
         <div className="flex flex-col items-start h-full w-full">
-          <p className="text-primary text-center py-5">No chats found.</p>
+          <p className="text-center py-5" style={{ color: 'var(--primary-color)' }}>No chats found.</p>
         </div>
       )}
     </div>

@@ -522,7 +522,7 @@ const ExecutionNode: FC<{ data: ExecutionNodeData; selected?: boolean }> = ({
         className={`min-w-[280px] max-w-[320px] h-[300px] border-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden ${
           selected
             ? "border-blue-600 border-4 bg-blue-100 shadow-2xl scale-110 shadow-blue-300 ring-8 ring-blue-500 ring-offset-4"
-            : "bg-white"
+            : "bg-background"
         }`}
         style={
           selected
@@ -670,7 +670,7 @@ const ExecutionNode: FC<{ data: ExecutionNodeData; selected?: boolean }> = ({
                       </TooltipTrigger>
                       <TooltipContent
                         side="top"
-                        className="max-w-md max-h-64 p-3 bg-white border border-gray-200 shadow-lg"
+                        className="max-w-md max-h-64 p-3 bg-background border border-gray-200 shadow-lg"
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -836,9 +836,9 @@ const NodeDetailsPanel: FC<{
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[600px] bg-white border-l border-gray-200 shadow-xl z-50 overflow-y-auto">
+    <div className="fixed inset-y-0 right-0 w-[600px] bg-background border-l border-gray-200 shadow-xl z-50 overflow-y-auto">
       {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 p-8">
+      <div className="sticky top-0 bg-background border-b border-gray-200 p-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {getNodeTypeIcon(data.nodeId)}
@@ -1148,7 +1148,7 @@ const ReactFlowWrapper: FC<ReactFlowWrapperProps> = ({
 };
 
 const LoadingSpinner: FC = () => (
-  <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+  <div className="absolute inset-0 bg-background bg-opacity-75 flex items-center justify-center z-10">
     <div className="text-center">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
       <p className="text-gray-600">Loading execution tree...</p>
@@ -1370,7 +1370,7 @@ export const ExecutionTreeVisualizer: FC<ExecutionTreeVisualizerProps> = ({
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header - only show if not embedded */}
       {!embedded && (
-        <div className="flex items-center justify-between p-4 border-b bg-white">
+        <div className="flex items-center justify-between p-4 border-b bg-background">
           <div className="flex items-center gap-4">
             {onBack && (
               <Button variant="outline" size="sm" onClick={onBack}>

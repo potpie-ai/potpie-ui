@@ -12,11 +12,33 @@ import QuestionSection from "./components/QuestionSection";
 import AdditionalContextSection from "./components/AdditionalContextSection";
 import QuestionProgress from "./components/QuestionProgress";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Github, FileText, Loader2 } from "lucide-react";
-import { QAAnswer, SubmitSpecGenerationResponse, RecipeQuestionsResponse } from "@/lib/types/spec";
-import type { MCQQuestion, QuestionAnswer, RepoPageState } from "@/types/question";
+import { Github, FileText, Loader2, GitBranch } from "lucide-react";
+import {
+  QAAnswer,
+  SubmitSpecGenerationResponse,
+  RecipeQuestionsResponse,
+} from "@/lib/types/spec";
+import type {
+  MCQQuestion,
+  QuestionAnswer,
+  RepoPageState,
+} from "@/types/question";
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { ParsingStatusEnum } from "@/lib/Constants";
+import { Badge as UIBadge } from "@/components/ui/badge";
+
+const Badge = ({
+  children,
+  icon: Icon,
+}: {
+  children: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+}) => (
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-zinc-500">
+    {Icon && <Icon className="w-3.5 h-3.5" />}
+    {children}
+  </div>
+);
 
 export default function RepoPage() {
   const router = useRouter();
@@ -26,7 +48,7 @@ export default function RepoPage() {
   const repoNameFromUrl = searchParams.get("repoName");
   const featureIdeaFromUrl = searchParams.get("featureIdea");
   const questionsEndRef = useRef<HTMLDivElement>(null);
-  
+
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [questionsPolling, setQuestionsPolling] = useState(false);
 
@@ -57,16 +79,22 @@ export default function RepoPage() {
         let questionsData: RecipeQuestionsResponse;
         try {
           questionsData = await QuestionService.getRecipeQuestions(recipeId);
-          
+
           // If questions are available, use them immediately
           if (questionsData.questions && questionsData.questions.length > 0) {
-            console.log("[Repo Page] Questions already available, status:", questionsData.recipe_status);
+            console.log(
+              "[Repo Page] Questions already available, status:",
+              questionsData.recipe_status
+            );
             // Process questions immediately
             processQuestions(questionsData);
             return;
           }
         } catch (error) {
-          console.log("[Repo Page] Direct fetch failed, will poll instead:", error);
+          console.log(
+            "[Repo Page] Direct fetch failed, will poll instead:",
+            error
+          );
         }
 
         // If direct fetch didn't return questions, poll for them
@@ -87,14 +115,16 @@ export default function RepoPage() {
       // This handles cases where status is SPEC_IN_PROGRESS but questions are still available
       if (questionsData.questions && questionsData.questions.length > 0) {
         // Convert RecipeQuestion[] to MCQQuestion[] format
-        const mcqQuestions: MCQQuestion[] = questionsData.questions.map((q) => ({
-          id: q.id,
-          section: "General", // Default section, could be enhanced later
-          question: q.question,
-          options: q.options,
-          needsInput: q.allow_custom_answer,
-          assumed: q.preferred_option,
-        }));
+        const mcqQuestions: MCQQuestion[] = questionsData.questions.map(
+          (q) => ({
+            id: q.id,
+            section: "General", // Default section, could be enhanced later
+            question: q.question,
+            options: q.options,
+            needsInput: q.allow_custom_answer,
+            assumed: q.preferred_option,
+          })
+        );
 
         // Group by section and set state
         const sectionsMap = new Map<string, MCQQuestion[]>();
@@ -124,7 +154,10 @@ export default function RepoPage() {
         });
       } else {
         // No questions available
-        console.warn("[Repo Page] No questions available, status:", questionsData.recipe_status);
+        console.warn(
+          "[Repo Page] No questions available, status:",
+          questionsData.recipe_status
+        );
         setState((prev) => ({ ...prev, pageState: "questions" }));
       }
     };
@@ -176,9 +209,18 @@ export default function RepoPage() {
   });
 
   // Extract project info - prioritize URL params, then project data
-  const repoName =
+  let repoName =
     repoNameFromUrl || projectData?.repo_name || "Unknown Repository";
-  const branchName = projectData?.branch_name || "";
+  let branchName = projectData?.branch_name || "";
+
+  // Split repoName if it contains "/" (format: reponame/branchname)
+  if (repoName.includes("/") && !branchName) {
+    const parts = repoName.split("/");
+    if (parts.length >= 2) {
+      repoName = parts[0];
+      branchName = parts.slice(1).join("/"); // Handle cases where branch name might contain "/"
+    }
+  }
 
   // Parse feature idea from properties if not in URL
   let featureIdea: string | null = featureIdeaFromUrl || null;
@@ -207,15 +249,24 @@ export default function RepoPage() {
   useEffect(() => {
     if (recipeIdFromUrl) {
       // Validate it's a UUID format
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (uuidRegex.test(recipeIdFromUrl)) {
-        console.log("[Repo Page] Recovered recipeId from URL:", recipeIdFromUrl);
+        console.log(
+          "[Repo Page] Recovered recipeId from URL:",
+          recipeIdFromUrl
+        );
         setRecipeId(recipeIdFromUrl);
       } else {
-        console.warn("[Repo Page] Invalid recipeId format in URL:", recipeIdFromUrl);
+        console.warn(
+          "[Repo Page] Invalid recipeId format in URL:",
+          recipeIdFromUrl
+        );
       }
     } else {
-      console.warn("[Repo Page] No recipeId in URL - recipe should have been created in idea page");
+      console.warn(
+        "[Repo Page] No recipeId in URL - recipe should have been created in idea page"
+      );
     }
   }, [recipeIdFromUrl]);
 
@@ -313,37 +364,48 @@ export default function RepoPage() {
     },
   });
 
-
   // Generate plan mutation
   const generatePlanMutation = useMutation({
     mutationFn: async () => {
       // Use recipeId from URL if available (new flow), otherwise fall back to projectId (old flow)
       const activeRecipeId = recipeId || recipeIdFromUrl;
-      
+
       if (!activeRecipeId) {
-        console.error("Recipe ID is not set. Current recipeId:", recipeId, "recipeIdFromUrl:", recipeIdFromUrl);
+        console.error(
+          "Recipe ID is not set. Current recipeId:",
+          recipeId,
+          "recipeIdFromUrl:",
+          recipeIdFromUrl
+        );
         throw new Error("Recipe not initialized. Please refresh the page.");
       }
 
       // Validate recipeId is a UUID (basic check - should be 36 chars with dashes)
       // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(activeRecipeId)) {
-        console.error("Invalid recipeId format:", activeRecipeId, "Expected UUID format");
-        throw new Error(`Invalid recipe ID format. Please refresh the page and try again.`);
+        console.error(
+          "Invalid recipeId format:",
+          activeRecipeId,
+          "Expected UUID format"
+        );
+        throw new Error(
+          `Invalid recipe ID format. Please refresh the page and try again.`
+        );
       }
 
       console.log("Submitting QA answers with recipeId:", activeRecipeId);
 
       // Collect all answers in the new format
       const qaAnswers: Array<{ question_id: string; answer: string }> = [];
-      
+
       state.answers.forEach((answer, qId) => {
         if (state.skippedQuestions.has(qId)) return;
-        
-        const question = state.questions.find(q => q.id === qId);
+
+        const question = state.questions.find((q) => q.id === qId);
         if (!question) return;
-        
+
         if (answer.textAnswer || answer.mcqAnswer) {
           qaAnswers.push({
             question_id: qId,
@@ -351,7 +413,7 @@ export default function RepoPage() {
           });
         }
       });
-      
+
       // Add additional context if provided (as a special question)
       if (state.additionalContext.trim()) {
         qaAnswers.push({
@@ -489,61 +551,43 @@ export default function RepoPage() {
   }
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-screen bg-background">
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-zinc-100">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3">
-                <h1 className="text-2xl font-bold text-zinc-900">
-                  Implementation Plan
-                </h1>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <Github className="w-3.5 h-3.5 text-zinc-400" />
-                  <span className="text-xs font-medium text-zinc-500">{repoName}</span>
-                  {branchName && (
-                    <>
-                      <span className="text-zinc-300">•</span>
-                      <span className="text-xs text-zinc-400">{branchName}</span>
-                    </>
-                  )}
-                </div>
-                {featureIdea && (
-                  <div className="flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-zinc-400" />
-                    <span className="text-xs text-zinc-500">{featureIdea}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <QuestionProgress
-              total={activeQuestionCount}
-              answered={answeredCount}
-              skipped={skippedCount}
-            />
-          </div>
-        </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-8">
+        <div className="mt-6 flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-3xl mx-auto space-y-6">
+            <div className="flex justify-between items-start mb-10">
+              <h1 className="text-2xl font-bold text-primary">
+                Clarifying Questions
+              </h1>
+              <div className="flex flex-col items-end gap-4">
+                <div className="flex items-center gap-3">
+                  <Badge icon={Github}>{repoName}</Badge>
+                  {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
+                </div>
+                {/* <QuestionProgress
+                  total={activeQuestionCount}
+                  answered={answeredCount}
+                  skipped={skippedCount}
+                /> */}
+              </div>
+            </div>
             {state.pageState === "questions" && <AIAnalysisBanner />}
-
             {/* Loading State - Only show if we don't have questions yet */}
-            {(questionsLoading || (questionsPolling && state.questions.length === 0)) && (
+            {(questionsLoading ||
+              (questionsPolling && state.questions.length === 0)) && (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
                   <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto mb-3" />
                   <p className="text-xs text-zinc-500">
-                    {questionsPolling ? "Loading questions..." : "Generating questions..."}
+                    {questionsPolling
+                      ? "Loading questions..."
+                      : "Generating questions..."}
                   </p>
                 </div>
               </div>
             )}
-
             {/* Question Sections */}
             {state.pageState === "questions" &&
               (() => {
@@ -608,23 +652,23 @@ export default function RepoPage() {
                   );
                 });
               })()}
-
+            {state.pageState === "questions" && (
+              <AdditionalContextSection
+                context={state.additionalContext}
+                onContextChange={(context) =>
+                  setState((prev) => ({ ...prev, additionalContext: context }))
+                }
+                onGeneratePlan={handleGeneratePlan}
+                isGenerating={state.isGenerating}
+                recipeId={recipeId}
+              />
+            )}
+             
             <div ref={questionsEndRef} />
           </div>
         </div>
 
         {/* Additional Context Section */}
-        {state.pageState === "questions" && (
-          <AdditionalContextSection
-            context={state.additionalContext}
-            onContextChange={(context) =>
-              setState((prev) => ({ ...prev, additionalContext: context }))
-            }
-            onGeneratePlan={handleGeneratePlan}
-            isGenerating={state.isGenerating}
-            recipeId={recipeId}
-          />
-        )}
       </div>
     </div>
   );

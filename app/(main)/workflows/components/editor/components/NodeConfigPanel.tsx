@@ -120,7 +120,7 @@ export const NodeConfigPanel: FC<NodeConfigPanelProps> = ({
         <div className="p-6 space-y-6">
           {/* Node Info Row */}
           <div
-            className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm"
+            className="bg-background rounded-lg border border-gray-200 p-4 shadow-sm"
             style={{ maxWidth: "1000px" }}
           >
             <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -173,7 +173,7 @@ export const NodeConfigPanel: FC<NodeConfigPanelProps> = ({
           {/* Dynamic Configuration Fields */}
           {ConfigComponent ? (
             <div
-              className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm"
+              className="bg-background rounded-lg border border-gray-200 p-4 shadow-sm"
               style={{ maxWidth: "1000px" }}
             >
               <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -190,7 +190,7 @@ export const NodeConfigPanel: FC<NodeConfigPanelProps> = ({
             </div>
           ) : (
             <div
-              className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm"
+              className="bg-background rounded-lg border border-gray-200 p-4 shadow-sm"
               style={{ maxWidth: "1000px" }}
             >
               <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">

@@ -667,7 +667,7 @@ const FileTree: React.FC<FileTreeProps> = ({
     return (
         <div className="flex flex-col h-full">
             {/* Search Box with Pattern Toggle */}
-            <div className="p-2 border-b sticky top-0 bg-white z-10 space-y-2">
+            <div className="p-2 border-b sticky top-0 bg-background z-10 space-y-2">
                 <div className="flex gap-2">
                     <div className="relative flex-1">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />

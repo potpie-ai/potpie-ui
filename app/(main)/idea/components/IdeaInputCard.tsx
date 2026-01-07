@@ -80,7 +80,7 @@ export default function IdeaInputCard({
   };
 
   return (
-    <div className="relative bg-white border border-zinc-300 rounded-lg shadow-lg overflow-hidden">
+    <div className="relative bg-background border border-zinc-300 rounded-lg shadow-lg overflow-hidden">
       {/* Terminal Header Bar */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 border-b border-zinc-200">
         <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export default function IdeaInputCard({
       </div>
 
       {/* Terminal Content */}
-      <div className="relative z-10 flex flex-col h-full bg-white">
+      <div className="relative z-10 flex flex-col h-full bg-background">
         {/* Terminal Prompt and Textarea */}
         <div className="flex items-start gap-2 px-4 pt-4 pb-2">
           <span className="text-xl font-mono text-zinc-600 select-none text-[#022D2C]">$</span>
@@ -165,7 +165,7 @@ export default function IdeaInputCard({
                   />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[380px] max-h-[400px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
+              <DropdownMenuContent className="w-[380px] max-h-[400px] overflow-y-auto p-2 bg-background border border-zinc-200 rounded-xl shadow-lg" align="start">
                 {reposLoading ? (
                   <div className="p-8 text-center">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3 text-zinc-400" />
@@ -293,7 +293,7 @@ export default function IdeaInputCard({
                   />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[280px] max-h-[300px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
+              <DropdownMenuContent className="w-[280px] max-h-[300px] overflow-y-auto p-2 bg-background border border-zinc-200 rounded-xl shadow-lg" align="start">
                 {!selectedRepo ? (
                   <div className="p-6 text-center">
                     <p className="text-xs text-zinc-500">Please select a repository first</p>

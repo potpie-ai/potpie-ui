@@ -50,14 +50,14 @@ export default function QuestionCard({
   if (isSkipped) {
     cardClasses += "bg-zinc-50/50 border-zinc-200 opacity-50";
   } else if (isUserEdited) {
-    cardClasses += "bg-white border-zinc-900 ring-1 ring-zinc-900";
+    cardClasses += "bg-background border-[#D3E5E5] ring-1 ring-primary";
   } else if (isAIAssumed) {
-    cardClasses += "bg-white border-zinc-200";
+    cardClasses += "bg-background border-[#D3E5E5]";
   } else {
-    cardClasses += "bg-white border-zinc-200";
+    cardClasses += "bg-background border-[#D3E5E5]";
   }
   if (isHovered && !isSkipped) {
-    cardClasses += " border-zinc-300";
+    cardClasses += " border-[#D3E5E5]";
   }
 
   const handleEdit = () => {
@@ -86,7 +86,7 @@ export default function QuestionCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 space-y-2">
             <div className="flex items-start gap-2 flex-wrap">
-              <p className={`text-sm font-medium leading-relaxed flex-1 ${isSkipped ? "text-zinc-400 line-through" : "text-zinc-900"}`}>
+              <p className={`text-sm font-medium leading-relaxed flex-1 ${isSkipped ? "text-zinc-400 line-through" : "text-primary"}`}>
                 {question.question}
               </p>
               <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -95,16 +95,7 @@ export default function QuestionCard({
                     Skipped
                   </span>
                 )}
-                {!isSkipped && isAIAssumed && (
-                  <span className="px-1.5 py-0.5 bg-zinc-900 text-white rounded text-[10px] font-bold uppercase tracking-wider">
-                    AI
-                  </span>
-                )}
-                {!isSkipped && isUserEdited && (
-                  <span className="px-1.5 py-0.5 bg-emerald-500 text-white rounded text-[10px] font-bold uppercase tracking-wider">
-                    Edited
-                  </span>
-                )}
+
                 {!isSkipped && question.needsInput && (
                   <span className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700">
                     Needs Input
@@ -122,23 +113,9 @@ export default function QuestionCard({
           </div>
           <div className="flex items-center gap-1">
             {/* Skip/Unskip button - always visible on hover */}
-            {isHovered && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onToggleSkip}
-                className="h-8 w-8 p-0"
-                title={isSkipped ? "Include this question" : "Skip this question"}
-              >
-                {isSkipped ? (
-                  <Eye className="h-4 w-4 text-green-600" />
-                ) : (
-                  <EyeOff className="h-4 w-4 text-gray-500" />
-                )}
-              </Button>
-            )}
+
             {/* Edit button - only when not skipped */}
-            {isHovered && !answer?.isEditing && !isSkipped && (
+            {!answer?.isEditing && !isSkipped && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -211,8 +188,8 @@ export default function QuestionCard({
                       }}
                       className={`text-xs p-2.5 rounded-lg transition-all ${
                         isSelected
-                          ? "bg-zinc-900 text-white font-semibold"
-                          : "text-zinc-600 bg-white border border-zinc-200 hover:border-zinc-300"
+                          ? "bg-primary text-primary-foreground font-semibold"
+                          : "text-zinc-600 bg-background border border-zinc-200 hover:border-zinc-300"
                       } ${
                         !isSkipped && !answer?.isEditing ? "cursor-pointer" : "cursor-default"
                       }`}

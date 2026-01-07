@@ -119,7 +119,7 @@ const PlanTabs = ({ plan }) => {
         {plan[activeTab].map((item) => (
           <div
             key={item.id}
-            className={`bg-white border transition-all rounded-lg overflow-hidden ${
+            className={`bg-background border transition-all rounded-lg overflow-hidden ${
               expandedId === item.id
                 ? "border-zinc-300 shadow-sm"
                 : "border-zinc-200 hover:border-zinc-300"
@@ -689,7 +689,7 @@ const SpecPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white text-zinc-900 font-sans selection:bg-zinc-100 antialiased">
+    <div className="min-h-screen bg-background text-zinc-900 font-sans selection:bg-zinc-100 antialiased">
       <main className="max-w-3xl mx-auto px-6 py-12">
         {/* Error Display */}
         {error && (
@@ -844,7 +844,7 @@ const SpecPage = () => {
                       >
                         {/* Icon Node */}
                         <div
-                          className={`relative z-10 w-8 h-8 flex items-center justify-center rounded-lg border transition-all duration-500 bg-white ${
+                          className={`relative z-10 w-8 h-8 flex items-center justify-center rounded-lg border transition-all duration-500 bg-background ${
                             isDone
                               ? "border-zinc-900 bg-zinc-900 text-white shadow-sm"
                               : isActive

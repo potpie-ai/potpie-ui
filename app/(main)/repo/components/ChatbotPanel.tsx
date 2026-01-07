@@ -123,28 +123,28 @@ export default function ChatbotPanel({
 
   if (minimized) {
     return (
-      <div className="w-16 bg-white border-l border-zinc-200 flex flex-col items-center py-4">
+      <div className="w-16 bg-background border-l border-[var(--primary-color)]/20 flex flex-col items-center py-4">
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggleMinimize}
           className="h-10 w-10"
         >
-          <Maximize2 className="h-5 w-5" />
+          <Maximize2 className="h-5 w-5 text-[var(--primary-color)]" />
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="w-[400px] bg-white border-l border-zinc-200 flex flex-col">
-      <CardHeader className="border-b border-zinc-200 pb-3">
+    <div className="w-[400px] bg-background border-l border-[var(--primary-color)]/20 flex flex-col">
+      <CardHeader className="border-b border-[var(--primary-color)]/20 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Bot className="w-5 h-5 text-zinc-900" />
+            <Bot className="w-5 h-5 text-[var(--primary-color)]" />
             <div>
-              <h3 className="text-xs font-bold">AI Assistant</h3>
-              <p className="text-[10px] text-zinc-500">Ask me anything</p>
+              <h3 className="text-xs font-bold text-[var(--primary-color)]">AI Assistant</h3>
+              <p className="text-[10px] text-[var(--primary-color)]/70">Ask me anything</p>
             </div>
           </div>
           <Button
@@ -153,7 +153,7 @@ export default function ChatbotPanel({
             onClick={onToggleMinimize}
             className="h-8 w-8"
           >
-            <Minimize2 className="h-4 w-4" />
+            <Minimize2 className="h-4 w-4 text-[var(--primary-color)]" />
           </Button>
         </div>
       </CardHeader>
@@ -170,8 +170,8 @@ export default function ChatbotPanel({
               <div
                 className={`max-w-[80%] rounded-lg p-2 text-[10px] ${
                   message.sender === "user"
-                    ? "bg-zinc-900 text-white"
-                    : "bg-zinc-100 text-zinc-900"
+                    ? "bg-[var(--primary-color)] text-white"
+                    : "bg-[var(--accent-color)]/20 text-[var(--primary-color)]"
                 }`}
               >
                 {message.text}
@@ -180,15 +180,15 @@ export default function ChatbotPanel({
           ))}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-zinc-100 rounded-lg p-2">
-                <Loader2 className="h-4 w-4 animate-spin text-zinc-600" />
+              <div className="bg-[var(--accent-color)]/20 rounded-lg p-2">
+                <Loader2 className="h-4 w-4 animate-spin text-[var(--primary-color)]" />
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="border-t border-zinc-200 p-4">
+        <div className="border-t border-[var(--primary-color)]/20 p-4">
           <div className="space-y-2">
             <Textarea
               value={input}
@@ -200,15 +200,15 @@ export default function ChatbotPanel({
                 }
               }}
               placeholder="Ask a question about the repository or plan..."
-              className="min-h-[60px] text-xs resize-none border-zinc-200"
+              className="min-h-[60px] text-xs resize-none border-[var(--primary-color)]/20"
             />
-            <div className="flex items-center justify-between text-[10px] text-zinc-500">
+            <div className="flex items-center justify-between text-[10px] text-[var(--primary-color)]/70">
               <span>Press Enter to send, Shift+Enter for new line</span>
               <Button
                 size="sm"
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
-                className="h-8"
+                className="h-8 bg-[var(--primary-color)] hover:bg-[var(--primary-color)]/90 text-white"
               >
                 <Send className="h-3 w-3" />
               </Button>

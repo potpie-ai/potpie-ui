@@ -5,11 +5,13 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
 import posthog from "posthog-js";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/Layouts/Sidebar";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
+import { PanelLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function RootLayout({
   children,
@@ -44,6 +46,7 @@ export default function RootLayout({
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
+        <SidebarOpenButton />
         <main
           className={cn(
             "flex flex-1 flex-col gap-4 lg:gap-6",
@@ -54,5 +57,28 @@ export default function RootLayout({
         </main>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+function SidebarOpenButton() {
+  const { state, toggleSidebar } = useSidebar();
+
+  // Only show when sidebar is collapsed
+  if (state === "expanded") {
+    return null;
+  }
+
+  return (
+    <div className="absolute top-4 left-4 z-[100]">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 bg-background border border-zinc-200 shadow-md hover:bg-zinc-50 hover:shadow-lg transition-shadow"
+        onClick={toggleSidebar}
+      >
+        <PanelLeft className="h-5 w-5 text-foreground" />
+        <span className="sr-only">Open Sidebar</span>
+      </Button>
+    </div>
   );
 }

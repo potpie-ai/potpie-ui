@@ -6,11 +6,11 @@ export default function AIAnalysisBanner() {
   return (
     <div className="bg-zinc-50/50 border border-zinc-100 rounded-xl p-4">
       <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 w-6 h-6 bg-zinc-900 rounded flex items-center justify-center mt-0.5">
-          <Sparkles className="w-3.5 h-3.5 text-white" />
+        <div className="flex-shrink-0 w-6 h-6 bg-primary rounded flex items-center justify-center mt-0.5">
+          <Sparkles className="w-3.5 h-3.5 text-primary-foreground" />
         </div>
         <div className="flex-1">
-          <h3 className="text-xs font-bold text-zinc-900 mb-1 uppercase tracking-wide">
+          <h3 className="text-xs font-bold text-primary mb-1 uppercase tracking-wide">
             AI Agent Analysis
           </h3>
           <p className="text-xs text-zinc-500 leading-relaxed">

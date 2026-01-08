@@ -1096,22 +1096,6 @@ const PlanPage = () => {
                             </div>
                           )}
 
-                        {/* 7. Start Implementation Button */}
-                        <div className="px-5 py-4 bg-zinc-50/50">
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(
-                                `/task/${recipeId}/code?planId=${planId}&itemNumber=${item.item_number}`
-                              );
-                            }}
-                            className="w-full bg-accent-color hover:bg-[#006B66] hover:text-accent-color text-primary-color px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Rocket className="w-4 h-4" />
-                            Start Implementation for Slice{" "}
-                            {String(item.item_number).padStart(2, "0")}
-                          </Button>
-                        </div>
                       </div>
                     )}
                   </div>

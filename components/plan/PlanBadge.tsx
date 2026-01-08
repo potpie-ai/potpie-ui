@@ -16,7 +16,7 @@ export const PlanBadge: React.FC<PlanBadgeProps> = ({
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-zinc-500",
+        "flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-primary-color",
         className
       )}
     >

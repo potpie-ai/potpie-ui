@@ -43,7 +43,7 @@ export default function AdditionalContextSection({
             <Button
               onClick={onGeneratePlan}
               disabled={isGenerating || !recipeId}
-              className="h-8 px-6 bg-accent-color text-primary-color hover:bg-[#0575E6] hover:text-white text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="h-8 px-6 bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
                 <>

@@ -749,7 +749,10 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
             Mermaid Diagram - Fallback View
           </span>
           <button
-            onClick={handleCopy}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
             className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors"
           >
             Copy Source
@@ -801,6 +804,7 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogTrigger asChild>
               <button
+                onClick={(e) => e.stopPropagation()}
                 aria-label="Expand diagram to full screen"
                 className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -811,7 +815,10 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
               <div className="flex flex-col h-full min-h-[80vh] sm:min-h-[70vh]">
                 <div className="absolute top-2 right-2 flex gap-1 z-10">
                   <button
-                    onClick={handleCopy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopy();
+                    }}
                     className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800"
                   >
                     {copied ? (
@@ -841,7 +848,10 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
             </DialogContent>
           </Dialog>
           <button
-            onClick={handleCopy}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
             className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800"
           >
             {copied ? (

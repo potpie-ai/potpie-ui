@@ -69,13 +69,13 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({ plan }) => {
             onClick={() => setActiveTab(cat.id)}
             className={`px-4 py-2 text-xs font-semibold transition-all relative ${
               activeTab === cat.id
-                ? "text-zinc-900"
-                : "text-zinc-400 hover:text-zinc-600"
+                ? "text-primary-color"
+                : "text-primary-color hover:text-primary-color"
             }`}
           >
             {cat.label} ({cat.count})
             {activeTab === cat.id && (
-              <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-zinc-900" />
+              <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-primary-color" />
             )}
           </button>
         ))}
@@ -99,28 +99,28 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({ plan }) => {
               <div className="flex gap-3">
                 <FileCode
                   className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-                    expandedId === item.id ? "text-zinc-900" : "text-zinc-400"
+                    expandedId === item.id ? "text-primary-color" : "text-primary-color"
                   }`}
                 />
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-3">
-                    <h4 className="text-sm font-medium text-zinc-900 font-sans">
+                    <h4 className="text-sm font-medium text-primary-color font-sans">
                       {item.title}
                     </h4>
                     {item.files && item.files.length > 0 && (
-                      <span className="text-xs font-medium px-1.5 py-0.5 bg-zinc-50 border border-zinc-100 rounded text-zinc-400 font-sans">
+                      <span className="text-xs font-medium px-1.5 py-0.5 bg-zinc-50 border border-zinc-100 rounded text-primary-color font-sans">
                         {item.files.length}{" "}
                         {item.files.length === 1 ? "File" : "Files"}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-zinc-500 leading-relaxed font-sans">
+                  <p className="text-sm text-primary-color leading-relaxed font-sans">
                     {item.details}
                   </p>
                 </div>
               </div>
               <ChevronDown
-                className={`w-4 h-4 text-zinc-300 transition-transform flex-shrink-0 mt-0.5 ${
+                className={`w-4 h-4 text-primary-color transition-transform flex-shrink-0 mt-0.5 ${
                   expandedId === item.id ? "rotate-180" : ""
                 }`}
               />
@@ -131,7 +131,7 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({ plan }) => {
               <div className="px-11 pb-5 pt-2 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200 border-t border-zinc-50 font-sans">
                 {item.files && item.files.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                       Target Files
                     </p>
                     <div className="grid grid-cols-1 gap-1">
@@ -140,7 +140,7 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({ plan }) => {
                           key={i}
                           className="flex items-center justify-between py-1 border-b border-zinc-50 last:border-0"
                         >
-                          <code className="text-xs font-mono text-zinc-600">
+                          <code className="text-xs font-mono text-primary-color">
                             {file.path}
                           </code>
                           <span
@@ -162,14 +162,14 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({ plan }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {item.dependencies && item.dependencies.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                           <Package className="w-3 h-3" /> Libraries
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {item.dependencies.map((dep, i) => (
                             <span
                               key={i}
-                              className="px-1.5 py-0.5 bg-zinc-50 border border-zinc-100 rounded text-xs font-mono text-zinc-500"
+                              className="px-1.5 py-0.5 bg-zinc-50 border border-zinc-100 rounded text-xs font-mono text-primary-color"
                             >
                               {dep}
                             </span>
@@ -180,7 +180,7 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({ plan }) => {
                     {item.externalConnections &&
                       item.externalConnections.length > 0 && (
                         <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
+                          <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                             <Link2 className="w-3 h-3" /> External
                           </p>
                           <div className="flex flex-wrap gap-1">
@@ -201,12 +201,12 @@ export const PlanTabs: React.FC<PlanTabsProps> = ({ plan }) => {
                 {item.context && (
                   <div className="bg-zinc-50 rounded p-3 border-l-2 border-zinc-200">
                     <div className="flex items-center gap-2 mb-1">
-                      <Info className="w-3 h-3 text-zinc-400" />
-                      <span className="text-xs font-medium text-zinc-400 uppercase">
+                      <Info className="w-3 h-3 text-primary-color" />
+                      <span className="text-xs font-medium text-primary-color uppercase">
                         Context
                       </span>
                     </div>
-                    <p className="text-sm text-zinc-500 leading-relaxed italic">
+                    <p className="text-sm text-primary-color leading-relaxed italic">
                       {item.context}
                     </p>
                   </div>

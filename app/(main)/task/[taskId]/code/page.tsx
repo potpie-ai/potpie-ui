@@ -393,7 +393,7 @@ const StatusBadge = ({ status, tests }: { status: string; tests: any }) => {
     );
   }
   return (
-    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-zinc-50 text-zinc-400 rounded text-[9px] font-bold border border-zinc-100">
+    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-zinc-50 text-primary-color rounded text-[9px] font-bold border border-zinc-100">
       <Circle className="w-3 h-3" />
       <span>WAITING</span>
     </div>
@@ -404,7 +404,7 @@ const StatusBadge = ({ status, tests }: { status: string; tests: any }) => {
 const SimpleCodeBlock = ({ code }) => {
   if (!code)
     return (
-      <span className="text-zinc-400 italic font-mono text-[10px]">
+      <span className="text-primary-color italic font-mono text-[10px]">
         Waiting for generation...
       </span>
     );
@@ -442,7 +442,7 @@ const SimpleCodeBlock = ({ code }) => {
       {lines.map((line, i) => {
         if (line.trim().startsWith("//")) {
           return (
-            <div key={i} className="text-zinc-500 whitespace-pre">
+            <div key={i} className="text-primary-color whitespace-pre">
               {line}
             </div>
           );
@@ -476,7 +476,7 @@ const SimpleCodeBlock = ({ code }) => {
                 parts[j + 1].trim() === "("
               ) {
                 return (
-                  <span key={j} className="text-black">
+                  <span key={j} className="text-primary-color">
                     {part}
                   </span>
                 );
@@ -489,7 +489,7 @@ const SimpleCodeBlock = ({ code }) => {
                 );
 
               return (
-                <span key={j} className="text-zinc-600">
+                <span key={j} className="text-primary-color">
                   {part}
                 </span>
               );
@@ -543,15 +543,15 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div
-              className={`p-1.5 rounded-md ${uiStatus === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-zinc-100 text-zinc-500"}`}
+              className={`p-1.5 rounded-md ${uiStatus === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-zinc-100 text-primary-color"}`}
             >
               <Code2 className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-bold text-zinc-900">
+              <div className="text-xs font-bold text-primary-color">
                 {task.title}
               </div>
-              <div className="text-[10px] font-mono text-zinc-400">
+              <div className="text-[10px] font-mono text-primary-color">
                 {task.file}
               </div>
             </div>
@@ -560,7 +560,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
           <div className="flex items-center gap-3">
             <StatusBadge status={uiStatus} tests={task.tests} />
             <ChevronDown
-              className={`w-4 h-4 text-zinc-300 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
+              className={`w-4 h-4 text-primary-color transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
             />
           </div>
         </div>
@@ -589,11 +589,11 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                   e.stopPropagation();
                   setActiveTab("diff");
                 }}
-                className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "diff" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600"}`}
+                className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "diff" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
               >
                 <FileDiff className="w-3 h-3" />
                 Code Changes{" "}
-                <span className="text-zinc-400 font-normal">
+                <span className="text-primary-color font-normal">
                   ({task.changes?.length || 0})
                 </span>
               </button>
@@ -603,7 +603,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                 e.stopPropagation();
                 setActiveTab("tests");
               }}
-              className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "tests" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600"}`}
+              className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "tests" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
             >
               <TestTube className="w-3 h-3" />
               Verification
@@ -618,7 +618,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                 e.stopPropagation();
                 setActiveTab("logs");
               }}
-              className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "logs" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600"}`}
+              className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "logs" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
             >
               <ScrollText className="w-3 h-3" />
               Logs
@@ -630,12 +630,12 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
             {activeTab === "diff" &&
               hasChanges &&
               (isPending ? (
-                <div className="h-32 flex flex-col items-center justify-center text-zinc-400 border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
-                  <Hourglass className="w-6 h-6 mb-3 opacity-50 animate-pulse text-black" />
-                  <p className="text-xs font-bold text-zinc-500">
+                <div className="h-32 flex flex-col items-center justify-center text-primary-color border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
+                  <Hourglass className="w-6 h-6 mb-3 opacity-50 animate-pulse text-primary-color" />
+                  <p className="text-xs font-bold text-primary-color">
                     Waiting to generate code...
                   </p>
-                  <p className="text-[10px] text-zinc-400 mt-1">
+                  <p className="text-[10px] text-primary-color mt-1">
                     Files will appear here when execution starts.
                   </p>
                 </div>
@@ -649,16 +649,16 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                     >
                       <div className="px-3 py-2 bg-zinc-50/80 border-b border-zinc-100 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <FileText className="w-3 h-3 text-zinc-400" />
-                          <span className="text-[10px] font-mono font-medium text-zinc-700">
+                          <FileText className="w-3 h-3 text-primary-color" />
+                          <span className="text-[10px] font-mono font-medium text-primary-color">
                             {change.path}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase">
+                          <span className="text-[9px] font-bold text-primary-color uppercase">
                             {change.lang}
                           </span>
-                          <Copy className="w-3 h-3 text-zinc-300 cursor-pointer hover:text-zinc-500" />
+                          <Copy className="w-3 h-3 text-primary-color cursor-pointer hover:text-primary-color" />
                         </div>
                       </div>
                       {change.content ? (
@@ -666,9 +666,9 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                           {change.content.split("\n").map((line, i) => (
                             <div
                               key={i}
-                              className={`${line.startsWith("+") ? "bg-emerald-50 text-emerald-900 w-full block -mx-3 px-3" : "text-zinc-500"}`}
+                              className={`${line.startsWith("+") ? "bg-emerald-50 text-emerald-900 w-full block -mx-3 px-3" : "text-primary-color"}`}
                             >
-                              <span className="inline-block w-6 text-zinc-300 select-none text-right mr-3 border-r border-zinc-100 pr-2">
+                              <span className="inline-block w-6 text-primary-color select-none text-right mr-3 border-r border-zinc-100 pr-2">
                                 {i + 1}
                               </span>
                               {line}
@@ -676,9 +676,9 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                           ))}
                         </pre>
                       ) : (
-                        <div className="p-4 text-center text-[10px] font-mono text-zinc-400 italic bg-background flex flex-col items-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin text-black" />
-                          <span className="text-black">Generating diff...</span>
+                        <div className="p-4 text-center text-[10px] font-mono text-primary-color italic bg-background flex flex-col items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-primary-color" />
+                          <span className="text-primary-color">Generating diff...</span>
                         </div>
                       )}
                     </div>
@@ -691,8 +691,8 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                 {/* 1. Test Definition */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                    <ShieldCheck className="w-3.5 h-3.5 text-primary-color" />
+                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                       Test Suite Definition
                     </span>
                   </div>
@@ -706,8 +706,8 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                 {/* 2. Live Results */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Play className="w-3.5 h-3.5 text-zinc-400" />
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                    <Play className="w-3.5 h-3.5 text-primary-color" />
+                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                       Live Execution Results
                     </span>
                   </div>
@@ -722,10 +722,10 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                             {uiStatus === "completed" ? (
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                             ) : (
-                              <Circle className="w-3.5 h-3.5 text-zinc-300" />
+                              <Circle className="w-3.5 h-3.5 text-primary-color" />
                             )}
                             <span
-                              className={`text-[11px] font-medium ${uiStatus === "completed" ? "text-zinc-900" : "text-zinc-500"}`}
+                              className={`text-[11px] font-medium ${uiStatus === "completed" ? "text-primary-color" : "text-primary-color"}`}
                             >
                               {test.name}
                             </span>
@@ -736,7 +736,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                                 ? test.status === "PASSED"
                                   ? "bg-emerald-100 text-emerald-700"
                                   : "bg-red-100 text-red-700"
-                                : "bg-zinc-100 text-zinc-400"
+                                : "bg-zinc-100 text-primary-color"
                             }`}
                           >
                             {uiStatus === "completed" ? (test.status === "PASSED" ? "PASSED" : "FAILED") : "PENDING"}
@@ -753,18 +753,18 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                 {task.logs.length > 0 ? (
                   task.logs.map((log, i) => (
                     <div key={i} className="flex gap-2">
-                      <span className="text-zinc-600 select-none">{">"}</span>
+                      <span className="text-primary-color select-none">{">"}</span>
                       <span>{log}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-zinc-600 italic">
+                  <div className="text-primary-color italic">
                     Waiting for logs...
                   </div>
                 )}
 
                 {uiStatus === "running" && (
-                  <div className="animate-pulse text-black">_</div>
+                  <div className="animate-pulse text-primary-color">_</div>
                 )}
               </div>
             )}
@@ -1090,20 +1090,24 @@ export default function VerticalTaskExecution() {
           let start = 0;
           let hasMore = true;
 
-          while (hasMore) {
-            const response = await TaskSplittingService.getTaskSplittingItems(taskSplittingId, start, 10);
-            allLayersData = [...allLayersData, ...response.layers];
-            if (response.next_layer_order === null) {
-              hasMore = false;
-            } else {
-              start = response.next_layer_order;
+          try {
+            while (hasMore) {
+              const response = await TaskSplittingService.getTaskSplittingItems(taskSplittingId, start, 10);
+              allLayersData = [...allLayersData, ...response.layers];
+              if (response.next_layer_order === null) {
+                hasMore = false;
+              } else {
+                start = response.next_layer_order;
+              }
             }
+
+            if (!mounted) return;
+
+            setAllLayers(allLayersData);
+            setCurrentDag(allLayersData);
+          } catch (layerError) {
+            console.error("[Code Page] Error fetching layers:", layerError);
           }
-
-          if (!mounted) return;
-
-          setAllLayers(allLayersData);
-          setCurrentDag(allLayersData);
 
           // Check if all tasks are completed
           const allCompleted = allLayersData.every(
@@ -1139,7 +1143,7 @@ export default function VerticalTaskExecution() {
           setIsRunning(false);
         }
       } catch (error) {
-        console.error("Error polling codegen status:", error);
+        console.error("[Code Page] Error polling codegen status:", error);
       }
     };
 
@@ -1189,8 +1193,8 @@ export default function VerticalTaskExecution() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-          <p>Loading task data...</p>
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
+          <p className="text-primary-color">Loading task data...</p>
         </div>
       </div>
     );
@@ -1201,9 +1205,9 @@ export default function VerticalTaskExecution() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-          <p>Starting task splitting...</p>
-          <p className="text-sm text-zinc-500 mt-2">Preparing execution plan for Slice {String(activeSliceId).padStart(2, '0')}</p>
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
+          <p className="text-primary-color">Starting task splitting...</p>
+          <p className="text-sm text-primary-color mt-2">Preparing execution plan for Slice {String(activeSliceId).padStart(2, '0')}</p>
         </div>
       </div>
     );
@@ -1214,9 +1218,9 @@ export default function VerticalTaskExecution() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-          <p>Generating task execution plan...</p>
-          <p className="text-sm text-zinc-500 mt-2">Step {taskSplittingStatus.current_step + 1}/2</p>
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
+          <p className="text-primary-color">Generating task execution plan...</p>
+          <p className="text-sm text-primary-color mt-2">Step {taskSplittingStatus.current_step + 1}/2</p>
         </div>
       </div>
     );
@@ -1227,19 +1231,19 @@ export default function VerticalTaskExecution() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-          <p>Task splitting submitted, waiting to start...</p>
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
+          <p className="text-primary-color">Task splitting submitted, waiting to start...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-background text-zinc-900 font-sans flex flex-col md:flex-row overflow-hidden relative">
+    <div className="h-screen bg-background text-primary-color font-sans flex flex-col md:flex-row overflow-hidden relative">
       {/* --- SIDEBAR: Timeline --- */}
       <aside className="w-80 bg-zinc-50/50 border-r border-zinc-200 flex flex-col z-20 shrink-0">
         <div className="h-16 flex items-center px-6 border-b border-zinc-100 bg-zinc-50/80 backdrop-blur-sm sticky top-0">
-          <h2 className="text-base font-bold text-zinc-900">Slices</h2>
+          <h2 className="text-base font-bold text-primary-color">Slices</h2>
         </div>
 
         <div ref={sidebarRef} className="flex-1 overflow-y-auto p-6 relative">
@@ -1272,8 +1276,8 @@ export default function VerticalTaskExecution() {
                       isCompleted
                         ? "border-emerald-500 text-emerald-500"
                         : isActive
-                          ? "border-zinc-900 text-zinc-900 scale-110 shadow-sm"
-                          : "border-zinc-200 text-zinc-500"
+                          ? "border-primary-color text-primary-color scale-110 shadow-sm"
+                          : "border-zinc-200 text-primary-color"
                     }
                   `}
                   >
@@ -1289,11 +1293,11 @@ export default function VerticalTaskExecution() {
                     className={`flex-1 pt-0.5 transition-all duration-300 ${isActive ? "translate-x-1" : ""}`}
                   >
                     <h3
-                      className={`text-xs font-bold leading-tight ${isActive ? "text-zinc-900" : "text-zinc-500 group-hover:text-zinc-700"}`}
+                      className={`text-xs font-bold leading-tight ${isActive ? "text-primary-color" : "text-primary-color group-hover:text-primary-color"}`}
                     >
                       {slice.title}
                     </h3>
-                    <p className="text-[10px] text-zinc-400 leading-relaxed mt-1 line-clamp-2">
+                    <p className="text-[10px] text-primary-color leading-relaxed mt-1 line-clamp-2">
                       {slice.description}
                     </p>
                   </div>
@@ -1309,15 +1313,15 @@ export default function VerticalTaskExecution() {
         {/* Header */}
         <header className="h-16 flex items-center justify-between px-8 border-b border-zinc-100">
           <div>
-            <h1 className="text-lg font-bold text-zinc-900 tracking-tight">
+            <h1 className="text-lg font-bold text-primary-color tracking-tight">
               {activeSliceMeta?.title || planItems.find((item) => item.item_number === activeSliceId)?.title || `Slice ${activeSliceId}`}
             </h1>
             <div className="flex items-center gap-2">
-              <p className="text-[10px] text-zinc-400 font-medium uppercase tracking-widest">
+              <p className="text-[10px] text-primary-color font-medium uppercase tracking-widest">
                 Execution Graph
               </p>
               {isGraphLoading && (
-                <Loader2 className="w-3 h-3 animate-spin text-zinc-400" />
+                <Loader2 className="w-3 h-3 animate-spin text-primary-color" />
               )}
             </div>
           </div>
@@ -1329,8 +1333,8 @@ export default function VerticalTaskExecution() {
                   flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border
                   ${
                     showGlobalLogs
-                      ? "bg-zinc-100 border-zinc-200 text-zinc-700"
-                      : "bg-background border-zinc-200 text-zinc-500 hover:text-zinc-700"
+                      ? "bg-zinc-100 border-zinc-200 text-primary-color"
+                      : "bg-background border-zinc-200 text-primary-color hover:bg-[#006B66] hover:text-accent-color"
                   }
                 `}
             >
@@ -1339,7 +1343,7 @@ export default function VerticalTaskExecution() {
             </button>
 
             {isSliceComplete ? (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 text-zinc-500 rounded-md border border-zinc-100 text-xs font-bold">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 text-primary-color rounded-md border border-zinc-100 text-xs font-bold">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Verified
               </div>
@@ -1351,16 +1355,16 @@ export default function VerticalTaskExecution() {
                    flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-bold transition-all
                    ${
                      isGraphLoading
-                       ? "bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                       ? "bg-zinc-100 text-primary-color cursor-not-allowed"
                        : isRunning
-                         ? "bg-background border border-zinc-200 text-zinc-900 hover:bg-zinc-50"
-                         : "bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm"
+                         ? "bg-background border border-zinc-200 text-primary-color hover:bg-[#006B66] hover:text-accent-color"
+                         : "bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color shadow-sm"
                    }
                  `}
               >
                 {isGraphLoading ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-color" /> Loading
                     Plan...
                   </>
                 ) : isRunning ? (
@@ -1385,11 +1389,11 @@ export default function VerticalTaskExecution() {
             {currentDag.length === 0 && isGraphLoading && (
               <div className="flex flex-col items-center justify-center h-full opacity-50 space-y-4">
                 <div className="flex gap-2">
-                  <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                  <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-primary-color rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-2 h-2 bg-primary-color rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-2 h-2 bg-primary-color rounded-full animate-bounce"></div>
                 </div>
-                <p className="text-xs text-zinc-400 font-mono">
+                <p className="text-xs text-primary-color font-mono">
                   Discovering dependencies...
                 </p>
               </div>
@@ -1418,13 +1422,13 @@ export default function VerticalTaskExecution() {
                         <div
                           className={`
                               w-10 h-10 rounded-xl flex items-center justify-center border-2 shrink-0 z-10 bg-background transition-colors duration-300
-                              ${isActive ? "border-black text-black shadow-md" : isDone ? "border-emerald-500 text-emerald-600" : "border-zinc-200 text-zinc-300"}
+                              ${isActive ? "border-primary-color text-primary-color shadow-md" : isDone ? "border-emerald-500 text-emerald-600" : "border-zinc-200 text-primary-color"}
                             `}
                         >
                           {isDone ? (
                             <Check className="w-5 h-5" />
                           ) : isActive ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <Loader2 className="w-5 h-5 animate-spin text-primary-color" />
                           ) : (
                             <GitBranch className="w-5 h-5" />
                           )}
@@ -1434,11 +1438,11 @@ export default function VerticalTaskExecution() {
                         <div className="flex-1 pt-1">
                           <div className="flex items-center justify-between mb-3">
                             <h3
-                              className={`text-sm font-bold ${isActive ? "text-zinc-900" : "text-zinc-500"}`}
+                              className={`text-sm font-bold ${isActive ? "text-primary-color" : "text-primary-color"}`}
                             >
                               {level.title}
                             </h3>
-                            <span className="text-[9px] uppercase font-bold text-zinc-400">
+                            <span className="text-[9px] uppercase font-bold text-primary-color">
                               {isDone
                                 ? "Completed"
                                 : isActive
@@ -1487,19 +1491,19 @@ export default function VerticalTaskExecution() {
                       </div>
                       <div className="p-6 space-y-4">
                         <div>
-                          <h4 className="text-[10px] font-bold text-zinc-900 uppercase tracking-wider mb-2">
+                          <h4 className="text-[10px] font-bold text-primary-color uppercase tracking-wider mb-2">
                             What was done
                           </h4>
-                          <p className="text-sm text-zinc-600 leading-relaxed">
+                          <p className="text-sm text-primary-color leading-relaxed">
                             {activeSliceMeta?.summary || activeSliceMeta?.detailed_objective || "Slice completed successfully"}
                           </p>
                         </div>
                         <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-100">
-                          <h4 className="text-[10px] font-bold text-zinc-900 uppercase tracking-wider mb-2 flex items-center gap-2">
+                          <h4 className="text-[10px] font-bold text-primary-color uppercase tracking-wider mb-2 flex items-center gap-2">
                             <ExternalLink className="w-3.5 h-3.5" />
                             How to Verify
                           </h4>
-                          <p className="text-xs font-mono text-zinc-500">
+                          <p className="text-xs font-mono text-primary-color">
                             {activeSliceMeta?.verify || activeSliceMeta?.verification_criteria || "All tests passed"}
                           </p>
                         </div>
@@ -1516,8 +1520,8 @@ export default function VerticalTaskExecution() {
             <div className="w-80 border-l border-zinc-200 bg-background flex flex-col shrink-0 animate-in slide-in-from-right duration-300">
               <div className="h-10 border-b border-zinc-100 flex items-center justify-between px-4 bg-zinc-50/50">
                 <div className="flex items-center gap-2">
-                  <TerminalSquare className="w-3.5 h-3.5 text-zinc-400" />
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                  <TerminalSquare className="w-3.5 h-3.5 text-primary-color" />
+                  <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                     Live Logs
                   </span>
                 </div>
@@ -1531,7 +1535,7 @@ export default function VerticalTaskExecution() {
                 className="flex-1 p-4 overflow-y-auto font-mono text-[10px] space-y-2 bg-background"
               >
                 {globalLogs.length === 0 && (
-                  <div className="text-zinc-400 italic text-center mt-10">
+                  <div className="text-primary-color italic text-center mt-10">
                     Ready to execute.
                     <br />
                     Logs will appear here.
@@ -1542,14 +1546,14 @@ export default function VerticalTaskExecution() {
                     key={i}
                     className="flex gap-2 animate-in slide-in-from-left-1 duration-200"
                   >
-                    <span className="text-zinc-300 select-none">{">"}</span>
+                    <span className="text-primary-color select-none">{">"}</span>
                     <span
                       className={`break-words leading-relaxed ${
                         log.includes("SUCCESS")
                           ? "text-emerald-600 font-bold"
                           : log.includes("Starting")
                             ? "text-blue-600"
-                            : "text-zinc-600"
+                            : "text-primary-color"
                       }`}
                     >
                       {log}

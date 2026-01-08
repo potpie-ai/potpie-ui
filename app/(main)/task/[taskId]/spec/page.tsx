@@ -76,9 +76,8 @@ const PLAN_CHAPTERS = [
   },
 ];
 
-
 const Badge = ({ children, icon: Icon }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-zinc-500">
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
@@ -96,20 +95,20 @@ const PlanTabs = ({ plan }) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-1 border-b border-zinc-100">
+      <div className="flex gap-1 border-b border-[#D3E5E5]">
         {categories.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setActiveTab(cat.id)}
             className={`px-4 py-2 text-xs font-semibold transition-all relative ${
               activeTab === cat.id
-                ? "text-zinc-900"
-                : "text-zinc-400 hover:text-zinc-600"
+                ? "text-primary-color"
+                : "text-primary-color hover:text-primary-color"
             }`}
           >
             {cat.label} ({cat.count})
             {activeTab === cat.id && (
-              <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-zinc-900" />
+              <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-primary-color" />
             )}
           </button>
         ))}
@@ -119,10 +118,10 @@ const PlanTabs = ({ plan }) => {
         {plan[activeTab].map((item) => (
           <div
             key={item.id}
-            className={`bg-background border transition-all rounded-lg overflow-hidden ${
+            className={`bg-background border border-[#D3E5E5] transition-all rounded-lg overflow-hidden ${
               expandedId === item.id
-                ? "border-zinc-300 shadow-sm"
-                : "border-zinc-200 hover:border-zinc-300"
+                ? "border-[#D3E5E5] shadow-sm"
+                : "border-[#D3E5E5] hover:border-[#D3E5E5]"
             }`}
           >
             {/* Summary Row */}
@@ -134,45 +133,45 @@ const PlanTabs = ({ plan }) => {
             >
               <div className="flex gap-3">
                 <FileCode
-                  className={`w-4 h-4 mt-0.5 flex-shrink-0 ${expandedId === item.id ? "text-zinc-900" : "text-zinc-400"}`}
+                  className={`w-4 h-4 mt-0.5 flex-shrink-0 ${expandedId === item.id ? "text-primary-color" : "text-primary-color"}`}
                 />
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-3">
-                    <h4 className="text-sm font-medium text-zinc-900 font-sans">
+                    <h4 className="text-sm font-medium text-primary-color font-sans">
                       {item.title}
                     </h4>
                     {item.files?.length > 0 && (
-                      <span className="text-xs font-medium px-1.5 py-0.5 bg-zinc-50 border border-zinc-100 rounded text-zinc-400 font-sans">
+                      <span className="text-xs font-medium px-1.5 py-0.5 bg-zinc-50 border border-[#D3E5E5] rounded text-primary-color font-sans">
                         {item.files.length}{" "}
                         {item.files.length === 1 ? "File" : "Files"}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-zinc-500 leading-relaxed font-sans">
+                  <p className="text-sm text-primary-color leading-relaxed font-sans">
                     {item.details}
                   </p>
                 </div>
               </div>
               <ChevronDown
-                className={`w-4 h-4 text-zinc-300 transition-transform flex-shrink-0 mt-0.5 ${expandedId === item.id ? "rotate-180" : ""}`}
+                className={`w-4 h-4 text-primary-color transition-transform flex-shrink-0 mt-0.5 ${expandedId === item.id ? "rotate-180" : ""}`}
               />
             </div>
 
             {/* Detailed Content */}
             {expandedId === item.id && (
-              <div className="px-11 pb-5 pt-2 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200 border-t border-zinc-50 font-sans">
+              <div className="px-11 pb-5 pt-2 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200 border-t border-[#D3E5E5] font-sans">
                 {item.files?.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                       Target Files
                     </p>
                     <div className="grid grid-cols-1 gap-1">
                       {item.files.map((file, i) => (
                         <div
                           key={i}
-                          className="flex items-center justify-between py-1 border-b border-zinc-50 last:border-0"
+                          className="flex items-center justify-between py-1 border-b border-[#D3E5E5] last:border-0"
                         >
-                          <code className="text-xs font-mono text-zinc-600">
+                          <code className="text-xs font-mono text-primary-color">
                             {file.path}
                           </code>
                           <span
@@ -191,14 +190,14 @@ const PlanTabs = ({ plan }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {item.dependencies?.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                           <Package className="w-3 h-3" /> Libraries
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {item.dependencies.map((dep, i) => (
                             <span
                               key={i}
-                              className="px-1.5 py-0.5 bg-zinc-50 border border-zinc-100 rounded text-xs font-mono text-zinc-500"
+                              className="px-1.5 py-0.5 bg-zinc-50 border border-[#D3E5E5] rounded text-xs font-mono text-primary-color"
                             >
                               {dep}
                             </span>
@@ -208,7 +207,7 @@ const PlanTabs = ({ plan }) => {
                     )}
                     {item.externalConnections?.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                           <Link2 className="w-3 h-3" /> External
                         </p>
                         <div className="flex flex-wrap gap-1">
@@ -227,14 +226,14 @@ const PlanTabs = ({ plan }) => {
                 )}
 
                 {item.context && (
-                  <div className="bg-zinc-50 rounded p-3 border-l-2 border-zinc-200">
+                  <div className="bg-zinc-50 rounded p-3 border-l-2 border-[#D3E5E5]">
                     <div className="flex items-center gap-2 mb-1">
-                      <Info className="w-3 h-3 text-zinc-400" />
-                      <span className="text-xs font-medium text-zinc-400 uppercase">
+                      <Info className="w-3 h-3 text-primary-color" />
+                      <span className="text-xs font-medium text-primary-color uppercase">
                         Context
                       </span>
                     </div>
-                    <p className="text-sm text-zinc-500 leading-relaxed italic">
+                    <p className="text-sm text-primary-color leading-relaxed italic">
                       {item.context}
                     </p>
                   </div>
@@ -663,8 +662,8 @@ const SpecPage = () => {
   if (isLoading && !specProgress) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
-        <p className="ml-3 text-gray-600">Loading spec generation...</p>
+        <Loader2 className="w-6 h-6 animate-spin text-primary-color" />
+        <p className="ml-3 text-primary-color">Loading spec generation...</p>
       </div>
     );
   }
@@ -674,12 +673,12 @@ const SpecPage = () => {
       <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
         <div className="text-center">
           <h2 className="text-2xl font-semibold mb-2">Recipe not found</h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-primary-color mb-6">
             The recipe ID was not found. Please start a new project.
           </p>
           <button
             onClick={() => router.push("/idea")}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="px-4 py-2 bg-primary-color text-accent-color rounded hover:opacity-90"
           >
             Create New Project
           </button>
@@ -689,7 +688,7 @@ const SpecPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background text-zinc-900 font-sans selection:bg-zinc-100 antialiased">
+    <div className="min-h-screen bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
       <main className="max-w-3xl mx-auto px-6 py-12">
         {/* Error Display */}
         {error && (
@@ -725,7 +724,7 @@ const SpecPage = () => {
           </div>
         )}
         <div className="flex justify-between items-start mb-10">
-          <h1 className="text-2xl font-bold text-zinc-900">Plan Spec</h1>
+          <h1 className="text-2xl font-bold text-primary-color">Plan Spec</h1>
           {projectData && (
             <div className="flex items-center gap-2">
               <Badge icon={Github}>{projectData.repo}</Badge>
@@ -734,9 +733,9 @@ const SpecPage = () => {
           )}
         </div>
         {/* Project Briefing */}
-        <section className="mb-8 pb-8 border-b border-zinc-100">
+        <section className="mb-8 pb-8 border-b border-[#D3E5E5]">
           <div className="space-y-6">
-            <p className="text-base font-medium tracking-tight text-zinc-900 leading-relaxed">
+            <p className="text-base font-medium tracking-tight text-primary-color leading-relaxed">
               {recipeData?.user_prompt || "Loading..."}
             </p>
 
@@ -747,15 +746,15 @@ const SpecPage = () => {
                 .map((q) => (
                   <div key={q.id} className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-zinc-300">
+                      <span className="text-xs font-black text-primary-color">
                         PARAM
                       </span>
-                      <p className="text-sm font-bold text-zinc-500">
+                      <p className="text-sm font-bold text-primary-color">
                         {q.question}
                       </p>
                     </div>
                     <div className="pl-14">
-                      <p className="text-sm font-medium text-zinc-900">
+                      <p className="text-sm font-medium text-primary-color">
                         {answers[q.id]}
                       </p>
                     </div>
@@ -768,19 +767,19 @@ const SpecPage = () => {
         {/* Dynamic Progress Indicator */}
         <section className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Zap className="w-4 h-4 text-zinc-900" />
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-900 font-sans">
+            <Zap className="w-4 h-4 text-primary-color" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-primary-color font-sans">
               Plan Specification
             </h2>
           </div>
-          <p className="text-sm text-zinc-500 mb-6 leading-relaxed">
+          <p className="text-sm text-primary-color mb-6 leading-relaxed">
             Plan spec is a granular specification of the user prompt and
             question. These represent the specific goals of the workflow. It
             also makes approximation on what libraries to use, files to modify
             and external services that might be used. Make sure that you review
             the goals of the workflow before your proceed.
           </p>
-          <div className="bg-zinc-50/50 border border-zinc-100 rounded-xl overflow-hidden">
+          <div className="bg-zinc-50/50 border border-[#D3E5E5] rounded-xl overflow-hidden">
             <div
               onClick={() => setIsPlanExpanded(!isPlanExpanded)}
               role="button"
@@ -790,15 +789,15 @@ const SpecPage = () => {
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 flex items-center justify-center">
                   {isCancelled ? (
-                    <X className="w-4 h-4 text-zinc-400" />
+                    <X className="w-4 h-4 text-primary-color" />
                   ) : planProgress >= 100 ? (
-                    <Check className="w-4 h-4 text-zinc-900" />
+                    <Check className="w-4 h-4 text-primary-color" />
                   ) : (
-                    <Loader2 className="w-4 h-4 text-zinc-900 animate-spin" />
+                    <Loader2 className="w-4 h-4 text-primary-color animate-spin" />
                   )}
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-sm font-bold text-zinc-900">
+                  <span className="text-sm font-bold text-primary-color">
                     {isCancelled
                       ? "Stopped"
                       : status === 'COMPLETED'
@@ -807,20 +806,20 @@ const SpecPage = () => {
                           ? "Failed"
                           : "Architecting System"}
                   </span>
-                  <span className="text-xs font-mono text-zinc-400 uppercase tracking-tighter">
+                  <span className="text-xs font-mono text-primary-color uppercase tracking-tighter">
                     Status: {planProgress}% Compiled
                   </span>
                 </div>
               </div>
               <ChevronDown
-                className={`w-4 h-4 text-zinc-300 transition-transform ${isPlanExpanded ? "" : "-rotate-90"}`}
+                className={`w-4 h-4 text-primary-color transition-transform ${isPlanExpanded ? "" : "-rotate-90"}`}
               />
             </div>
 
             {isPlanExpanded && (
               <div className="relative px-4 py-8">
                 {/* Connecting Vertical Line */}
-                <div className="absolute left-8 top-8 bottom-8 w-[1px] bg-zinc-200" />
+                <div className="absolute left-8 top-8 bottom-8 w-[1px] bg-[#D3E5E5]" />
 
                 <div className="space-y-8 relative">
                   {PLAN_CHAPTERS.map((step, idx) => {
@@ -846,12 +845,12 @@ const SpecPage = () => {
                         <div
                           className={`relative z-10 w-8 h-8 flex items-center justify-center rounded-lg border transition-all duration-500 bg-background ${
                             isDone
-                              ? "border-zinc-900 bg-zinc-900 text-white shadow-sm"
+                              ? "border-primary-color bg-primary-color text-accent-color shadow-sm"
                               : isActive
-                                ? "border-zinc-900 animate-pulse text-zinc-900"
+                                ? "border-primary-color animate-pulse text-primary-color"
                                 : isFailed
                                   ? "border-red-500 bg-red-50 text-red-500"
-                                  : "border-zinc-200 text-zinc-300"
+                                  : "border-[#D3E5E5] text-primary-color"
                           }`}
                         >
                           {isDone ? (
@@ -867,12 +866,12 @@ const SpecPage = () => {
                         <div className="flex flex-col pt-0.5">
                           <span
                             className={`text-xs font-bold uppercase tracking-wider ${
-                              isActive ? "text-zinc-900" : "text-zinc-500"
+                              isActive ? "text-primary-color" : "text-primary-color"
                             }`}
                           >
                             {step.title}
                           </span>
-                          <span className="text-xs text-zinc-400 mt-0.5 max-w-[240px]">
+                          <span className="text-xs text-primary-color mt-0.5 max-w-[240px]">
                             {stepStatus?.message || step.description}
                           </span>
                         </div>
@@ -924,7 +923,7 @@ const SpecPage = () => {
                     }
                   }}
                   disabled={isSubmittingPlan}
-                  className="px-6 py-2 bg-[#0575E6] bg-gradient-to-r from-[#0575E6] to-[#021B79] hover:bg-[#0575E6] hover:text-white rounded-lg font-medium text-sm hover:bg-zinc-800 transition-colors text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-6 py-2 bg-accent-color text-primary-color hover:opacity-90 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isSubmittingPlan ? (
                     <>

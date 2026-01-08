@@ -532,9 +532,9 @@ const Badge = ({
   icon?: LucideIcon;
 }) => {
   const styles: Record<string, string> = {
-    default: "bg-zinc-100 text-zinc-600 border-zinc-200",
-    success: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    blue: "bg-blue-50 text-blue-700 border-blue-100",
+    default: "bg-zinc-100 text-primary-color border-zinc-200",
+    success: "bg-emerald-50 text-primary-color border-emerald-100",
+    blue: "bg-blue-50 text-primary-color border-blue-100",
   };
 
   return (
@@ -554,7 +554,7 @@ const HeaderBadge = ({
   children: React.ReactNode;
   icon?: LucideIcon;
 }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-zinc-500">
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-primary-color">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
@@ -572,7 +572,7 @@ const FormattedText = ({ text }: { text: string }) => {
           return (
             <code
               key={index}
-              className="font-mono text-[10px] font-medium text-zinc-700 bg-zinc-100 px-1 py-0.5 rounded border border-zinc-200 mx-0.5"
+              className="font-mono text-[10px] font-medium text-primary-color bg-zinc-100 px-1 py-0.5 rounded border border-zinc-200 mx-0.5"
             >
               {part}
             </code>
@@ -587,13 +587,13 @@ const FormattedText = ({ text }: { text: string }) => {
 const StatusIcon = ({ status }: { status: string }) => {
   if (status === "generated")
     return (
-      <div className="w-5 h-5 bg-zinc-900 rounded-full flex items-center justify-center text-white">
+      <div className="w-5 h-5 bg-primary-color rounded-full flex items-center justify-center text-accent-color">
         <Check className="w-3 h-3" />
       </div>
     );
   if (status === "generating")
     return (
-      <div className="w-5 h-5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
+      <div className="w-5 h-5 border-2 border-primary-color border-t-transparent rounded-full animate-spin" />
     );
   return (
     <div className="w-5 h-5 border border-zinc-200 rounded-full bg-zinc-50" />
@@ -636,8 +636,9 @@ const PlanPage = () => {
       return null;
     },
     enabled: !!(planId || specIdFromUrl || recipeId),
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Poll every 2 seconds if plan is in progress
+      const data = query.state.data;
       if (
         data?.plan_gen_status === "IN_PROGRESS" ||
         data?.plan_gen_status === "SUBMITTED"
@@ -723,8 +724,8 @@ const PlanPage = () => {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-zinc-400" />
-          <p className="text-zinc-600">Loading detailed plan...</p>
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
+          <p className="text-primary-color">Loading detailed plan...</p>
         </div>
       </div>
     );
@@ -735,11 +736,11 @@ const PlanPage = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
         <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-2">Task not found</h2>
-          <p className="text-zinc-600 mb-6">
+          <h2 className="text-2xl font-semibold mb-2 text-primary-color">Task not found</h2>
+          <p className="text-primary-color mb-6">
             The recipe ID was not found in the URL. Please start a new task.
           </p>
-          <Button onClick={() => router.push("/idea")}>Create New Task</Button>
+          <Button onClick={() => router.push("/idea")} className="bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color">Create New Task</Button>
         </div>
       </div>
     );
@@ -752,15 +753,15 @@ const PlanPage = () => {
   const isFailed = planStatus?.plan_gen_status === "FAILED";
 
   return (
-    <div className="min-h-screen bg-background text-zinc-900 font-sans selection:bg-zinc-100 antialiased">
+    <div className="min-h-screen bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
       <main className="max-w-2xl mx-auto px-6 py-12 pb-32">
         {/* Intro */}
         <div className="flex justify-between items-start mb-10">
           <div>
-            <h1 className="text-2xl font-bold text-zinc-900 mb-2">
+            <h1 className="text-2xl font-bold text-primary-color mb-2">
               Task Overview
             </h1>
-            <p className="text-sm text-zinc-500 leading-relaxed">
+            <p className="text-sm text-primary-color leading-relaxed">
               Generating execution plan step-by-step. Each slice defines a
               complete vertical unit of work.
             </p>
@@ -782,9 +783,9 @@ const PlanPage = () => {
             <div className="pl-16 py-8">
               <div className="border border-zinc-200 rounded-xl p-8 bg-zinc-50">
                 <div className="flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 animate-spin text-zinc-600" />
+                  <Loader2 className="w-5 h-5 animate-spin text-primary-color" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-zinc-900">
+                    <p className="text-sm font-medium text-primary-color">
                       {planStatus?.status_message || "Generating plan..."}
                     </p>
                     {planStatus && (
@@ -800,7 +801,7 @@ const PlanPage = () => {
                               />
                             </div>
                           )}
-                        <p className="text-xs text-zinc-600 mt-1">
+                        <p className="text-xs text-primary-color mt-1">
                           Step {planStatus.current_step + 1}/3
                           {planStatus.progress_percent !== null &&
                             planStatus.progress_percent !== undefined &&
@@ -855,49 +856,51 @@ const PlanPage = () => {
                   className="group animate-in fade-in slide-in-from-bottom-4 duration-500 relative"
                 >
                   <div
-                    onClick={() => {
-                      const newExpandedId = isExpanded
-                        ? null
-                        : item.item_number;
-                      setExpandedId(newExpandedId);
-                      if (newExpandedId !== null) {
-                        setTimeout(() => {
-                          const element = sliceRefs.current[item.item_number];
-                          if (element) {
-                            const yOffset = -24;
-                            const y =
-                              element.getBoundingClientRect().top +
-                              window.scrollY +
-                              yOffset;
-                            window.scrollTo({ top: y, behavior: "smooth" });
-                          }
-                        }, 100);
-                      }
-                    }}
                     className={`
-                    relative bg-background border rounded-xl overflow-hidden cursor-pointer transition-all
+                    relative bg-background border rounded-xl overflow-hidden transition-all
                     ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-sm" : "border-zinc-200 hover:border-zinc-300"}
                   `}
                   >
                     {/* Summary Header */}
-                    <div className="p-4 flex gap-4 items-start">
+                    <div 
+                      onClick={() => {
+                        const newExpandedId = isExpanded
+                          ? null
+                          : item.item_number;
+                        setExpandedId(newExpandedId);
+                        if (newExpandedId !== null) {
+                          setTimeout(() => {
+                            const element = sliceRefs.current[item.item_number];
+                            if (element) {
+                              const yOffset = -24;
+                              const y =
+                                element.getBoundingClientRect().top +
+                                window.scrollY +
+                                yOffset;
+                              window.scrollTo({ top: y, behavior: "smooth" });
+                            }
+                          }, 100);
+                        }
+                      }}
+                      className="p-4 flex gap-4 items-start cursor-pointer"
+                    >
                       <div className="pt-0.5 shrink-0">
                         <StatusIcon status="generated" />
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                          <span className="text-[10px] font-black text-primary-color uppercase tracking-widest">
                             Slice {String(item.item_number).padStart(2, "0")}
                           </span>
                           <ChevronDown
-                            className={`w-4 h-4 text-zinc-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                            className={`w-4 h-4 text-primary-color transition-transform ${isExpanded ? "rotate-180" : ""}`}
                           />
                         </div>
-                        <h3 className="text-sm font-bold text-zinc-900 truncate">
+                        <h3 className="text-sm font-bold text-primary-color truncate">
                           {item.title}
                         </h3>
-                        <p className="text-[11px] text-zinc-500 mt-1 line-clamp-1">
+                        <p className="text-[11px] text-primary-color mt-1 line-clamp-1">
                           {item.description}
                         </p>
                       </div>
@@ -909,12 +912,12 @@ const PlanPage = () => {
                         {/* 0. Detailed Objective */}
                         <div className="px-5 py-4 border-b border-zinc-100 bg-background">
                           <div className="flex items-center gap-2 mb-2">
-                            <AlignLeft className="w-3.5 h-3.5 text-zinc-400" />
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                            <AlignLeft className="w-3.5 h-3.5 text-primary-color" />
+                            <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                               Objective
                             </span>
                           </div>
-                          <p className="text-xs text-zinc-600 leading-relaxed">
+                          <p className="text-xs text-primary-color leading-relaxed">
                             {item.detailed_objective}
                           </p>
                         </div>
@@ -922,12 +925,12 @@ const PlanPage = () => {
                         {/* 1. Success Criteria */}
                         <div className="px-5 py-4 border-b border-zinc-100">
                           <div className="flex items-center gap-2 mb-2">
-                            <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                            <ShieldCheck className="w-3.5 h-3.5 text-primary-color" />
+                            <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                               Success Criteria
                             </span>
                           </div>
-                          <p className="text-xs font-medium text-zinc-700 bg-background border border-zinc-200 rounded p-2.5 leading-relaxed">
+                          <p className="text-xs font-medium text-primary-color bg-background border border-zinc-200 rounded p-2.5 leading-relaxed">
                             {item.verification_criteria}
                           </p>
                         </div>
@@ -935,8 +938,8 @@ const PlanPage = () => {
                         {/* 2. Implementation Details */}
                         <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
                           <div className="flex items-center gap-2 mb-3">
-                            <ListTodo className="w-3.5 h-3.5 text-zinc-400" />
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                            <ListTodo className="w-3.5 h-3.5 text-primary-color" />
+                            <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                               Implementation Details
                             </span>
                           </div>
@@ -944,7 +947,7 @@ const PlanPage = () => {
                             {item.implementation_steps.map((step, i) => (
                               <li
                                 key={i}
-                                className="flex gap-2 text-xs text-zinc-600 leading-relaxed"
+                                className="flex gap-2 text-xs text-primary-color leading-relaxed"
                               >
                                 <div className="mt-1.5 w-1 h-1 rounded-full bg-zinc-300 shrink-0" />
                                 <span>
@@ -959,8 +962,8 @@ const PlanPage = () => {
                         {item.architecture && (
                           <div className="px-5 py-4 border-b border-zinc-100 bg-background">
                             <div className="flex items-center gap-2 mb-3">
-                              <GitMerge className="w-3.5 h-3.5 text-zinc-400" />
-                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                              <GitMerge className="w-3.5 h-3.5 text-primary-color" />
+                              <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                                 Slice Architecture
                               </span>
                             </div>
@@ -974,8 +977,8 @@ const PlanPage = () => {
                         {item.reasoning && (
                           <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50">
                             <div className="flex items-center gap-2 mb-2">
-                              <BrainCircuit className="w-3.5 h-3.5 text-zinc-400" />
-                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                              <BrainCircuit className="w-3.5 h-3.5 text-primary-color" />
+                              <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                                 AI Reasoning
                               </span>
                             </div>
@@ -984,16 +987,16 @@ const PlanPage = () => {
                                 item.reasoning.map((reason, i) => (
                                   <li
                                     key={i}
-                                    className="text-[11px] text-zinc-600 flex gap-2 leading-relaxed"
+                                    className="text-[11px] text-primary-color flex gap-2 leading-relaxed"
                                   >
-                                    <span className="text-zinc-300 select-none">
+                                    <span className="text-primary-color select-none">
                                       •
                                     </span>
                                     {reason}
                                   </li>
                                 ))
                               ) : (
-                                <li className="text-[11px] text-zinc-600 leading-relaxed">
+                                <li className="text-[11px] text-primary-color leading-relaxed">
                                   {item.reasoning}
                                 </li>
                               )}
@@ -1005,8 +1008,8 @@ const PlanPage = () => {
                         {item.files && item.files.length > 0 && (
                           <div className="px-5 py-4 border-b border-zinc-100">
                             <div className="flex items-center gap-2 mb-3">
-                              <FileCode className="w-3.5 h-3.5 text-zinc-400" />
-                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                              <FileCode className="w-3.5 h-3.5 text-primary-color" />
+                              <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                                 Specs to Generate
                               </span>
                             </div>
@@ -1020,8 +1023,8 @@ const PlanPage = () => {
                                       className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80"
                                     >
                                       <div className="flex items-center gap-2 mb-2">
-                                        <ModIcon className="w-3 h-3 text-zinc-400" />
-                                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                                        <ModIcon className="w-3 h-3 text-primary-color" />
+                                        <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                                           {modName}
                                         </span>
                                       </div>
@@ -1032,7 +1035,7 @@ const PlanPage = () => {
                                             className="flex items-center justify-between text-[10px]"
                                           >
                                             <span
-                                              className="font-mono text-zinc-600 truncate max-w-[200px]"
+                                              className="font-mono text-primary-color truncate max-w-[200px]"
                                               title={f.path}
                                             >
                                               {f.path.split("/").pop()}
@@ -1066,8 +1069,8 @@ const PlanPage = () => {
                           typeof item.context_handoff === "object" && (
                             <div className="px-5 py-4 border-b border-zinc-100">
                               <div className="flex items-center gap-2 mb-2">
-                                <Database className="w-3.5 h-3.5 text-zinc-400" />
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                                <Database className="w-3.5 h-3.5 text-primary-color" />
+                                <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                                   Planned Context Handoff
                                 </span>
                               </div>
@@ -1078,10 +1081,10 @@ const PlanPage = () => {
                                       key={i}
                                       className="flex items-start gap-2 text-[10px]"
                                     >
-                                      <span className="font-mono text-zinc-400 shrink-0 mt-[1px]">
+                                      <span className="font-mono text-primary-color shrink-0 mt-[1px]">
                                         {key}:
                                       </span>
-                                      <span className="font-semibold text-zinc-700 break-all">
+                                      <span className="font-semibold text-primary-color break-all">
                                         {Array.isArray(val)
                                           ? val.join(", ")
                                           : String(val)}
@@ -1102,7 +1105,7 @@ const PlanPage = () => {
                                 `/task/${recipeId}/code?planId=${planId}&itemNumber=${item.item_number}`
                               );
                             }}
-                            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                            className="w-full bg-accent-color hover:bg-[#006B66] hover:text-accent-color text-primary-color px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
                           >
                             <Rocket className="w-4 h-4" />
                             Start Implementation for Slice{" "}
@@ -1121,13 +1124,13 @@ const PlanPage = () => {
             <div className="pl-16 py-8 opacity-50">
               <div className="border border-dashed border-zinc-300 rounded-xl p-8 flex flex-col items-center justify-center gap-4 text-center">
                 <div className="w-12 h-12 bg-zinc-100 rounded-full flex items-center justify-center">
-                  <Play className="w-5 h-5 text-zinc-400 ml-1" />
+                  <Play className="w-5 h-5 text-primary-color ml-1" />
                 </div>
                 <div className="max-w-xs">
-                  <p className="text-sm font-bold text-zinc-900">
+                  <p className="text-sm font-bold text-primary-color">
                     Ready to Generate
                   </p>
-                  <p className="text-xs text-zinc-500 mt-1">
+                  <p className="text-xs text-primary-color mt-1">
                     Press start to begin the vertical decomposition process.
                   </p>
                 </div>
@@ -1150,47 +1153,49 @@ const PlanPage = () => {
                 className="group animate-in fade-in slide-in-from-bottom-4 duration-500"
               >
                 <div
-                  onClick={() => {
-                    const newExpandedId = isExpanded ? null : slice.id;
-                    setExpandedId(newExpandedId);
-                    if (newExpandedId !== null) {
-                      setTimeout(() => {
-                        const element = sliceRefs.current[slice.id];
-                        if (element) {
-                          const yOffset = -24;
-                          const y =
-                            element.getBoundingClientRect().top +
-                            window.scrollY +
-                            yOffset;
-                          window.scrollTo({ top: y, behavior: "smooth" });
-                        }
-                      }, 100);
-                    }
-                  }}
                   className={`
-                    relative bg-background border rounded-xl overflow-hidden cursor-pointer transition-all
+                    relative bg-background border rounded-xl overflow-hidden transition-all
                     ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-sm" : "border-zinc-200 hover:border-zinc-300"}
                   `}
                 >
                   {/* Summary Header */}
-                  <div className="p-4 flex gap-4 items-start">
+                  <div 
+                    onClick={() => {
+                      const newExpandedId = isExpanded ? null : slice.id;
+                      setExpandedId(newExpandedId);
+                      if (newExpandedId !== null) {
+                        setTimeout(() => {
+                          const element = sliceRefs.current[slice.id];
+                          if (element) {
+                            const yOffset = -24;
+                            const y =
+                              element.getBoundingClientRect().top +
+                              window.scrollY +
+                              yOffset;
+                            window.scrollTo({ top: y, behavior: "smooth" });
+                          }
+                        }, 100);
+                      }
+                    }}
+                    className="p-4 flex gap-4 items-start cursor-pointer"
+                  >
                     <div className="pt-0.5 shrink-0">
                       <StatusIcon status={status} />
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                        <span className="text-[10px] font-black text-primary-color uppercase tracking-widest">
                           Slice 0{slice.id}
                         </span>
                         <ChevronDown
-                          className={`w-4 h-4 text-zinc-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          className={`w-4 h-4 text-primary-color transition-transform ${isExpanded ? "rotate-180" : ""}`}
                         />
                       </div>
-                      <h3 className="text-sm font-bold text-zinc-900 truncate">
+                      <h3 className="text-sm font-bold text-primary-color truncate">
                         {slice.title}
                       </h3>
-                      <p className="text-[11px] text-zinc-500 mt-1 line-clamp-1">
+                      <p className="text-[11px] text-primary-color mt-1 line-clamp-1">
                         {slice.description}
                       </p>
                     </div>
@@ -1202,12 +1207,12 @@ const PlanPage = () => {
                       {/* 0. Detailed Objective */}
                       <div className="px-5 py-4 border-b border-zinc-100 bg-background">
                         <div className="flex items-center gap-2 mb-2">
-                          <AlignLeft className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <AlignLeft className="w-3.5 h-3.5 text-primary-color" />
+                          <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                             Objective
                           </span>
                         </div>
-                        <p className="text-xs text-zinc-600 leading-relaxed">
+                        <p className="text-xs text-primary-color leading-relaxed">
                           {slice.detailed_objective}
                         </p>
                       </div>
@@ -1215,12 +1220,12 @@ const PlanPage = () => {
                       {/* 1. Success Criteria (Moved Up per request) */}
                       <div className="px-5 py-4 border-b border-zinc-100">
                         <div className="flex items-center gap-2 mb-2">
-                          <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <ShieldCheck className="w-3.5 h-3.5 text-primary-color" />
+                          <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                             Success Criteria
                           </span>
                         </div>
-                        <p className="text-xs font-medium text-zinc-700 bg-background border border-zinc-200 rounded p-2.5 leading-relaxed">
+                        <p className="text-xs font-medium text-primary-color bg-background border border-zinc-200 rounded p-2.5 leading-relaxed">
                           {slice.verification_criteria}
                         </p>
                       </div>
@@ -1228,8 +1233,8 @@ const PlanPage = () => {
                       {/* 2. Implementation Details (New) */}
                       <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
                         <div className="flex items-center gap-2 mb-3">
-                          <ListTodo className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <ListTodo className="w-3.5 h-3.5 text-primary-color" />
+                          <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                             Implementation Details
                           </span>
                         </div>
@@ -1237,7 +1242,7 @@ const PlanPage = () => {
                           {slice.implementation_steps.map((step, i) => (
                             <li
                               key={i}
-                              className="flex gap-2 text-xs text-zinc-600 leading-relaxed"
+                              className="flex gap-2 text-xs text-primary-color leading-relaxed"
                             >
                               <div className="mt-1.5 w-1 h-1 rounded-full bg-zinc-300 shrink-0" />
                               <span>
@@ -1251,8 +1256,8 @@ const PlanPage = () => {
                       {/* 3. Architecture Diagram */}
                       <div className="px-5 py-4 border-b border-zinc-100 bg-background">
                         <div className="flex items-center gap-2 mb-3">
-                          <GitMerge className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <GitMerge className="w-3.5 h-3.5 text-primary-color" />
+                          <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                             Slice Architecture
                           </span>
                         </div>
@@ -1264,8 +1269,8 @@ const PlanPage = () => {
                       {/* 4. AI Reasoning */}
                       <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50">
                         <div className="flex items-center gap-2 mb-2">
-                          <BrainCircuit className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <BrainCircuit className="w-3.5 h-3.5 text-primary-color" />
+                          <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                             AI Reasoning
                           </span>
                         </div>
@@ -1273,9 +1278,9 @@ const PlanPage = () => {
                           {slice.reasoning.map((item, i) => (
                             <li
                               key={i}
-                              className="text-[11px] text-zinc-600 flex gap-2 leading-relaxed"
+                              className="text-[11px] text-primary-color flex gap-2 leading-relaxed"
                             >
-                              <span className="text-zinc-300 select-none">
+                              <span className="text-primary-color select-none">
                                 •
                               </span>
                               {item}
@@ -1287,8 +1292,8 @@ const PlanPage = () => {
                       {/* 5. Files Changeset (Grouped by Module) */}
                       <div className="px-5 py-4 border-b border-zinc-100">
                         <div className="flex items-center gap-2 mb-3">
-                          <FileCode className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <FileCode className="w-3.5 h-3.5 text-primary-color" />
+                          <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                             Specs to Generate
                           </span>
                         </div>
@@ -1301,8 +1306,8 @@ const PlanPage = () => {
                                 className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80"
                               >
                                 <div className="flex items-center gap-2 mb-2">
-                                  <ModIcon className="w-3 h-3 text-zinc-400" />
-                                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                                  <ModIcon className="w-3 h-3 text-primary-color" />
+                                  <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                                     {modName}
                                   </span>
                                 </div>
@@ -1313,7 +1318,7 @@ const PlanPage = () => {
                                       className="flex items-center justify-between text-[10px]"
                                     >
                                       <span
-                                        className="font-mono text-zinc-600 truncate max-w-[200px]"
+                                        className="font-mono text-primary-color truncate max-w-[200px]"
                                         title={f.path}
                                       >
                                         {f.path.split("/").pop()}
@@ -1339,8 +1344,8 @@ const PlanPage = () => {
                       {/* 6. Context Handoff */}
                       <div className="px-5 py-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <Database className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <Database className="w-3.5 h-3.5 text-primary-color" />
+                          <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
                             Planned Context Handoff
                           </span>
                         </div>
@@ -1351,10 +1356,10 @@ const PlanPage = () => {
                                 key={i}
                                 className="flex items-start gap-2 text-[10px]"
                               >
-                                <span className="font-mono text-zinc-400 shrink-0 mt-[1px]">
+                                <span className="font-mono text-primary-color shrink-0 mt-[1px]">
                                   {key}:
                                 </span>
-                                <span className="font-semibold text-zinc-700 break-all">
+                                <span className="font-semibold text-primary-color break-all">
                                   {Array.isArray(val) ? val.join(", ") : val}
                                 </span>
                               </div>
@@ -1401,7 +1406,7 @@ const PlanPage = () => {
                   console.error("Error starting implementation:", error);
                 }
               }}
-              className="bg-zinc-900 hover:bg-zinc-800 text-white px-6 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
+              className="bg-accent-color hover:bg-[#006B66] hover:text-accent-color text-primary-color px-6 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
             >
               <Rocket className="w-4 h-4" />
               Start Implementation

@@ -618,9 +618,32 @@ const PlanPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(1);
   const [visibleCount, setVisibleCount] = useState(0);
+  const [repoName, setRepoName] = useState<string>("Repository");
+  const [branchName, setBranchName] = useState<string>("Branch");
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const sliceRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  // Fetch recipe details to get repo and branch information
+  useEffect(() => {
+    const fetchRecipeDetails = async () => {
+      if (!recipeId) return;
+
+      try {
+        console.log("[Plan Page] Fetching recipe details for:", recipeId);
+        const recipeDetails = await SpecService.getRecipeDetails(recipeId);
+        console.log("[Plan Page] Recipe details received:", recipeDetails);
+
+        setRepoName(recipeDetails.repo_name || "Unknown Repository");
+        setBranchName(recipeDetails.branch_name || "main");
+      } catch (error: any) {
+        console.error("[Plan Page] Failed to fetch recipe details:", error);
+        // Keep default values on error
+      }
+    };
+
+    fetchRecipeDetails();
+  }, [recipeId]);
 
   // Fetch plan status
   const { data: statusData, isLoading: isLoadingStatus } = useQuery({
@@ -766,10 +789,10 @@ const PlanPage = () => {
               complete vertical unit of work.
             </p>
           </div>
-          {/* Repo info will be loaded from API or localStorage */}
+          {/* Repo info loaded from Recipe Details API */}
           <div className="flex items-center gap-2">
-            <HeaderBadge icon={Github}>Repository</HeaderBadge>
-            <HeaderBadge icon={GitBranch}>Branch</HeaderBadge>
+            <HeaderBadge icon={Github}>{repoName}</HeaderBadge>
+            <HeaderBadge icon={GitBranch}>{branchName}</HeaderBadge>
           </div>
         </div>
 

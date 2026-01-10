@@ -22,11 +22,7 @@ import {
   Info,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
-import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
-import QuestionService from "@/services/QuestionService";
 import PlanService from "@/services/PlanService";
-import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
 import { toast } from "sonner";
 import {
   SpecPlanStatusResponse,
@@ -143,12 +139,7 @@ const PlanTabs = ({ plan }) => {
                     <h4 className="text-sm font-semibold text-foreground font-sans leading-snug">
                       {item.title}
                     </h4>
-                    {item.files?.length > 0 && (
-                      <span className="text-xs font-medium px-2 py-0.5 bg-zinc-50 border border-[#D3E5E5] rounded text-primary-color font-sans">
-                        {item.files.length}{" "}
-                        {item.files.length === 1 ? "File" : "Files"}
-                      </span>
-                    )}
+
                   </div>
                   <div className="text-sm text-muted-foreground leading-relaxed font-sans text-left [&_p]:my-0 [&_p]:leading-relaxed [&_p]:text-left [&_p]:text-muted-foreground">
                     <SharedMarkdown content={item.details} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left" />
@@ -160,23 +151,25 @@ const PlanTabs = ({ plan }) => {
               </div>
             </AccordionTrigger>
 
-            <AccordionContent className="px-4 pb-6 pt-4 space-y-6 border-t border-[#D3E5E5] font-sans">
+            <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-[#D3E5E5] font-sans">
+              {/* Target Files */}
               {item.files?.length > 0 && (
-                <div className="space-y-2.5">
-                  <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                    <FileCode className="w-3.5 h-3.5" />
                     Target Files
                   </p>
                   <div className="grid grid-cols-1 gap-1.5">
                     {item.files.map((file, i) => (
                       <div
                         key={i}
-                        className="flex items-center justify-between py-2 px-3 border-b border-[#D3E5E5] last:border-0 bg-zinc-50/50 rounded"
+                        className="flex items-center justify-between py-2.5 px-3 bg-zinc-50/50 border border-[#D3E5E5] rounded-md"
                       >
-                        <code className="text-xs font-mono text-primary-color">
+                        <code className="text-xs font-mono text-primary-color truncate pr-3">
                           {file.path}
                         </code>
                         <span
-                          className={`text-xs font-medium uppercase ${file.type === "Create" ? "text-emerald-500" : "text-blue-500"}`}
+                          className={`text-xs font-medium uppercase shrink-0 ${file.type === "Create" ? "text-emerald-600" : "text-blue-600"}`}
                         >
                           {file.type}
                         </span>
@@ -186,19 +179,21 @@ const PlanTabs = ({ plan }) => {
                 </div>
               )}
 
-              {(item.dependencies?.length > 0 ||
-                item.externalConnections?.length > 0) && (
+              {/* Libraries & External Connections */}
+              {(item.dependencies?.length > 0 || item.externalConnections?.length > 0) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Libraries */}
                   {item.dependencies?.length > 0 && (
-                    <div className="space-y-2.5">
-                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5 mb-2">
-                        <Package className="w-3 h-3" /> Libraries
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                        <Package className="w-3.5 h-3.5" />
+                        Libraries
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {item.dependencies.map((dep, i) => (
                           <span
                             key={i}
-                            className="px-2.5 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded text-xs font-mono text-primary-color"
+                            className="px-3 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded-md text-xs font-mono text-primary-color"
                           >
                             {dep}
                           </span>
@@ -206,16 +201,19 @@ const PlanTabs = ({ plan }) => {
                       </div>
                     </div>
                   )}
+                  
+                  {/* External Connections */}
                   {item.externalConnections?.length > 0 && (
-                    <div className="space-y-2.5">
-                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5 mb-2">
-                        <Link2 className="w-3 h-3" /> External
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                        <Link2 className="w-3.5 h-3.5" />
+                        External
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {item.externalConnections.map((conn, i) => (
                           <span
                             key={i}
-                            className="px-2.5 py-1.5 bg-blue-50 border border-blue-100 rounded text-xs font-medium text-blue-600"
+                            className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-xs font-medium text-blue-600"
                           >
                             {conn}
                           </span>
@@ -226,17 +224,18 @@ const PlanTabs = ({ plan }) => {
                 </div>
               )}
 
+              {/* Context */}
               {item.context && (
-                <div className="bg-zinc-50 rounded-lg p-4 border-l-3 border-[#D3E5E5]">
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <Info className="w-3.5 h-3.5 text-primary-color" />
-                    <span className="text-xs font-semibold text-primary-color uppercase tracking-wide">
-                      Context
-                    </span>
-                  </div>
-                  <p className="text-sm text-primary-color leading-relaxed italic pl-0.5">
-                    {item.context}
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5" />
+                    Context
                   </p>
+                  <div className="bg-zinc-50 border border-[#D3E5E5] rounded-md p-4">
+                    <div className="text-sm text-muted-foreground leading-relaxed">
+                      <SharedMarkdown content={item.context} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left [&_p]:mb-2 [&_p:last-child]:mb-0" />
+                    </div>
+                  </div>
                 </div>
               )}
             </AccordionContent>
@@ -309,195 +308,81 @@ const SpecPage = () => {
     });
   }, [storedRepoContext]);
 
-  // Fetch recipe and project data on mount
+  // Fetch recipe details including repo and branch information
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchRecipeDetails = async () => {
       if (!recipeId) return;
       
       // Prevent multiple initializations
       if (hasInitializedRef.current) return;
       
       try {
-        const headers = await getHeaders();
+        console.log("[Spec Page] Fetching recipe details for:", recipeId);
         
-        // Try to get project_id from recipe creation response stored in localStorage
-        // (We store it when creating recipe in repo page)
-        let projectId: string | null = null;
-        let storedRepoName: string | null = null;
-        let storedBranchName: string | null = null;
-        try {
-          const storedRecipeData = localStorage.getItem(`recipe_${recipeId}`);
-          if (storedRecipeData) {
-            const parsed = JSON.parse(storedRecipeData);
-            projectId = parsed.project_id;
-            storedRepoName = parsed.repo_name || null;
-            storedBranchName = parsed.branch_name || null;
-          }
-        } catch {
-          // Ignore localStorage errors
-        }
-
-        // Get current Redux state to check if we need to dispatch
-        const currentRepoContext = repoBranchByTask?.[recipeId];
-        const needsDispatch = !currentRepoContext || 
-          currentRepoContext.repoName !== (storedRepoName || storedRepoContext?.repoName) ||
-          currentRepoContext.branchName !== (storedBranchName || storedRepoContext?.branchName);
-
-        if (storedRepoName || storedBranchName) {
-          setProjectData((prev) => {
-            const repoName =
-              storedRepoName ||
-              storedRepoContext?.repoName ||
-              prev?.repo ||
-              "Unknown Repository";
-            const branchName =
-              storedBranchName ||
-              storedRepoContext?.branchName ||
-              prev?.branch ||
-              "main";
-
-            if (prev && prev.repo === repoName && prev.branch === branchName) {
-              return prev;
-            }
-
-            return {
-              repo: repoName,
-              branch: branchName,
-              questions: prev?.questions || [],
-            };
-          });
-
-          const repoForStore =
-            storedRepoName ||
-            storedRepoContext?.repoName ||
-            undefined;
-          const branchForStore =
-            storedBranchName ||
-            storedRepoContext?.branchName ||
-            undefined;
-
-          // Only dispatch if values are different from what's already in Redux
-          if (recipeId && needsDispatch && (repoForStore || branchForStore)) {
-            dispatch(
-              setRepoAndBranchForTask({
-                taskId: recipeId,
-                repoName: repoForStore || "Unknown Repository",
-                branchName: branchForStore || "main",
-                projectId: projectId || undefined,
-              })
-            );
-          }
-        }
-
-        // If we have project_id, fetch project details
-        if (projectId) {
-          try {
-            const projects = await BranchAndRepositoryService.getUserProjects();
-            const project = Array.isArray(projects) 
-              ? projects.find((p: any) => p.id === projectId)
-              : null;
-            
-            if (project) {
-              const repoCandidate =
-                project.repo_name ||
-                storedRepoContext?.repoName ||
-                storedRepoName ||
-                "";
-              const branchCandidate =
-                project.branch_name ||
-                storedRepoContext?.branchName ||
-                storedBranchName ||
-                "";
-              let promptRepoName = "Unknown Repository";
-
-              setProjectData((prev) => {
-                const repoValue =
-                  repoCandidate || prev?.repo || "Unknown Repository";
-                const branchValue =
-                  branchCandidate || prev?.branch || "main";
-                promptRepoName = repoValue;
-                return {
-                  repo: repoValue,
-                  branch: branchValue,
-                  questions: prev?.questions || [],
-                };
-              });
-              
-              // Update recipe data with project info
-              setRecipeData(prev => prev ? {
-                ...prev,
-                user_prompt: `Implementation plan for ${promptRepoName}`,
-              } : null);
-
-              // Only dispatch if values are different from what's already in Redux
-              const currentRepoContext = repoBranchByTask?.[recipeId];
-              const needsUpdate = !currentRepoContext ||
-                currentRepoContext.repoName !== promptRepoName ||
-                currentRepoContext.branchName !== (branchCandidate || storedBranchName || storedRepoContext?.branchName || "main");
-              
-              if (needsUpdate) {
-                dispatch(
-                  setRepoAndBranchForTask({
-                    taskId: recipeId,
-                    repoName: promptRepoName,
-                    branchName:
-                      branchCandidate ||
-                      storedBranchName ||
-                      storedRepoContext?.branchName ||
-                      "main",
-                    projectId: projectId || undefined,
-                  })
-                );
-              }
-
-              // Try to fetch questions and answers
-              try {
-                const questionsData = await QuestionService.getQuestions(projectId);
-                if (questionsData?.questions) {
-                  setProjectData(prev => prev ? {
-                    ...prev,
-                    questions: questionsData.questions.map((q: any) => ({
-                      id: q.id,
-                      question: q.question,
-                    })),
-                  } : null);
-                }
-                if (questionsData?.answers) {
-                  const answersMap: Record<string, string> = {};
-                  Object.entries(questionsData.answers).forEach(
-                    ([qId, ans]: [string, any]) => {
-                      answersMap[qId] = ans.text_answer || ans.mcq_answer || "";
-                    }
-                  );
-                  setAnswers(answersMap);
-                }
-              } catch {
-                // Non-critical, continue without questions
-              }
-            }
-          } catch {
-            // Non-critical error, continue without project data
-          }
-        }
-
-        // Set recipe data (will update user_prompt after projectData is set)
+        // Fetch comprehensive recipe details from the API
+        const recipeDetails = await SpecService.getRecipeDetails(recipeId);
+        console.log("[Spec Page] Recipe details received:", recipeDetails);
+        
+        // Set recipe data
         setRecipeData({
-          recipe_id: recipeId,
-          project_id: projectId || "",
-          user_prompt: "Implementation plan generation",
+          recipe_id: recipeDetails.recipe_id,
+          project_id: recipeDetails.project_id,
+          user_prompt: recipeDetails.user_prompt,
         });
+
+        // Set project data with repo and branch
+        const repoName = recipeDetails.repo_name || "Unknown Repository";
+        const branchName = recipeDetails.branch_name || "main";
+        
+        setProjectData({
+          repo: repoName,
+          branch: branchName,
+          questions: recipeDetails.questions_and_answers.map((qa) => ({
+            id: qa.question_id,
+            question: qa.question,
+          })),
+        });
+
+        // Set answers
+        const answersMap: Record<string, string> = {};
+        recipeDetails.questions_and_answers.forEach((qa) => {
+          if (qa.answer) {
+            answersMap[qa.question_id] = qa.answer;
+          }
+        });
+        setAnswers(answersMap);
+
+        // Update Redux state
+        dispatch(
+          setRepoAndBranchForTask({
+            taskId: recipeId,
+            repoName: repoName,
+            branchName: branchName,
+            projectId: recipeDetails.project_id || undefined,
+          })
+        );
         
         hasInitializedRef.current = true;
       } catch (err: any) {
-        console.error("Failed to fetch data:", err);
-        // Non-critical error, just log it
+        console.error("[Spec Page] Failed to fetch recipe details:", err);
+        // Set default values on error
+        setRecipeData({
+          recipe_id: recipeId,
+          project_id: "",
+          user_prompt: "Implementation plan generation",
+        });
+        setProjectData({
+          repo: "Unknown Repository",
+          branch: "main",
+          questions: [],
+        });
         hasInitializedRef.current = true;
       }
     };
     
-    fetchData();
+    fetchRecipeDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipeId]); // Removed storedRepoContext and dispatch from deps to prevent infinite loop
+  }, [recipeId]);
 
   // Poll for spec progress
   useEffect(() => {

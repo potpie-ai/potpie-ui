@@ -14,6 +14,7 @@ import {
   SubmitSpecGenerationRequest,
   SubmitSpecGenerationResponse,
   SpecStatusResponse,
+  RecipeDetailsResponse,
 } from "@/lib/types/spec";
 
 export default class SpecService {
@@ -242,6 +243,31 @@ export default class SpecService {
       return response.data;
     } catch (error: any) {
       console.error("Error fetching spec progress:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Get comprehensive recipe details including repo and branch information
+   * @param recipeId - The recipe ID
+   * @returns Recipe details including repo_name, branch_name, and questions/answers
+   */
+  static async getRecipeDetails(
+    recipeId: string,
+  ): Promise<RecipeDetailsResponse> {
+    try {
+      console.log("[SpecService] Fetching recipe details for:", recipeId);
+      const headers = await getHeaders();
+      const response = await axios.get<RecipeDetailsResponse>(
+        `${this.API_BASE}/${recipeId}/details`,
+        { headers },
+      );
+
+      console.log("[SpecService] Recipe details response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("[SpecService] Error fetching recipe details:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }

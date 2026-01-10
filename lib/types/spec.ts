@@ -259,3 +259,19 @@ export interface TaskSplittingItemsResponse {
   layers: TaskLayer[];
   next_layer_order: number | null;
 }
+
+// Recipe Details API types
+export interface QuestionAnswerPair {
+  question_id: string;
+  question: string;
+  answer: string | null;
+}
+
+export interface RecipeDetailsResponse {
+  recipe_id: string;
+  project_id: string;
+  user_prompt: string;
+  repo_name: string | null;
+  branch_name: string | null;
+  questions_and_answers: QuestionAnswerPair[];
+}

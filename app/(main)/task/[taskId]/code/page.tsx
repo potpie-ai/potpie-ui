@@ -1201,17 +1201,17 @@ export default function VerticalTaskExecution() {
   }
 
   // Show loading if task splitting is being submitted
-  if (planId && !taskSplittingId && !taskSplittingStatus) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
-          <p className="text-primary-color">Starting task splitting...</p>
-          <p className="text-sm text-primary-color mt-2">Preparing execution plan for Slice {String(activeSliceId).padStart(2, '0')}</p>
-        </div>
-      </div>
-    );
-  }
+  // if (planId && !taskSplittingId && !taskSplittingStatus) {
+  //   return (
+  //     <div className="flex items-center justify-center min-h-screen">
+  //       <div className="text-center">
+  //         <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
+  //         <p className="text-primary-color">Starting task splitting...</p>
+  //         <p className="text-sm text-primary-color mt-2">Preparing execution plan for Slice {String(activeSliceId).padStart(2, '0')}</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // Show loading if task splitting is in progress and no layers yet
   if (taskSplittingStatus?.status === "IN_PROGRESS" && allLayers.length === 0) {

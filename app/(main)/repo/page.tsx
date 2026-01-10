@@ -51,6 +51,8 @@ export default function RepoPage() {
 
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [questionsPolling, setQuestionsPolling] = useState(false);
+  const [recipeRepoName, setRecipeRepoName] = useState<string | null>(null);
+  const [recipeBranchName, setRecipeBranchName] = useState<string | null>(null);
 
   const [state, setState] = useState<RepoPageState>({
     pageState: "generating",
@@ -64,6 +66,28 @@ export default function RepoPage() {
     skippedQuestions: new Set(),
     isGenerating: false,
   });
+
+  // Fetch recipe details when recipeId is available
+  useEffect(() => {
+    const fetchRecipeDetails = async () => {
+      if (!recipeId) return;
+
+      try {
+        console.log("[Repo Page] Fetching recipe details for:", recipeId);
+        const recipeDetails = await SpecService.getRecipeDetails(recipeId);
+        console.log("[Repo Page] Recipe details received:", recipeDetails);
+
+        // Set repo and branch from recipe details
+        setRecipeRepoName(recipeDetails.repo_name);
+        setRecipeBranchName(recipeDetails.branch_name);
+      } catch (error: any) {
+        console.error("[Repo Page] Failed to fetch recipe details:", error);
+        // Keep null values on error - will fall back to URL params or projectData
+      }
+    };
+
+    fetchRecipeDetails();
+  }, [recipeId]);
 
   // Fetch questions when recipeId is available (new recipe codegen flow)
   useEffect(() => {
@@ -208,12 +232,15 @@ export default function RepoPage() {
     enabled: !!projectId,
   });
 
-  // Extract project info - prioritize URL params, then project data
+  // Extract project info - prioritize Recipe Details API, then URL params, then project data
   let repoName =
-    repoNameFromUrl || projectData?.repo_name || "Unknown Repository";
-  let branchName = projectData?.branch_name || "";
+    recipeRepoName ||
+    repoNameFromUrl ||
+    projectData?.repo_name ||
+    "Unknown Repository";
+  let branchName = recipeBranchName || projectData?.branch_name || "";
 
-  // Split repoName if it contains "/" (format: reponame/branchname)
+  // Split repoName if it contains "/" (format: reponame/branchname) and no branch is set
   if (repoName.includes("/") && !branchName) {
     const parts = repoName.split("/");
     if (parts.length >= 2) {

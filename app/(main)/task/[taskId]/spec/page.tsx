@@ -37,6 +37,13 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
 import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 
 const PLAN_CHAPTERS = [
   {
@@ -85,13 +92,15 @@ const Badge = ({ children, icon: Icon }) => (
 
 const PlanTabs = ({ plan }) => {
   const [activeTab, setActiveTab] = useState("add");
-  const [expandedId, setExpandedId] = useState(null);
 
   const categories = [
     { id: "add", label: "Create", count: plan.add.length },
     { id: "modify", label: "Update", count: plan.modify.length },
     { id: "fix", label: "Fix", count: plan.fix.length },
   ];
+
+  // Get all item IDs for the active tab to set as default open values
+  const defaultOpenValues = plan[activeTab].map((item) => item.id);
 
   return (
     <div className="space-y-6">
@@ -114,135 +123,126 @@ const PlanTabs = ({ plan }) => {
         ))}
       </div>
 
-      <div className="space-y-4">
+      <Accordion 
+        key={activeTab}
+        type="multiple" 
+        defaultValue={defaultOpenValues} 
+        className="space-y-4"
+      >
         {plan[activeTab].map((item) => (
-          <div
+          <AccordionItem
             key={item.id}
-            className={`bg-background border border-[#D3E5E5] transition-all rounded-lg overflow-hidden ${
-              expandedId === item.id
-                ? "border-[#D3E5E5] shadow-sm"
-                : "border-[#D3E5E5] hover:border-[#D3E5E5]"
-            }`}
+            value={item.id}
+            className="bg-background border border-[#D3E5E5] transition-all rounded-lg overflow-hidden data-[state=open]:border-[#D3E5E5] data-[state=open]:shadow-sm border-[#D3E5E5] hover:border-[#D3E5E5]"
           >
-            {/* Summary Row */}
-            <div
-              onClick={() =>
-                setExpandedId(expandedId === item.id ? null : item.id)
-              }
-              className="p-4 flex justify-between items-start cursor-pointer select-none"
-            >
-              <div className="flex gap-3">
-                <FileCode
-                  className={`w-4 h-4 mt-0.5 flex-shrink-0 ${expandedId === item.id ? "text-primary-color" : "text-primary-color"}`}
-                />
-                <div className="flex flex-col gap-0.5">
-                  <div className="flex items-center gap-3">
-                    <h4 className="text-sm font-medium text-primary-color font-sans">
+            <AccordionTrigger className="p-4 flex justify-between items-start cursor-pointer select-none hover:no-underline [&>svg]:hidden [&[data-state=open] svg:last-child]:rotate-180">
+              <div className="flex gap-3 flex-1 min-w-0">
+                <FileCode className="w-4 h-4 mt-1 flex-shrink-0 text-primary-color" />
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <h4 className="text-sm font-semibold text-foreground font-sans leading-snug">
                       {item.title}
                     </h4>
                     {item.files?.length > 0 && (
-                      <span className="text-xs font-medium px-1.5 py-0.5 bg-zinc-50 border border-[#D3E5E5] rounded text-primary-color font-sans">
+                      <span className="text-xs font-medium px-2 py-0.5 bg-zinc-50 border border-[#D3E5E5] rounded text-primary-color font-sans">
                         {item.files.length}{" "}
                         {item.files.length === 1 ? "File" : "Files"}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-primary-color leading-relaxed font-sans">
-                    {item.details}
-                  </p>
+                  <div className="text-sm text-muted-foreground leading-relaxed font-sans text-left [&_p]:my-0 [&_p]:leading-relaxed [&_p]:text-left [&_p]:text-muted-foreground">
+                    <SharedMarkdown content={item.details} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left" />
+                  </div>
                 </div>
               </div>
-              <ChevronDown
-                className={`w-4 h-4 text-primary-color transition-transform flex-shrink-0 mt-0.5 ${expandedId === item.id ? "rotate-180" : ""}`}
-              />
-            </div>
-
-            {/* Detailed Content */}
-            {expandedId === item.id && (
-              <div className="px-11 pb-5 pt-2 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200 border-t border-[#D3E5E5] font-sans">
-                {item.files?.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
-                      Target Files
-                    </p>
-                    <div className="grid grid-cols-1 gap-1">
-                      {item.files.map((file, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between py-1 border-b border-[#D3E5E5] last:border-0"
-                        >
-                          <code className="text-xs font-mono text-primary-color">
-                            {file.path}
-                          </code>
-                          <span
-                            className={`text-xs font-medium uppercase ${file.type === "Create" ? "text-emerald-500" : "text-blue-500"}`}
-                          >
-                            {file.type}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {(item.dependencies?.length > 0 ||
-                  item.externalConnections?.length > 0) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {item.dependencies?.length > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
-                          <Package className="w-3 h-3" /> Libraries
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {item.dependencies.map((dep, i) => (
-                            <span
-                              key={i}
-                              className="px-1.5 py-0.5 bg-zinc-50 border border-[#D3E5E5] rounded text-xs font-mono text-primary-color"
-                            >
-                              {dep}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {item.externalConnections?.length > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
-                          <Link2 className="w-3 h-3" /> External
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {item.externalConnections.map((conn, i) => (
-                            <span
-                              key={i}
-                              className="px-1.5 py-0.5 bg-blue-50 border border-blue-100 rounded text-xs font-medium text-blue-600"
-                            >
-                              {conn}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {item.context && (
-                  <div className="bg-zinc-50 rounded p-3 border-l-2 border-[#D3E5E5]">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Info className="w-3 h-3 text-primary-color" />
-                      <span className="text-xs font-medium text-primary-color uppercase">
-                        Context
-                      </span>
-                    </div>
-                    <p className="text-sm text-primary-color leading-relaxed italic">
-                      {item.context}
-                    </p>
-                  </div>
-                )}
+              <div className="flex-shrink-0 mt-1 ml-2">
+                <ChevronDown className="w-4 h-4 text-primary-color transition-transform duration-200" />
               </div>
-            )}
-          </div>
+            </AccordionTrigger>
+
+            <AccordionContent className="px-4 pb-6 pt-4 space-y-6 border-t border-[#D3E5E5] font-sans">
+              {item.files?.length > 0 && (
+                <div className="space-y-2.5">
+                  <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                    Target Files
+                  </p>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {item.files.map((file, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between py-2 px-3 border-b border-[#D3E5E5] last:border-0 bg-zinc-50/50 rounded"
+                      >
+                        <code className="text-xs font-mono text-primary-color">
+                          {file.path}
+                        </code>
+                        <span
+                          className={`text-xs font-medium uppercase ${file.type === "Create" ? "text-emerald-500" : "text-blue-500"}`}
+                        >
+                          {file.type}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(item.dependencies?.length > 0 ||
+                item.externalConnections?.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {item.dependencies?.length > 0 && (
+                    <div className="space-y-2.5">
+                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                        <Package className="w-3 h-3" /> Libraries
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {item.dependencies.map((dep, i) => (
+                          <span
+                            key={i}
+                            className="px-2.5 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded text-xs font-mono text-primary-color"
+                          >
+                            {dep}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {item.externalConnections?.length > 0 && (
+                    <div className="space-y-2.5">
+                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                        <Link2 className="w-3 h-3" /> External
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {item.externalConnections.map((conn, i) => (
+                          <span
+                            key={i}
+                            className="px-2.5 py-1.5 bg-blue-50 border border-blue-100 rounded text-xs font-medium text-blue-600"
+                          >
+                            {conn}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {item.context && (
+                <div className="bg-zinc-50 rounded-lg p-4 border-l-3 border-[#D3E5E5]">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <Info className="w-3.5 h-3.5 text-primary-color" />
+                    <span className="text-xs font-semibold text-primary-color uppercase tracking-wide">
+                      Context
+                    </span>
+                  </div>
+                  <p className="text-sm text-primary-color leading-relaxed italic pl-0.5">
+                    {item.context}
+                  </p>
+                </div>
+              )}
+            </AccordionContent>
+          </AccordionItem>
         ))}
-      </div>
+      </Accordion>
     </div>
   );
 };

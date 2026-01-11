@@ -10,7 +10,7 @@ import {
 
 export default class TaskSplittingService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
-  private static readonly API_BASE = `${this.BASE_URL}/api/v1/recipe/task-splitting`;
+  private static readonly API_BASE = `${this.BASE_URL}/codegen/task-splitting`;
 
   /**
    * Submit task splitting request

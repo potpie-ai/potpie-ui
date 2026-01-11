@@ -431,9 +431,11 @@ const PlanPage = () => {
                 const firstItem = planItems[0];
                 try {
                   await TaskSplittingService.submitTaskSplitting({ plan_item_id: firstItem.id });
-                  router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
                 } catch (error) {
-                  toast.error("Failed to start implementation");
+                  console.error("Failed to start implementation, but redirecting anyway");
+                } finally {
+                  // Always redirect regardless of API call success/failure
+                  router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
                 }
               }}
               className="bg-accent-color hover:bg-[#006B66] text-primary-color px-6 py-2 rounded-lg font-medium text-sm flex items-center gap-2"

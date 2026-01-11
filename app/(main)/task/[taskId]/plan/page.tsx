@@ -121,28 +121,37 @@ const groupFilesByModule = (files: FileItem[] | undefined) => {
     "Core Logic": [],
     "API & Middleware": [],
     Frontend: [],
+    Documentation: [],
     Configuration: [],
   };
 
-  if (!files || files.length === 0) return {};
+  if (!files || !Array.isArray(files) || files.length === 0) return {};
 
   files.forEach((file) => {
+    if (!file || !file.path) return;
     const path = file.path.toLowerCase();
-    if (path.includes("prisma") || path.includes("db.ts")) {
+    
+    if (path.includes("prisma") || path.includes("db.ts") || path.includes("migrations")) {
       modules["Database"].push(file);
+    } else if (path.includes("readme") || path.includes(".md") || path.includes("agents/")) {
+      modules["Documentation"].push(file);
     } else if (
       path.includes("utils") ||
-      path.includes("lib") ||
+      path.includes("/lib/") ||
       path.includes("types") ||
-      path.includes("hooks")
+      path.includes("hooks") ||
+      path.includes("services") ||
+      path.includes("providers")
     ) {
       modules["Core Logic"].push(file);
-    } else if (path.includes("api") || path.includes("middleware")) {
+    } else if (path.includes("api") || path.includes("middleware") || path.includes("trpc")) {
       modules["API & Middleware"].push(file);
     } else if (
       path.includes("components") ||
       path.includes("app/") ||
-      path.includes("tailwind")
+      path.includes("apps/web") ||
+      path.includes("tailwind") ||
+      path.includes("pages")
     ) {
       modules["Frontend"].push(file);
     } else {
@@ -161,6 +170,7 @@ const getModuleIcon = (name: string) => {
     case "Core Logic": return BrainCircuit;
     case "API & Middleware": return Server;
     case "Frontend": return Layout;
+    case "Documentation": return FileCode;
     case "Configuration": return Settings;
     default: return Code2;
   }
@@ -365,33 +375,58 @@ const PlanPage = () => {
                       )}
                       
                       {/* Files changeset */}
-                      {Object.keys(modules).length > 0 && (
+                      {(Object.keys(modules).length > 0 || (item.files && item.files.length > 0)) && (
                         <div className="px-5 py-4 border-t border-zinc-100">
                            <div className="flex items-center gap-2 mb-3">
                               <FileCode className="w-3.5 h-3.5 text-primary-color" />
                               <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">Specs to Generate</span>
+                              <span className="text-[9px] text-zinc-400">({item.files?.length || 0} files)</span>
                             </div>
-                            <div className="grid grid-cols-1 gap-3">
-                              {Object.entries(modules).map(([modName, files]) => (
-                                <div key={modName} className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    {React.createElement(getModuleIcon(modName), { className: "w-3 h-3" })}
-                                    <span className="text-[10px] font-bold uppercase">{modName}</span>
+                            {Object.keys(modules).length > 0 ? (
+                              <div className="grid grid-cols-1 gap-3">
+                                {Object.entries(modules).map(([modName, files]) => (
+                                  <div key={modName} className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      {React.createElement(getModuleIcon(modName), { className: "w-3 h-3" })}
+                                      <span className="text-[10px] font-bold uppercase">{modName}</span>
+                                      <span className="text-[9px] text-zinc-400">({files.length})</span>
+                                    </div>
+                                    <ul className="space-y-1.5">
+                                      {files.map((f, i) => (
+                                        <li key={i} className="flex justify-between items-center text-[10px] gap-2">
+                                          <span className="font-mono truncate text-zinc-600" title={f.path}>{f.path}</span>
+                                          <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded ${
+                                            f.type?.toLowerCase() === 'create' ? 'bg-emerald-50 text-emerald-600' :
+                                            f.type?.toLowerCase() === 'modify' ? 'bg-amber-50 text-amber-600' :
+                                            f.type?.toLowerCase() === 'delete' ? 'bg-red-50 text-red-600' :
+                                            'bg-zinc-100 text-zinc-600'
+                                          }`}>{f.type}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
                                   </div>
-                                  <ul className="space-y-1">
-                                    {files.map((f, i) => (
-                                      <li key={i} className="flex justify-between text-[10px]">
-                                        <span className="font-mono truncate">{f.path.split("/").pop()}</span>
-                                        <span className="font-bold uppercase text-[9px]">{f.type}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ))}
-                            </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
+                                <ul className="space-y-1.5">
+                                  {item.files?.map((f: FileItem, i: number) => (
+                                    <li key={i} className="flex justify-between items-center text-[10px] gap-2">
+                                      <span className="font-mono truncate text-zinc-600" title={f.path}>{f.path}</span>
+                                      <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded ${
+                                        f.type?.toLowerCase() === 'create' ? 'bg-emerald-50 text-emerald-600' :
+                                        f.type?.toLowerCase() === 'modify' ? 'bg-amber-50 text-amber-600' :
+                                        f.type?.toLowerCase() === 'delete' ? 'bg-red-50 text-red-600' :
+                                        'bg-zinc-100 text-zinc-600'
+                                      }`}>{f.type}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                         </div>
                       )}
-                    </AccordionContent>
+                    </AccordionContent> 
                   </AccordionItem>
                 );
               })}

@@ -25,6 +25,9 @@ import {
   GitBranch,
   Rocket,
   LucideIcon,
+  FileText,
+  Lightbulb,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -353,17 +356,75 @@ const PlanPage = () => {
                         <p className="text-xs">{item.detailed_objective}</p>
                       </div>
 
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                        <div className="flex items-center gap-2 mb-2"><ListTodo className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Implementation</span></div>
+                      {item.description && (
+                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                          <div className="flex items-center gap-2 mb-2"><FileText className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Description</span></div>
+                          <p className="text-xs">{item.description}</p>
+                        </div>
+                      )}
+
+                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
+                        <div className="flex items-center gap-2 mb-2"><ListTodo className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Implementation Steps</span></div>
                         <ul className="space-y-2">
-                          {item.implementation_steps.map((step, i) => (
-                            <li key={i} className="flex gap-2 text-xs text-left">
-                              <div className="mt-1.5 w-1 h-1 rounded-full bg-zinc-300 shrink-0" />
-                              <FormattedText text={step} />
-                            </li>
-                          ))}
+                          {item.implementation_steps && item.implementation_steps.length > 0 ? (
+                            item.implementation_steps.map((step, i) => (
+                              <li key={i} className="flex gap-2 text-xs text-left">
+                                <div className="mt-1.5 w-1 h-1 rounded-full bg-zinc-300 shrink-0" />
+                                <FormattedText text={step} />
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-xs text-zinc-400 italic">No implementation steps defined</li>
+                          )}
                         </ul>
                       </div>
+
+                      {item.verification_criteria && (
+                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                          <div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Verification Criteria</span></div>
+                          <p className="text-xs">{item.verification_criteria}</p>
+                        </div>
+                      )}
+
+                      {item.context_handoff && (
+                        <div className="px-5 py-4 border-b border-zinc-100 bg-background">
+                          <div className="flex items-center gap-2 mb-2"><ArrowRightLeft className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Context Handoff</span></div>
+                          {item.context_handoff.summary ? (
+                            <p className="text-xs">{item.context_handoff.summary}</p>
+                          ) : (
+                            <div className="text-xs">
+                              {Object.entries(item.context_handoff).map(([key, value], i) => (
+                                <div key={i} className="mb-2 last:mb-0">
+                                  <span className="font-bold text-zinc-600">{key}:</span>{" "}
+                                  <span>{typeof value === 'string' ? value : JSON.stringify(value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {item.reasoning && (
+                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                          <div className="flex items-center gap-2 mb-2"><Lightbulb className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Reasoning</span></div>
+                          {Array.isArray(item.reasoning) ? (
+                            <ul className="space-y-2">
+                              {item.reasoning.length > 0 ? (
+                                item.reasoning.map((reason, i) => (
+                                  <li key={i} className="flex gap-2 text-xs text-left">
+                                    <div className="mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0" />
+                                    <FormattedText text={reason} />
+                                  </li>
+                                ))
+                              ) : (
+                                <li className="text-xs text-zinc-400 italic">No reasoning provided</li>
+                              )}
+                            </ul>
+                          ) : (
+                            <p className="text-xs">{item.reasoning}</p>
+                          )}
+                        </div>
+                      )}
 
                       {item.architecture && (
                         <div className="px-5 py-4 bg-background">

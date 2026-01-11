@@ -10,11 +10,11 @@ import {
 
 export default class TaskSplittingService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
-  private static readonly API_BASE = `${this.BASE_URL}/api/v1/recipe/codegen/task-splitting`;
+  private static readonly API_BASE = `${this.BASE_URL}/api/v1/recipe/task-splitting`;
 
   /**
    * Submit task splitting request
-   * @param request - Task splitting request with plan_id and item_number
+   * @param request - Task splitting request with plan_item_id
    * @returns Task splitting submission response with task_splitting_id
    */
   static async submitTaskSplitting(
@@ -46,7 +46,7 @@ export default class TaskSplittingService {
     try {
       const headers = await getHeaders();
       const response = await axios.get<TaskSplittingStatusResponse>(
-        `${this.API_BASE}/${taskSplittingId}`,
+        `${this.API_BASE}/${taskSplittingId}/status`,
         { headers }
       );
       return response.data;

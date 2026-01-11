@@ -35,343 +35,27 @@ import {
   ArrowLeft,
   Github,
 } from "lucide-react";
-import { MockTaskResponse, getMockTaskFromSession } from "@/lib/mock/taskMock";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import TaskSplittingService from "@/services/TaskSplittingService";
 import PlanService from "@/services/PlanService";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   TaskSplittingStatusResponse,
   TaskSplittingItemsResponse,
   TaskLayer,
+  PlanItem,
 } from "@/lib/types/spec";
 
 /**
  * VERTICAL TASK EXECUTION ENGINE
- * * Updates:
- * - Start Button is always present (no fade-in).
- * - Start Button is disabled/loading while the Execution Graph is generating.
- * - Start Button becomes active ("Start Codegen") once Graph is ready.
+ * Uses real API data from TaskSplittingService and PlanService
+ * - Fetches plan items from PlanService
+ * - Submits task splitting via TaskSplittingService
+ * - Polls task splitting status and items
+ * - Displays real execution graph from API
  */
-
-// --- 1. Vertical Slices Metadata ---
-const SLICES = [
-  {
-    id: 1,
-    title: "Persistence & Schema",
-    description: "Database setup and Prisma schema definition.",
-    summary:
-      "Initialized the PostgreSQL container, generated the initial Prisma schema with the User model, and successfully applied the first migration.",
-    verify:
-      "Run `npx prisma studio` to browse the empty User table, or check the `migrations/` folder for the SQL artifact.",
-  },
-  {
-    id: 2,
-    title: "Auth Core Logic",
-    description: "JWT utilities and password hashing.",
-    summary:
-      "Implemented secure password hashing (bcrypt) and token signing (JWT). Unit tests confirmed that tokens expire correctly and hashes are salted.",
-    verify:
-      "Check `coverage/lcov-report/index.html` for 100% test coverage on `utils/auth.ts`.",
-  },
-  {
-    id: 3,
-    title: "API Routes",
-    description: "Next.js route handlers for login/register.",
-    summary:
-      "Created API endpoints for Login and Registration. Middleware is configured to intercept 401s on protected routes.",
-    verify:
-      "Use Postman or cURL to POST valid credentials to `/api/auth/login` and receive a Bearer token.",
-  },
-  {
-    id: 4,
-    title: "Frontend Forms",
-    description: "React components and validation.",
-    summary:
-      "Built the Login form with Zod validation. Wired up the submit handler to the API and implemented global toast notifications.",
-    verify:
-      "Navigate to `/login` in the preview. Try submitting an empty form to see validation errors.",
-  },
-  {
-    id: 5,
-    title: "Email Verification",
-    description: "Token generation and email provider mock.",
-    summary:
-      "Added `emailVerified` field to schema. Implemented token generation service and mocked the SendGrid transport.",
-    verify:
-      "Register a new user and check the console logs for the mocked 'Verify Email' link.",
-  },
-  {
-    id: 6,
-    title: "Password Recovery",
-    description: "Reset flow and temporary tokens.",
-    summary:
-      "Implemented the `PasswordResetToken` model and the complete reset flow APIs.",
-    verify:
-      "Trigger a password reset and verify that the old token is invalidated after use.",
-  },
-  {
-    id: 7,
-    title: "User Profile",
-    description: "Protected dashboard routes.",
-    summary:
-      "Created the protected `/dashboard` layout and the Profile API to fetch user details from the session.",
-    verify:
-      "Log in and visit `/dashboard`. Ensure your username is displayed correctly in the header.",
-  },
-  {
-    id: 8,
-    title: "RBAC & Admin",
-    description: "Role-based access control.",
-    summary:
-      "Added `role` enum to User. Secured `/admin` routes so they strictly require the ADMIN role.",
-    verify:
-      "Try accessing `/admin` as a standard user (should 403). Update your role in DB and retry (should 200).",
-  },
-];
-
-// --- 2. Mock DAG Data with Rich Details ---
-const MOCK_DAGS = {
-  1: [
-    {
-      id: "l1",
-      title: "Configuration Phase",
-      status: "pending",
-      tasks: [
-        {
-          id: "t1-1",
-          title: "Init Prisma & Env",
-          file: "schema.prisma",
-          status: "pending",
-          tests: { total: 2, passed: 0 },
-          changes: [
-            {
-              path: "prisma/schema.prisma",
-              lang: "prisma",
-              content: `+ generator client {
-+   provider = "prisma-client-js"
-+ }
-+
-+ datasource db {
-+   provider = "postgresql"
-+   url      = env("DATABASE_URL")
-+ }`,
-            },
-            {
-              path: ".env",
-              lang: "bash",
-              content: `+ DATABASE_URL="postgresql://user:pass@localhost:5432/mydb?schema=public"
-+ NODE_ENV="development"`,
-            },
-          ],
-          testCode: `import fs from 'fs';
-
-describe('Prisma Configuration', () => {
-  test('should have valid schema file', async () => {
-    const schema = await fs.readFile('prisma/schema.prisma', 'utf8');
-    expect(schema).toContain('provider = "postgresql"');
-  });
-
-  test('should have database url in env', () => {
-    expect(process.env.DATABASE_URL).toBeDefined();
-    expect(process.env.DATABASE_URL).toContain('postgresql://');
-  });
-});`,
-          testResults: [
-            { name: "should have valid schema file", status: "pending" },
-            { name: "should have database url in env", status: "pending" },
-          ],
-          logs: [
-            "Initializing prisma...",
-            "Generating schema.prisma...",
-            "Validating provider configuration...",
-            "Parsing .env file...",
-          ],
-        },
-      ],
-    },
-    {
-      id: "l2",
-      title: "Implementation Phase",
-      status: "pending",
-      tasks: [
-        {
-          id: "t1-2",
-          title: "User Model Definition",
-          file: "models/User.ts",
-          status: "pending",
-          tests: { total: 2, passed: 0 },
-          changes: [
-            {
-              path: "prisma/schema.prisma",
-              lang: "prisma",
-              content: `  datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
-  }
-
-+ model User {
-+   id        String   @id @default(uuid())
-+   email     String   @unique
-+   password  String
-+   name      String?
-+   createdAt DateTime @default(now())
-+   updatedAt DateTime @updatedAt
-+ }`,
-            },
-          ],
-          testCode: `import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
-
-describe('User Model', () => {
-  test('should support UUID generation', async () => {
-    // Mocking the prisma generate call
-    const dmmf = await prisma.getDmmf();
-    const userModel = dmmf.datamodel.models.find(m => m.name === 'User');
-    const idField = userModel.fields.find(f => f.name === 'id');
-    expect(idField.default.name).toBe('uuid');
-  });
-
-  test('should enforce unique email', async () => {
-    const dmmf = await prisma.getDmmf();
-    const userModel = dmmf.datamodel.models.find(m => m.name === 'User');
-    const emailField = userModel.fields.find(f => f.name === 'email');
-    expect(emailField.isUnique).toBe(true);
-  });
-});`,
-          testResults: [
-            { name: "should support UUID generation", status: "pending" },
-            { name: "should enforce unique email", status: "pending" },
-          ],
-          logs: [
-            "Parsing model definition...",
-            "Adding UUID constraint...",
-            "Adding unique index on email...",
-            "Validating relation consistency...",
-          ],
-        },
-        {
-          id: "t1-3",
-          title: "Migration Generation",
-          file: "migrations/init.sql",
-          status: "pending",
-          tests: { total: 1, passed: 0 },
-          changes: [
-            {
-              path: "migrations/20240315_init/migration.sql",
-              lang: "sql",
-              content: `+ -- CreateTable
-+ CREATE TABLE "User" (
-+     "id" TEXT NOT NULL,
-+     "email" TEXT NOT NULL,
-+     "password" TEXT NOT NULL,
-+     "name" TEXT,
-+     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-+     "updatedAt" TIMESTAMP(3) NOT NULL,
-+
-+     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
-+ );
-+
-+ -- CreateIndex
-+ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");`,
-            },
-          ],
-          testCode: `import fs from 'fs';
-import path from 'path';
-
-describe('Migration Integrity', () => {
-  test('should generate non-empty SQL file', () => {
-    const migrationDir = path.join(__dirname, 'migrations');
-    const files = fs.readdirSync(migrationDir);
-    const sqlFile = files.find(f => f.endsWith('.sql'));
-
-    const content = fs.readFileSync(path.join(migrationDir, sqlFile), 'utf8');
-    expect(content.length).toBeGreaterThan(0);
-    expect(content).toContain('CREATE TABLE "User"');
-  });
-});`,
-          testResults: [
-            { name: "should generate non-empty SQL file", status: "pending" },
-          ],
-          logs: [
-            "Comparing schema to DB shadow...",
-            "Generating SQL...",
-            "Checking for destructive changes...",
-            "Migration artifact created.",
-          ],
-        },
-      ],
-    },
-    {
-      id: "l3",
-      title: "Verification Phase",
-      status: "pending",
-      tasks: [
-        {
-          id: "t1-4",
-          title: "DB Connection Test",
-          file: "scripts/test-db.ts",
-          status: "pending",
-          tests: { total: 1, passed: 0 },
-          // No changes array here - simulates "No Codegen"
-          testCode: `import { exec } from 'child_process';
-
-describe('End-to-End Connectivity', () => {
-  test('should execute connection script without error', (done) => {
-    exec('ts-node scripts/test-db.ts', (error, stdout, stderr) => {
-      expect(error).toBeNull();
-      expect(stdout).toContain('Successfully connected');
-      done();
-    });
-  });
-});`,
-          testResults: [
-            {
-              name: "should execute connection script without error",
-              status: "pending",
-            },
-          ],
-          logs: [
-            "Loading predefined test suite...",
-            "Transpiling TypeScript...",
-            "Connecting to localhost:5432...",
-            "Authenticating user...",
-            "Connection successful.",
-          ],
-        },
-      ],
-    },
-  ],
-  default: [
-    {
-      id: "l1",
-      title: "Scaffolding",
-      status: "pending",
-      tasks: [
-        {
-          id: "def-1",
-          title: "Setup Module",
-          file: "index.ts",
-          status: "pending",
-          tests: { total: 2, passed: 0 },
-          logs: ["Initializing module..."],
-          changes: [
-            {
-              path: "index.ts",
-              content: "+ export const init = () => {};",
-              lang: "typescript",
-            },
-          ],
-          testCode: "test('exists', () => expect(init).toBeDefined())",
-          testResults: [{ name: "Module exports init", status: "pending" }],
-        },
-      ],
-    },
-  ],
-};
 
 // --- Sub-components ---
 
@@ -401,7 +85,7 @@ const StatusBadge = ({ status, tests }: { status: string; tests: any }) => {
 };
 
 // Simple Syntax Highlighter
-const SimpleCodeBlock = ({ code }) => {
+const SimpleCodeBlock = ({ code }: { code: string }) => {
   if (!code)
     return (
       <span className="text-primary-color italic font-mono text-[10px]">
@@ -439,7 +123,7 @@ const SimpleCodeBlock = ({ code }) => {
 
   return (
     <div className="font-mono text-[10px] leading-relaxed">
-      {lines.map((line, i) => {
+      {lines.map((line: string, i: number) => {
         if (line.trim().startsWith("//")) {
           return (
             <div key={i} className="text-primary-color whitespace-pre">
@@ -451,7 +135,7 @@ const SimpleCodeBlock = ({ code }) => {
 
         return (
           <div key={i} className="whitespace-pre">
-            {parts.map((part, j) => {
+            {parts.map((part: string, j: number) => {
               if (KEYWORDS.has(part))
                 return (
                   <span key={j} className="text-purple-500 font-semibold">
@@ -513,7 +197,15 @@ const mapApiStatusToUI = (apiStatus: string): string => {
 };
 
 // New TaskCard component handling inline expansion
-const TaskCard = ({ task, isExpanded, onToggle }) => {
+const TaskCard = ({ 
+  task, 
+  isExpanded, 
+  onToggle 
+}: { 
+  task: import("@/lib/types/spec").TaskItem; 
+  isExpanded: boolean; 
+  onToggle: () => void;
+}) => {
   const hasChanges = task.changes && task.changes.length > 0;
   // Default to 'logs' if no changes (Verification task), otherwise 'diff'
   const [activeTab, setActiveTab] = React.useState(
@@ -641,7 +333,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {task.changes.map((change, idx) => (
+                  {task.changes?.map((change: { path: string; lang: string; content: string }, idx: number) => (
                     <div
                       key={idx}
                       className="bg-background rounded-lg border border-zinc-200 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
@@ -663,7 +355,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                       </div>
                       {change.content ? (
                         <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed bg-background">
-                          {change.content.split("\n").map((line, i) => (
+                          {change.content.split("\n").map((line: string, i: number) => (
                             <div
                               key={i}
                               className={`${line.startsWith("+") ? "bg-emerald-50 text-emerald-900 w-full block -mx-3 px-3" : "text-primary-color"}`}
@@ -698,7 +390,7 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                   </div>
                   <div className="bg-background rounded-lg border border-zinc-200 overflow-hidden relative group">
                     <div className="p-4 overflow-x-auto">
-                      <SimpleCodeBlock code={task.testCode} />
+                      <SimpleCodeBlock code={task.testCode || ""} />
                     </div>
                   </div>
                 </div>
@@ -712,8 +404,8 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                     </span>
                   </div>
                   <div className="bg-background border border-zinc-200 rounded-lg divide-y divide-zinc-50">
-                    {task.testResults &&
-                      task.testResults.map((test, i) => (
+                    {task.testResults && task.testResults.length > 0 ? (
+                      task.testResults.map((test: import("@/lib/types/spec").TaskTestResult, i: number) => (
                         <div
                           key={i}
                           className="flex items-center justify-between p-3"
@@ -742,7 +434,12 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
                             {uiStatus === "completed" ? (test.status === "PASSED" ? "PASSED" : "FAILED") : "PENDING"}
                           </span>
                         </div>
-                      ))}
+                      ))
+                    ) : (
+                      <div className="p-3 text-[11px] text-primary-color italic">
+                        No test results available yet
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -750,8 +447,8 @@ const TaskCard = ({ task, isExpanded, onToggle }) => {
 
             {activeTab === "logs" && (
               <div className="bg-zinc-900 rounded-lg p-3 font-mono text-[10px] text-zinc-300 space-y-1.5 min-h-[150px] max-h-[300px] overflow-y-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {task.logs.length > 0 ? (
-                  task.logs.map((log, i) => (
+                {task.logs && task.logs.length > 0 ? (
+                  task.logs.map((log: string, i: number) => (
                     <div key={i} className="flex gap-2">
                       <span className="text-primary-color select-none">{">"}</span>
                       <span>{log}</span>
@@ -783,23 +480,19 @@ export default function VerticalTaskExecution() {
   const recipeId = params?.taskId as string;
   const planIdFromUrl = searchParams.get("planId");
   const itemNumberFromUrl = searchParams.get("itemNumber");
+  const taskSplittingIdFromUrl = searchParams.get("taskSplittingId");
   
-  const repoBranchByTask = useSelector(
-    (state: RootState) => state.RepoAndBranch.byTaskId
-  );
-  const storedRepoContext = recipeId
-    ? repoBranchByTask?.[recipeId]
-    : undefined;
-
-  const [mockTask, setMockTask] = useState<MockTaskResponse | null>(null);
   const [activeSliceId, setActiveSliceId] = useState(itemNumberFromUrl ? parseInt(itemNumberFromUrl) : 1);
   const [completedSlices, setCompletedSlices] = useState<number[]>([]);
   const [isRunning, setIsRunning] = useState(false);
 
   // Task Splitting API State
   const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
-  const [planItems, setPlanItems] = useState<any[]>([]);
-  const [taskSplittingId, setTaskSplittingId] = useState<string | null>(null);
+  const [planItems, setPlanItems] = useState<PlanItem[]>([]);
+  const [isLoadingPlanItems, setIsLoadingPlanItems] = useState(false);
+  const [taskSplittingId, setTaskSplittingId] = useState<string | null>(
+    taskSplittingIdFromUrl || null
+  );
   const [taskSplittingStatus, setTaskSplittingStatus] = useState<TaskSplittingStatusResponse | null>(null);
   const [allLayers, setAllLayers] = useState<TaskLayer[]>([]);
   const [nextLayerOrder, setNextLayerOrder] = useState<number | null>(0);
@@ -843,25 +536,48 @@ export default function VerticalTaskExecution() {
   // Submit task splitting when we have planId and itemNumber but no taskSplittingId
   useEffect(() => {
     if (!planId || !activeSliceId || taskSplittingId) return;
+    // Wait for plan items to be loaded before submitting
+    if (planItems.length === 0 || isLoadingPlanItems) return;
 
-    // Check if we already have a stored task_splitting_id for this plan item
+    // Priority 1: Check URL parameter
+    if (taskSplittingIdFromUrl) {
+      setTaskSplittingId(taskSplittingIdFromUrl);
+      localStorage.setItem(`task_splitting_${planId}_${activeSliceId}`, taskSplittingIdFromUrl);
+      return;
+    }
+
+    // Priority 2: Check localStorage
     const storedTaskSplittingId = localStorage.getItem(`task_splitting_${planId}_${activeSliceId}`);
     if (storedTaskSplittingId) {
       setTaskSplittingId(storedTaskSplittingId);
       return;
     }
 
-    // Submit task splitting request
+    // Priority 3: Submit new task splitting request
     const submitTaskSplitting = async () => {
       try {
-        console.log("[Code Page] Submitting task splitting for planId:", planId, "itemNumber:", activeSliceId);
+        // Find the plan item by item_number to get its id (plan_item_id)
+        const planItem = planItems.find((item) => item.item_number === activeSliceId);
+        if (!planItem) {
+          console.error("[Code Page] Plan item not found for item_number:", activeSliceId);
+          console.error("[Code Page] Available plan items:", planItems.map(item => item.item_number));
+          // Don't show error toast - just wait for plan items to load or user to select valid item
+          return;
+        }
+
+        console.log("[Code Page] Submitting task splitting for plan_item_id:", planItem.id);
         const response = await TaskSplittingService.submitTaskSplitting({
-          plan_id: planId,
-          item_number: activeSliceId,
+          plan_item_id: planItem.id,
         });
         console.log("[Code Page] Task splitting submitted:", response);
         setTaskSplittingId(response.task_splitting_id);
         localStorage.setItem(`task_splitting_${planId}_${activeSliceId}`, response.task_splitting_id);
+        
+        // Update URL with taskSplittingId
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("taskSplittingId", response.task_splitting_id);
+        router.replace(`/task/${recipeId}/code?${params.toString()}`);
+        
         toast.success("Task splitting started");
       } catch (error: any) {
         console.error("[Code Page] Error submitting task splitting:", error);
@@ -870,13 +586,14 @@ export default function VerticalTaskExecution() {
     };
 
     submitTaskSplitting();
-  }, [planId, activeSliceId, taskSplittingId]);
+  }, [planId, activeSliceId, taskSplittingId, taskSplittingIdFromUrl, searchParams, recipeId, router, planItems, isLoadingPlanItems]);
 
   // Fetch plan items for sidebar display
   useEffect(() => {
     if (!planId || planItems.length > 0) return;
 
     const fetchPlanItems = async () => {
+      setIsLoadingPlanItems(true);
       try {
         console.log("[Code Page] Fetching plan items for planId:", planId);
         let allItems: any[] = [];
@@ -897,44 +614,14 @@ export default function VerticalTaskExecution() {
         setPlanItems(allItems);
       } catch (error) {
         console.error("[Code Page] Error fetching plan items:", error);
+      } finally {
+        setIsLoadingPlanItems(false);
       }
     };
 
     fetchPlanItems();
   }, [planId, planItems.length]);
 
-  useEffect(() => {
-    if (!storedRepoContext) return;
-    setMockTask((prev) => {
-      const repoName =
-        storedRepoContext.repoName || prev?.repo || "Unknown Repository";
-      const branchName =
-        storedRepoContext.branchName || prev?.branch || "main";
-
-      if (prev) {
-        if (prev.repo === repoName && prev.branch === branchName) {
-          return prev;
-        }
-        return {
-          ...prev,
-          repo: repoName,
-          branch: branchName,
-        };
-      }
-
-      if (!recipeId) {
-        return prev;
-      }
-
-      return {
-        task_id: recipeId,
-        prompt: "",
-        repo: repoName,
-        branch: branchName,
-        questions: [],
-      };
-    });
-  }, [storedRepoContext, recipeId]);
 
   // 1. Reset State when Slice Changes
   useEffect(() => {
@@ -963,42 +650,14 @@ export default function VerticalTaskExecution() {
     }
   }, [activeSliceId, planId]);
 
-  // 2. Poll for task splitting status (5.2 API) - runs when we have taskSplittingId
+  // 2. Poll for task splitting status and fetch layers
   useEffect(() => {
     if (!taskSplittingId) return;
 
     let mounted = true;
     let pollInterval: NodeJS.Timeout;
 
-    const fetchStatusAndLayers = async () => {
-      try {
-        console.log("[Code Page] Polling task splitting status for:", taskSplittingId);
-        const status = await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
-
-        if (!mounted) return;
-
-        console.log("[Code Page] Task splitting status:", status);
-        setTaskSplittingStatus(status);
-
-        // Fetch layers if task splitting is completed or if we need to show progress
-        if (status.status === "COMPLETED" || status.status === "IN_PROGRESS") {
-          await fetchLayersWithPagination();
-        }
-
-        // Stop polling if task splitting is done
-        if (status.status === "COMPLETED" || status.status === "FAILED") {
-          if (pollInterval) clearInterval(pollInterval);
-
-          if (status.status === "COMPLETED") {
-            setIsGraphLoading(false);
-          }
-        }
-      } catch (error) {
-        console.error("[Code Page] Error polling task splitting status:", error);
-      }
-    };
-
-    // Fetch layers with pagination (5.3 API)
+    // Fetch layers with pagination
     const fetchLayersWithPagination = async () => {
       try {
         console.log("[Code Page] Fetching layers with pagination");
@@ -1033,10 +692,38 @@ export default function VerticalTaskExecution() {
       }
     };
 
+    const fetchStatusAndLayers = async () => {
+      try {
+        console.log("[Code Page] Polling task splitting status for:", taskSplittingId);
+        const status = await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
+
+        if (!mounted) return;
+
+        console.log("[Code Page] Task splitting status:", status);
+        setTaskSplittingStatus(status);
+
+        // Always fetch layers if available (even during IN_PROGRESS)
+        if (status.status === "COMPLETED" || status.status === "IN_PROGRESS") {
+          await fetchLayersWithPagination();
+        }
+
+        // Stop polling if task splitting is done
+        if (status.status === "COMPLETED" || status.status === "FAILED") {
+          if (pollInterval) clearInterval(pollInterval);
+
+          if (status.status === "COMPLETED") {
+            setIsGraphLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error("[Code Page] Error polling task splitting status:", error);
+      }
+    };
+
     // Initial fetch
     fetchStatusAndLayers();
 
-    // Set up polling
+    // Set up polling every 2 seconds
     pollInterval = setInterval(fetchStatusAndLayers, 2000);
 
     return () => {
@@ -1173,8 +860,7 @@ export default function VerticalTaskExecution() {
   }, [activeSliceId]);
 
   const isSliceComplete = completedSlices.includes(activeSliceId);
-  const activeSliceMeta = planItems.find((item) => item.item_number === activeSliceId) || 
-    SLICES.find((s) => s.id === activeSliceId);
+  const activeSliceMeta = planItems.find((item) => item.item_number === activeSliceId);
 
   // Manual navigation
   const handleManualSliceChange = (id: number) => {
@@ -1249,61 +935,66 @@ export default function VerticalTaskExecution() {
         <div ref={sidebarRef} className="flex-1 overflow-y-auto p-6 relative">
           {/* Continuous Vertical Line */}
           <div
-            className="absolute left-[35px] top-6 w-[1px] bg-zinc-200 z-0"
-            style={{ height: `${Math.min(planItems.length || SLICES.length, 8) * 70 - 70}px` }}
+            className="absolute left-[35px] top-6 bottom-6 w-[1px] bg-zinc-200 z-0"
           />
 
           <div className="space-y-8 relative z-10">
-            {(planItems.length > 0 ? planItems : SLICES).map((slice: any, idx: number) => {
-              const sliceId = slice.item_number || slice.id;
-              const isCompleted = completedSlices.includes(sliceId);
-              const isLocked =
-                idx > 0 && !completedSlices.includes((planItems.length > 0 ? planItems : SLICES)[idx - 1]?.item_number || (planItems.length > 0 ? planItems : SLICES)[idx - 1]?.id);
-              const isActive = activeSliceId === sliceId;
+            {planItems.length > 0 ? (
+              planItems.map((slice: PlanItem, idx: number) => {
+                const sliceId = slice.item_number;
+                const isCompleted = completedSlices.includes(sliceId);
+                const isLocked =
+                  idx > 0 && !completedSlices.includes(planItems[idx - 1]?.item_number);
+                const isActive = activeSliceId === sliceId;
 
-              return (
-                <div
-                  key={slice.id}
-                  data-active={isActive}
-                  className={`group flex gap-4 ${isLocked ? " pointer-events-none" : "cursor-pointer"}`}
-                  onClick={() => !isLocked && handleManualSliceChange(sliceId)}
-                >
-                  {/* Timeline Node */}
+                return (
                   <div
-                    className={`
-                    w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 bg-background relative z-10
-                    ${
-                      isCompleted
-                        ? "border-emerald-500 text-emerald-500"
-                        : isActive
-                          ? "border-primary-color text-primary-color scale-110 shadow-sm"
-                          : "border-zinc-200 text-primary-color"
-                    }
-                  `}
+                    key={slice.id}
+                    data-active={isActive}
+                    className={`group flex gap-4 ${isLocked ? " pointer-events-none" : "cursor-pointer"}`}
+                    onClick={() => !isLocked && handleManualSliceChange(sliceId)}
                   >
-                    {isCompleted ? (
-                      <Check className="w-3.5 h-3.5" />
-                    ) : (
-                      <span className="text-[10px] font-bold">{sliceId}</span>
-                    )}
-                  </div>
-
-                  {/* Text Content */}
-                  <div
-                    className={`flex-1 pt-0.5 transition-all duration-300 ${isActive ? "translate-x-1" : ""}`}
-                  >
-                    <h3
-                      className={`text-xs font-bold leading-tight ${isActive ? "text-primary-color" : "text-primary-color group-hover:text-primary-color"}`}
+                    {/* Timeline Node */}
+                    <div
+                      className={`
+                      w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 bg-background relative z-10
+                      ${
+                        isCompleted
+                          ? "border-emerald-500 text-emerald-500"
+                          : isActive
+                            ? "border-primary-color text-primary-color scale-110 shadow-sm"
+                            : "border-zinc-200 text-primary-color"
+                      }
+                    `}
                     >
-                      {slice.title}
-                    </h3>
-                    <p className="text-[10px] text-primary-color leading-relaxed mt-1 line-clamp-2">
-                      {slice.description}
-                    </p>
+                      {isCompleted ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <span className="text-[10px] font-bold">{slice.item_number}</span>
+                      )}
+                    </div>
+
+                    {/* Text Content */}
+                    <div
+                      className={`flex-1 pt-0.5 transition-all duration-300 ${isActive ? "translate-x-1" : ""}`}
+                    >
+                      <h3
+                        className={`text-xs font-bold leading-tight ${isActive ? "text-primary-color" : "text-primary-color group-hover:text-primary-color"}`}
+                      >
+                        {slice.title}
+                      </h3>
+                      <p className="text-[10px] text-primary-color leading-relaxed mt-1 line-clamp-2">
+                        {slice.description}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div className="text-center py-8 text-primary-color text-sm">
+                {isLoadingPlanItems ? "Loading plan items..." : "No plan items available"}
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -1314,7 +1005,7 @@ export default function VerticalTaskExecution() {
         <header className="h-16 flex items-center justify-between px-8 border-b border-zinc-100">
           <div>
             <h1 className="text-lg font-bold text-primary-color tracking-tight">
-              {activeSliceMeta?.title || planItems.find((item) => item.item_number === activeSliceId)?.title || `Slice ${activeSliceId}`}
+              {activeSliceMeta?.title || `Slice ${activeSliceId}`}
             </h1>
             <div className="flex items-center gap-2">
               <p className="text-[10px] text-primary-color font-medium uppercase tracking-widest">
@@ -1495,7 +1186,7 @@ export default function VerticalTaskExecution() {
                             What was done
                           </h4>
                           <p className="text-sm text-primary-color leading-relaxed">
-                            {activeSliceMeta?.summary || activeSliceMeta?.detailed_objective || "Slice completed successfully"}
+                            {activeSliceMeta?.detailed_objective || "Slice completed successfully"}
                           </p>
                         </div>
                         <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-100">
@@ -1504,7 +1195,7 @@ export default function VerticalTaskExecution() {
                             How to Verify
                           </h4>
                           <p className="text-xs font-mono text-primary-color">
-                            {activeSliceMeta?.verify || activeSliceMeta?.verification_criteria || "All tests passed"}
+                            {activeSliceMeta?.verification_criteria || "All tests passed"}
                           </p>
                         </div>
                       </div>

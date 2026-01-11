@@ -159,7 +159,7 @@ const PlanTabs = ({ plan }) => {
                     <FileCode className="w-3.5 h-3.5" />
                     Target Files
                   </p>
-                  <div className="grid grid-cols-1 gap-1.5">
+                  <div className="grid grid-cols-1 gap-2">
                     {item.files.map((file, i) => (
                       <div
                         key={i}
@@ -181,7 +181,7 @@ const PlanTabs = ({ plan }) => {
 
               {/* Libraries & External Connections */}
               {(item.dependencies?.length > 0 || item.externalConnections?.length > 0) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                   {/* Libraries */}
                   {item.dependencies?.length > 0 && (
                     <div className="space-y-3">
@@ -205,7 +205,7 @@ const PlanTabs = ({ plan }) => {
                   {/* External Connections */}
                   {item.externalConnections?.length > 0 && (
                     <div className="space-y-3">
-                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                      <p className="text-xs font-semibold  text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                         <Link2 className="w-3.5 h-3.5" />
                         External
                       </p>
@@ -227,7 +227,7 @@ const PlanTabs = ({ plan }) => {
               {/* Context */}
               {item.context && (
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                  <p className="text-xs font-semibold mt-4 text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                     <Info className="w-3.5 h-3.5" />
                     Context
                   </p>

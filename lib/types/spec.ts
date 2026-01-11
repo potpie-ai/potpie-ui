@@ -186,6 +186,7 @@ export interface FileReference {
 export interface PlanItem {
   id: string;
   item_number: number;
+  order: number;
   title: string;
   detailed_objective: string;
   implementation_steps: string[];

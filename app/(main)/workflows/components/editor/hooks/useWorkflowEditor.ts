@@ -960,7 +960,7 @@ export const useWorkflowEditor = ({
 
     // Prepare payload for API
     const payload = {
-      title: updatedWorkflow.title,
+      title: updatedWorkflow.title.trim() || "Untitled Workflow",
       description: updatedWorkflow.description,
       nodes: updatedWorkflow.graph.nodes,
       adjacency_list: updatedWorkflow.graph.adjacency_list,

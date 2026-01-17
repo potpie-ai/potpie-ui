@@ -279,6 +279,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     queryFn: async () => {
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = inputValue.match(regex);
+    
       if (!match) {
         setLinkedRepoName(null);
         setIsValidLink(false);
@@ -286,45 +287,120 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         toast.error("Invalid repository URL. Please try again.");
         return "Invalid repository URL.";
       }
-
+    
       const ownerRepo = `${match[1]}/${match[2]}`;
-
+    
+      const repoExistsPublic = async (repo: string) => {
+        try {
+          const res = await fetch(`https://api.github.com/repos/${repo}`);
+          return res.status === 200;
+        } catch {
+          return false;
+        }
+      };
+    
       try {
         if (linkedRepoName === ownerRepo) {
           handleSetPublicRepoDialog(false);
           setIsValidLink(true);
           return "Repo is public";
         }
-        const response =
-          await BranchAndRepositoryService.check_public_repo(ownerRepo);
-
-        // Handle both { is_public: true } and direct boolean/string responses
-        const isPublic =
-          response === true ||
-          response === "True" ||
-          response === "true" ||
-          response?.is_public === true;
-
+    
+        const response = await BranchAndRepositoryService.check_public_repo(ownerRepo);
+        console.log("Public repo check response:", response);
+    
+        let isPublic = false;
+    
+        // Handle response formats: boolean / string / object
+        if (typeof response === "boolean") {
+          isPublic = response;
+        } else if (typeof response === "string") {
+          isPublic = response.toLowerCase() === "true";
+        } else if (typeof response === "object" && response !== null) {
+          isPublic =
+            response.is_public === true ||
+            response.isPublic === true ||
+            response.public === true;
+        }
+    
         if (isPublic) {
           setIsValidLink(true);
           setLinkedRepoName(ownerRepo);
           dispatch(setRepoName(ownerRepo));
-        } else {
-          setIsValidLink(false);
-          setLinkedRepoName(null);
-          toast.error("Repo is not public. Try linking a private repo.");
+          handleSetPublicRepoDialog(false);
+          return response;
         }
+    
+        // Not public based on response: show popup ONLY if explicitly private
+        const isExplicitlyPrivate =
+          response === false ||
+          response === "False" ||
+          response === "false" ||
+          (typeof response === "object" &&
+            response !== null &&
+            (response.is_public === false ||
+              response.isPublic === false ||
+              response.public === false));
+    
+        setIsValidLink(false);
+        setLinkedRepoName(null);
         handleSetPublicRepoDialog(false);
+    
+        if (isExplicitlyPrivate) {
+          toast.error("This repository is private. Please link it through GitHub to import it.");
+          openPopup();
+        } else {
+          toast.error("Unable to verify repository visibility. Please try again.");
+        }
+    
         return response;
       } catch (error: any) {
         setLinkedRepoName(null);
         handleSetPublicRepoDialog(false);
-
-        openPopup();
-        toast.error("Repo is not public try linking new private repo...");
-        throw error;
+    
+        const statusCode = error?.response?.status;
+        const errorMessage = error?.response?.data?.message || error?.message;
+    
+        console.error("Error checking public repo:", {
+          statusCode,
+          errorMessage,
+          error: error?.response?.data,
+          ownerRepo,
+        });
+    
+        // Fix: 404 can be invalid repo OR private repo
+        if (statusCode === 404) {
+          const exists = await repoExistsPublic(ownerRepo);
+    
+          if (!exists) {
+            toast.error("Repository does not exist. Please check the URL.");
+            return false;
+          }
+    
+          toast.error("Repository is private or not accessible. Please link it through GitHub.");
+          openPopup();
+          return false;
+        }
+    
+        if (statusCode === 401) {
+          toast.error(
+            "Backend is not authenticated with GitHub (401). This does not mean the repo is private. Configure GitHub auth and retry."
+          );
+          return false;
+        }
+    
+        if (statusCode === 403) {
+          toast.error(
+            "GitHub API forbidden or rate-limited (403). This does not mean the repo is private. Try again later."
+          );
+          return false;
+        }
+    
+        toast.error("Unable to verify repository right now. Please try again.");
+        return false;
       }
     },
+    
     enabled: false,
     retry: false,
   });

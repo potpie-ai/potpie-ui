@@ -23,7 +23,16 @@ export default function AuthLayout({
           if (process.env.NODE_ENV === 'development') {
             console.log("token", token);
           }
-          window.location.href = `http://localhost:54333/auth/callback?token=${token}`;
+          // Get Firebase refresh token to send to VS Code extension
+          // This allows the extension to refresh tokens without requiring re-login
+          const refreshToken = (user as any).stsTokenManager?.refreshToken || "";
+          
+          const callbackUrl = new URL("http://localhost:54333/auth/callback");
+          callbackUrl.searchParams.set("token", token);
+          if (refreshToken) {
+            callbackUrl.searchParams.set("refreshToken", refreshToken);
+          }
+          window.location.href = callbackUrl.toString();
         });
         return;
       }

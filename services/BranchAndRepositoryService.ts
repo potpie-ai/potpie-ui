@@ -41,32 +41,68 @@ export default class BranchAndRepositoryService {
         }
     }
 
-    static async getUserRepositories() {
-        const headers: Headers = await getHeaders();
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    static async getUserRepositories(limit?: number, offset: number = 0) {
+      const headers: Headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
-        console.log("BranchAndRepositoryService: Getting user repositories");
-        console.log(`BranchAndRepositoryService: Base URL: ${baseUrl}`);
-        
-        console.log(`BranchAndRepositoryService: Headers: ${JSON.stringify({
-            ...headers,
-            Authorization: headers.Authorization ? `${headers.Authorization.substring(0, 15)}...` : 'Not set'
-        })}`);
+      console.log("BranchAndRepositoryService: Getting user repositories");
+      console.log(`BranchAndRepositoryService: Base URL: ${baseUrl}`);
+      
+      console.log(`BranchAndRepositoryService: Headers: ${JSON.stringify({
+          ...headers,
+          Authorization: headers.Authorization ? `${headers.Authorization.substring(0, 15)}...` : 'Not set'
+      })}`);
 
-        try {
-            const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
-                headers,
-            });
-            console.log("BranchAndRepositoryService: Successfully fetched user repositories");
-            return response.data.repositories;
-        } catch (error) {
-            console.error("BranchAndRepositoryService: Error fetching user repositories:", error);
-            if (axios.isAxiosError(error)) {
-                console.error(`BranchAndRepositoryService: Status: ${error.response?.status}, Message: ${error.message}`);
-                console.error(`BranchAndRepositoryService: Response data:`, error.response?.data);
-            }
-            throw new Error("Error fetching user repositories");
-        }
+      try {
+          const params: any = {};
+          if (limit !== undefined) {
+              params.limit = limit;
+          }
+          if (offset > 0) {
+              params.offset = offset;
+          }
+          
+          const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
+              headers,
+              params,
+          });
+          console.log("BranchAndRepositoryService: Successfully fetched user repositories");
+          
+          // Handle different response formats
+          const data = response.data;
+          
+          // If response is an array (old format), wrap it
+          if (Array.isArray(data)) {
+              return {
+                  repositories: data,
+                  has_next_page: data.length === 20, // Assume more if we got exactly 20
+                  total_count: undefined
+              };
+          }
+          
+          // If response has repositories property
+          if (data.repositories) {
+              return {
+                  repositories: data.repositories,
+                  has_next_page: data.has_next_page !== undefined ? data.has_next_page : (data.repositories.length === 20),
+                  total_count: data.total_count
+              };
+          }
+          
+          // Fallback: treat entire response as repositories array
+          return {
+              repositories: data,
+              has_next_page: false,
+              total_count: undefined
+          };
+      } catch (error) {
+          console.error("BranchAndRepositoryService: Error fetching user repositories:", error);
+          if (axios.isAxiosError(error)) {
+              console.error(`BranchAndRepositoryService: Status: ${error.response?.status}, Message: ${error.message}`);
+              console.error(`BranchAndRepositoryService: Response data:`, error.response?.data);
+          }
+          throw new Error("Error fetching user repositories");
+      }
     }
 
     static async getUserProjects() {
@@ -84,46 +120,79 @@ export default class BranchAndRepositoryService {
       }
   }
 
-    static async getBranchList(repoName: string) {
+  static async getBranchList(
+    repoName: string,
+    limit?: number,
+    offset: number = 0,
+    search?: string,
+    afterCursor?: string
+  ): Promise<{
+        branches: string[];
+        has_next_page?: boolean;
+        end_cursor?: string;
+        total_count?: number;
+    }> {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
         try {
-            console.log(`Fetching branches for repo: ${repoName}`);
+          console.log(`Fetching branches for repo: ${repoName}, limit: ${limit}, offset: ${offset}, search: ${search}, afterCursor: ${afterCursor}`);
             
             if (!repoName) {
                 console.error("No repository name provided");
-                return [];
+                return { branches: [] };
+            }
+
+            const params: any = {
+                repo_name: repoName,
+            };
+          
+            if (limit !== undefined) {
+                params.limit = limit;
+            }
+            if (offset > 0) {
+                params.offset = offset;
+            }
+            if (search !== undefined && search !== null && search !== "") {
+                params.search = search;
+            }
+            if (afterCursor !== undefined && afterCursor !== null && afterCursor !== "") {
+                params.after_cursor = afterCursor;
             }
             
             const response = await axios.get(
                 `${baseUrl}/api/v1/github/get-branch-list`,
                 {
-                    params: {
-                        repo_name: repoName,
-                    },
+                    params,
                     headers,
                 }
             );
             
             console.log("Branch API raw response status:", response.status);
             
-            // The response format is { branches: string[] }
-            if (response.data && Array.isArray(response.data.branches)) {
-                console.log(`Found ${response.data.branches.length} branches in response`);
-                return response.data.branches;
-            } else if (Array.isArray(response.data)) {
-                console.log(`Found ${response.data.length} branches in direct response array`);
-                return response.data;
-            } else {
-                console.log("No branches array found in response, returning empty array");
-                console.log("Response data type:", typeof response.data);
-                return [];
-            }
+            // Handle GraphQL response format: { branches: string[], has_next_page: boolean, end_cursor: string, total_count: number }
+            // Or REST response format: { branches: string[] }
+            if (response.data) {
+              if (Array.isArray(response.data.branches)) {
+                  console.log(`Found ${response.data.branches.length} branches in response`);
+                  return {
+                      branches: response.data.branches,
+                      has_next_page: response.data.has_next_page,
+                      end_cursor: response.data.end_cursor,
+                      total_count: response.data.total_count,
+                  };
+              } else if (Array.isArray(response.data)) {
+                  console.log(`Found ${response.data.length} branches in direct response array`);
+                  return { branches: response.data };
+              }
+          }
+          
+          console.log("No branches array found in response, returning empty array");
+          return { branches: [] };
         } catch (error) {
             console.error("Error fetching branch list:", error);
             // Return empty array instead of throwing to avoid crashing the UI
-            return [];
+            return { branches: [] };
         }
     }
 

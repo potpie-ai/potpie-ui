@@ -164,7 +164,11 @@ export default class BranchAndRepositoryService {
           }
         );
         return response.data;
-      } catch (error) {
+      } catch (error: any) {
+        // Preserve the original error so the caller can access status code and response data
+        if (axios.isAxiosError(error)) {
+          throw error;
+        }
         throw new Error("Error fetching Repository");
       }
     }

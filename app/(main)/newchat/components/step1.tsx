@@ -7,7 +7,6 @@ import {
   Plus,
   XCircle,
   Info,
-  Loader2,
   Folder,
 } from "lucide-react";
 import Link from "next/link";
@@ -57,7 +56,6 @@ import { ParsingStatusEnum } from "@/lib/Constants";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import ParsingProgress from "./ParsingProgress";
-import FileSelector, { ParseFilters } from "./FileSelector";
 
 const repoLinkSchema = z.object({
   repoLink: z
@@ -86,18 +84,17 @@ const getRepoIdentifier = (repo: RepoIdentifier) => {
   return repo?.name || "";
 };
 
-const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
+const Step1: React.FC<Step1Props> = ({
+  setProjectId,
+  setChatStep,
+}) => {
+
   const { repoName, branchName } = useSelector(
     (state: RootState) => state.RepoAndBranch
   );
 
   const dispatch = useDispatch();
 
-  const [filters, setFilters] = useState<ParseFilters>({
-    excluded_directories: [],
-    excluded_files: [],
-    excluded_extensions: [],
-  });
 
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [isPublicRepoDailog, setIsPublicRepoDailog] = useState(false);
@@ -111,6 +108,20 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
   const [searchValue, setSearchValue] = useState("");
   const [repoOpen, setRepoOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
+  const [searchText, setSearchText] = useState(""); // Raw search input (single string, no splitting)
+  const [debouncedSearchText, setDebouncedSearchText] = useState(""); // Debounced search text
+  const [allFetchedBranches, setAllFetchedBranches] = useState<string[]>([]); // All branches fetched across all pages
+  const [displayedBranches, setDisplayedBranches] = useState<string[]>([]); // Branches to display (filtered or paginated)
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0); // Track which page we're on (0-indexed)
+  const [isSearching, setIsSearching] = useState(false); // Track if we're in search mode
+  const [isExhausted, setIsExhausted] = useState(false); // Track if all pages have been checked during search
+  const [repoOffset, setRepoOffset] = useState(0); // For repo pagination
+  const [allRepos, setAllRepos] = useState<any[]>([]); // Store all loaded repos
+  const [hasMoreRepos, setHasMoreRepos] = useState(false); // Track if more repos available
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const branchListRef = useRef<HTMLDivElement | null>(null); // Ref for branch CommandList
+  const isAutoFetchingRef = useRef<boolean>(false); // Track if we're auto-fetching during search
 
   const searchParams = useSearchParams();
 
@@ -136,8 +147,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     try {
       const parseResponse = await BranchAndRepositoryService.parseRepo(
         repo_name,
-        branch_name,
-        filters
+        branch_name
       );
       const projectId = parseResponse.project_id;
       const initialStatus = parseResponse.status;
@@ -170,16 +180,16 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     try {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-
+      
       dispatch(setRepoName(repo_path));
       dispatch(setBranchName(branch_name));
-
+      
       const parseResponse = await axios.post(
         `${baseUrl}/api/v1/parse`,
-        { repo_path, branch_name, filters },
+        { repo_path, branch_name },
         { headers }
       );
-
+      
       const projectId = parseResponse.data.project_id;
       const initialStatus = parseResponse.data.status;
 
@@ -206,69 +216,278 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     }
   };
 
-  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery(
+  const { data: repoData, isLoading: UserRepositorysLoading, isFetching: isFetchingRepos } = useQuery(
     {
-      queryKey: ["user-repository"],
+      queryKey: ["user-repository", repoOffset],
       queryFn: async () => {
-        const repos =
-          await BranchAndRepositoryService.getUserRepositories().then(
-            (data) => {
-              if (defaultRepo && data.length > 0) {
-                const decodedDefaultRepo =
-                  decodeURIComponent(defaultRepo).toLowerCase();
-                const matchingRepo = data.find((repo: RepoIdentifier) => {
-                  const repoIdentifier = getRepoIdentifier(repo);
-                  return (
-                    repoIdentifier &&
-                    repoIdentifier.toLowerCase() === decodedDefaultRepo
-                  );
-                });
-                dispatch(
-                  setRepoName(
-                    matchingRepo ? decodeURIComponent(defaultRepo) : ""
-                  )
-                );
-              }
-              return data;
-            }
-          );
-        return repos;
+        const result = await BranchAndRepositoryService.getUserRepositories(20, repoOffset);
+        const repos = result.repositories || result;
+        
+        if (defaultRepo && repos.length > 0 && repoOffset === 0) {
+          const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
+          const matchingRepo = repos.find((repo: RepoIdentifier) => {
+            const repoIdentifier = getRepoIdentifier(repo);
+            return repoIdentifier && repoIdentifier.toLowerCase() === decodedDefaultRepo;
+          });
+          dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
+        }
+        
+        return {
+          repositories: repos,
+          has_next_page: result.has_next_page || false,
+          total_count: result.total_count
+        };
       },
     }
   );
 
-  const { data: UserBranch, isLoading: UserBranchLoading } = useQuery({
-    queryKey: ["user-branch", repoName],
-    queryFn: () => {
+  // Update allRepos when repoData changes
+  useEffect(() => {
+    if (repoData) {
+      // Handle both old format (array) and new format (object with repositories property)
+      const repos = Array.isArray(repoData) ? repoData : (repoData.repositories || []);
+      const hasNext = Array.isArray(repoData) ? (repos.length === 20) : (repoData.has_next_page || false);
+      
+      if (repoOffset === 0) {
+        // Initial load, replace all repos
+        setAllRepos(repos);
+      } else {
+        // Load more, append to existing repos
+        setAllRepos(prev => {
+          const existing = new Set(prev.map(r => getRepoIdentifier(r)));
+          const uniqueNew = repos.filter((repo: RepoIdentifier) => {
+            const identifier = getRepoIdentifier(repo);
+            return identifier && !existing.has(identifier);
+          });
+          return [...prev, ...uniqueNew];
+        });
+      }
+      setHasMoreRepos(hasNext);
+    }
+  }, [repoData, repoOffset]);
+
+  // Use allRepos instead of UserRepositorys
+  const UserRepositorys = allRepos;
+
+  // Debounce search text: wait 300ms after typing stops
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    if (searchText.length > 0) {
+      debounceTimerRef.current = setTimeout(() => {
+        setDebouncedSearchText(searchText);
+      }, 300);
+    } else {
+      setDebouncedSearchText("");
+    }
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchText]);
+
+  // Case-insensitive matching function
+  const matchesSearch = (branchName: string, searchQuery: string): boolean => {
+    return branchName.toLowerCase().includes(searchQuery.toLowerCase());
+  };
+
+  // Helper function to sort branches by relevance to search term
+  const sortBranchesByRelevance = (branches: string[], searchTerm: string): string[] => {
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      return branches;
+    }
+    
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    
+    return [...branches].sort((a, b) => {
+      const aLower = a.toLowerCase();
+      const bLower = b.toLowerCase();
+      
+      // Exact match (case-insensitive) - highest priority
+      const aExact = aLower === lowerSearchTerm;
+      const bExact = bLower === lowerSearchTerm;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      
+      // Starts with search term - second priority
+      const aStarts = aLower.startsWith(lowerSearchTerm);
+      const bStarts = bLower.startsWith(lowerSearchTerm);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      
+      // Contains search term - third priority
+      const aContains = aLower.includes(lowerSearchTerm);
+      const bContains = bLower.includes(lowerSearchTerm);
+      if (aContains && !bContains) return -1;
+      if (!aContains && bContains) return 1;
+      
+      // If both match, sort by position of match (earlier match is better)
+      if (aContains && bContains) {
+        const aIndex = aLower.indexOf(lowerSearchTerm);
+        const bIndex = bLower.indexOf(lowerSearchTerm);
+        if (aIndex !== bIndex) {
+          return aIndex - bIndex;
+        }
+      }
+      
+      // Finally, alphabetical order
+      return a.localeCompare(b);
+    });
+  };
+
+  // Fetch branches for a specific page (no search filter - we fetch all and filter locally)
+  const { data: branchData, isLoading: UserBranchLoading, isFetching: isFetchingBranches } = useQuery({
+    queryKey: ["user-branch", repoName, currentPage],
+    queryFn: async () => {
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = repoName.match(regex);
-      if (match) {
-        const ownerRepo = `${match[1]}/${match[2]}`;
-        return BranchAndRepositoryService.getBranchList(ownerRepo);
-      }
-      return BranchAndRepositoryService.getBranchList(repoName).then((data) => {
-        // Auto-select branch if there's only one
-        if (data?.length === 1) {
-          dispatch(setBranchName(data[0]));
-        }
-        // Handle default branch selection if provided
-        else if (data?.length > 0 && defaultBranch) {
-          const matchingBranch = data.find(
-            (branch: string) =>
-              branch.toLowerCase() ===
-              decodeURIComponent(defaultBranch).toLowerCase()
-          );
-          dispatch(
-            setBranchName(
-              matchingBranch ? decodeURIComponent(defaultBranch) : ""
-            )
-          );
-        }
-        return data;
-      });
+      const ownerRepo = match ? `${match[1]}/${match[2]}` : repoName;
+      
+      const limit = 20;
+      const offset = currentPage * limit;
+      
+      const result = await BranchAndRepositoryService.getBranchList(
+        ownerRepo, 
+        limit, 
+        offset,
+        undefined, // No search filter - fetch all branches
+        undefined
+      );
+      
+      return result;
     },
     enabled: !!repoName && repoName !== "",
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
+
+  // Accumulate fetched branches across pages
+  useEffect(() => {
+    if (branchData && branchData.branches) {
+      const newBranches = branchData.branches || [];
+      
+      setAllFetchedBranches(prev => {
+        const existing = new Set(prev);
+        const uniqueNew = newBranches.filter((b: string) => !existing.has(b));
+        return [...prev, ...uniqueNew];
+      });
+      
+      setHasNextPage(branchData.has_next_page || false);
+    }
+  }, [branchData]);
+
+  // Filter and display branches based on search text
+  useEffect(() => {
+    if (debouncedSearchText.length === 0) {
+      // No search: show paginated branches (first 20, then Load More)
+      setIsSearching(false);
+      setIsExhausted(false);
+      isAutoFetchingRef.current = false;
+      const pageSize = 20;
+      const endIndex = (currentPage + 1) * pageSize;
+      setDisplayedBranches(allFetchedBranches.slice(0, endIndex));
+    } else {
+      // Search mode: filter all fetched branches and sort by relevance
+      setIsSearching(true);
+      setIsExhausted(false); // Reset exhausted state for new search
+      isAutoFetchingRef.current = false; // Reset auto-fetching for new search
+      const filtered = allFetchedBranches.filter(branch => 
+        matchesSearch(branch, debouncedSearchText)
+      );
+      const sorted = sortBranchesByRelevance(filtered, debouncedSearchText);
+      setDisplayedBranches(sorted);
+    }
+  }, [debouncedSearchText, allFetchedBranches, currentPage]);
+
+  // Progressive fetching during search: auto-fetch more pages if not enough matches
+  useEffect(() => {
+    if (!isSearching || !debouncedSearchText || debouncedSearchText.length === 0) {
+      isAutoFetchingRef.current = false;
+      setIsExhausted(false);
+      return;
+    }
+
+    // Only proceed if we're not already fetching
+    if (isFetchingBranches || isAutoFetchingRef.current) {
+      return;
+    }
+
+    const filtered = allFetchedBranches.filter(branch => 
+      matchesSearch(branch, debouncedSearchText)
+    );
+    const sorted = sortBranchesByRelevance(filtered, debouncedSearchText);
+    const enoughMatches = 20;
+    const needsMoreMatches = sorted.length < enoughMatches;
+    const canFetchMore = hasNextPage;
+
+    if (needsMoreMatches && canFetchMore) {
+      // Auto-fetch next page
+      isAutoFetchingRef.current = true;
+      setCurrentPage(prev => prev + 1);
+    } else if (!hasNextPage) {
+      // All pages exhausted
+      setIsExhausted(true);
+      isAutoFetchingRef.current = false;
+    } else {
+      // We have enough matches
+      isAutoFetchingRef.current = false;
+      setIsExhausted(false);
+    }
+  }, [debouncedSearchText, allFetchedBranches, hasNextPage, isFetchingBranches, isSearching]);
+
+  // Reset auto-fetching flag when fetch completes
+  useEffect(() => {
+    if (!isFetchingBranches) {
+      isAutoFetchingRef.current = false;
+    }
+  }, [isFetchingBranches]);
+
+  // Auto-select branch logic
+  useEffect(() => {
+    if (displayedBranches.length === 1 && !isSearching) {
+      dispatch(setBranchName(displayedBranches[0]));
+    } else if (displayedBranches.length > 0 && defaultBranch) {
+      const matchingBranch = displayedBranches.find((branch: string) => 
+        branch.toLowerCase() === decodeURIComponent(defaultBranch).toLowerCase()
+      );
+      if (matchingBranch) {
+        dispatch(setBranchName(decodeURIComponent(defaultBranch)));
+      }
+    }
+  }, [displayedBranches, defaultBranch, dispatch, isSearching]);
+
+  // Reset state when repo changes
+  useEffect(() => {
+    setSearchText("");
+    setDebouncedSearchText("");
+    setCurrentPage(0);
+    setAllFetchedBranches([]);
+    setDisplayedBranches([]);
+    setHasNextPage(false);
+    setIsSearching(false);
+    setIsExhausted(false);
+    isAutoFetchingRef.current = false;
+  }, [repoName]);
+
+  // Trigger initial fetch when repo is selected
+  useEffect(() => {
+    if (repoName && repoName !== "" && currentPage === 0 && allFetchedBranches.length === 0) {
+      // Initial fetch will happen via the useQuery hook
+    }
+  }, [repoName, currentPage, allFetchedBranches.length]);
+
+  // Reset repo pagination when repo popover closes
+  useEffect(() => {
+    if (!repoOpen && repoOffset > 0) {
+      // Keep the loaded repos, but reset offset for next time
+      // Actually, we want to keep the repos loaded, so don't reset
+    }
+  }, [repoOpen, repoOffset]);
 
   const {
     data: PublicRepo,
@@ -300,9 +519,9 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
       };
     
       try {
-        if (linkedRepoName === ownerRepo) {
-          handleSetPublicRepoDialog(false);
-          setIsValidLink(true);
+        if(linkedRepoName === ownerRepo){
+        handleSetPublicRepoDialog(false);
+        setIsValidLink(true);
           return "Repo is public";
         }
     
@@ -404,10 +623,11 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     enabled: false,
     retry: false,
   });
+  
 
   const [showTooltip, setShowTooltip] = useState(false);
   const handleRepoSelect = (repo: string) => {
-    dispatch(setRepoName(repo));
+     dispatch(setRepoName(repo));
     setInputValue(repo);
     setLinkedRepoName(null);
   };
@@ -427,43 +647,8 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     setIsParseDisabled(!repoName || !branchName || parsingStatus !== "");
   }, [repoName, branchName, parsingStatus, inputValue, isValidLink]);
 
-  // Fetch existing filters when repo and branch are selected
   useEffect(() => {
-    const fetchExistingFilters = async () => {
-      // Reset filters first when repo/branch changes
-      const defaultFilters = {
-        excluded_directories: [],
-        excluded_files: [],
-        excluded_extensions: [],
-      };
-      setFilters(defaultFilters);
-
-      if (repoName && branchName) {
-        try {
-          const statusResponse =
-            await BranchAndRepositoryService.checkParsingStatus(
-              repoName,
-              branchName
-            );
-          if (statusResponse?.current_filters) {
-            const existingFilters = statusResponse.current_filters;
-            setFilters({
-              excluded_directories: existingFilters.excluded_directories || [],
-              excluded_files: existingFilters.excluded_files || [],
-              excluded_extensions: existingFilters.excluded_extensions || [],
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching existing filters:", error);
-        }
-      }
-    };
-
-    fetchExistingFilters();
-  }, [repoName, branchName]);
-
-  useEffect(() => {
-    if (isPublicRepoDailog) {
+    if(isPublicRepoDailog){
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = inputValue.match(regex);
       if (match) {
@@ -475,7 +660,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
   }, [inputValue, isPublicRepoDailog]);
 
   useEffect(() => {
-    if (isLocalRepoDailog) {
+    if(isLocalRepoDailog){
       // Simple validation for local repo path - just check if it's not empty
       setIsValidLink(!!localRepoPath && !!localBranchName);
     }
@@ -483,16 +668,17 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
 
   // Function to safely set the public repo dialog state
   const handleSetPublicRepoDialog = (value: boolean) => {
+    // Only allow opening the dialog if we're not on localhost
+    if (value && process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost')) {
+      return;
+    }
     setIsPublicRepoDailog(value);
   };
 
   return (
     <div className="text-black max-w-[900px]">
       <h1 className="text-lg">Select a repository and branch</h1>
-      <Link
-        href="https://docs.potpie.ai/quickstart"
-        className="text-primary underline"
-      >
+      <Link href="https://docs.potpie.ai/quickstart" className="text-primary underline">
         Need help?
       </Link>
       <div className="flex items-center gap-4 mt-4">
@@ -500,141 +686,150 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
           <Skeleton className="flex-1 h-10" />
         ) : (
           <>
-            <Popover open={repoOpen} onOpenChange={setRepoOpen}>
-              <PopoverTrigger asChild className="flex-1">
-                {UserRepositorys?.length === 0 || !repoName ? (
-                  <Button
-                    className="flex gap-3 items-center font-semibold justify-start"
-                    variant="outline"
-                  >
+          <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+            <PopoverTrigger asChild className="flex-1">
+              {UserRepositorys?.length === 0 || !repoName ? (
+                <Button
+                  className="flex gap-3 items-center font-semibold justify-start"
+                  variant="outline"
+                >
+                  <Github
+                    className="h-4 w-4 text-[#7A7A7A]"
+                    strokeWidth={1.5}
+                  />
+                  Select Repository
+                </Button>
+              ) : (
+                <Button
+                  className="flex gap-3 items-center font-semibold justify-start"
+                  variant="outline"
+                >
+                  {repoName.startsWith('/') || repoName.includes(':\\') || repoName.includes(':/') ? (
+                    <Folder
+                      className="h-4 w-4 text-[#7A7A7A]"
+                      strokeWidth={1.5}
+                    />
+                  ) : (
                     <Github
                       className="h-4 w-4 text-[#7A7A7A]"
                       strokeWidth={1.5}
                     />
-                    Select Repository
-                  </Button>
-                ) : (
-                  <Button
-                    className="flex gap-3 items-center font-semibold justify-start"
-                    variant="outline"
-                  >
-                    {repoName.startsWith("/") ||
-                    repoName.includes(":\\") ||
-                    repoName.includes(":/") ? (
-                      <Folder
-                        className="h-4 w-4 text-[#7A7A7A]"
-                        strokeWidth={1.5}
-                      />
-                    ) : (
-                      <Github
-                        className="h-4 w-4 text-[#7A7A7A]"
-                        strokeWidth={1.5}
-                      />
-                    )}
-                    <span className="truncate text-ellipsis whitespace-nowrap">
-                      {repoName}
-                    </span>
-                  </Button>
-                )}
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                <Command defaultValue={defaultRepo ?? undefined}>
-                  <CommandInput
-                    value={searchValue}
-                    onValueChange={(e) => {
-                      setSearchValue(e);
-                    }}
-                    placeholder="Search repo or paste local path (e.g., /Users/...)"
-                  />
-                  <CommandList>
-                    <CommandEmpty>
-                      {searchValue.startsWith("https://github.com/") ? (
-                        <Button
-                          onClick={() => {
-                            handleSetPublicRepoDialog(true);
-                            setInputValue(searchValue);
-                          }}
-                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2"
-                        >
+                  )}
+                  <span className="truncate text-ellipsis whitespace-nowrap">
+                    {repoName}
+                  </span>
+                </Button>
+              )}
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+              <Command defaultValue={defaultRepo ?? undefined}>
+                <CommandInput
+                  value={searchValue}
+                  onValueChange={(e) => {
+                    setSearchValue(e);
+                  }}
+                  placeholder="Search repo or paste local path (e.g., /Users/...)"
+                />
+                <CommandList>
+                  <CommandEmpty>
+                    {searchValue.startsWith("https://github.com/") && !process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
+                      <Button
+                        onClick={() => {handleSetPublicRepoDialog(true);setInputValue(searchValue)}}
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                      >
                           <Plus className="size-4" /> <p> Public Repository</p>
-                        </Button>
-                      ) : searchValue &&
-                        searchValue.trim() !== "" &&
-                        (searchValue.startsWith("/") ||
-                          searchValue.includes(":\\") ||
-                          searchValue.includes(":/")) &&
-                        process.env.NEXT_PUBLIC_BASE_URL?.includes(
-                          "localhost"
-                        ) ? (
-                        <Button
-                          onClick={() => {
-                            setIsLocalRepoDailog(true);
-                            setLocalRepoPath(searchValue);
-                          }}
-                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2"
-                        >
+                      </Button>
+                    ) : searchValue && searchValue.trim() !== "" && 
+                        (searchValue.startsWith('/') || searchValue.includes(':\\') || searchValue.includes(':/')) && 
+                        process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
+                      <Button
+                        onClick={() => {setIsLocalRepoDailog(true);setLocalRepoPath(searchValue)}}
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                      >
                           <Plus className="size-4" /> <p> Local Repository</p>
-                        </Button>
-                      ) : searchValue && searchValue.trim() !== "" ? (
-                        "No repositories found."
-                      ) : (
-                        "No results found."
-                      )}
-                    </CommandEmpty>
+                      </Button>
+                    ) : searchValue && searchValue.trim() !== "" ? (
+                      "No repositories found."
+                    ) : (
+                      "No results found."
+                    )}
+                  </CommandEmpty>
 
-                    <CommandGroup>
-                      {isValidLink && linkedRepoName && (
+                  <CommandGroup>
+                  {isValidLink && linkedRepoName && (
+                      <CommandItem
+                        value={linkedRepoName}
+                        onSelect={() => handleRepoSelect(linkedRepoName)}
+                      >
+                        {linkedRepoName}
+                      </CommandItem>
+                    )}
+                    {UserRepositorys?.map((value: any) => {
+                      const repoIdentifier = getRepoIdentifier(value);
+                      if (!repoIdentifier) {
+                        return null;
+                      }
+                      return (
                         <CommandItem
-                          value={linkedRepoName}
-                          onSelect={() => handleRepoSelect(linkedRepoName)}
+                          key={value.id}
+                          value={repoIdentifier}
+                          onSelect={(value) => {
+                            dispatch(setRepoName(value));
+                            setRepoOpen(false);
+                          }}
                         >
-                          {linkedRepoName}
+                          {repoIdentifier}
                         </CommandItem>
-                      )}
-                      {UserRepositorys?.map((value: any) => {
-                        const repoIdentifier = getRepoIdentifier(value);
-                        if (!repoIdentifier) {
-                          return null;
-                        }
-                        return (
-                          <CommandItem
-                            key={value.id}
-                            value={repoIdentifier}
-                            onSelect={(value) => {
-                              dispatch(setRepoName(value));
-                              setRepoOpen(false);
-                            }}
-                          >
-                            {repoIdentifier}
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                    <CommandSeparator className="my-1" />
-                    <CommandItem
-                      value="public"
-                      onSelect={() => handleSetPublicRepoDialog(true)}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Plus className="size-4" /> Public Repository
-                      </span>
-                    </CommandItem>
-                    <CommandSeparator className="my-1" />
-                    {process.env.NEXT_PUBLIC_BASE_URL?.includes(
-                      "localhost"
-                    ) && (
-                      <>
+                      );
+                    })}
+                  </CommandGroup>
+                  {/* Show "Load More" when there are more repos */}
+                  {hasMoreRepos && (
+                    <>
+                      <CommandSeparator className="my-1" />
+                      <CommandGroup>
                         <CommandItem
-                          value="local"
-                          onSelect={() => setIsLocalRepoDailog(true)}
+                          value="load-more-repos"
+                          onSelect={() => {
+                            setRepoOffset(allRepos.length);
+                          }}
+                          className="cursor-pointer text-primary font-medium"
                         >
                           <span className="flex items-center gap-2">
-                            <Folder className="size-4" /> Local Repository
+                            <Plus className="size-4" /> Load More Repositories
                           </span>
                         </CommandItem>
-                        <CommandSeparator className="my-1" />
-                      </>
-                    )}
+                      </CommandGroup>
+                    </>
+                  )}
+                  <CommandSeparator className="my-1" />
+                  {!process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
+                    <>
+                      <CommandItem
+                        value="public"
+                        onSelect={() => handleSetPublicRepoDialog(true)}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Plus className="size-4" /> Public Repository
+                        </span>
+                      </CommandItem>
+                      <CommandSeparator className="my-1" />
+                    </>
+                  )}
+                  {process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
+                    <>
+                      <CommandItem
+                        value="local"
+                        onSelect={() => setIsLocalRepoDailog(true)}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Folder className="size-4" /> Local Repository
+                        </span>
+                      </CommandItem>
+                      <CommandSeparator className="my-1" />
+                    </>
+                  )}
+                  {!process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
                     <CommandItem>
                       <span
                         className="flex items-center gap-2"
@@ -646,20 +841,21 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                         <Plus className="size-4" /> Link new repository
                       </span>
                     </CommandItem>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-
-            {/* No separate local repo button */}
+                  )}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          
+          {/* No separate local repo button */}
           </>
         )}
-        {UserBranchLoading ? (
+        {UserBranchLoading && currentPage === 0 ? (
           <Skeleton className="flex-1 h-10" />
         ) : (
           <Popover open={branchOpen} onOpenChange={setBranchOpen}>
             <PopoverTrigger asChild className="flex-1">
-              {UserBranch?.length === 0 || !branchName ? (
+              {displayedBranches.length === 0 || !branchName ? (
                 <Button
                   className="flex gap-3 items-center font-semibold justify-start"
                   variant="outline"
@@ -686,24 +882,80 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
               )}
             </PopoverTrigger>
             <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-              <Command defaultValue={defaultBranch ?? undefined}>
-                <CommandInput placeholder="Search branch..." />
-                <CommandList>
-                  <CommandEmpty>No branch found.</CommandEmpty>
+              <Command defaultValue={defaultBranch ?? undefined} shouldFilter={false}>
+                <CommandInput 
+                  placeholder="Search all branches..." 
+                  value={searchText}
+                  onValueChange={(value) => {
+                    setSearchText(value);
+                  }}
+                />
+                <CommandList ref={branchListRef}>
+                  {/* Show search status when searching */}
+                  {isSearching && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground border-b">
+                      {isFetchingBranches ? (
+                        "Searching through all branches..."
+                      ) : isExhausted ? (
+                        `Found ${displayedBranches.length} match${displayedBranches.length !== 1 ? 'es' : ''}`
+                      ) : (
+                        `Found ${displayedBranches.length} match${displayedBranches.length !== 1 ? 'es' : ''}${hasNextPage ? ' (searching...)' : ''}`
+                      )}
+                    </div>
+                  )}
+                  <CommandEmpty>
+                    {!isFetchingBranches && displayedBranches.length === 0 
+                      ? (searchText && searchText.length > 0
+                          ? (isExhausted 
+                              ? "No branches found matching your search." 
+                              : "Searching...")
+                          : "No branch found.")
+                      : ""}
+                  </CommandEmpty>
                   <CommandGroup>
-                    {UserBranch?.map((value: any) => (
+                    {displayedBranches.map((value: string) => (
                       <CommandItem
                         key={value}
                         value={value}
+                        data-branch={value}
                         onSelect={(value) => {
                           dispatch(setBranchName(value));
                           setBranchOpen(false);
+                          setSearchText("");
                         }}
                       >
                         {value}
                       </CommandItem>
                     ))}
                   </CommandGroup>
+                  {/* Show "Load More" when not searching and there are more branches */}
+                  {!isSearching && hasNextPage && (
+                    <>
+                      <CommandSeparator className="my-1" />
+                      <div className="px-2 py-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setCurrentPage(prev => prev + 1);
+                          }}
+                          className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground w-full justify-start gap-2 text-primary font-medium"
+                          disabled={isFetchingBranches}
+                        >
+                          {isFetchingBranches ? (
+                            <>
+                              <Loader className="size-4 animate-spin" /> Loading More Branches...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="size-4" /> Load More Branches
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </CommandList>
               </Command>
             </PopoverContent>
@@ -748,27 +1000,16 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
           )}
         </div>
       </div>
-
-      <FileSelector
-        filters={filters}
-        setFilters={setFilters}
-        repoName={repoName}
-        branchName={branchName}
-        isParsing={parsingStatus !== ""}
-      />
-
+      
       {/* Parsing Status with new ParsingProgress component */}
       {parsingStatus && (
-        <ParsingProgress
-          status={parsingStatus}
-          onRetry={() => branchName && parseRepo(repoName, branchName)}
-        />
-      )}
-
-      <Dialog
-        open={isPublicRepoDailog}
-        onOpenChange={handleSetPublicRepoDialog}
-      >
+  <ParsingProgress 
+    status={parsingStatus} 
+    onRetry={() => branchName && parseRepo(repoName, branchName)} 
+  />
+)}
+      
+      <Dialog open={isPublicRepoDailog} onOpenChange={handleSetPublicRepoDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Parse Public Repository</DialogTitle>
@@ -810,14 +1051,13 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+      
       <Dialog open={isLocalRepoDailog} onOpenChange={setIsLocalRepoDailog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Import Local Repository</DialogTitle>
             <DialogDescription>
-              Confirm the path to your local repository and specify the branch
-              name
+              Confirm the path to your local repository and specify the branch name
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

@@ -84,50 +84,6 @@ const getRepoIdentifier = (repo: RepoIdentifier) => {
   return repo?.name || "";
 };
 
-// Helper function to sort branches by relevance to search term
-const sortBranchesByRelevance = (branches: string[], searchTerm: string): string[] => {
-  if (!searchTerm || searchTerm.trim().length === 0) {
-    return branches;
-  }
-  
-  const lowerSearchTerm = searchTerm.toLowerCase();
-  
-  return [...branches].sort((a, b) => {
-    const aLower = a.toLowerCase();
-    const bLower = b.toLowerCase();
-    
-    // Exact match (case-insensitive) - highest priority
-    const aExact = aLower === lowerSearchTerm;
-    const bExact = bLower === lowerSearchTerm;
-    if (aExact && !bExact) return -1;
-    if (!aExact && bExact) return 1;
-    
-    // Starts with search term - second priority
-    const aStarts = aLower.startsWith(lowerSearchTerm);
-    const bStarts = bLower.startsWith(lowerSearchTerm);
-    if (aStarts && !bStarts) return -1;
-    if (!aStarts && bStarts) return 1;
-    
-    // Contains search term - third priority
-    const aContains = aLower.includes(lowerSearchTerm);
-    const bContains = bLower.includes(lowerSearchTerm);
-    if (aContains && !bContains) return -1;
-    if (!aContains && bContains) return 1;
-    
-    // If both match, sort by position of match (earlier match is better)
-    if (aContains && bContains) {
-      const aIndex = aLower.indexOf(lowerSearchTerm);
-      const bIndex = bLower.indexOf(lowerSearchTerm);
-      if (aIndex !== bIndex) {
-        return aIndex - bIndex;
-      }
-    }
-    
-    // Finally, alphabetical order
-    return a.localeCompare(b);
-  });
-};
-
 const Step1: React.FC<Step1Props> = ({
   setProjectId,
   setChatStep,
@@ -339,6 +295,50 @@ const Step1: React.FC<Step1Props> = ({
     return branchName.toLowerCase().includes(searchQuery.toLowerCase());
   };
 
+  // Helper function to sort branches by relevance to search term
+  const sortBranchesByRelevance = (branches: string[], searchTerm: string): string[] => {
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      return branches;
+    }
+    
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    
+    return [...branches].sort((a, b) => {
+      const aLower = a.toLowerCase();
+      const bLower = b.toLowerCase();
+      
+      // Exact match (case-insensitive) - highest priority
+      const aExact = aLower === lowerSearchTerm;
+      const bExact = bLower === lowerSearchTerm;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      
+      // Starts with search term - second priority
+      const aStarts = aLower.startsWith(lowerSearchTerm);
+      const bStarts = bLower.startsWith(lowerSearchTerm);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      
+      // Contains search term - third priority
+      const aContains = aLower.includes(lowerSearchTerm);
+      const bContains = bLower.includes(lowerSearchTerm);
+      if (aContains && !bContains) return -1;
+      if (!aContains && bContains) return 1;
+      
+      // If both match, sort by position of match (earlier match is better)
+      if (aContains && bContains) {
+        const aIndex = aLower.indexOf(lowerSearchTerm);
+        const bIndex = bLower.indexOf(lowerSearchTerm);
+        if (aIndex !== bIndex) {
+          return aIndex - bIndex;
+        }
+      }
+      
+      // Finally, alphabetical order
+      return a.localeCompare(b);
+    });
+  };
+
   // Fetch branches for a specific page (no search filter - we fetch all and filter locally)
   const { data: branchData, isLoading: UserBranchLoading, isFetching: isFetchingBranches } = useQuery({
     queryKey: ["user-branch", repoName, currentPage],
@@ -392,14 +392,15 @@ const Step1: React.FC<Step1Props> = ({
       const endIndex = (currentPage + 1) * pageSize;
       setDisplayedBranches(allFetchedBranches.slice(0, endIndex));
     } else {
-      // Search mode: filter all fetched branches
+      // Search mode: filter all fetched branches and sort by relevance
       setIsSearching(true);
       setIsExhausted(false); // Reset exhausted state for new search
       isAutoFetchingRef.current = false; // Reset auto-fetching for new search
       const filtered = allFetchedBranches.filter(branch => 
         matchesSearch(branch, debouncedSearchText)
       );
-      setDisplayedBranches(filtered);
+      const sorted = sortBranchesByRelevance(filtered, debouncedSearchText);
+      setDisplayedBranches(sorted);
     }
   }, [debouncedSearchText, allFetchedBranches, currentPage]);
 
@@ -419,8 +420,9 @@ const Step1: React.FC<Step1Props> = ({
     const filtered = allFetchedBranches.filter(branch => 
       matchesSearch(branch, debouncedSearchText)
     );
+    const sorted = sortBranchesByRelevance(filtered, debouncedSearchText);
     const enoughMatches = 20;
-    const needsMoreMatches = filtered.length < enoughMatches;
+    const needsMoreMatches = sorted.length < enoughMatches;
     const canFetchMore = hasNextPage;
 
     if (needsMoreMatches && canFetchMore) {

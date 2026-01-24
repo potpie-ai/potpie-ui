@@ -58,6 +58,7 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import ParsingProgress from "./ParsingProgress";
 import FileSelector, { ParseFilters } from "./FileSelector";
+import FileSelector, { ParseFilters } from "./FileSelector";
 
 const repoLinkSchema = z.object({
   repoLink: z
@@ -137,6 +138,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
       const parseResponse = await BranchAndRepositoryService.parseRepo(
         repo_name,
         branch_name,
+        filters,
         filters
       );
       const projectId = parseResponse.project_id;
@@ -146,10 +148,13 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         setProjectId(projectId);
       }
 
-      if (initialStatus === ParsingStatusEnum.READY) {
-        setParsingStatus(ParsingStatusEnum.READY);
+      // Advance to step 2 immediately if already READY or INFERRING
+      if (initialStatus === ParsingStatusEnum.READY || initialStatus === ParsingStatusEnum.INFERRING) {
+        setParsingStatus(initialStatus);
         setChatStep(2);
-        return;
+        if (initialStatus === ParsingStatusEnum.READY) {
+          return;
+        }
       }
 
       await BranchAndRepositoryService.pollParsingStatus(
@@ -187,10 +192,13 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         setProjectId(projectId);
       }
 
-      if (initialStatus === ParsingStatusEnum.READY) {
-        setParsingStatus(ParsingStatusEnum.READY);
+      // Advance to step 2 immediately if already READY or INFERRING
+      if (initialStatus === ParsingStatusEnum.READY || initialStatus === ParsingStatusEnum.INFERRING) {
+        setParsingStatus(initialStatus);
         setChatStep(2);
-        return;
+        if (initialStatus === ParsingStatusEnum.READY) {
+          return;
+        }
       }
 
       await BranchAndRepositoryService.pollParsingStatus(

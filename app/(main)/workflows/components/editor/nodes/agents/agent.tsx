@@ -128,12 +128,12 @@ export const AgentConfigComponent: FC<AgentConfigProps> = ({
           <div className="pointer-events-none">
             <CarouselPrevious
               type="button"
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 pointer-events-auto bg-white rounded-full shadow border border-gray-200 w-8 h-8 flex items-center justify-center"
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 pointer-events-auto bg-background rounded-full shadow border border-gray-200 w-8 h-8 flex items-center justify-center"
               disabled={readOnly}
             />
             <CarouselNext
               type="button"
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 pointer-events-auto bg-white rounded-full shadow border border-gray-200 w-8 h-8 flex items-center justify-center"
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 pointer-events-auto bg-background rounded-full shadow border border-gray-200 w-8 h-8 flex items-center justify-center"
               disabled={readOnly}
             />
           </div>
@@ -372,7 +372,6 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
           <p
             className="mt-2 text-xs text-gray-700 line-clamp-2 max-w-full break-words"
             title={task || undefined}
-            style={{ wordBreak: "break-word" }}
           >
             {task ? task : "No task specified"}
           </p>

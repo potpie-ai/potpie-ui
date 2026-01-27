@@ -490,7 +490,7 @@ const AllAgents = () => {
                   setIsUpgradeMode(false);
                 }
               }}
-              className="ml-auto"
+              className="ml-auto bg-primary-color text-accent-color"
             >
               <Plus className="mr-2 h-4 w-4" /> Create New Agent
             </Button>
@@ -527,11 +527,12 @@ const AllAgents = () => {
                         "_blank"
                       )
                     }
+                    className="bg-primary-color text-accent-color"
                   >
                     Upgrade
                   </Button>
                   <DialogClose asChild>
-                    <Button className="ml-2">Close</Button>
+                    <Button className="ml-2 bg-primary-color text-accent-color">Close</Button>
                   </DialogClose>
                 </DialogFooter>
               </div>
@@ -565,6 +566,7 @@ const AllAgents = () => {
                       }
                     }}
                     disabled={isCreating}
+                    className="bg-primary-color text-accent-color"
                   >
                     {isCreating ? (
                       <>
@@ -597,7 +599,7 @@ const AllAgents = () => {
           <Card className="p-6 w-full text-center shadow-md rounded-2xl">
             <CardContent>
               <p className="text-lg text-muted">No agents available.</p>
-              <Button className="mt-4" onClick={() => setPromptModalOpen(true)}>
+              <Button className="mt-4 bg-primary-color text-accent-color" onClick={() => setPromptModalOpen(true)}>
                 <Plus /> Create New Agent
               </Button>
             </CardContent>
@@ -609,7 +611,7 @@ const AllAgents = () => {
             </p>
             <Button
               variant="outline"
-              className="mt-4"
+              className="mt-4 bg-primary-color text-accent-color"
               onClick={() => setSearchTerm("")}
             >
               Clear Search
@@ -730,7 +732,7 @@ const AllAgents = () => {
                         </DialogHeader>
                         <DialogFooter>
                           <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
+                            <Button variant="outline" className="bg-primary-color text-accent-color">Cancel</Button>
                           </DialogClose>
                           <Button
                             variant="destructive"
@@ -738,7 +740,7 @@ const AllAgents = () => {
                               agentToDelete &&
                               deleteCustomAgentForm.mutate(agentToDelete)
                             }
-                            className="gap-2"
+                            className="gap-2 bg-primary-color text-accent-color"
                           >
                             {deleteCustomAgentForm.isPending ? (
                               <Loader className="w-5 h-5 animate-spin" />
@@ -888,6 +890,7 @@ const AllAgents = () => {
                   disabled={
                     !emailToShare.trim() || shareWithEmailMutation.isPending
                   }
+                  className="bg-primary-color text-accent-color"
                 >
                   {shareWithEmailMutation.isPending ? (
                     <Loader className="h-4 w-4 animate-spin" />
@@ -939,7 +942,7 @@ const AllAgents = () => {
             <div>
               <Button
                 variant="outline"
-                className="w-full"
+                className="w-full bg-primary-color text-accent-color"
                 onClick={copyShareableUrl}
                 disabled={
                   copyUrlSuccess ||
@@ -971,11 +974,12 @@ const AllAgents = () => {
                 type="submit"
                 onClick={shareAgentWithEmail}
                 disabled={!emailToShare}
+                className="bg-primary-color text-accent-color"
               >
                 Share
               </Button>
               <DialogClose asChild>
-                <Button type="button">Done</Button>
+                <Button type="button" className="bg-primary-color text-accent-color">Done</Button>
               </DialogClose>
             </div>
           </DialogFooter>

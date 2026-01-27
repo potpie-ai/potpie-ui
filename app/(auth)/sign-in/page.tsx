@@ -277,11 +277,11 @@ export default function Signin() {
     
     // For existing users signing in via SSO
     if (source === "vscode") {
-      router.push('/i');
+      router.push('/idea');
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push('/i');
+      router.push('/idea');
     }
   };
 

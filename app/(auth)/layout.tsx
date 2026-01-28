@@ -27,7 +27,13 @@ export default function AuthLayout({
           // This allows the extension to refresh tokens without requiring re-login
           const refreshToken = (user as any).stsTokenManager?.refreshToken || "";
           
-          const callbackUrl = new URL("http://localhost:54333/auth/callback");
+          // Use redirect parameter from query string (supports custom ports)
+          // Fallback to default localhost:54333 if not provided
+          const callbackUrlStr = redirectUrl 
+            ? decodeURIComponent(redirectUrl) 
+            : "http://localhost:54333/auth/callback";
+          
+          const callbackUrl = new URL(callbackUrlStr);
           callbackUrl.searchParams.set("token", token);
           if (refreshToken) {
             callbackUrl.searchParams.set("refreshToken", refreshToken);

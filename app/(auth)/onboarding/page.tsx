@@ -9,7 +9,9 @@ import { LucideGithub, LucideCheck, LoaderCircle, ArrowRight, ArrowLeft } from "
 import axios from "axios";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
+import { testimonials } from "@/lib/utils/testimonials";
 import Image from "next/image";
+import Link from "next/link";
 
 // Helper function to extract company name from email domain
 const extractCompanyNameFromEmail = (email: string): string => {
@@ -78,6 +80,7 @@ const Onboarding = () => {
   const [onboardingSubmitted, setOnboardingSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1); // 1 = form, 2 = GitHub linking
+  const [currentTestimonial, setCurrentTestimonial] = useState(0);
   
   // Store the UID from URL params in state to prevent it from changing
   // This is the Google SSO UID we want to link GitHub to
@@ -448,286 +451,378 @@ const Onboarding = () => {
   };
 
   return (
-    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition">
-      {/* Left Side - Image */}
-      <div className="flex items-center justify-center w-1/2 h-full p-6">
-        <div className="relative h-full w-full rounded-lg overflow-hidden">
-          <Image
-            src={"/images/landing.png"}
-            alt="landing"
-            layout="fill"
-            objectFit="cover"
-          />
-        </div>
-      </div>
+    <div className="relative h-screen w-full font-sans bg-[#022D2C] overflow-hidden">
+      {/* Background vector */}
+      <Image
+        src="/images/figma/auth/auth-signin-vector.svg"
+        alt=""
+        width={1523}
+        height={1452}
+        priority
+        className="pointer-events-none select-none absolute w-[1623px] h-[1452px] top-[-276px] left-[-1.5px] opacity-100"
+      />
 
-      {/* Right Side - Onboarding Content */}
-      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-14 overflow-y-auto">
-        <div className="w-full max-w-lg px-6 py-8">
-          {/* Progress Indicator */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2">
-              <div className={`h-1 flex-1 rounded-full ${currentStep >= 1 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-              <div className={`h-1 flex-1 rounded-full ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-            </div>
-          </div>
+      {/* Right-side blur glow */}
+      <div
+        className="pointer-events-none absolute top-0 right-0 h-[900px] w-[900px] rounded-full"
+        style={{
+          transform: "translateX(153px)",
+          backgroundColor: "#022423",
+          filter: "blur(162px)",
+        }}
+      />
 
-        {/* Step 1: Form */}
-        {currentStep === 1 && (
-          <>
-            {/* Title and Subtitle */}
-            <div className="mb-8">
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-                Welcome! Let&apos;s get you set up
-              </h1>
-              <p className="text-gray-600 text-base md:text-lg">
-                We just need a few details to personalize your experience
-              </p>
-            </div>
+      {/* Main frame content */}
+      <div className="relative z-10 mx-auto h-full w-full max-w-[1440px] px-2 py-2">
+        <div className="grid h-full grid-cols-1 lg:grid-cols-[836px_1fr] gap-10">
+          {/* Left panel */}
+          <section className="flex h-full w-full flex-col rounded-2xl bg-[#FFF9F5] overflow-y-auto">
+            {/* Header */}
+            <div className="flex w-full items-center justify-between px-8 pt-8">
+              <Link href="/" className="inline-flex items-center">
+                <Image
+                  src="/images/figma/auth/auth-signin-logo.svg"
+                  width={42}
+                  height={42}
+                  alt="Potpie"
+                  priority
+                />
+              </Link>
 
-            {/* Add authentication error message */}
-            {authError && (
-              <div className="mb-6 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                {authError}
-              </div>
-            )}
-
-            {/* Only show the form if authenticated */}
-            {isAuthenticated ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submitOnboarding();
-                }}
-                className="flex flex-col gap-6"
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-sm font-normal text-[#656969] hover:text-[#022D2C] transition-colors"
               >
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-900">
-                    Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email || ""}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
-                    disabled
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-900">
-                    Full Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter your full name"
-                    value={formData.name || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-900">
-                    How did you find us? <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.source}
-                    onChange={(e) =>
-                      setFormData({ ...formData, source: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    required
-                  >
-                    <option value="">Select an option</option>
-                    <option value="Reddit">Reddit</option>
-                    <option value="Twitter">Twitter</option>
-                    <option value="LinkedIn">LinkedIn</option>
-                    <option value="HackerNews">HackerNews</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-900">
-                    Industry <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter your industry"
-                    value={formData.industry}
-                    onChange={(e) =>
-                      setFormData({ ...formData, industry: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-900">
-                    Job Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter your job title"
-                    value={formData.jobTitle}
-                    onChange={(e) =>
-                      setFormData({ ...formData, jobTitle: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-900">
-                    Company Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter your company name"
-                    value={formData.companyName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, companyName: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-background text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    required
-                  />
-                </div>
-
-                {/* Submit Button */}
-                <Button
-                  type="submit"
-                  className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                  disabled={!isAuthenticated || isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <LoaderCircle className="animate-spin h-5 w-5" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      Continue
-                      <ArrowRight className="h-5 w-5" />
-                    </>
-                  )}
-                </Button>
-              </form>
-            ) : (
-              <div className="mt-10 p-6 bg-gray-100 rounded-lg text-black text-center">
-                <p>Please sign in to continue.</p>
-                <Button
-                  onClick={() => router.push("/sign-in")}
-                  className="mt-4 mx-auto hover:bg-black bg-gray-800"
-                >
-                  Go to Sign In
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Step 2: GitHub Linking */}
-        {currentStep === 2 && isAuthenticated && (
-          <>
-            {/* Back Button */}
-            <button
-              onClick={() => setCurrentStep(1)}
-              className="mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              <span>Back</span>
-            </button>
-
-            {/* GitHub Logo */}
-            <div className="flex justify-center mb-6">
-              <div className="bg-gradient-to-br from-indigo-700 via-blue-700 to-purple-700 rounded-xl p-8 w-32 h-32 flex items-center justify-center shadow-lg">
-                <LucideGithub className="text-white w-16 h-16" fill="white" />
-              </div>
+                <Image
+                  src="/images/figma/auth/auth-signin-globe.svg"
+                  alt=""
+                  width={20}
+                  height={20}
+                />
+                <span className="px-1">ENG</span>
+                <Image
+                  src="/images/figma/auth/auth-signin-arrow-down.svg"
+                  alt=""
+                  width={20}
+                  height={20}
+                />
+              </button>
             </div>
 
-            {/* Title */}
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 text-center">
-              Connect Your GitHub
-            </h1>
+            {/* Form content */}
+            <div className="flex flex-1 items-center justify-center px-8 pb-8">
+              <div className="w-full max-w-[392px]">
+                {/* Progress Indicator */}
+                <div className="mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-1 flex-1 rounded-full ${currentStep >= 1 ? 'bg-[#B7F600]' : 'bg-[#EBEBEB]'}`}></div>
+                    <div className={`h-1 flex-1 rounded-full ${currentStep >= 2 ? 'bg-[#B7F600]' : 'bg-[#EBEBEB]'}`}></div>
+                  </div>
+                </div>
 
-            {/* Subtitle */}
-            <p className="text-gray-600 text-base md:text-lg text-center mb-8">
-              Link your GitHub account to get started with repositories
-            </p>
+                {/* Step 1: Form */}
+                {currentStep === 1 && (
+                  <>
+                    {/* Title and Subtitle */}
+                    <div className="mb-6">
+                      <h1 className="text-center text-2xl font-medium text-[#022D2C] mb-2">
+                        Welcome! Let&apos;s get you set up
+                      </h1>
+                      <p className="text-center text-sm text-[#656969]">
+                        We just need a few details to personalize your experience
+                      </p>
+                    </div>
 
-            {/* Feature List */}
-            <div className="bg-blue-50 rounded-lg p-6 mb-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <LucideCheck className="text-blue-600 w-5 h-5 flex-shrink-0 mt-0.5" />
-                <span className="text-gray-800 text-sm">
-                  Select repositories for your AI agents
-                </span>
-              </div>
-              <div className="flex items-start gap-3">
-                <LucideCheck className="text-blue-600 w-5 h-5 flex-shrink-0 mt-0.5" />
-                <span className="text-gray-800 text-sm">
-                  Add more repositories anytime from your dashboard
-                </span>
+                    {/* Add authentication error message */}
+                    {authError && (
+                      <div className="mb-6 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                        {authError}
+                      </div>
+                    )}
+
+                    {/* Only show the form if authenticated */}
+                    {isAuthenticated ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          submitOnboarding();
+                        }}
+                        className="space-y-4"
+                      >
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-[#022D2C]">
+                            Email <span className="ml-0.5">*</span>
+                          </label>
+                          <input
+                            type="email"
+                            value={formData.email || ""}
+                            className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] cursor-not-allowed text-sm"
+                            disabled
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-[#022D2C]">
+                            Full Name <span className="ml-0.5">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter your full name"
+                            value={formData.name || ""}
+                            onChange={(e) =>
+                              setFormData({ ...formData, name: e.target.value })
+                            }
+                            className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-[#022D2C]">
+                            How did you find us? <span className="ml-0.5">*</span>
+                          </label>
+                          <select
+                            value={formData.source}
+                            onChange={(e) =>
+                              setFormData({ ...formData, source: e.target.value })
+                            }
+                            className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
+                            required
+                          >
+                            <option value="">Select an option</option>
+                            <option value="Reddit">Reddit</option>
+                            <option value="Twitter">Twitter</option>
+                            <option value="LinkedIn">LinkedIn</option>
+                            <option value="HackerNews">HackerNews</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-[#022D2C]">
+                            Industry <span className="ml-0.5">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter your industry"
+                            value={formData.industry}
+                            onChange={(e) =>
+                              setFormData({ ...formData, industry: e.target.value })
+                            }
+                            className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-[#022D2C]">
+                            Job Title <span className="ml-0.5">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter your job title"
+                            value={formData.jobTitle}
+                            onChange={(e) =>
+                              setFormData({ ...formData, jobTitle: e.target.value })
+                            }
+                            className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-[#022D2C]">
+                            Company Name <span className="ml-0.5">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter your company name"
+                            value={formData.companyName}
+                            onChange={(e) =>
+                              setFormData({ ...formData, companyName: e.target.value })
+                            }
+                            className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
+                            required
+                          />
+                        </div>
+
+                        {/* Submit Button */}
+                        <Button
+                          type="submit"
+                          className="mt-2 h-10 w-full rounded-lg bg-[#B7F600] text-[#00291C] hover:bg-[#a7e400] font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                          disabled={!isAuthenticated || isSubmitting}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <LoaderCircle className="animate-spin h-4 w-4 mr-2" />
+                              Submitting...
+                            </>
+                          ) : (
+                            <>
+                              Continue
+                              <ArrowRight className="h-4 w-4 ml-2" />
+                            </>
+                          )}
+                        </Button>
+                      </form>
+                    ) : (
+                      <div className="mt-10 p-6 bg-gray-100 rounded-lg text-black text-center">
+                        <p className="text-sm">Please sign in to continue.</p>
+                        <Button
+                          onClick={() => router.push("/sign-in")}
+                          className="mt-4 mx-auto bg-[#022D2C] hover:bg-[#033d3c] text-white"
+                        >
+                          Go to Sign In
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Step 2: GitHub Linking */}
+                {currentStep === 2 && isAuthenticated && (
+                  <>
+                    {/* Back Button */}
+                    <button
+                      onClick={() => setCurrentStep(1)}
+                      className="mb-6 flex items-center gap-2 text-[#656969] hover:text-[#022D2C] transition-colors text-sm"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      <span>Back</span>
+                    </button>
+
+                    {/* GitHub Logo */}
+                    <div className="flex justify-center mb-6">
+                      <div className="bg-[#022D2C] rounded-full p-6 w-20 h-20 flex items-center justify-center">
+                        <LucideGithub className="text-[#FFF9F5] w-10 h-10" fill="#FFF9F5" />
+                      </div>
+                    </div>
+
+                    {/* Title */}
+                    <h1 className="text-center text-2xl font-medium text-[#022D2C] mb-2">
+                      Connect Your GitHub
+                    </h1>
+
+                    {/* Subtitle */}
+                    <p className="text-center text-sm text-[#656969] mb-6">
+                      Link your GitHub account to get started with repositories
+                    </p>
+
+                    {/* Feature List */}
+                    <div className="bg-[rgba(2,45,44,0.08)] rounded-lg p-4 mb-6 space-y-3">
+                      <div className="flex items-start gap-2">
+                        <LucideCheck className="text-[#022D2C] w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span className="text-[#022D2C] text-sm">
+                          Select repositories for your AI agents
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <LucideCheck className="text-[#022D2C] w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span className="text-[#022D2C] text-sm">
+                          Add more repositories anytime from your dashboard
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Link GitHub Button */}
+                    {!hasGithubLinked ? (
+                      <>
+                        <Button
+                          onClick={linkGithub}
+                          className="w-full h-10 rounded-lg bg-[#022D2C] hover:bg-[#033d3c] text-[#FFF9F5] font-medium flex items-center justify-center gap-2 transition-colors mb-3"
+                          disabled={isLinkingGithub}
+                        >
+                          <LucideGithub className="w-5 h-5" />
+                          {isLinkingGithub ? "Linking..." : "Link GitHub Account"}
+                        </Button>
+
+                        {/* Disclaimer */}
+                        <p className="text-[#656969] text-xs text-center">
+                          We&apos;ll only access repositories you explicitly authorize
+                        </p>
+                      </>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                          <p className="text-green-800 font-medium text-sm">
+                            GitHub account linked successfully!
+                          </p>
+                        </div>
+                        <Button
+                          onClick={proceedToNextStep}
+                          className="w-full h-10 rounded-lg bg-[#B7F600] text-[#00291C] hover:bg-[#a7e400] font-medium flex items-center justify-center gap-2 transition-colors"
+                        >
+                          Continue to Dashboard
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Footer */}
+                    <div className="mt-6 pt-4 border-t border-[#EBEBEB]">
+                      <p className="text-[#656969] text-xs text-center">
+                        By continuing, you agree to our{" "}
+                        <a href="#" className="text-[#022D2C] hover:underline">
+                          Terms of Service
+                        </a>{" "}
+                        and{" "}
+                        <a href="#" className="text-[#022D2C] hover:underline">
+                          Privacy Policy
+                        </a>
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
+          </section>
 
-            {/* Link GitHub Button */}
-            {!hasGithubLinked ? (
-              <>
-                <Button
-                  onClick={linkGithub}
-                  className="w-full bg-gray-900 hover:bg-gray-800 text-white font-medium py-3 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors mb-4"
-                  disabled={isLinkingGithub}
-                >
-                  <LucideGithub className="w-6 h-6" />
-                  {isLinkingGithub ? "Linking..." : "Link GitHub Account"}
-                </Button>
+          {/* Right testimonials */}
+          <aside className="hidden lg:flex h-full items-center justify-end pr-10">
+            <div className="w-[404px]">
+              <Image
+                src={testimonials[currentTestimonial].image}
+                alt=""
+                width={56}
+                height={56}
+                className="mb-10 rounded-full"
+              />
 
-                {/* Disclaimer */}
-                <p className="text-gray-500 text-sm text-center">
-                  We&apos;ll only access repositories you explicitly authorize
-                </p>
-              </>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                  <p className="text-green-800 font-medium mb-2">
-                    GitHub account linked successfully!
-                  </p>
-                </div>
-                <Button
-                  onClick={proceedToNextStep}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                >
-                  Continue to Dashboard
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              </div>
-            )}
-
-            {/* Footer */}
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <p className="text-gray-500 text-sm text-center">
-                By continuing, you agree to our{" "}
-                <a href="#" className="text-blue-600 hover:underline">
-                  Terms of Service
-                </a>{" "}
-                and{" "}
-                <a href="#" className="text-blue-600 hover:underline">
-                  Privacy Policy
-                </a>
+              <p className="text-2xl font-normal leading-[1.3333333] text-[#FFF9F5]">
+                {testimonials[currentTestimonial].quote}
               </p>
+
+              <div className="mt-7">
+                <p className="text-base font-medium text-[#FFF9F5]">{testimonials[currentTestimonial].name}</p>
+                <p className="mt-1 text-sm font-medium text-[rgba(255,249,245,0.72)]">
+                  {testimonials[currentTestimonial].title}
+                </p>
+              </div>
+
+              <div className="mt-10 flex items-center gap-2">
+                {testimonials.map((_, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setCurrentTestimonial(index)}
+                    className="h-4 w-4"
+                    aria-label={`Go to testimonial ${index + 1}`}
+                  >
+                    <span
+                      className="block h-1 rounded-full transition-all"
+                      style={{
+                        width: index === currentTestimonial ? 16 : 4,
+                        background: index === currentTestimonial ? "#FFF9F5" : "rgba(255,249,245,0.35)",
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
             </div>
-          </>
-        )}
+          </aside>
         </div>
       </div>
-    </section>
+    </div>
   );
 };
 

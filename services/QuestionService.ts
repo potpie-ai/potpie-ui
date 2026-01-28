@@ -230,9 +230,9 @@ export default class QuestionService {
         // If status indicates spec generation has started but questions exist, return them
         // This handles the case where user navigates back to the page after spec gen started
         if (
-          (data.recipe_status === 'SPEC_IN_PROGRESS' || 
-           data.recipe_status === 'IN_PROGRESS' ||
-           data.recipe_status === 'QUESTIONS_READY') &&
+          ((data as any).recipe_status === 'SPEC_IN_PROGRESS' || 
+           (data as any).recipe_status === 'IN_PROGRESS') &&
+          (data as any).recipe_status === 'QUESTIONS_READY' &&
           data.questions &&
           data.questions.length > 0
         ) {

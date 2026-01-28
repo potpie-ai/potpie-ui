@@ -2242,7 +2242,7 @@ const MockTaskCard = ({
                           Ready to generate code
                         </p>
                         <p className="text-[10px] text-primary-color mt-1">
-                          Click "Generate Code" button to start
+                          Click &quot;Generate Code&quot; button to start
                         </p>
                       </>
                     ) : (
@@ -2251,7 +2251,7 @@ const MockTaskCard = ({
                           No code generation available
                         </p>
                         <p className="text-[10px] text-primary-color mt-1">
-                          This task doesn't have test diff defined
+                          This task doesn&apos;t have test diff defined
                         </p>
                       </>
                     )}

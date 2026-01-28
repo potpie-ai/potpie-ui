@@ -132,16 +132,36 @@ const MOCK_PLAN = {
   ],
 };
 
-const Badge = ({ children, icon: Icon }) => (
+const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
   <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-zinc-500">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
 );
 
-const PlanTabs = ({ plan }) => {
+interface FileItem {
+  path: string;
+  type: string;
+}
+
+interface PlanItem {
+  id: string;
+  files: FileItem[];
+  dependencies?: string[];
+  externalConnections?: string[];
+  [key: string]: any;
+}
+
+interface Plan {
+  add: PlanItem[];
+  modify: PlanItem[];
+  fix: PlanItem[];
+  [key: string]: PlanItem[];
+}
+
+const PlanTabs = ({ plan }: { plan: Plan }) => {
   const [activeTab, setActiveTab] = useState("add");
-  const [expandedId, setExpandedId] = useState(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const categories = [
     { id: "add", label: "Create", count: plan.add.length },
@@ -241,16 +261,16 @@ const PlanTabs = ({ plan }) => {
                   </div>
                 )}
 
-                {(item.dependencies?.length > 0 ||
-                  item.externalConnections?.length > 0) && (
+                {((item.dependencies?.length ?? 0) > 0 ||
+                  (item.externalConnections?.length ?? 0) > 0) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {item.dependencies?.length > 0 && (
+                    {(item.dependencies?.length ?? 0) > 0 && (
                       <div className="space-y-1.5">
                         <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
                           <Package className="w-3 h-3" /> Libraries
                         </p>
                         <div className="flex flex-wrap gap-1">
-                          {item.dependencies.map((dep, i) => (
+                          {item.dependencies?.map((dep, i) => (
                             <span
                               key={i}
                               className="px-1.5 py-0.5 bg-zinc-50 border border-zinc-100 rounded text-xs font-mono text-zinc-500"
@@ -261,13 +281,13 @@ const PlanTabs = ({ plan }) => {
                         </div>
                       </div>
                     )}
-                    {item.externalConnections?.length > 0 && (
+                    {(item.externalConnections?.length ?? 0) > 0 && (
                       <div className="space-y-1.5">
                         <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide flex items-center gap-1.5">
                           <Link2 className="w-3 h-3" /> External
                         </p>
                         <div className="flex flex-wrap gap-1">
-                          {item.externalConnections.map((conn, i) => (
+                          {item.externalConnections?.map((conn, i) => (
                             <span
                               key={i}
                               className="px-1.5 py-0.5 bg-blue-50 border border-blue-100 rounded text-xs font-medium text-blue-600"
@@ -337,7 +357,7 @@ const PlanOverviewPage = () => {
   const [isCancelled, setIsCancelled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const planContentRef = useRef(null);
+  const planContentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!storedRepoContext) return;
@@ -408,10 +428,10 @@ const PlanOverviewPage = () => {
         } else {
           // If spec is not ready, show generating state
           const status = 'spec_gen_status' in progress 
-            ? progress.spec_gen_status 
-            : progress.spec_generation_step_status;
+            ? (progress as any).spec_gen_status 
+            : (progress as any).spec_generation_step_status;
           
-          const progressPercent = progress.progress_percent ?? 0;
+          const progressPercent = (progress as any).progress_percent ?? 0;
           setPlanProgress(progressPercent);
           
           if (status === 'COMPLETED') {
@@ -483,7 +503,7 @@ const PlanOverviewPage = () => {
       } catch (err: any) {
         console.warn("API call failed, using mock data for preview:", err.message);
         // Use mock data when API fails
-        const mockSpecOutput: SpecOutput = MOCK_PLAN as SpecOutput;
+        const mockSpecOutput: SpecOutput = MOCK_PLAN as unknown as SpecOutput;
         
         // Generate random repo and branch names for demo
         const mockRepos = ["my-awesome-project", "web-app", "api-server", "frontend-app", "backend-service"];
@@ -757,7 +777,7 @@ const PlanOverviewPage = () => {
             ref={planContentRef}
             className="animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
-            <PlanTabs plan={specOutput} />
+            <PlanTabs plan={specOutput as unknown as Plan} />
 
             {/* Action Button */}
             <div className="mt-12 flex justify-end">

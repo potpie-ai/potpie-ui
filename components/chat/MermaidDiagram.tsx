@@ -291,9 +291,8 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
             useMaxWidth: true,
             htmlLabels: false,
             padding: 0,
-            layout: "dagre",
             look: "neo",
-          },
+          } as any,
           logLevel: "fatal", // Minimize console output
           suppressErrorRendering: true, // Suppress mermaid's built-in error display since we handle errors
         });
@@ -599,9 +598,8 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
           htmlLabels: false,
           useMaxWidth: false,
           padding: 0,
-          layout: "dagre",
           look: "neo",
-        },
+        } as any,
         logLevel: "fatal",
         suppressErrorRendering: true,
       });

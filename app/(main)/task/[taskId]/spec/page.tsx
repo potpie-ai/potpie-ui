@@ -79,14 +79,34 @@ const PLAN_CHAPTERS = [
   },
 ];
 
-const Badge = ({ children, icon: Icon }) => (
+interface FileItem {
+  path: string;
+  type: string;
+}
+
+interface PlanItem {
+  id: string;
+  files: FileItem[];
+  dependencies?: string[];
+  externalConnections?: string[];
+  [key: string]: any;
+}
+
+interface Plan {
+  add: PlanItem[];
+  modify: PlanItem[];
+  fix: PlanItem[];
+  [key: string]: PlanItem[];
+}
+
+const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
   <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
 );
 
-const PlanTabs = ({ plan }) => {
+const PlanTabs = ({ plan }: { plan: Plan }) => {
   const [activeTab, setActiveTab] = useState("add");
 
   const categories = [
@@ -180,17 +200,17 @@ const PlanTabs = ({ plan }) => {
               )}
 
               {/* Libraries & External Connections */}
-              {(item.dependencies?.length > 0 || item.externalConnections?.length > 0) && (
+              {((item.dependencies?.length ?? 0) > 0 || (item.externalConnections?.length ?? 0) > 0) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                   {/* Libraries */}
-                  {item.dependencies?.length > 0 && (
+                  {(item.dependencies?.length ?? 0) > 0 && (
                     <div className="space-y-3">
                       <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                         <Package className="w-3.5 h-3.5" />
                         Libraries
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {item.dependencies.map((dep, i) => (
+                        {item.dependencies?.map((dep, i) => (
                           <span
                             key={i}
                             className="px-3 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded-md text-xs font-mono text-primary-color"
@@ -203,14 +223,14 @@ const PlanTabs = ({ plan }) => {
                   )}
                   
                   {/* External Connections */}
-                  {item.externalConnections?.length > 0 && (
+                  {(item.externalConnections?.length ?? 0) > 0 && (
                     <div className="space-y-3">
                       <p className="text-xs font-semibold  text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                         <Link2 className="w-3.5 h-3.5" />
                         External
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {item.externalConnections.map((conn, i) => (
+                        {item.externalConnections?.map((conn, i) => (
                           <span
                             key={i}
                             className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-xs font-medium text-blue-600"
@@ -284,7 +304,7 @@ const SpecPage = () => {
   const [isCancelled, setIsCancelled] = useState(false);
   const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
 
-  const planContentRef = useRef(null);
+  const planContentRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedRef = useRef(false);
 
   // Update projectData when storedRepoContext changes (from Redux)
@@ -433,8 +453,8 @@ const SpecPage = () => {
 
         // Determine status based on response type
         const status = 'spec_gen_status' in progress 
-          ? progress.spec_gen_status 
-          : progress.spec_generation_step_status;
+          ? (progress as any).spec_gen_status 
+          : (progress as any).spec_generation_step_status;
 
         // Stop polling when completed or failed
         if (status === 'COMPLETED' || status === 'FAILED') {
@@ -472,8 +492,8 @@ const SpecPage = () => {
               setSpecProgress(updated);
               
               const updatedStatus = 'spec_gen_status' in updated 
-                ? updated.spec_gen_status 
-                : updated.spec_generation_step_status;
+                ? (updated as any).spec_gen_status 
+                : (updated as any).spec_generation_step_status;
               
               console.log("[Spec Page] Updated status:", updatedStatus);
               
@@ -527,8 +547,8 @@ const SpecPage = () => {
     : 0;
   const stepStatuses: Record<string | number, { status: StepStatusValue; message: string }> | Record<number, { status: StepStatusValue; message: string }> | null = specProgress 
     ? ('step_statuses' in specProgress 
-        ? specProgress.step_statuses 
-        : ('step_statuses' in specProgress ? specProgress.step_statuses : null)) ?? {}
+        ? (specProgress as any).step_statuses 
+        : null) ?? {}
     : {};
   const specOutput: SpecOutput | null = specProgress?.spec_output ?? null;
 
@@ -712,7 +732,7 @@ const SpecPage = () => {
                     const stepStatus = stepStatuses 
                       ? (typeof stepStatuses[idx] !== 'undefined' 
                           ? stepStatuses[idx] 
-                          : stepStatuses[idx.toString()])
+                          : (stepStatuses as any)[idx.toString()])
                       : undefined;
                     const isDone = stepStatus?.status === 'COMPLETED';
                     const isActive = stepStatus?.status === 'IN_PROGRESS';
@@ -777,7 +797,7 @@ const SpecPage = () => {
               ref={planContentRef}
               className="animate-in fade-in slide-in-from-bottom-4 duration-500"
             >
-              <PlanTabs plan={specOutput} />
+              <PlanTabs plan={specOutput as unknown as Plan} />
 
               {/* Action Button */}
               <div className="mt-12 flex justify-end">

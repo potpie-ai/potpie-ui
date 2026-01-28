@@ -122,17 +122,92 @@ const createChatAdapter = (
           }
         };
 
+        // Map to accumulate tool calls during resume
+        const accumulatedToolCalls = new Map<string, StreamingToolCallPart>();
+
         // 2. Start the backend call
         ChatService.resumeWithCursor(
           chatId,
           sessionId,
           cursor,
           (message, tool_calls) => {
-            // Process tool calls into the map (your existing logic is fine here)
-            // ... process tool_calls into a local Map ...
+            // Process tool calls into the map
+            tool_calls.forEach((toolCallJson) => {
+              try {
+                const parsed =
+                  typeof toolCallJson === "string"
+                    ? JSON.parse(toolCallJson)
+                    : toolCallJson;
+                const {
+                  call_id,
+                  tool_name,
+                  tool_call_details,
+                  event_type,
+                  tool_response,
+                } = parsed;
+
+                const rawArgs = tool_call_details?.arguments;
+
+                const previous =
+                  accumulatedToolCalls.get(call_id) ??
+                  ({
+                    type: "tool-call" as const,
+                    toolCallId: call_id,
+                    toolName: tool_name,
+                    args:
+                      typeof rawArgs === "object" && rawArgs !== null
+                        ? rawArgs
+                        : {},
+                    argsText:
+                      typeof rawArgs === "string"
+                        ? rawArgs
+                        : JSON.stringify(rawArgs ?? {}, null, 2),
+                  } as StreamingToolCallPart);
+
+                const argsValue =
+                  rawArgs === undefined
+                    ? previous.args
+                    : typeof rawArgs === "object" && rawArgs !== null
+                      ? rawArgs
+                      : {};
+
+                const argsTextValue =
+                  rawArgs === undefined
+                    ? previous.argsText
+                    : typeof rawArgs === "string"
+                      ? rawArgs
+                      : JSON.stringify(rawArgs, null, 2);
+
+                const streamState: ToolCallResult = {
+                  event_type,
+                  response: tool_response,
+                  details: tool_call_details,
+                };
+
+                const next: StreamingToolCallPart = {
+                  ...previous,
+                  streamState,
+                  toolName: tool_name,
+                  args: argsValue,
+                  argsText: argsTextValue,
+                };
+
+                if (event_type === "result" || event_type === "error") {
+                  next.result = streamState;
+                  next.isError = event_type === "error";
+                } else {
+                  next.result = undefined;
+                  next.isError = false;
+                }
+
+                accumulatedToolCalls.set(call_id, next);
+              } catch (e) {
+                console.error("Error processing tool call during resume:", e);
+              }
+            });
 
             // Push the current state to the queue
-            pushToQueue(message, processedToolCallsMap);
+            pushToQueue(message, accumulatedToolCalls);
           },
           abortSignal
         )
@@ -891,12 +966,26 @@ export function usePendingMessageHandler(
         // Small delay to ensure runtime is fully initialized
         await new Promise((resolve) => setTimeout(resolve, 100));
 
-        // Send message through runtime's composer
+        const thread = runtime.thread;
+        if (!thread) {
+          console.error("[PendingMessage] Thread not available");
+          dispatch(clearPendingMessage());
+          return;
+        }
+
+        // Send message through thread's composer
         // This ensures it goes through the adapter and proper streaming happens
-        runtime.composer.setText(pendingMessage);
+        const composer = thread.composer;
+        if (!composer) {
+          console.error("[PendingMessage] Composer not available");
+          dispatch(clearPendingMessage());
+          return;
+        }
+
+        composer.setText(pendingMessage);
 
         // Trigger send
-        await runtime.composer.send();
+        await composer.send();
 
         console.log(
           "[PendingMessage] Successfully sent pending message via runtime"

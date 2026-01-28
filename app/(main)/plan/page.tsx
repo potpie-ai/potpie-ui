@@ -61,8 +61,9 @@ export default function PlanPage() {
       return null;
     },
     enabled: !!(planId || specId || recipeId),
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Poll every 2 seconds if plan is in progress
+      const data = query.state.data;
       if (data?.plan_gen_status === "IN_PROGRESS" || data?.plan_gen_status === "SUBMITTED") {
         return 2000;
       }

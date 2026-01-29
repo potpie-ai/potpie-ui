@@ -117,7 +117,8 @@
       "undici": "^6.21.2",
       "brace-expansion": "^2.0.2",
       "js-yaml": "^4.1.1",
-      "prismjs": "^1.30.0"
+      "prismjs": "^1.30.0",
+      "lodash-es": "^4.17.23"
     }
   }
 }

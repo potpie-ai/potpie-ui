@@ -214,6 +214,10 @@ const MessageComposer = ({
 
   // Node fetching and handling
   const fetchNodes = async (query: string) => {
+    if (!projectId) {
+      setNodeOptions([]);
+      return;
+    }
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     setIsSearchingNode(true);

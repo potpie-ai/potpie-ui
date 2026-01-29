@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
+import { SessionInfo } from "@/lib/types/session";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "./components/Navbar";
@@ -52,6 +53,9 @@ const ChatV2 = () => {
     description: "",
   });
 
+  // Active session state for resume functionality
+  const [activeSession, setActiveSession] = useState<SessionInfo | null>(null);
+
   // Ref to prevent overlapping parsing polls
   const isPollingRef = useRef(false);
 
@@ -78,13 +82,13 @@ const ChatV2 = () => {
       }
 
       const getMessages = () => thread.getState().messages;
-      
+
       // If messages are already loaded (array exists), resolve immediately
       if (Array.isArray(getMessages())) {
         resolve(true);
         return;
       }
-      
+
       // Otherwise, wait for history adapter to complete
       const unsubscribe = thread.subscribe(() => {
         const messages = getMessages();
@@ -93,7 +97,7 @@ const ChatV2 = () => {
           resolve(true);
         }
       });
-      
+
       // Safety timeout - resolve after 10 seconds even if history doesn't load
       setTimeout(() => {
         unsubscribe();
@@ -102,13 +106,53 @@ const ChatV2 = () => {
     });
   };
 
+  // Fallback handler for when resume completely fails - polls for completed message
+  const handleFailedResume = async () => {
+    console.log("[Chat Page] Resume failed, polling for completed message as fallback");
+
+    try {
+      const maxAttempts = 5;
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const messages = await ChatService.loadMessages(currentConversationId, 0, 2);
+
+        // Check if we have a new assistant message that's not in current thread state
+        const threadMessages = runtime?.thread?.getState().messages || [];
+        const latestAssistantMsg = messages.find((m: any) => m.sender === 'agent');
+
+        if (latestAssistantMsg) {
+          // Check if this message is already in the thread
+          const alreadyInThread = threadMessages.some((msg: any) => msg.id === latestAssistantMsg.id);
+
+          if (!alreadyInThread) {
+            console.log("[Chat Page] Found completed message from polling, reloading history");
+            // Trigger a history reload by clearing and re-fetching
+            // The runtime's history adapter will pick this up
+            toast.info("Message completed. Reloading...");
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            window.location.reload();
+            return;
+          }
+        }
+      }
+
+      // If we get here, polling didn't find anything
+      console.error("[Chat Page] Fallback polling failed to find completed message");
+      toast.error("Could not connect to streaming session. Please refresh the page.");
+    } catch (error) {
+      console.error("[Chat Page] Error in fallback polling:", error);
+      toast.error("Failed to recover streaming session. Please try again.");
+    }
+  };
+
   // Send pending message when chat page is ready (after ALL preprocessing completes)
   useEffect(() => {
     const sendPendingMessageWhenReady = async () => {
       // Check all prerequisites
       if (
-        !pendingMessage || 
-        hasSentPendingMessage.current || 
+        !pendingMessage ||
+        hasSentPendingMessage.current ||
         !currentConversationId ||
         !isPreprocessingComplete ||
         !runtime ||
@@ -120,46 +164,91 @@ const ChatV2 = () => {
       try {
         // Wait for runtime history to load
         const historyLoaded = await waitForHistoryLoad(runtime);
-        
+
         if (!historyLoaded) {
-          console.warn("[Chat Page] History load timeout, sending message anyway");
+          console.warn("[Chat Page] History load timeout, proceeding anyway");
         }
 
         // Small delay to ensure everything is fully ready
         await new Promise((resolve) => setTimeout(resolve, 300));
-        
-        hasSentPendingMessage.current = true;
-        
-        console.log("[Chat Page] All preprocessing complete, sending pending message");
-        
-        // Send the pending message
-        await ChatService.streamMessage(
-          currentConversationId,
-          pendingMessage,
-          [], // No selected nodes
-          [], // No images
-          () => {
-            // Message is streaming, runtime will handle the display
-          }
-        );
 
-        // Clear pending message after sending
-        dispatch(clearPendingMessage());
+        hasSentPendingMessage.current = true;
+
+        // CASE 1: Active session exists - RESUME IT
+        if (activeSession && activeSession.status === 'active') {
+          console.log("[Chat Page] Active session detected, resuming:", activeSession);
+
+          try {
+            // Trigger resume via runtime - the runtime adapter will handle calling resumeWithCursor
+            const thread = runtime.thread;
+            if (!thread) {
+              throw new Error("Thread not available on runtime");
+            }
+
+            // Get the last message ID to trigger resume for
+            const messages = thread.getState().messages;
+            const lastMessage = messages[messages.length - 1];
+
+            if (lastMessage && lastMessage.role === 'user') {
+              console.log("[Chat Page] Triggering resume for message:", lastMessage.id);
+              thread.startRun(lastMessage.id);
+
+              console.log("[Chat Page] Resume initiated successfully");
+              dispatch(clearPendingMessage());
+              return;
+            } else {
+              console.warn("[Chat Page] No user message found to resume, falling back to composer");
+              // Fall through to CASE 2
+            }
+          } catch (error) {
+            console.error("[Chat Page] Error resuming active session:", error);
+            toast.error("Failed to connect to streaming session. Retrying...");
+
+            // Reset to allow retry
+            hasSentPendingMessage.current = false;
+
+            // Wait a bit and try fallback
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Fall through to CASE 2 to send via composer as fallback
+          }
+        }
+
+        // CASE 2: No active session or resume failed - SEND VIA COMPOSER
+        if (runtime.thread) {
+          console.log("[Chat Page] Sending pending message via composer");
+
+          const composer = runtime.thread.composer;
+          if (!composer) {
+            throw new Error("Composer not available");
+          }
+
+          composer.setText(pendingMessage);
+          composer.send();
+
+          console.log("[Chat Page] Message sent successfully via composer");
+          dispatch(clearPendingMessage());
+        } else {
+          throw new Error("Thread not available on runtime");
+        }
       } catch (error) {
-        console.error("[Chat Page] Error sending pending message:", error);
+        console.error("[Chat Page] Error handling pending message:", error);
         toast.error("Failed to send message. You can retry in the chat.");
-        hasSentPendingMessage.current = false; // Allow retry
+
+        // Allow retry on error
+        hasSentPendingMessage.current = false;
         dispatch(clearPendingMessage());
       }
     };
 
     sendPendingMessageWhenReady();
   }, [
-    pendingMessage, 
-    currentConversationId, 
-    infoLoadedForChat, 
+    pendingMessage,
+    currentConversationId,
+    infoLoadedForChat,
     isPreprocessingComplete,
-    runtime, 
+    runtime,
+    activeSession,
     dispatch
   ]);
 
@@ -279,6 +368,36 @@ const ChatV2 = () => {
     hasSentPendingMessage.current = false;
   }, [currentConversationId]);
 
+  // Detect active session after preprocessing completes
+  useEffect(() => {
+    const checkActiveSession = async () => {
+      if (!currentConversationId || !isPreprocessingComplete) {
+        return;
+      }
+
+      try {
+        console.log("[Chat Page] Checking for active session...");
+        const session = await ChatService.detectActiveSession(currentConversationId);
+
+        if (session && session.status === 'active') {
+          console.log("[Chat Page] Active session detected:", session);
+          setActiveSession(session);
+        } else {
+          console.log("[Chat Page] No active session found");
+          setActiveSession(null);
+        }
+      } catch (error: any) {
+        // 404 is expected when no active session exists
+        if (error.response?.status !== 404) {
+          console.error("[Chat Page] Error detecting active session:", error);
+        }
+        setActiveSession(null);
+      }
+    };
+
+    checkActiveSession();
+  }, [currentConversationId, isPreprocessingComplete]);
+
   useEffect(() => {
     if (
       parsingStatus === ParsingStatusEnum.ERROR ||
@@ -328,7 +447,7 @@ const ChatV2 = () => {
             writeDisabled={false}
             userImageURL={profilePicUrl}
             conversation_id={currentConversationId}
-            isSessionResuming={false}
+            isSessionResuming={activeSession !== null}
             isBackgroundTaskActive={isBackgroundTaskActive}
           />
         </AssistantRuntimeProvider>

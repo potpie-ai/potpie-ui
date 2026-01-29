@@ -93,6 +93,27 @@ const availableIntegrationTypes = [
     ],
   },
   {
+    id: "confluence",
+    name: "Confluence",
+    description:
+      "Connect to your Confluence instance to manage documentation and collaborate on pages.",
+    icon: (
+      <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
+        <span className="text-white text-xs font-bold">C</span>
+      </div>
+    ),
+    category: "Documentation",
+    fields: [
+      {
+        id: "instanceName",
+        label: "Instance Name",
+        type: "text",
+        placeholder: "e.g., Company Confluence",
+        required: true,
+      },
+    ],
+  },
+  {
     id: "sentry",
     name: "Sentry",
     description:

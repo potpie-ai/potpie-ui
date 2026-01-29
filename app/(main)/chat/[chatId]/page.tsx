@@ -1,7 +1,7 @@
 "use client";
-import React, { useEffect, useLayoutEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "@/lib/state/store";
+import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/lib/state/store";
 import { setChat } from "@/lib/state/Reducers/chat";
 import {
   Dialog,
@@ -18,29 +18,22 @@ import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { toast } from "sonner";
 import GlobalError from "@/app/error";
 import Navbar from "./components/Navbar";
-
 import { list_system_agents } from "@/lib/utils";
-import { ParsingStatusEnum, planTypesEnum } from "@/lib/Constants";
+import { ParsingStatusEnum } from "@/lib/Constants";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "./components/Thread";
-import { PotpieRuntime } from "./runtime";
+import { useChatRuntime } from "./runtime";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useParams } from "next/navigation";
 
-const Chat = () => {
+const ChatV2 = () => {
   const params: { chatId: string } = useParams();
   const [chatAccess, setChatAccess] = useState("loading");
   const dispatch: AppDispatch = useDispatch();
-  const [_currentConversation, setCurrentConversation] = useState<any>({
-    conversationId: params.chatId,
-    messages: [],
-    totalMessages: 0,
-    start: 0,
-  });
   const [projectId, setProjectId] = useState<string>("");
   const [parsingStatus, setParsingStatus] = useState<string>("");
-  const [infoLoaded, setInfoLoaded] = useState(false);
+  const [infoLoadedForChat, setInfoLoadedForChat] = useState<string | null>(null);
   const currentConversationId = params.chatId;
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
@@ -50,17 +43,26 @@ const Chat = () => {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const { planType, total_human_messages } = useSelector(
-    (state: RootState) => state.UserInfo
-  );
-  const { backgroundTaskActive } = useSelector((state: RootState) => state.chat);
-  const [Error, setError] = useState({
+  const [errorState, setErrorState] = useState({
     isError: false,
     message: "",
     description: "",
   });
 
+  // Ref to prevent overlapping parsing polls
+  const isPollingRef = useRef(false);
+
+  // Call hook before any early returns
+  // Returns runtime + session states for background task handling
+  const { runtime, isSessionResuming, isBackgroundTaskActive } = useChatRuntime(params.chatId);
+
   const parseRepo = async () => {
+    // Guard: prevent overlapping polls and bail if projectId is missing
+    if (isPollingRef.current || !projectId) {
+      return;
+    }
+
+    isPollingRef.current = true;
     try {
       await BranchAndRepositoryService.pollParsingStatus(
         projectId,
@@ -70,6 +72,8 @@ const Chat = () => {
     } catch (err) {
       console.error("Error during parsing:", err);
       setParsingStatus(ParsingStatusEnum.ERROR);
+    } finally {
+      isPollingRef.current = false;
     }
   };
 
@@ -83,7 +87,7 @@ const Chat = () => {
   };
 
   const loadInfoOnce = async () => {
-    if (infoLoaded) return;
+    if (infoLoadedForChat === currentConversationId) return;
     setParsingStatus("loading");
 
     try {
@@ -100,7 +104,7 @@ const Chat = () => {
           toast.error(info.description);
         }
         setShowNavbar(false);
-        setError({
+        setErrorState({
           isError: true,
           message: info.message,
           description: info.description,
@@ -112,34 +116,45 @@ const Chat = () => {
 
       setIsCreator(info.is_creator);
 
-      if (!list_system_agents.includes(info.agent_ids[0])) {
+      // Defensive checks for required arrays
+      const agentId = info.agent_ids?.[0];
+      const projectIdFromInfo = info.project_ids?.[0];
+
+      if (!agentId || !projectIdFromInfo) {
+        console.error("Missing agent_ids or project_ids in conversation info:", info);
+        toast.error("Failed to load conversation: missing required data");
+        setErrorState({
+          isError: true,
+          message: "Invalid conversation data",
+          description: "The conversation is missing required information. Please try again or contact support.",
+        });
+        return;
+      }
+
+      if (!list_system_agents.includes(agentId)) {
         setChatAccess(info.access_type);
       } else {
         setChatAccess(info.is_creator ? "write" : info.access_type);
       }
-      setCurrentConversation((prevConversation: any) => ({
-        ...prevConversation,
-        totalMessages: info.total_messages,
-      }));
 
       dispatch(
         setChat({
-          agentId: info.agent_ids[0],
+          agentId: agentId,
           title: info.title,
         })
       );
 
-      setProjectId(info.project_ids[0]);
-      setInfoLoaded(true);
+      setProjectId(projectIdFromInfo);
+      setInfoLoadedForChat(currentConversationId);
 
-      if (!info.is_creator) {
+      if (!info.is_creator && info.creator_id) {
         fetchProfilePicture(info.creator_id).then((profilePicture) => {
           setProfilePicUrl(profilePicture as string);
         });
       }
 
       const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
-        info.project_ids[0]
+        projectIdFromInfo
       );
       setParsingStatus(parsingStatus);
     } catch (error) {
@@ -168,9 +183,9 @@ const Chat = () => {
     }
   }, [parsingStatus, projectId]);
 
-  if (Error.isError)
+  if (errorState.isError)
     return (
-      <GlobalError title={Error.message} description={Error.description} />
+      <GlobalError title={errorState.message} description={errorState.description} />
     );
   if (chatAccess === "not_found") {
     return (
@@ -187,23 +202,22 @@ const Chat = () => {
     );
   }
 
-  const runtime = PotpieRuntime(params.chatId);
-
   return (
     <div className="flex flex-col h-screen">
       <Navbar
         disableShare={!isCreator}
         showShare
-        hidden={!showNavbar || Error.isError}
+        hidden={!showNavbar || errorState.isError}
       />
       <div className="h-[calc(90vh)]">
         <AssistantRuntimeProvider runtime={runtime}>
           <Thread
             projectId={projectId}
-            writeDisabled={false
-            }
+            writeDisabled={false}
             userImageURL={profilePicUrl}
             conversation_id={currentConversationId}
+            isSessionResuming={isSessionResuming}
+            isBackgroundTaskActive={isBackgroundTaskActive}
           />
         </AssistantRuntimeProvider>
       </div>
@@ -236,4 +250,5 @@ const Chat = () => {
   );
 };
 
-export default Chat;
+export default ChatV2;
+

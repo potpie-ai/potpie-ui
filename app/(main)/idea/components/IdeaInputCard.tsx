@@ -353,7 +353,7 @@ export default function IdeaInputCard({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-7 w-7"
               disabled={loading}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -364,7 +364,7 @@ export default function IdeaInputCard({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 gap-1.5"
+              className="h-7 gap-1.5"
               disabled={loading}
             >
               <Paperclip className="h-3.5 w-3.5" />

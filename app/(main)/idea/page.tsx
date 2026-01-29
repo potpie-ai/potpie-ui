@@ -4,8 +4,9 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import Image from "next/image";
-import { Check } from "lucide-react";
+import { Search } from "lucide-react";
 import IdeaInputCard from "./components/IdeaInputCard";
+import { Input } from "@/components/ui/input";
 import RepositorySelector from "./components/RepositorySelector";
 import ParsingStatusCard from "./components/ParsingStatusCard";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -1103,18 +1104,37 @@ export default function IdeaPage() {
 
   return (
     <div
-      className="min-h-screen flex relative"
-      style={{ backgroundColor: "#FFF9F5" }}
+      className="min-h-screen flex flex-col relative"
+      style={{ backgroundColor: "#FAF8F7" }}
     >
-      {/* Dot Pattern Background - More Visible */}
-      <div className="absolute inset-0 opacity-60 pointer-events-none">
-        <div
-          className="w-full h-full"
-          style={{
-            backgroundImage: `radial-gradient(circle, #71717a 1px, transparent 1px)`,
-            backgroundSize: "20px 20px",
-          }}
-        />
+       {/* SVG Background */}
+       <div
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{
+          backgroundImage: "url('/images/Mesh.svg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          opacity: 0.75,
+        }}
+      />
+
+      {/* Horizontal Navbar */}
+      <nav className="absolute top-0 left-0 right-0 z-20 bg-white/80 backdrop-blur-sm border-b border-zinc-200 h-16">
+      </nav>
+
+      {/* Search Bar Overlay on Navbar */}
+      <div className="absolute top-4 left-0 right-0 z-30 px-4">
+        <div className="flex justify-center">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="search"
+              className="w-full pl-10 pr-4 h-10 bg-white border border-zinc-300 rounded-md focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -1124,7 +1144,7 @@ export default function IdeaPage() {
           <div className="flex flex-col items-center space-y-3">
             <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center">
               <Image
-                src="/images/Green Icon.svg"
+                src="/images/logo.svg"
                 alt="Potpie Logo"
                 width={56}
                 height={56}
@@ -1162,7 +1182,7 @@ export default function IdeaPage() {
 
             {/* Agent Selection Tiles - Outside the card (hidden during parsing) */}
             {!state.parsing && (
-              <div className="flex items-center justify-center gap-3 mt-2">
+              <div className="flex items-center justify-center gap-2.5 mt-2">
                 {[
                   {
                     value: "ask",
@@ -1199,18 +1219,22 @@ export default function IdeaPage() {
                       }}
                       disabled={state.loading}
                       className={`
-                        px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200
-                        flex items-center gap-2.5 min-w-[140px] justify-center
+                        px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200
+                        flex items-center gap-2 min-w-[120px] justify-center
+                        border border-zinc-300
                         ${
                           isSelected
                             ? "text-[#00291C] shadow-md scale-105"
-                            : "bg-zinc-50 text-foreground hover:bg-zinc-100 border-2 border-zinc-200 hover:border-zinc-300"
+                            : "bg-zinc-50 text-foreground hover:bg-zinc-100"
                         }
                         ${state.loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:scale-105"}
                       `}
-                      className={isSelected ? "bg-accent-color" : ""}
+                      style={{
+                        backgroundColor: isSelected
+                          ? "var(--accent-color)"
+                          : undefined,
+                      }}
                     >
-                      {isSelected && <Check className="h-4 w-4" />}
                       <span>{agent.displayLabel}</span>
                     </button>
                   );

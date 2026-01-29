@@ -33,12 +33,24 @@ export default function AuthLayout({
             ? decodeURIComponent(redirectUrl) 
             : "http://localhost:54333/auth/callback";
           
-          const callbackUrl = new URL(callbackUrlStr);
-          callbackUrl.searchParams.set("token", token);
-          if (refreshToken) {
-            callbackUrl.searchParams.set("refreshToken", refreshToken);
+          try {
+            const callbackUrl = new URL(callbackUrlStr);
+            callbackUrl.searchParams.set("token", token);
+            if (refreshToken) {
+              callbackUrl.searchParams.set("refreshToken", refreshToken);
+            }
+            // Use window.location.replace to avoid history issues
+            window.location.replace(callbackUrl.toString());
+          } catch (error) {
+            console.error("Error constructing callback URL:", error);
+            // Fallback to default
+            const fallbackUrl = new URL("http://localhost:54333/auth/callback");
+            fallbackUrl.searchParams.set("token", token);
+            if (refreshToken) {
+              fallbackUrl.searchParams.set("refreshToken", refreshToken);
+            }
+            window.location.replace(fallbackUrl.toString());
           }
-          window.location.href = callbackUrl.toString();
         });
         return;
       }
@@ -56,7 +68,16 @@ export default function AuthLayout({
         if (process.env.NODE_ENV === 'development') {
           console.log("redirecting to", redirectUrl ? decodeURIComponent(redirectUrl) : "/");
         }
-        router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
+        // Only use router.push for internal routes (relative paths)
+        // For external URLs (like localhost), use window.location.href
+        const decodedRedirect = redirectUrl ? decodeURIComponent(redirectUrl) : "/";
+        if (decodedRedirect.startsWith('http://') || decodedRedirect.startsWith('https://')) {
+          // External URL - use window.location
+          window.location.href = decodedRedirect;
+        } else {
+          // Internal route - use router
+          router.push(decodedRedirect);
+        }
       }
     }
   }, [user, source, redirectUrl, agent_id, router]);

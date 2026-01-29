@@ -53,10 +53,7 @@ export const DebugPanel: FC<DebugPanelProps> = ({
         <summary className="cursor-pointer text-blue-600">
           Workflow Structure
         </summary>
-        <div
-          className="mt-1 p-2 bg-background rounded border resize-y overflow-auto min-h-[180px] max-h-[600px] flex flex-col"
-          style={{ minHeight: 180, maxHeight: 600 }}
-        >
+        <div className="mt-1 p-2 bg-background rounded border resize-y overflow-auto min-h-[var(--debug-panel-min-height)] max-h-[var(--debug-panel-max-height)] flex flex-col">
           <WorkflowJsonDropdown
             workflow={workflow}
             localWorkflow={localWorkflow}

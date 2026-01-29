@@ -8,7 +8,7 @@
   }
 
   :root {
-    --background: 23 100% 98%;
+    --background: #FFF9F5;
     --foreground: 179 91% 9%;
     --card: 30 25% 98%;
     --card-foreground: 179 91% 9%;
@@ -32,6 +32,8 @@
     --input: 214 32% 91%;
     --ring: 179 91% 9%;
     --radius: 0.5rem;
+    --debug-panel-min-height: 180px;
+    --debug-panel-max-height: 600px;
     --chart-1: 179 91% 9%;
     --chart-2: 72 58% 53%;
     --chart-3: 180 30% 86%;

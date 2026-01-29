@@ -39,8 +39,7 @@ export const HighlightableEdge = memo(
             stroke="transparent"
             strokeWidth={20}
             fill="none"
-            style={{ cursor: "pointer" }}
-            className="react-flow__edge-interaction"
+            className="react-flow__edge-interaction cursor-pointer"
           />
         )}
         {/* Visible edge */}

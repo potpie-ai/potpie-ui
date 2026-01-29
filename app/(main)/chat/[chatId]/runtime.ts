@@ -73,7 +73,7 @@ const createChatAdapter = (
   isBackgroundTaskActiveRef: React.MutableRefObject<boolean>
 ): ChatModelAdapter => {
   return {
-    async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
+    async *run({ messages, abortSignal, runConfig: optionsRunConfig }: ChatModelRunOptions) {
       // Prevent new messages during background tasks
       if (isBackgroundTaskActiveRef.current) {
         console.warn("Cannot send message while background task is active");
@@ -92,14 +92,16 @@ const createChatAdapter = (
         throw new Error("Message must contain text");
       }
 
-      // Extract custom config (selectedNodes)
-      interface RunConfig {
+      // Extract custom config (selectedNodes, documentIds) from runConfig
+      // runConfig is set by MessageComposer via composer.setRunConfig() and must include
+      // documentIds so we can send attachment_ids to the message API
+      interface RunConfigCustom {
         custom?: {
           selectedNodes?: unknown[];
           documentIds?: string[];
         };
       }
-      const runConfig = (context as { runConfig?: RunConfig }).runConfig;
+      const runConfig = (optionsRunConfig ?? {}) as RunConfigCustom;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
       const documentIds = runConfig?.custom?.documentIds || [];

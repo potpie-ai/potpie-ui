@@ -25,19 +25,19 @@ export const DocumentAttachmentCard: FC<DocumentAttachmentCardProps> = ({
   return (
     <div
       className={cn(
-        'flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors',
+        'flex items-center justify-between p-2 rounded-md border border-gray-200 bg-white hover:bg-gray-50 transition-colors',
         className
       )}
     >
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="text-2xl flex-shrink-0">{icon}</div>
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="text-lg flex-shrink-0">{icon}</div>
 
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm truncate" title={attachment.file_name}>
+          <div className="font-medium text-xs truncate" title={attachment.file_name}>
             {attachment.file_name}
           </div>
 
-          <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+          <div className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
             <span>{formatFileSize(attachment.file_size)}</span>
 
             {showTokenCount && attachment.token_count && (
@@ -64,27 +64,27 @@ export const DocumentAttachmentCard: FC<DocumentAttachmentCardProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 ml-2">
+      <div className="flex items-center gap-0.5 ml-1.5 flex-shrink-0">
         {onDownload && (
           <button
             type="button"
             onClick={onDownload}
-            className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
             title="Download"
             aria-label={`Download ${attachment.file_name}`}
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3 h-3" />
           </button>
         )}
 
         <button
           type="button"
           onClick={onRemove}
-          className="p-1.5 hover:bg-red-100 text-red-600 rounded transition-colors"
+          className="p-1 hover:bg-red-100 text-red-600 rounded transition-colors"
           title="Remove"
           aria-label={`Remove ${attachment.file_name}`}
         >
-          <X className="w-4 h-4" />
+          <X className="w-3 h-3" />
         </button>
       </div>
     </div>

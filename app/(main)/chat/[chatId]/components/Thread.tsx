@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
+import type { DocumentAttachment } from "@/lib/types/attachment";
 
 interface ThreadProps {
   projectId: string;
@@ -61,16 +62,75 @@ export const Thread: FC<ThreadProps> = ({
   isBackgroundTaskActive,
 }) => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [pendingDocumentAttachments, setPendingDocumentAttachments] = useState<
+    DocumentAttachment[] | null
+  >(null);
+  // Once we show pending docs on a message, store by message id so they stay visible after clearing pending
+  const [committedDocumentAttachmentsByMessageId, setCommittedDocumentAttachmentsByMessageId] =
+    useState<Record<string, DocumentAttachment[]>>({});
   const runtime = useThreadRuntime();
+  const [messagesSnapshot, setMessagesSnapshot] = useState(
+    () => runtime.getState().messages ?? []
+  );
+  const prevLastUserMessageIdRef = useRef<string | null>(null);
+
+  // Subscribe to thread so we see new messages (e.g. just-sent user message)
+  useEffect(() => {
+    setMessagesSnapshot(runtime.getState().messages ?? []);
+    const unsub = runtime.subscribe(() => {
+      setMessagesSnapshot(runtime.getState().messages ?? []);
+    });
+    return unsub;
+  }, [runtime]);
+
+  // Commit pending only when a *new* user message appears (last user message id changed)
+  // so we don't wrongly attach pending docs to the previous message
+  const lastUserMessageId = useMemo(() => {
+    const messages = messagesSnapshot;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i].id;
+    }
+    return null;
+  }, [messagesSnapshot]);
+
+  useEffect(() => {
+    if (
+      lastUserMessageId != null &&
+      lastUserMessageId !== prevLastUserMessageIdRef.current &&
+      pendingDocumentAttachments != null &&
+      pendingDocumentAttachments.length > 0
+    ) {
+      setCommittedDocumentAttachmentsByMessageId((prev) => ({
+        ...prev,
+        [lastUserMessageId]: pendingDocumentAttachments,
+      }));
+      setPendingDocumentAttachments(null);
+    }
+    prevLastUserMessageIdRef.current = lastUserMessageId;
+  }, [lastUserMessageId, pendingDocumentAttachments]);
 
   // Move useMemo before any early returns to satisfy React Hooks rules
   const userMessage = useMemo(() => {
     const UserMessageComponent = () => (
-      <UserMessage userPhotoURL={userImageURL} />
+      <UserMessage
+        userPhotoURL={userImageURL}
+        pendingDocumentAttachments={pendingDocumentAttachments}
+        setPendingDocumentAttachments={setPendingDocumentAttachments}
+        committedDocumentAttachmentsByMessageId={
+          committedDocumentAttachmentsByMessageId
+        }
+        setCommittedDocumentAttachmentsByMessageId={
+          setCommittedDocumentAttachmentsByMessageId
+        }
+      />
     );
     UserMessageComponent.displayName = "UserMessageComponent";
     return UserMessageComponent;
-  }, [userImageURL]);
+  }, [
+    userImageURL,
+    pendingDocumentAttachments,
+    committedDocumentAttachmentsByMessageId,
+  ]);
 
   useEffect(() => {
     const state = runtime.getState();
@@ -165,6 +225,7 @@ export const Thread: FC<ThreadProps> = ({
                 projectId={projectId}
                 disabled={writeDisabled}
                 conversation_id={conversation_id}
+                setPendingDocumentAttachments={setPendingDocumentAttachments}
               />
             </div>
           </>
@@ -235,25 +296,80 @@ const Composer: FC<{
   projectId: string;
   disabled: boolean;
   conversation_id: string;
-}> = ({ projectId, disabled, conversation_id }) => {
-  // REMOVED: Manual runtime subscriptions and state
-  // REMOVED: isStreaming check - assistant-ui handles this
-
+  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
+}> = ({ projectId, disabled, conversation_id, setPendingDocumentAttachments }) => {
   return (
     <ComposerPrimitive.Root className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out">
       <MessageComposer
         projectId={projectId}
         conversation_id={conversation_id}
         disabled={disabled}
+        setPendingDocumentAttachments={setPendingDocumentAttachments}
       />
     </ComposerPrimitive.Root>
   );
 };
 
-const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
+const UserMessage: FC<{
+  userPhotoURL: string;
+  pendingDocumentAttachments: DocumentAttachment[] | null;
+  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
+  committedDocumentAttachmentsByMessageId: Record<
+    string,
+    DocumentAttachment[]
+  >;
+  setCommittedDocumentAttachmentsByMessageId: React.Dispatch<
+    React.SetStateAction<Record<string, DocumentAttachment[]>>
+  >;
+}> = ({
+  userPhotoURL,
+  pendingDocumentAttachments,
+  setPendingDocumentAttachments,
+  committedDocumentAttachmentsByMessageId,
+  setCommittedDocumentAttachmentsByMessageId,
+}) => {
   const message = useMessage();
-  const documentAttachments =
+  const runtime = useThreadRuntime();
+  const [messagesSnapshot, setMessagesSnapshot] = useState(
+    () => runtime.getState().messages ?? []
+  );
+
+  useEffect(() => {
+    setMessagesSnapshot(runtime.getState().messages ?? []);
+    const unsub = runtime.subscribe(() => {
+      setMessagesSnapshot(runtime.getState().messages ?? []);
+    });
+    return unsub;
+  }, [runtime]);
+
+  const metadataDocumentAttachments =
     (message.metadata as any)?.custom?.documentAttachments ?? [];
+
+  // For just-sent messages, metadata may not be populated yet; use pending or committed docs
+  const lastUserMessage = useMemo(() => {
+    const messages = messagesSnapshot;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i];
+    }
+    return null;
+  }, [messagesSnapshot]);
+
+  const isLastUserMessage = lastUserMessage?.id === message.id;
+  const committedForThisMessage = committedDocumentAttachmentsByMessageId[message.id];
+  const showPending =
+    metadataDocumentAttachments.length === 0 &&
+    !(committedForThisMessage?.length) &&
+    isLastUserMessage &&
+    (pendingDocumentAttachments?.length ?? 0) > 0;
+
+  const documentAttachments =
+    metadataDocumentAttachments.length > 0
+      ? metadataDocumentAttachments
+      : committedForThisMessage?.length
+        ? committedForThisMessage
+        : showPending
+          ? pendingDocumentAttachments!
+          : [];
 
   return (
     <motion.div

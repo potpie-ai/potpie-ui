@@ -120,9 +120,13 @@ export function NavUser({
                 <div className="flex items-center gap-1">
                   <span className="truncate font-semibold">{user.name}</span>
                   {user.emailVerified ? (
-                    <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" title="Email verified" />
+                    <span title="Email verified">
+                      <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                    </span>
                   ) : (
-                    <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" title="Email not verified" />
+                    <span title="Email not verified">
+                      <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                    </span>
                   )}
                 </div>
                 <span className="truncate text-xs text-muted-foreground">{user.email}</span>
@@ -147,9 +151,13 @@ export function NavUser({
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-xs">{user.email}</span>
                     {user.emailVerified ? (
-                      <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" title="Email verified" />
+                      <span title="Email verified">
+                        <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                      </span>
                     ) : (
-                      <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" title="Email not verified" />
+                      <span title="Email not verified">
+                        <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                      </span>
                     )}
                   </div>
                 </div>

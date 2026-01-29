@@ -33,8 +33,13 @@ export const ValidationErrorModal: FC<ValidationErrorModalProps> = ({
   if (!validation || validation.can_upload) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-red-600">
             <AlertTriangle className="w-5 h-5" />
@@ -45,12 +50,12 @@ export const ValidationErrorModal: FC<ValidationErrorModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto min-h-0">
           {/* File Info */}
-          <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="font-medium">File:</span>
-              <span className="text-right truncate ml-2" title={fileName}>
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 space-y-2 text-sm">
+            <div className="flex justify-between gap-2 min-w-0">
+              <span className="font-medium flex-shrink-0">File:</span>
+              <span className="text-right truncate min-w-0" title={fileName}>
                 {fileName}
               </span>
             </div>

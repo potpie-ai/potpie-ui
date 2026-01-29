@@ -24,10 +24,7 @@ import {
   useComposerRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import {
-  ComposerAddAttachment,
-  ComposerAttachments,
-} from "@/components/assistant-ui/attachment";
+import { ComposerAttachments } from "@/components/assistant-ui/attachment";
 import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import { Dialog } from "@radix-ui/react-dialog";
 import axios from "axios";
@@ -74,6 +71,7 @@ interface MessageComposerProps {
   projectId: string;
   disabled: boolean;
   conversation_id: string;
+  setPendingDocumentAttachments?: (docs: DocumentAttachment[] | null) => void;
 }
 
 interface NodeOption {
@@ -91,6 +89,7 @@ const MessageComposer = ({
   projectId,
   disabled,
   conversation_id,
+  setPendingDocumentAttachments,
 }: MessageComposerProps) => {
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>([]);
@@ -381,6 +380,9 @@ const MessageComposer = ({
       },
     });
 
+    // So the just-sent user message can show document attachments in the thread
+    setPendingDocumentAttachments?.(documents.length > 0 ? [...documents] : null);
+
     // Only send the message - let the "send" event handler manage cleanup
     composer.send();
   };
@@ -487,9 +489,6 @@ const MessageComposer = ({
     } finally {
       setValidating(false);
       setUploadLocked(false);
-    }
-  };
-
     }
   };
 
@@ -652,12 +651,18 @@ const MessageComposer = ({
           }}
           onChangeModel={() => {
             handleCloseValidationModal();
-            const modelTrigger = document.querySelector(
-              '[class*="DialogTrigger"]'
-            ) as HTMLButtonElement;
-            if (modelTrigger) {
-              setTimeout(() => modelTrigger.click(), 100);
-            }
+            requestAnimationFrame(() => {
+              const modelTrigger = document.querySelector(
+                '[data-model-selector-trigger]'
+              ) as HTMLButtonElement | null;
+              if (modelTrigger && !modelTrigger.hasAttribute("disabled")) {
+                modelTrigger.click();
+              } else {
+                toast.info(
+                  "Open the model selector (model name next to the send button) to switch to a model with a larger context window."
+                );
+              }
+            });
           }}
         />
       )}
@@ -698,9 +703,9 @@ const MessageComposer = ({
           {/* Attachment Previews */}
           {isMultimodalEnabled() && <ComposerAttachments />}
 
-          {/* Document Attachments */}
+          {/* Document Attachments - compact tile, does not span full width */}
           {documents.length > 0 && (
-            <div className="w-full px-4 space-y-2">
+            <div className="w-max max-w-sm px-4 space-y-2">
               <div className="text-xs font-medium text-gray-600">
                 Documents ({documents.length})
               </div>
@@ -717,15 +722,15 @@ const MessageComposer = ({
             </div>
           )}
 
-          {/* Validation/Upload Loading State */}
+          {/* Validation/Upload Loading State - compact, same width as documents tile */}
           {validating && (
-            <div className="w-full px-4 py-2 text-sm text-gray-600 flex items-center gap-2">
+            <div className="w-max max-w-sm px-4 py-2 text-sm text-gray-600 flex items-center gap-2">
               <Loader2Icon className="w-4 h-4 animate-spin" />
               <span>Validating document...</span>
             </div>
           )}
           {uploadingDocument && (
-            <div className="w-full px-4 py-2">
+            <div className="w-max max-w-sm px-4 py-2">
               <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
                 <div className="flex items-center gap-2">
                   <Loader2Icon className="w-4 h-4 animate-spin" />
@@ -739,7 +744,7 @@ const MessageComposer = ({
                   Cancel
                 </button>
               </div>
-              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden min-w-[140px]">
                 <div
                   className="h-full bg-blue-500 transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
@@ -749,51 +754,54 @@ const MessageComposer = ({
           )}
 
           <div className="flex flex-row w-full items-end gap-2">
-            {isMultimodalEnabled() && (
-              <div className="flex items-center pb-4 gap-2">
-                <ComposerAddAttachment />
-                <input
-                  type="file"
-                  ref={documentInputRef}
-                  onChange={(e) => {
-                    const files = e.target.files;
-                    if (!files || files.length === 0) return;
+            <div className="flex items-center pb-4 gap-2">
+              <input
+                type="file"
+                ref={documentInputRef}
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
 
-                    const file = files[0];
-                    if (isImageTypeByFile(file)) {
-                      toast.info("Use the image button for images.");
-                    } else if (isDocumentTypeByFile(file)) {
-                      void handleDocumentSelect(files);
+                  const file = files[0];
+                  if (isImageTypeByFile(file)) {
+                    if (isMultimodalEnabled()) {
+                      await composer.addAttachment(file);
                     } else {
-                      toast.error("Unsupported file type", {
-                        description: "Please select a supported document file.",
-                      });
+                      toast.info("Image upload is not available in this chat.");
                     }
+                  } else if (isDocumentTypeByFile(file)) {
+                    void handleDocumentSelect(files);
+                  } else {
+                    toast.error("Unsupported file type", {
+                      description:
+                        "Supported: images (JPEG, PNG, WebP, GIF), documents (PDF, DOCX, CSV, code files, etc.).",
+                    });
+                  }
 
-                    e.target.value = "";
-                  }}
-                  accept={getSupportedFileExtensions()}
-                  multiple={false}
-                  className="hidden"
-                />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
-                        onClick={() => documentInputRef.current?.click()}
-                      >
-                        <Paperclip className="w-4 h-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Attach document</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            )}
+                  e.target.value = "";
+                }}
+                accept={getSupportedFileExtensions()}
+                multiple={false}
+                className="hidden"
+              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
+                      onClick={() => documentInputRef.current?.click()}
+                      aria-label="Attach file (image or document)"
+                    >
+                      <Paperclip className="w-4 h-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Attach file (image or document)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
 
             <ComposerPrimitive.Input
               submitOnEnter={!isDisabled}
@@ -911,6 +919,7 @@ const ModelSelection: FC<{
     <Dialog>
       {currentModel ? (
         <DialogTrigger
+          data-model-selector-trigger
           className="p-2 transition ease-in bg-white hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
           disabled={disabled}
           onClick={handleModelList}

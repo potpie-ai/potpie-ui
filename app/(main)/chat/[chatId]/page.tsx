@@ -123,7 +123,7 @@ const ChatV2 = () => {
       if (!agentId || !projectIdFromInfo) {
         console.error("Missing agent_ids or project_ids in conversation info:", info);
         toast.error("Failed to load conversation: missing required data");
-        setError({
+        setErrorState({
           isError: true,
           message: "Invalid conversation data",
           description: "The conversation is missing required information. Please try again or contact support.",

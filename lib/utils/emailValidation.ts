@@ -5,6 +5,11 @@
 
 import type { UserCredential } from 'firebase/auth';
 
+// Firebase modular UserCredential type omits additionalUserInfo; it exists at runtime from signInWithPopup
+type UserCredentialWithAdditionalInfo = UserCredential & {
+  additionalUserInfo?: { isNewUser?: boolean } | null;
+};
+
 // Set of blocked email domains (generic/personal email providers)
 // Using Set for O(1) lookup performance
 export const BLOCKED_DOMAINS = new Set([
@@ -190,10 +195,11 @@ export function validateWorkEmail(email: string): { isValid: boolean; errorMessa
  * }
  */
 export function isNewUser(result: UserCredential): boolean {
+  const cred = result as UserCredentialWithAdditionalInfo;
   // Method 1: additionalUserInfo.isNewUser
   // Note: This only returns true if the current SDK call created the account.
   // It will be false for accounts created via Admin SDK, console, or backend.
-  if (result.additionalUserInfo?.isNewUser === true) {
+  if (cred.additionalUserInfo?.isNewUser === true) {
     return true;
   }
   

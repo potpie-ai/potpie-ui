@@ -1,6 +1,7 @@
 import getHeaders from "@/app/utils/headers.util";
 import { Button } from "@/components/ui/button";
 import { isMultimodalEnabled } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Command,
   CommandEmpty,
@@ -23,10 +24,7 @@ import {
   useComposerRuntime,
   useThreadRuntime,
 } from "@assistant-ui/react";
-import {
-  ComposerAddAttachment,
-  ComposerAttachments,
-} from "@/components/assistant-ui/attachment";
+import { ComposerAttachments } from "@/components/assistant-ui/attachment";
 import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import { Dialog } from "@radix-ui/react-dialog";
 import axios from "axios";
@@ -37,6 +35,7 @@ import {
   Loader2Icon,
   Crown,
   Zap,
+  Paperclip,
 } from "lucide-react";
 import {
   FC,
@@ -51,11 +50,28 @@ import Image from "next/image";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
+import { DocumentAttachment, ValidationResponse } from "@/lib/types/attachment";
+import {
+  isDocumentTypeByFile,
+  isImageTypeByFile,
+  MAX_FILE_SIZE,
+  getSupportedFileExtensions,
+} from "@/lib/utils/fileTypes";
+import { DocumentAttachmentCard } from "@/components/chat/DocumentAttachmentCard";
+import { ValidationErrorModal } from "@/components/chat/ValidationErrorModal";
+import { ContextUsageIndicator } from "@/components/chat/ContextUsageIndicator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface MessageComposerProps {
   projectId: string;
   disabled: boolean;
   conversation_id: string;
+  setPendingDocumentAttachments?: (docs: DocumentAttachment[] | null) => void;
 }
 
 interface NodeOption {
@@ -73,6 +89,7 @@ const MessageComposer = ({
   projectId,
   disabled,
   conversation_id,
+  setPendingDocumentAttachments,
 }: MessageComposerProps) => {
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<NodeOption[]>([]);
@@ -80,6 +97,18 @@ const MessageComposer = ({
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [documents, setDocuments] = useState<DocumentAttachment[]>([]);
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState<{
+    validation: ValidationResponse;
+    file: File;
+  } | null>(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [contextRefreshTrigger, setContextRefreshTrigger] = useState(0);
+  const [uploadAbortController, setUploadAbortController] =
+    useState<AbortController | null>(null);
+  const [uploadLocked, setUploadLocked] = useState(false);
 
   // Use thread runtime to check if streaming is in progress
   const threadRuntime = useThreadRuntime();
@@ -100,6 +129,7 @@ const MessageComposer = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
 
   const composer = useComposerRuntime();
 
@@ -130,14 +160,16 @@ const MessageComposer = ({
     return unsubscribe;
   }, [composer]); // Only depend on composer, not message
 
-  // Update runtime config when nodes change
+  // Update runtime config when nodes/documents change
   useEffect(() => {
     composer.setRunConfig({
       custom: {
         selectedNodes: selectedNodes,
+        documentIds: documents.map((doc) => doc.id),
+        documents: documents,
       },
     });
-  }, [selectedNodes, composer]);
+  }, [selectedNodes, documents, composer]);
 
   useEffect(() => {
     const unsubscribe =
@@ -148,6 +180,8 @@ const MessageComposer = ({
         composer.setRunConfig({
           custom: {
             selectedNodes: [],
+            documentIds: [],
+            documents: [],
           },
         });
         // Clear React state
@@ -155,6 +189,11 @@ const MessageComposer = ({
         setNodeOptions([]);
         setSelectedNodeIndex(-1);
         setMessage("");
+        setDocuments([]);
+        setValidationError(null);
+        setValidating(false);
+        setUploadingDocument(false);
+        setUploadProgress(0);
         // Clear refs
         messageRef.current = "";
         lastSyncedComposerText.current = "";
@@ -174,6 +213,10 @@ const MessageComposer = ({
 
   // Node fetching and handling
   const fetchNodes = async (query: string) => {
+    if (!projectId) {
+      setNodeOptions([]);
+      return;
+    }
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     setIsSearchingNode(true);
@@ -327,25 +370,125 @@ const MessageComposer = ({
   };
 
   const handleSend = () => {
+    // Ensure config is set with current documents before sending
+    const documentIds = documents.map((doc) => doc.id);
+    composer.setRunConfig({
+      custom: {
+        selectedNodes: selectedNodes,
+        documentIds: documentIds,
+        documents: documents,
+      },
+    });
+
+    // So the just-sent user message can show document attachments in the thread
+    setPendingDocumentAttachments?.(documents.length > 0 ? [...documents] : null);
+
     // Only send the message - let the "send" event handler manage cleanup
     composer.send();
   };
 
-  const handleEnhancePrompt = async () => {
+  const handleDocumentSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    // Prevent multiple simultaneous uploads
+    if (uploadLocked || validating || uploadingDocument) {
+      toast.info("Please wait", {
+        description: "An upload is already in progress.",
+      });
+      return;
+    }
+
+    const file = files[0]; // Single document at a time for now
+
+    // Client-side validation
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("File too large", {
+        description: `Maximum file size is 10MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB.`,
+      });
+      return;
+    }
+
+    if (!isDocumentTypeByFile(file)) {
+      toast.error("Unsupported file type", {
+        description: "Supported formats: PDF, DOCX, CSV, XLSX, code files (.py, .js, .ts, etc.), and markdown.",
+      });
+      return;
+    }
+
+    // Start upload process - set lock
+    setUploadLocked(true);
+    setValidating(true);
+
     try {
-      setIsEnhancing(true);
-      setMessage("Enhancing...");
-      composer.setText("Enhancing...");
-      const enhancedMessage = await ChatService.enhancePrompt(
-        conversation_id,
-        message
+      const validation = await ChatService.validateDocument(conversation_id, file);
+
+      if (!validation.can_upload) {
+        // Show error modal
+        setValidationError({ validation, file });
+        return;
+      }
+
+      // Show warning if usage will be high
+      if (validation.usage_after_upload && validation.usage_after_upload > 80) {
+      console.warn(
+        `High context usage after upload: ${validation.usage_after_upload}%`
       );
-      setMessage(enhancedMessage);
-      composer.setText(enhancedMessage);
-    } catch (error) {
-      console.error("Error enhancing prompt:", error);
+      }
+
+      // Upload the document
+      setValidating(false);
+      setUploadingDocument(true);
+      setUploadProgress(0);
+
+      const controller = new AbortController();
+      setUploadAbortController(controller);
+
+      try {
+        const uploadResult = await ChatService.uploadAttachment(
+          file,
+          undefined,
+          (progress) => setUploadProgress(progress),
+          controller.signal
+        );
+
+        // Get full metadata including token count
+        const attachmentInfo = await ChatService.getAttachmentInfo(uploadResult.id);
+
+        // Add to documents state
+        const documentAttachment: DocumentAttachment = {
+          ...uploadResult,
+          file,
+          token_count: attachmentInfo.file_metadata.token_count,
+          metadata: attachmentInfo.file_metadata,
+        };
+
+        setDocuments(prev => [...prev, documentAttachment]);
+
+        // Trigger context refresh
+        setContextRefreshTrigger(prev => prev + 1);
+      } catch (error: any) {
+        if (error.name === 'AbortError' || error.name === 'CanceledError') {
+          // User cancelled, already handled
+          return;
+        }
+        console.error("Document upload error:", error);
+        toast.error("Upload failed", {
+          description:
+            error.message || "Failed to upload document. Please try again.",
+        });
+      } finally {
+        setUploadAbortController(null);
+        setUploadingDocument(false);
+      }
+    } catch (error: any) {
+      console.error("Document validation/upload error:", error);
+      toast.error("Upload failed", {
+        description:
+          error.message || "Failed to upload document. Please try again.",
+      });
     } finally {
-      setIsEnhancing(false);
+      setValidating(false);
+      setUploadLocked(false);
     }
   };
 
@@ -430,68 +573,260 @@ const MessageComposer = ({
     );
   };
 
-  return (
-    <div className="flex flex-col w-full p-2">
-      {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
+  const handleEnhancePrompt = async () => {
+    try {
+      setIsEnhancing(true);
+      setMessage("Enhancing...");
+      composer.setText("Enhancing...");
+      const enhancedMessage = await ChatService.enhancePrompt(
+        conversation_id,
+        message
+      );
+      setMessage(enhancedMessage);
+      composer.setText(enhancedMessage);
+    } catch (error) {
+      console.error("Error enhancing prompt:", error);
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
 
-      {selectedNodes.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-2">
-          <span className="text-xs uppercase tracking-wide text-muted-foreground">
-            Context
-          </span>
-          {selectedNodes.map((node) => (
-            <span
-              key={node.node_id}
-              className="flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-800 shadow-sm"
-            >
-              {node.name}
-              <button
-                type="button"
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-rose-600 transition hover:bg-white hover:text-rose-800"
-                onClick={() => handleNodeDeselect(node)}
-                aria-label={`Remove ${node.name}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-        </div>
+  const handleCloseValidationModal = () => {
+    setValidationError(null);
+  };
+
+  const handleRemoveDocument = (index: number) => {
+    const removedDoc = documents[index];
+    setDocuments((prev) => prev.filter((_, i) => i !== index));
+
+    // Trigger context refresh
+    setContextRefreshTrigger((prev) => prev + 1);
+
+    toast("Document removed", {
+      description: removedDoc.file_name,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          setDocuments((prev) => [
+            ...prev.slice(0, index),
+            removedDoc,
+            ...prev.slice(index),
+          ]);
+          setContextRefreshTrigger((prev) => prev + 1);
+        },
+      },
+      duration: 5000,
+    });
+  };
+
+  const handleCancelUpload = () => {
+    if (uploadAbortController) {
+      uploadAbortController.abort();
+      setUploadAbortController(null);
+    }
+    setUploadingDocument(false);
+    setValidating(false);
+    setUploadProgress(0);
+    toast.info("Upload cancelled");
+  };
+
+  return (
+    <>
+      {/* Validation Error Modal */}
+      {validationError && (
+        <ValidationErrorModal
+          open={!!validationError}
+          onClose={handleCloseValidationModal}
+          validation={validationError.validation}
+          fileName={validationError.file.name}
+          fileSize={validationError.file.size}
+          onViewAttachments={() => {
+            handleCloseValidationModal();
+            if (documents.length > 0) {
+              containerRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }
+          }}
+          onChangeModel={() => {
+            handleCloseValidationModal();
+            requestAnimationFrame(() => {
+              const modelTrigger = document.querySelector(
+                '[data-model-selector-trigger]'
+              ) as HTMLButtonElement | null;
+              if (modelTrigger && !modelTrigger.hasAttribute("disabled")) {
+                modelTrigger.click();
+              } else {
+                toast.info(
+                  "Open the model selector (model name next to the send button) to switch to a model with a larger context window."
+                );
+              }
+            });
+          }}
+        />
       )}
 
-      <div
-        ref={containerRef}
-        className="flex flex-col w-full items-start gap-4"
-        tabIndex={0}
-        style={{ outline: "none" }}
-      >
-        {/* Attachment Previews - using assistant-ui components */}
-        {isMultimodalEnabled() && <ComposerAttachments />}
+      <div className="flex flex-col w-full p-2">
+        {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
 
-        <div className="flex flex-row w-full items-end gap-2">
-          {/* Attachment Button - using assistant-ui component */}
-          {isMultimodalEnabled() && (
-            <div className="flex items-center pb-4">
-              <ComposerAddAttachment />
+        {selectedNodes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+              Context
+            </span>
+            {selectedNodes.map((node) => (
+              <span
+                key={node.node_id}
+                className="flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-800 shadow-sm"
+              >
+                {node.name}
+                <button
+                  type="button"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-rose-600 transition hover:bg-white hover:text-rose-800"
+                  onClick={() => handleNodeDeselect(node)}
+                  aria-label={`Remove ${node.name}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div
+          ref={containerRef}
+          className="flex flex-col w-full items-start gap-4"
+          tabIndex={0}
+          style={{ outline: "none" }}
+        >
+          {/* Attachment Previews */}
+          {isMultimodalEnabled() && <ComposerAttachments />}
+
+          {/* Document Attachments - compact tile, does not span full width */}
+          {documents.length > 0 && (
+            <div className="w-max max-w-sm px-4 space-y-2">
+              <div className="text-xs font-medium text-gray-600">
+                Documents ({documents.length})
+              </div>
+              {documents.map((doc, index) => (
+                <DocumentAttachmentCard
+                  key={doc.id}
+                  attachment={doc}
+                  onRemove={() => handleRemoveDocument(index)}
+                  onDownload={() => {
+                    ChatService.downloadAttachment(doc.id, doc.file_name);
+                  }}
+                />
+              ))}
             </div>
           )}
 
-          <ComposerPrimitive.Input
-            submitOnEnter={!isDisabled}
-            ref={textareaRef}
-            value={message}
-            rows={1}
-            autoFocus
-            placeholder="Type @ followed by file or function name, or paste/upload images"
-            onChange={handleMessageChange}
-            onKeyDown={handleKeyPress}
-            disabled={isDisabled}
-            className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
-          />
-        </div>
+          {/* Validation/Upload Loading State - compact, same width as documents tile */}
+          {validating && (
+            <div className="w-max max-w-sm px-4 py-2 text-sm text-gray-600 flex items-center gap-2">
+              <Loader2Icon className="w-4 h-4 animate-spin" />
+              <span>Validating document...</span>
+            </div>
+          )}
+          {uploadingDocument && (
+            <div className="w-max max-w-sm px-4 py-2">
+              <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                <div className="flex items-center gap-2">
+                  <Loader2Icon className="w-4 h-4 animate-spin" />
+                  <span>Uploading... {uploadProgress}%</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelUpload}
+                  className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden min-w-[140px]">
+                <div
+                  className="h-full bg-blue-500 transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
-        <ComposerAction disabled={isDisabled} />
+          <div className="flex flex-row w-full items-end gap-2">
+            <div className="flex items-center pb-4 gap-2">
+              <input
+                type="file"
+                ref={documentInputRef}
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
+
+                  const file = files[0];
+                  if (isImageTypeByFile(file)) {
+                    if (isMultimodalEnabled()) {
+                      await composer.addAttachment(file);
+                    } else {
+                      toast.info("Image upload is not available in this chat.");
+                    }
+                  } else if (isDocumentTypeByFile(file)) {
+                    void handleDocumentSelect(files);
+                  } else {
+                    toast.error("Unsupported file type", {
+                      description:
+                        "Supported: images (JPEG, PNG, WebP, GIF), documents (PDF, DOCX, CSV, code files, etc.).",
+                    });
+                  }
+
+                  e.target.value = "";
+                }}
+                accept={getSupportedFileExtensions()}
+                multiple={false}
+                className="hidden"
+              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
+                      onClick={() => documentInputRef.current?.click()}
+                      aria-label="Attach file (image or document)"
+                    >
+                      <Paperclip className="w-4 h-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Attach file (image or document)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <ComposerPrimitive.Input
+              submitOnEnter={!isDisabled}
+              ref={textareaRef}
+              value={message}
+              rows={1}
+              autoFocus
+              placeholder="Type @ followed by file or function name, or paste/upload images"
+              onChange={handleMessageChange}
+              onKeyDown={handleKeyPress}
+              disabled={isDisabled}
+              className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div className="flex items-center justify-between w-full">
+            <ContextUsageIndicator
+              conversationId={conversation_id}
+              refreshTrigger={contextRefreshTrigger}
+            />
+            <ComposerAction disabled={isDisabled} />
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -584,6 +919,7 @@ const ModelSelection: FC<{
     <Dialog>
       {currentModel ? (
         <DialogTrigger
+          data-model-selector-trigger
           className="p-2 transition ease-in bg-white hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
           disabled={disabled}
           onClick={handleModelList}

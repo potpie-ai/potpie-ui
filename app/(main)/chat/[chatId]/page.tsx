@@ -116,7 +116,22 @@ const ChatV2 = () => {
 
       setIsCreator(info.is_creator);
 
-      if (!list_system_agents.includes(info.agent_ids[0])) {
+      // Defensive checks for required arrays
+      const agentId = info.agent_ids?.[0];
+      const projectIdFromInfo = info.project_ids?.[0];
+
+      if (!agentId || !projectIdFromInfo) {
+        console.error("Missing agent_ids or project_ids in conversation info:", info);
+        toast.error("Failed to load conversation: missing required data");
+        setErrorState({
+          isError: true,
+          message: "Invalid conversation data",
+          description: "The conversation is missing required information. Please try again or contact support.",
+        });
+        return;
+      }
+
+      if (!list_system_agents.includes(agentId)) {
         setChatAccess(info.access_type);
       } else {
         setChatAccess(info.is_creator ? "write" : info.access_type);
@@ -124,22 +139,22 @@ const ChatV2 = () => {
 
       dispatch(
         setChat({
-          agentId: info.agent_ids[0],
+          agentId: agentId,
           title: info.title,
         })
       );
 
-      setProjectId(info.project_ids[0]);
+      setProjectId(projectIdFromInfo);
       setInfoLoadedForChat(currentConversationId);
 
-      if (!info.is_creator) {
+      if (!info.is_creator && info.creator_id) {
         fetchProfilePicture(info.creator_id).then((profilePicture) => {
           setProfilePicUrl(profilePicture as string);
         });
       }
 
       const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
-        info.project_ids[0]
+        projectIdFromInfo
       );
       setParsingStatus(parsingStatus);
     } catch (error) {

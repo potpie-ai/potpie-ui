@@ -372,7 +372,7 @@ const Onboarding = () => {
       provider.addScope("repo");
 
       // Link GitHub to the CURRENT authenticated user (work/SSO) without switching accounts
-      const result = await linkWithPopup(auth.currentUser, provider);
+      const result = await linkWithPopup(currentUser, provider);
       const credential = GithubAuthProvider.credentialFromResult(result);
       
       if (!credential) {

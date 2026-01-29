@@ -25,7 +25,6 @@ import {
   RefreshCwIcon,
   Loader,
 } from "lucide-react";
-import { isMultimodalEnabled } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import {
@@ -43,6 +42,7 @@ import {
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
+import type { DocumentAttachment } from "@/lib/types/attachment";
 
 interface ThreadProps {
   projectId: string;
@@ -62,16 +62,75 @@ export const Thread: FC<ThreadProps> = ({
   isBackgroundTaskActive,
 }) => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [pendingDocumentAttachments, setPendingDocumentAttachments] = useState<
+    DocumentAttachment[] | null
+  >(null);
+  // Once we show pending docs on a message, store by message id so they stay visible after clearing pending
+  const [committedDocumentAttachmentsByMessageId, setCommittedDocumentAttachmentsByMessageId] =
+    useState<Record<string, DocumentAttachment[]>>({});
   const runtime = useThreadRuntime();
+  const [messagesSnapshot, setMessagesSnapshot] = useState(
+    () => runtime.getState().messages ?? []
+  );
+  const prevLastUserMessageIdRef = useRef<string | null>(null);
+
+  // Subscribe to thread so we see new messages (e.g. just-sent user message)
+  useEffect(() => {
+    setMessagesSnapshot(runtime.getState().messages ?? []);
+    const unsub = runtime.subscribe(() => {
+      setMessagesSnapshot(runtime.getState().messages ?? []);
+    });
+    return unsub;
+  }, [runtime]);
+
+  // Commit pending only when a *new* user message appears (last user message id changed)
+  // so we don't wrongly attach pending docs to the previous message
+  const lastUserMessageId = useMemo(() => {
+    const messages = messagesSnapshot;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i].id;
+    }
+    return null;
+  }, [messagesSnapshot]);
+
+  useEffect(() => {
+    if (
+      lastUserMessageId != null &&
+      lastUserMessageId !== prevLastUserMessageIdRef.current &&
+      pendingDocumentAttachments != null &&
+      pendingDocumentAttachments.length > 0
+    ) {
+      setCommittedDocumentAttachmentsByMessageId((prev) => ({
+        ...prev,
+        [lastUserMessageId]: pendingDocumentAttachments,
+      }));
+      setPendingDocumentAttachments(null);
+    }
+    prevLastUserMessageIdRef.current = lastUserMessageId;
+  }, [lastUserMessageId, pendingDocumentAttachments]);
 
   // Move useMemo before any early returns to satisfy React Hooks rules
   const userMessage = useMemo(() => {
     const UserMessageComponent = () => (
-      <UserMessage userPhotoURL={userImageURL} />
+      <UserMessage
+        userPhotoURL={userImageURL}
+        pendingDocumentAttachments={pendingDocumentAttachments}
+        setPendingDocumentAttachments={setPendingDocumentAttachments}
+        committedDocumentAttachmentsByMessageId={
+          committedDocumentAttachmentsByMessageId
+        }
+        setCommittedDocumentAttachmentsByMessageId={
+          setCommittedDocumentAttachmentsByMessageId
+        }
+      />
     );
     UserMessageComponent.displayName = "UserMessageComponent";
     return UserMessageComponent;
-  }, [userImageURL]);
+  }, [
+    userImageURL,
+    pendingDocumentAttachments,
+    committedDocumentAttachmentsByMessageId,
+  ]);
 
   useEffect(() => {
     const state = runtime.getState();
@@ -166,6 +225,7 @@ export const Thread: FC<ThreadProps> = ({
                 projectId={projectId}
                 disabled={writeDisabled}
                 conversation_id={conversation_id}
+                setPendingDocumentAttachments={setPendingDocumentAttachments}
               />
             </div>
           </>
@@ -236,22 +296,81 @@ const Composer: FC<{
   projectId: string;
   disabled: boolean;
   conversation_id: string;
-}> = ({ projectId, disabled, conversation_id }) => {
-  // REMOVED: Manual runtime subscriptions and state
-  // REMOVED: isStreaming check - assistant-ui handles this
-
+  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
+}> = ({ projectId, disabled, conversation_id, setPendingDocumentAttachments }) => {
   return (
     <ComposerPrimitive.Root className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out">
       <MessageComposer
         projectId={projectId}
         conversation_id={conversation_id}
         disabled={disabled}
+        setPendingDocumentAttachments={setPendingDocumentAttachments}
       />
     </ComposerPrimitive.Root>
   );
 };
 
-const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
+const UserMessage: FC<{
+  userPhotoURL: string;
+  pendingDocumentAttachments: DocumentAttachment[] | null;
+  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
+  committedDocumentAttachmentsByMessageId: Record<
+    string,
+    DocumentAttachment[]
+  >;
+  setCommittedDocumentAttachmentsByMessageId: React.Dispatch<
+    React.SetStateAction<Record<string, DocumentAttachment[]>>
+  >;
+}> = ({
+  userPhotoURL,
+  pendingDocumentAttachments,
+  setPendingDocumentAttachments,
+  committedDocumentAttachmentsByMessageId,
+  setCommittedDocumentAttachmentsByMessageId,
+}) => {
+  const message = useMessage();
+  const runtime = useThreadRuntime();
+  const [messagesSnapshot, setMessagesSnapshot] = useState(
+    () => runtime.getState().messages ?? []
+  );
+
+  useEffect(() => {
+    setMessagesSnapshot(runtime.getState().messages ?? []);
+    const unsub = runtime.subscribe(() => {
+      setMessagesSnapshot(runtime.getState().messages ?? []);
+    });
+    return unsub;
+  }, [runtime]);
+
+  const metadataDocumentAttachments =
+    (message.metadata as any)?.custom?.documentAttachments ?? [];
+
+  // For just-sent messages, metadata may not be populated yet; use pending or committed docs
+  const lastUserMessage = useMemo(() => {
+    const messages = messagesSnapshot;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i];
+    }
+    return null;
+  }, [messagesSnapshot]);
+
+  const isLastUserMessage = lastUserMessage?.id === message.id;
+  const committedForThisMessage = committedDocumentAttachmentsByMessageId[message.id];
+  const showPending =
+    metadataDocumentAttachments.length === 0 &&
+    !(committedForThisMessage?.length) &&
+    isLastUserMessage &&
+    (pendingDocumentAttachments?.length ?? 0) > 0;
+
+  const documentAttachments =
+    metadataDocumentAttachments.length > 0
+      ? metadataDocumentAttachments
+      : committedForThisMessage?.length
+        ? committedForThisMessage
+        : showPending
+          ? pendingDocumentAttachments!
+          : [];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -261,12 +380,51 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          {/* Display attachments using assistant-ui component */}
-          {isMultimodalEnabled() && <UserMessageAttachments />}
+          {/* Document Attachments */}
+          {documentAttachments.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {documentAttachments.map((attachment: any, index: number) => {
+                const tokenCount =
+                  attachment.token_count || attachment.file_metadata?.token_count;
+                const metadata = attachment.metadata || attachment.file_metadata;
+
+                return (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 text-xs bg-white rounded-lg p-2 border"
+                  >
+                    <span className="text-lg">
+                      {attachment.attachment_type === "pdf" && "📄"}
+                      {attachment.attachment_type === "spreadsheet" && "📊"}
+                      {attachment.attachment_type === "code" && "💻"}
+                      {attachment.attachment_type === "document" && "📝"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {attachment.file_name}
+                      </div>
+                      {tokenCount && (
+                        <div className="text-gray-500">
+                          {tokenCount.toLocaleString()} tokens
+                        </div>
+                      )}
+                      {metadata?.page_count && (
+                        <div className="text-gray-400 text-xs">
+                          {metadata.page_count} pages
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <UserMessageAttachments />
 
           <MessagePrimitive.Parts
             components={{
-              Image: () => null, //UserMessageAttachments already handles images
+              Image: () => null,
             }}
           />
         </div>

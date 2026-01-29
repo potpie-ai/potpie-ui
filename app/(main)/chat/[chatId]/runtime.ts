@@ -73,7 +73,7 @@ const createChatAdapter = (
   isBackgroundTaskActiveRef: React.MutableRefObject<boolean>
 ): ChatModelAdapter => {
   return {
-    async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
+    async *run({ messages, abortSignal, runConfig: optionsRunConfig }: ChatModelRunOptions) {
       // Prevent new messages during background tasks
       if (isBackgroundTaskActiveRef.current) {
         console.warn("Cannot send message while background task is active");
@@ -92,15 +92,19 @@ const createChatAdapter = (
         throw new Error("Message must contain text");
       }
 
-      // Extract custom config (selectedNodes)
-      interface RunConfig {
+      // Extract custom config (selectedNodes, documentIds) from runConfig
+      // runConfig is set by MessageComposer via composer.setRunConfig() and must include
+      // documentIds so we can send attachment_ids to the message API
+      interface RunConfigCustom {
         custom?: {
           selectedNodes?: unknown[];
+          documentIds?: string[];
         };
       }
-      const runConfig = (context as { runConfig?: RunConfig }).runConfig;
+      const runConfig = (optionsRunConfig ?? {}) as RunConfigCustom;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
+      const documentIds = runConfig?.custom?.documentIds || [];
 
       // Extract images from message attachments (the assistant-ui way)
       const images: File[] = [];
@@ -169,6 +173,7 @@ const createChatAdapter = (
           textContent.text,
           selectedNodes,
           images,
+          documentIds,
           (message: string, tool_calls: any[], citations: string[]) => {
             if (abortSignal?.aborted || aborted) return;
 
@@ -580,8 +585,12 @@ const convertToThreadMessage = (msg: BackendMessage): ThreadMessage => {
     { type: "text", text: msg.text || "" },
   ];
 
-  // Prepare attachments array for Assistant UI
+  // Prepare attachments array for Assistant UI (images only)
   const attachments: CompleteAttachment[] = [];
+  const documentAttachments =
+    msg.attachments?.filter(
+      (attachment) => attachment.attachment_type !== "image"
+    ) || [];
 
   // Add image content and attachments if multimodal enabled and attachments exist
   if (
@@ -645,9 +654,11 @@ const convertToThreadMessage = (msg: BackendMessage): ThreadMessage => {
       id: msg.id,
       role: "user",
       content: content as ThreadUserMessage["content"],
-      attachments, // Now populated with actual attachments
+      attachments, // Image attachments only
       metadata: {
-        custom: {},
+        custom: {
+          documentAttachments,
+        },
       },
       createdAt,
     };

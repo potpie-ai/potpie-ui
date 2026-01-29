@@ -210,28 +210,24 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     {
       queryKey: ["user-repository"],
       queryFn: async () => {
-        const repos =
-          await BranchAndRepositoryService.getUserRepositories().then(
-            (data) => {
-              if (defaultRepo && data.length > 0) {
-                const decodedDefaultRepo =
-                  decodeURIComponent(defaultRepo).toLowerCase();
-                const matchingRepo = data.find((repo: RepoIdentifier) => {
-                  const repoIdentifier = getRepoIdentifier(repo);
-                  return (
-                    repoIdentifier &&
-                    repoIdentifier.toLowerCase() === decodedDefaultRepo
-                  );
-                });
-                dispatch(
-                  setRepoName(
-                    matchingRepo ? decodeURIComponent(defaultRepo) : ""
-                  )
-                );
-              }
-              return data;
-            }
-          );
+      const repos =
+        await BranchAndRepositoryService.getUserRepositories().then((data) => {
+          if (defaultRepo && data.length > 0) {
+            const decodedDefaultRepo =
+              decodeURIComponent(defaultRepo).toLowerCase();
+            const matchingRepo = data.find((repo: RepoIdentifier) => {
+              const repoIdentifier = getRepoIdentifier(repo);
+              return (
+                repoIdentifier &&
+                repoIdentifier.toLowerCase() === decodedDefaultRepo
+              );
+            });
+            dispatch(
+              setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : "")
+            );
+          }
+          return data;
+        });
         return repos;
       },
     }
@@ -601,7 +597,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                             key={value.id}
                             value={repoIdentifier}
                             onSelect={(value) => {
-                              dispatch(setRepoName(value));
+                              handleRepoSelect(value);
                               setRepoOpen(false);
                             }}
                           >
@@ -611,18 +607,20 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                       })}
                     </CommandGroup>
                     <CommandSeparator className="my-1" />
-                    <CommandItem
-                      value="public"
-                      onSelect={() => handleSetPublicRepoDialog(true)}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Plus className="size-4" /> Public Repository
-                      </span>
-                    </CommandItem>
-                    <CommandSeparator className="my-1" />
-                    {process.env.NEXT_PUBLIC_BASE_URL?.includes(
-                      "localhost"
-                    ) && (
+                    {!process.env.NEXT_PUBLIC_BASE_URL?.includes("localhost") && (
+                      <>
+                        <CommandItem
+                          value="public"
+                          onSelect={() => handleSetPublicRepoDialog(true)}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Plus className="size-4" /> Public Repository
+                          </span>
+                        </CommandItem>
+                        <CommandSeparator className="my-1" />
+                      </>
+                    )}
+                    {process.env.NEXT_PUBLIC_BASE_URL?.includes("localhost") && (
                       <>
                         <CommandItem
                           value="local"

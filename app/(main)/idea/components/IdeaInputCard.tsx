@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Paperclip, Mic, Loader2, ChevronDown, Plus, Link2, Check, FolderOpen, Github, GitBranch, Minus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,15 @@ export default function IdeaInputCard({
   const router = useRouter();
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { openGithubPopup } = useGithubAppPopup();
+
+  // Reset submitting state when loading completes
+  useEffect(() => {
+    if (!loading && isSubmitting) {
+      setIsSubmitting(false);
+    }
+  }, [loading, isSubmitting]);
 
   const selectedRepoData = repositories.find(
     (repo) => repo.id?.toString() === selectedRepo
@@ -387,35 +395,39 @@ export default function IdeaInputCard({
             ) : (
               <Button
                 type="button"
-                onClick={onSubmit}
-                disabled={loading || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent}
-                className={`h-10 w-10 rounded-full shadow-sm transition-all duration-200 ${
-                  loading || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
+                onClick={() => {
+                  if (loading || isSubmitting) return;
+                  setIsSubmitting(true);
+                  onSubmit();
+                }}
+                disabled={loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent}
+                className={`h-11 w-11 rounded-full shadow-sm transition-all duration-200 ${
+                  loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
                     ? "bg-zinc-200 text-zinc-400 cursor-not-allowed"
                     : "hover:scale-105"
                 }`}
                 style={{
-                  backgroundColor: loading || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent 
-                    ? undefined 
+                  backgroundColor: loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
+                    ? undefined
                     : "var(--foreground-color)",
-                  color: loading || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
+                  color: loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
                     ? undefined
                     : "var(--accent-color)"
                 }}
                 title={
-                  !selectedRepo 
-                    ? "Please select a repository first" 
+                  !selectedRepo
+                    ? "Please select a repository first"
                     : !selectedBranch
                     ? "Please select a branch"
                     : !selectedAgent
                     ? "Please select an agent (Ask, Build, or Debug)"
-                    : !input.trim() 
-                    ? "Please enter a feature idea" 
+                    : !input.trim()
+                    ? "Please enter a feature idea"
                     : "Start analysis"
                 }
               >
-                {loading ? (
-                  <Loader2 className="animate-spin" style={{ width: '22px', height: '22px' }} />
+                {loading || isSubmitting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <Send style={{ width: '22px', height: '22px' }} />
                 )}

@@ -103,15 +103,16 @@ const createChatAdapter = (
         ) => {
           const content: (TextMessagePart | ToolCallMessagePart)[] = [];
 
-          // Always ensure text is a valid string, even if empty
-          content.push({ type: "text", text: accumulatedText || "" });
-
+          // Reasoning (tool calls) first, then text - reasoning appears at top
           // Ensure tool calls are valid before pushing
           for (const tool of toolCallsMap.values()) {
             if (tool.toolCallId && tool.toolName) {
               content.push(tool);
             }
           }
+
+          // Always ensure text is a valid string, even if empty
+          content.push({ type: "text", text: accumulatedText || "" });
 
           const chunk = { content };
           if (resolve) {
@@ -466,6 +467,7 @@ const createChatAdapter = (
               hasUpdate = false;
 
               // Yield current accumulated state
+              // Reasoning (tool calls) first, then text - reasoning appears at top
               yield {
                 content: [
                   ...Array.from(accumulatedToolCalls.values()),
@@ -478,6 +480,7 @@ const createChatAdapter = (
           }
 
           // Final yield after stream completes to ensure all content is sent
+          // Reasoning (tool calls) first, then text - reasoning appears at top
           if (!aborted && accumulatedText) {
             yield {
               content: [

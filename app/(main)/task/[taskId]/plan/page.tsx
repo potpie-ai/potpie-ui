@@ -326,6 +326,24 @@ const PlanPage = () => {
             </div>
           )}
 
+          {isFailed && (
+            <div className="pl-16 py-8">
+              <div className="border border-red-200 rounded-xl p-8 bg-red-50">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-900 mb-1">
+                      Plan generation failed
+                    </p>
+                    {planStatus?.status_message && (
+                      <p className="text-xs text-red-700">{planStatus.status_message}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isCompleted && planItems.length > 0 && (
             <Accordion type="single" collapsible className="space-y-6">
               {planItems.map((item) => {

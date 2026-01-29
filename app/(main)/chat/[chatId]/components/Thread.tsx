@@ -102,20 +102,6 @@ export const Thread: FC<ThreadProps> = ({
       unsubscribe();
     };
   }, [runtime]);
-  
-  // Loading state for background tasks (not for normal streaming)
-  if (isBackgroundTaskActive && !isSessionResuming) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <Loader className="h-6 w-6 animate-spin mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">
-            Background task in progress...
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">

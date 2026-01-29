@@ -74,7 +74,7 @@ const DraggableNode: FC<DraggableNodeProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div style={{ position: "relative" }}>
       {!isDragging && (
         <Card
           ref={(node) => {
@@ -90,15 +90,11 @@ const DraggableNode: FC<DraggableNodeProps> = ({
                 style={{ backgroundColor: colors.secondary }}
               >
                 <IconComponent
-                  className={`w-4 h-4 ${
-                    nodeInfo.group === "linear" || nodeInfo.group === "sentry"
-                      ? "text-gray-500"
-                      : ""
-                  }`}
+                  className="w-4 h-4"
                   style={{
                     color:
                       nodeInfo.group === "linear" || nodeInfo.group === "sentry"
-                        ? undefined
+                        ? "var(--muted-text)"
                         : colors.text,
                   }}
                 />

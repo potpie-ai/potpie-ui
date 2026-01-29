@@ -22,6 +22,8 @@ import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { clearChat } from "@/lib/state/Reducers/chat";
+import { authClient } from "@/lib/sso/unified-auth";
+import type { UserAccount } from "@/types/auth";
 import {
   Card,
   CardContent,
@@ -68,6 +70,18 @@ export function AppSidebar() {
         userSubscription.end_date
       ),
     enabled: !!userId && !!userSubscription,
+  });
+
+  // Fetch account info from backend to get work email and verification status
+  const { data: accountInfo } = useQuery<UserAccount>({
+    queryKey: ["accountInfo", userId],
+    queryFn: async () => {
+      if (!user?.uid) throw new Error("No user ID");
+      const token = await user.getIdToken();
+      return authClient.getAccount(token);
+    },
+    enabled: !!userId && !!user,
+    retry: false,
   });
 
   useEffect(() => {
@@ -266,8 +280,11 @@ export function AppSidebar() {
         <NavUser
           user={{
             avatar: user?.photoURL,
-            email: user?.email,
+            // Use work email from backend (database), fallback to Firebase email
+            email: accountInfo?.email || user?.email || "",
             name: user?.displayName,
+            // Use verification status from backend (work email), fallback to Firebase status
+            emailVerified: accountInfo?.email_verified ?? user?.emailVerified ?? false,
           }}
         />
       </SidebarFooter>

@@ -13,7 +13,7 @@ import {
   setting,
 } from "@/public";
 import axios from "axios";
-import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
+import { GithubAuthProvider, linkWithPopup } from "firebase/auth";
 import { Link, LucideCheck, LucideGithub } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -45,7 +45,23 @@ const LinkGithub = () => {
 
   const onGithub = async () => {
     try {
-      const result = await signInWithPopup(auth, provider);
+      // Capture the currently signed-in user (work email / SSO) BEFORE opening the GitHub popup.
+      // We will link GitHub to this existing account instead of creating a new GitHub-only user.
+      const originalUser = auth.currentUser;
+      const linkToUserId = originalUser?.uid;
+
+      if (!linkToUserId) {
+        toast.error("Please sign in with your work email first, then link GitHub.");
+        return;
+      }
+
+      // Link GitHub to the currently signed-in work/SSO user
+      const result = await linkWithPopup(auth.currentUser, provider);
+
+      // Extract GitHub provider UID from providerData (stable across sessions)
+      const githubProviderUid =
+        result.user.providerData.find((p) => p.providerId === "github.com")
+          ?.uid || result.user.uid;
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const headers = await getHeaders();
@@ -54,7 +70,10 @@ const LinkGithub = () => {
         .post(
           `${baseUrl}/api/v1/signup`,
           {
-            uid: result.user.uid,
+            // Link GitHub to the original SSO/work account
+            uid: linkToUserId,
+            linkToUserId: linkToUserId,
+            githubFirebaseUid: githubProviderUid, // GitHub provider UID (from providerData)
             email: result.user.email,
             displayName:
               result.user.displayName || result.user.email?.split("@")[0],
@@ -78,7 +97,14 @@ const LinkGithub = () => {
           return res.data;
         })
         .catch((e: any) => {
+          // Check for 409 Conflict (GitHub already linked)
+          if (e?.response?.status === 409 && e?.response?.data?.error) {
+            toast.error(e.response.data.error);
+          } else if (e?.response?.data?.error) {
+            toast.error(e.response.data.error);
+          } else {
           toast.error("Signup call unsuccessful");
+          }
         });
       toast.success(
         "Account created successfully as  " + result.user.displayName

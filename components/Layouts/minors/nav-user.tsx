@@ -7,6 +7,9 @@ import {
   LogOut,
   Receipt,
   SubscriptIcon,
+  CheckCircle2,
+  AlertCircle,
+  Mail,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,6 +32,8 @@ import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import posthog from "posthog-js";
+import { toast } from "sonner";
+import { useState } from "react";
 
 export function NavUser({
   user,
@@ -37,9 +42,66 @@ export function NavUser({
     name: string;
     email: string;
     avatar: string;
+    emailVerified?: boolean;
   };
 }) {
   const router = useRouter();
+  const [isSendingVerification, setIsSendingVerification] = useState(false);
+  
+  const handleResendVerification = async () => {
+    if (!auth.currentUser) {
+      toast.error("No user found. Please sign in again.");
+      return;
+    }
+
+    // Check if email is already verified
+    if (user.emailVerified) {
+      toast.info("Your email is already verified!");
+      return;
+    }
+    
+    setIsSendingVerification(true);
+    try {
+      // Get Firebase token for authentication
+      const token = await auth.currentUser.getIdToken();
+      
+      // Call backend API to send verification email to work email
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8000'}/api/v1/account/resend-verification`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Check if this is a GitHub provider error
+        if (data.action === 'sign_in_with_work_email') {
+          toast.error(
+            data.message || "Please sign in with your work email (Google) to verify your email address.",
+            {
+              duration: 5000,
+            }
+          );
+          return;
+        }
+        throw new Error(data.error || data.message || 'Failed to send verification email');
+      }
+
+      toast.success(`Verification email sent to ${data.email || user.email}! Please check your inbox (and spam folder).`);
+      console.log("Verification email sent successfully to work email:", data.email || user.email);
+    } catch (error: any) {
+      console.error("Failed to send verification email:", error);
+      toast.error(error?.message || "Failed to send verification email. Please try again.");
+    } finally {
+      setIsSendingVerification(false);
+    }
+  };
 
   return (
     <SidebarMenu>
@@ -55,10 +117,17 @@ export function NavUser({
                 <AvatarFallback className="rounded-lg">CN</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
+                <div className="flex items-center gap-1">
+                  <span className="truncate font-semibold">{user.name}</span>
+                  {user.emailVerified ? (
+                    <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" title="Email verified" />
+                  ) : (
+                    <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" title="Email not verified" />
+                  )}
+                </div>
+                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <ChevronsUpDown className="ml-auto size-4 text-muted-foreground opacity-90" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -75,11 +144,31 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{user.name}</span>
-                  <span className="truncate text-xs">{user.email}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-xs">{user.email}</span>
+                    {user.emailVerified ? (
+                      <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" title="Email verified" />
+                    ) : (
+                      <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" title="Email not verified" />
+                    )}
+                  </div>
                 </div>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
+            {!user.emailVerified && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="hover:bg-accent cursor-pointer text-amber-600 dark:text-amber-400"
+                  onClick={handleResendVerification}
+                  disabled={isSendingVerification}
+                >
+                  <Mail />
+                  {isSendingVerification ? "Sending..." : "Resend Verification Email"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuGroup>
               <DropdownMenuItem 
                 className="hover:bg-accent cursor-pointer"

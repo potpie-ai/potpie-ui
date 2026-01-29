@@ -128,8 +128,7 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
         {/* Left Arrow */}
         <button
           onClick={prevSlide}
-          className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-background shadow-md p-2 rounded-full hover:bg-gray-100 transition z-10"
-          style={{ left: '-12px' }}
+          className="absolute -left-3 top-1/2 transform -translate-y-1/2 bg-background shadow-md p-2 rounded-full hover:bg-gray-100 transition z-10"
         >
           <ChevronLeft size={24} />
         </button>

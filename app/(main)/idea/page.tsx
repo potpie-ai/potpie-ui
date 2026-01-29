@@ -1208,11 +1208,7 @@ export default function IdeaPage() {
                         }
                         ${state.loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:scale-105"}
                       `}
-                      style={{
-                        backgroundColor: isSelected
-                          ? "var(--accent-color)"
-                          : undefined,
-                      }}
+                      className={isSelected ? "bg-accent-color" : ""}
                     >
                       {isSelected && <Check className="h-4 w-4" />}
                       <span>{agent.displayLabel}</span>

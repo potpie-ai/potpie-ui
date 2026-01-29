@@ -446,9 +446,8 @@ const MessageComposer = ({
 
       <div
         ref={containerRef}
-        className="flex flex-col w-full items-start gap-4"
+        className="flex flex-col w-full items-start gap-4 outline-none"
         tabIndex={0}
-        style={{ outline: "none" }}
       >
         {/* Attachment Previews - using assistant-ui components */}
         {isMultimodalEnabled() && <ComposerAttachments />}

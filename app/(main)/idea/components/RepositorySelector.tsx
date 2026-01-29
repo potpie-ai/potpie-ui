@@ -52,11 +52,8 @@ export default function RepositorySelector({
         <Button
           variant="outline"
           className={`w-full justify-between ${
-            selectedRepo ? "bg-blue-50 border-blue-200" : ""
+            selectedRepo ? "bg-blue-50 border-blue-200" : "text-muted-text"
           }`}
-          style={{
-            color: selectedRepo ? undefined : "var(--muted-text)"
-          }}
         >
           <span className="text-sm">
             {selectedRepoData
@@ -64,10 +61,7 @@ export default function RepositorySelector({
               : "Select repository"}
           </span>
           <ChevronDown 
-            className="h-4 w-4 ml-2" 
-            style={{
-              color: selectedRepo ? undefined : "var(--muted-text)"
-            }}
+            className={`h-4 w-4 ml-2 ${selectedRepo ? "" : "text-muted-text"}`}
           />
         </Button>
       </DropdownMenuTrigger>

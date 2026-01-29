@@ -265,7 +265,7 @@ export const ReactFlowCanvas: FC<ReactFlowCanvasProps> = ({
   );
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+    <div className="w-full h-full relative">
       {!isInitialized ? (
         <LoadingSpinner />
       ) : (

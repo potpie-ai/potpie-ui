@@ -55,7 +55,6 @@ export const DebugPanel: FC<DebugPanelProps> = ({
         </summary>
         <div
           className="mt-1 p-2 bg-background rounded border resize-y overflow-auto min-h-[180px] max-h-[600px] flex flex-col"
-          style={{ minHeight: 180, maxHeight: 600 }}
         >
           <WorkflowJsonDropdown
             workflow={workflow}
@@ -92,8 +91,7 @@ const CopyableJsonSection: FC<{ label: string; jsonData: any }> = ({
         </button>
       </div>
       <pre
-        className="text-xs overflow-auto flex-1 min-h-0 max-h-full"
-        style={{ margin: 0 }}
+        className="text-xs overflow-auto flex-1 min-h-0 max-h-full m-0"
       >
         {JSON.stringify(jsonData, null, 2)}
       </pre>

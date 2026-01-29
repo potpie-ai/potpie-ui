@@ -80,44 +80,45 @@ export default function IdeaInputCard({
   };
 
   return (
-    <div className="relative bg-background border border-zinc-300 rounded-lg shadow-lg overflow-hidden">
+    <div className="relative bg-background border border-zinc-300 rounded-lg overflow-hidden" style={{ boxShadow: '0px 5px 11px 0px rgba(144, 119, 106, 0.1)' }}>
       {/* Terminal Header Bar */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 border-b border-zinc-200">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-zinc-50 border-b border-zinc-200">
+        <div className="flex items-center gap-1.5">
           {/* Window Controls */}
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-400/80 hover:bg-red-500 transition-colors cursor-pointer" />
-            <div className="w-3 h-3 rounded-full bg-yellow-400/80 hover:bg-yellow-500 transition-colors cursor-pointer" />
-            <div className="w-3 h-3 rounded-full bg-green-400/80 hover:bg-green-500 transition-colors cursor-pointer" />
+          <div className="flex items-center gap-1">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-400/80 hover:bg-red-500 transition-colors cursor-pointer" />
+            <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/80 hover:bg-yellow-500 transition-colors cursor-pointer" />
+            <div className="w-2.5 h-2.5 rounded-full bg-green-400/80 hover:bg-green-500 transition-colors cursor-pointer" />
           </div>
-          <div className="ml-3 text-xs font-mono text-zinc-500">
+          <div className="ml-2.5 text-[10px] font-mono text-zinc-500">
             potpie-terminal
           </div>
         </div>
-        <div className="text-xs font-mono text-zinc-400">
+        <div className="text-[10px] font-mono text-zinc-400">
           ~/idea
         </div>
       </div>
 
       {/* Terminal Content */}
-      <div className="relative z-10 flex flex-col h-full bg-background">
+      <div className="relative z-10 flex flex-col h-full bg-[#FFFDFC]">
+        
         {/* Terminal Prompt and Textarea */}
-        <div className="flex items-start gap-2 px-4 pt-4 pb-2">
-          <span className="text-xl font-mono text-zinc-600 select-none text-[#022D2C]">$</span>
+        <div className="flex items-start gap-1.5 px-3.5 pt-3 pb-1.5">
+          <span className="text-lg font-mono text-zinc-600 select-none text-[#022D2C]">$</span>
           <textarea
             ref={textareaRef}
             value={input}
             onChange={handleInputChange}
             onKeyDown={onKeyDown}
             placeholder="Describe your feature idea... (e.g., Integrate payment with stripe.)"
-            className="w-full min-h-[100px] max-h-[280px] bg-transparent text-xl font-mono text-foreground placeholder:text-zinc-400 resize-none focus:outline-none flex-1 leading-relaxed"
+            className="w-full min-h-[85px] max-h-[240px] bg-transparent text-lg font-mono text-foreground placeholder:text-zinc-400 resize-none focus:outline-none flex-1 leading-relaxed"
             disabled={loading}
           />
         </div>
 
         {/* Terminal Bottom Controls */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 bg-zinc-50/50">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between px-3.5 py-2.5 border-t border-zinc-200 bg-zinc-50/50">
+          <div className="flex items-center gap-1.5">
 
             {/* Repository Selector Dropdown */}
             <DropdownMenu open={repoDropdownOpen} onOpenChange={setRepoDropdownOpen}>
@@ -125,7 +126,7 @@ export default function IdeaInputCard({
                 <Button
                   variant="outline"
                   size="sm"
-                  className={`h-9 justify-between gap-2 min-w-[140px] ${
+                  className={`h-8 justify-between gap-1.5 min-w-[120px] ${
                     selectedRepo 
                       ? "hover:opacity-90" 
                       : "border-zinc-200 hover:bg-zinc-50"
@@ -139,43 +140,43 @@ export default function IdeaInputCard({
                 >
                   {selectedRepoData && isLocalRepoPath ? (
                     <FolderOpen 
-                      className="h-3.5 w-3.5 flex-shrink-0" 
+                      className="h-3 w-3 flex-shrink-0" 
                       style={{ 
                         color: selectedRepo ? "var(--accent-color)" : "var(--muted-text)" 
                       }} 
                     />
                   ) : (
                     <Github 
-                      className="h-3.5 w-3.5 flex-shrink-0" 
+                      className="h-3 w-3 flex-shrink-0" 
                       style={{ 
                         color: selectedRepo ? "var(--accent-color)" : "var(--muted-text)" 
                       }} 
                     />
                   )}
-                  <span className="text-xs font-medium truncate max-w-[200px]">
+                  <span className="text-[10px] font-medium truncate max-w-[170px]">
                     {selectedRepoData
                       ? selectedRepoData.full_name || selectedRepoData.name
                       : "Select repo"}
                   </span>
                   <ChevronDown 
-                    className="h-3.5 w-3.5 flex-shrink-0" 
+                    className="h-3 w-3 flex-shrink-0" 
                     style={{
                       color: selectedRepo ? "var(--accent-color)" : "var(--muted-text)"
                     }}
                   />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[380px] max-h-[400px] overflow-y-auto p-2 bg-background border border-zinc-200 rounded-xl shadow-lg" align="start">
+              <DropdownMenuContent className="w-[340px] max-h-[360px] overflow-y-auto p-1.5 bg-background border border-zinc-200 rounded-xl shadow-lg" align="start">
                 {reposLoading ? (
-                  <div className="p-8 text-center">
-                    <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3 text-zinc-400" />
-                    <p className="text-xs text-zinc-500">Loading repositories...</p>
+                  <div className="p-7 text-center">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
+                    <p className="text-[10px] text-zinc-500">Loading repositories...</p>
                   </div>
                 ) : repositories.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <FolderOpen className="h-10 w-10 mx-auto mb-3 text-zinc-300" />
-                    <p className="text-xs font-medium text-foreground mb-1">No parsed repositories found</p>
-                    <p className="text-[10px] text-zinc-400">Parse a repository to get started</p>
+                  <div className="p-7 text-center">
+                    <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
+                    <p className="text-[10px] font-medium text-foreground mb-1">No parsed repositories found</p>
+                    <p className="text-[9px] text-zinc-400">Parse a repository to get started</p>
                   </div>
                 ) : (
                   <div className="space-y-0.5">
@@ -192,7 +193,7 @@ export default function IdeaInputCard({
                             setRepoDropdownOpen(false);
                           }}
                           className={`
-                            flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-lg
+                            flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg
                             transition-colors
                             ${isSelected 
                               ? 'bg-zinc-50 border border-zinc-200 text-foreground' 
@@ -202,22 +203,22 @@ export default function IdeaInputCard({
                         >
                           <div className="flex-shrink-0">
                             {isLocalPath ? (
-                              <FolderOpen className={`h-4 w-4 ${isSelected ? 'text-foreground' : 'text-zinc-400'}`} />
+                              <FolderOpen className={`h-3.5 w-3.5 ${isSelected ? 'text-foreground' : 'text-zinc-400'}`} />
                             ) : (
-                              <Github className={`h-4 w-4 ${isSelected ? 'text-foreground' : 'text-zinc-400'}`} />
+                              <Github className={`h-3.5 w-3.5 ${isSelected ? 'text-foreground' : 'text-zinc-400'}`} />
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-medium truncate ${isSelected ? 'text-foreground' : 'text-foreground'}`}>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[10px] font-medium truncate ${isSelected ? 'text-foreground' : 'text-foreground'}`}>
                                 {repoName}
                               </span>
                               {isSelected && (
-                                <Check className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
+                                <Check className="h-3 w-3 text-foreground flex-shrink-0" />
                               )}
                             </div>
                             {repo.description && (
-                              <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                              <p className="text-[9px] text-zinc-400 mt-0.5 truncate">
                                 {repo.description}
                               </p>
                             )}
@@ -229,14 +230,14 @@ export default function IdeaInputCard({
                 )}
                 {(repositories.length > 0 || reposLoading) && (
                   <>
-                    <DropdownMenuSeparator className="my-2 bg-zinc-100" />
+                    <DropdownMenuSeparator className="my-1.5 bg-zinc-100" />
                     {!isLocalhost && (
                       <DropdownMenuItem
                         onClick={handleOpenGithubPopup}
-                        className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer rounded-lg hover:bg-zinc-50 text-foreground"
+                        className="flex items-center gap-2 px-2.5 py-2 cursor-pointer rounded-lg hover:bg-zinc-50 text-foreground"
                       >
-                        <Link2 className="h-4 w-4 text-zinc-400" />
-                        <span className="text-xs font-medium">Connect New Repository</span>
+                        <Link2 className="h-3.5 w-3.5 text-zinc-400" />
+                        <span className="text-[10px] font-medium">Connect New Repository</span>
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
@@ -248,10 +249,10 @@ export default function IdeaInputCard({
                           router.push("/idea");
                         }
                       }}
-                      className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white mt-1"
+                      className="flex items-center gap-2 px-2.5 py-2 cursor-pointer rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white mt-1"
                     >
-                      <Plus className="h-4 w-4 font-semibold" />
-                      <span className="text-xs font-semibold">Parse New Repository</span>
+                      <Plus className="h-3.5 w-3.5 font-semibold" />
+                      <span className="text-[10px] font-semibold">Parse New Repository</span>
                     </DropdownMenuItem>
                   </>
                 )}
@@ -264,7 +265,7 @@ export default function IdeaInputCard({
                 <Button
                   variant="outline"
                   size="sm"
-                  className={`h-9 justify-between gap-2 min-w-[140px] ${
+                  className={`h-8 justify-between gap-1.5 min-w-[120px] ${
                     selectedBranch 
                       ? "hover:opacity-90" 
                       : "border-zinc-200 hover:bg-zinc-50"
@@ -277,37 +278,37 @@ export default function IdeaInputCard({
                   disabled={loading || !selectedRepo}
                 >
                   <GitBranch 
-                    className="h-3.5 w-3.5 flex-shrink-0" 
+                    className="h-3 w-3 flex-shrink-0" 
                     style={{
                       color: selectedBranch ? "var(--accent-color)" : "var(--muted-text)"
                     }}
                   />
-                  <span className="text-xs font-medium truncate max-w-[200px]">
+                  <span className="text-[10px] font-medium truncate max-w-[170px]">
                     {selectedBranch || "Select branch"}
                   </span>
                   <ChevronDown 
-                    className="h-3.5 w-3.5 flex-shrink-0" 
+                    className="h-3 w-3 flex-shrink-0" 
                     style={{
                       color: selectedBranch ? "var(--accent-color)" : "var(--muted-text)"
                     }}
                   />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[280px] max-h-[300px] overflow-y-auto p-2 bg-background border border-zinc-200 rounded-xl shadow-lg" align="start">
+              <DropdownMenuContent className="w-[250px] max-h-[270px] overflow-y-auto p-1.5 bg-background border border-zinc-200 rounded-xl shadow-lg" align="start">
                 {!selectedRepo ? (
-                  <div className="p-6 text-center">
-                    <p className="text-xs text-zinc-500">Please select a repository first</p>
+                  <div className="p-5 text-center">
+                    <p className="text-[10px] text-zinc-500">Please select a repository first</p>
                   </div>
                 ) : branchesLoading ? (
-                  <div className="p-8 text-center">
-                    <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3 text-zinc-400" />
-                    <p className="text-xs text-zinc-500">Loading branches...</p>
+                  <div className="p-7 text-center">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
+                    <p className="text-[10px] text-zinc-500">Loading branches...</p>
                   </div>
                 ) : branches.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <GitBranch className="h-10 w-10 mx-auto mb-3 text-zinc-300" />
-                    <p className="text-xs font-medium text-foreground mb-1">No branches found</p>
-                    <p className="text-[10px] text-zinc-400">Unable to load branches for this repository</p>
+                  <div className="p-7 text-center">
+                    <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
+                    <p className="text-[10px] font-medium text-foreground mb-1">No branches found</p>
+                    <p className="text-[9px] text-zinc-400">Unable to load branches for this repository</p>
                   </div>
                 ) : (
                   <div className="space-y-0.5">
@@ -321,7 +322,7 @@ export default function IdeaInputCard({
                             setBranchDropdownOpen(false);
                           }}
                           className={`
-                            flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-lg
+                            flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg
                             transition-colors
                             ${isSelected 
                               ? 'bg-zinc-50 border border-zinc-200 text-foreground' 
@@ -330,12 +331,12 @@ export default function IdeaInputCard({
                           `}
                         >
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-medium truncate ${isSelected ? 'text-foreground' : 'text-foreground'}`}>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[10px] font-medium truncate ${isSelected ? 'text-foreground' : 'text-foreground'}`}>
                                 {branch}
                               </span>
                               {isSelected && (
-                                <Check className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
+                                <Check className="h-3 w-3 text-foreground flex-shrink-0" />
                               )}
                             </div>
                           </div>
@@ -352,10 +353,10 @@ export default function IdeaInputCard({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9"
+              className="h-8 w-8"
               disabled={loading}
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
             </Button>
 
             {/* Attach Button */}
@@ -363,32 +364,32 @@ export default function IdeaInputCard({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-9 gap-2"
+              className="h-8 gap-1.5"
               disabled={loading}
             >
-              <Paperclip className="h-4 w-4" />
-              <span className="text-sm">Attach</span>
+              <Paperclip className="h-3.5 w-3.5" />
+              <span className="text-xs">Attach</span>
             </Button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {/* Show Mic button when input is empty, Send button when user has typed */}
             {!input.trim() ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-11 w-11 rounded-full"
+                className="h-10 w-10 rounded-full"
                 disabled={loading}
               >
-                <Mic className="h-5 w-5" />
+                <Mic className="h-[18px] w-[18px]" />
               </Button>
             ) : (
               <Button
                 type="button"
                 onClick={onSubmit}
                 disabled={loading || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent}
-                className={`h-11 w-11 rounded-full shadow-sm transition-all duration-200 ${
+                className={`h-10 w-10 rounded-full shadow-sm transition-all duration-200 ${
                   loading || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
                     ? "bg-zinc-200 text-zinc-400 cursor-not-allowed"
                     : "hover:scale-105"
@@ -414,9 +415,9 @@ export default function IdeaInputCard({
                 }
               >
                 {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="animate-spin" style={{ width: '22px', height: '22px' }} />
                 ) : (
-                  <Send className="h-5 w-5" />
+                  <Send style={{ width: '22px', height: '22px' }} />
                 )}
               </Button>
             )}

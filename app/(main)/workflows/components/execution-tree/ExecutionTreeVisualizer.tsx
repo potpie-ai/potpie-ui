@@ -395,9 +395,9 @@ const ExecutionNode: FC<{ data: ExecutionNodeData; selected?: boolean }> = ({
 
     if (nodeId.includes("trigger")) {
       if (nodeId.includes("github"))
-        return <Zap className="w-5 h-5 mr-2" style={{ color: "#fff" }} />;
+        return <Zap className="w-5 h-5 mr-2 text-white" />;
       if (nodeId.includes("linear"))
-        return <Zap className="w-5 h-5 mr-2" style={{ color: "#fff" }} />;
+        return <Zap className="w-5 h-5 mr-2 text-white" />;
       return <Zap className="w-5 h-5 mr-2" style={{ color: colors.primary }} />;
     }
     if (nodeId.includes("flow_control"))
@@ -744,9 +744,9 @@ const NodeDetailsPanel: FC<{
 
     if (nodeId.includes("trigger")) {
       if (nodeId.includes("github"))
-        return <Zap className="w-5 h-5 mr-2" style={{ color: "#fff" }} />;
+        return <Zap className="w-5 h-5 mr-2 text-white" />;
       if (nodeId.includes("linear"))
-        return <Zap className="w-5 h-5 mr-2" style={{ color: "#fff" }} />;
+        return <Zap className="w-5 h-5 mr-2 text-white" />;
       return <Zap className="w-5 h-5 mr-2" style={{ color: colors.primary }} />;
     }
     if (nodeId.includes("flow_control"))

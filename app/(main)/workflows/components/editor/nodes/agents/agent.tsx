@@ -372,7 +372,6 @@ export const AgentNode = ({ data }: { data: WorkflowNode }) => {
           <p
             className="mt-2 text-xs text-gray-700 line-clamp-2 max-w-full break-words"
             title={task || undefined}
-            style={{ wordBreak: "break-word" }}
           >
             {task ? task : "No task specified"}
           </p>

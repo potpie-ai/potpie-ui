@@ -110,22 +110,22 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar className="[&>div[data-sidebar='sidebar']]:bg-[#FFF9F5]">
+    <Sidebar className="[&>div[data-sidebar='sidebar']]:bg-[#FFFDFC]">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <div className="flex items-center justify-between w-full ml-2 mt-4">
               <Link
                 href="/"
-                className="flex items-center gap-3 font-semibold"
+                className="flex items-center font-semibold min-w-0"
               >
                 <Image
-                  src={"/images/Green Icon.svg"}
-                  alt="logo"
-                  width={35}
-                  height={35}
+                  src={"/images/Potpie Logomark.svg"}
+                  alt="Potpie"
+                  width={140}
+                  height={36}
+                  className="h-9 w-auto object-contain object-left"
                 />
-                <span className="text-2xl"><span className="text-foreground">potpie</span><span className="text-accent-color">.</span><span className="text-foreground">ai</span></span>
               </Link>
               <Button
                 variant="ghost"
@@ -144,7 +144,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem className="mt-5">
             <SidebarMenuButton
-              className="flex gap-3 text-[#00291C] text-md font-semibold mx-auto py-5 w-[90%] items-center justify-center bg-[#B4D13F] hover:bg-[#B4D13F]"
+              className="flex gap-3 text-[#00291C] text-md font-medium mx-auto py-5 w-[90%] items-center justify-center bg-[#B4D13F] hover:bg-[#B4D13F]"
               onClick={() => redirectToNewIdea()}
             >
               <Plus className="size-5" /> <span>New Chat</span>

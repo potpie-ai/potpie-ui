@@ -1963,7 +1963,6 @@ const MockTaskCard = ({
       bg-background border rounded-xl transition-all duration-300 overflow-hidden
       ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-md" : "border-zinc-200 hover:border-zinc-300"}
     `}
-    style={{ backgroundColor: "#FFF9F5" }}
     >
       {/* Header (Clickable for toggle) */}
       <div

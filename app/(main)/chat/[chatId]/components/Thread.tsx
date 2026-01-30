@@ -41,6 +41,7 @@ interface ThreadProps {
   conversation_id: string;
   isSessionResuming: boolean;
   isBackgroundTaskActive: boolean;
+  hasPendingMessage?: boolean; // New prop to detect pending message
 }
 
 export const Thread: FC<ThreadProps> = ({
@@ -50,6 +51,7 @@ export const Thread: FC<ThreadProps> = ({
   conversation_id,
   isSessionResuming,
   isBackgroundTaskActive,
+  hasPendingMessage = false,
 }) => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const runtime = useThreadRuntime();
@@ -63,37 +65,53 @@ export const Thread: FC<ThreadProps> = ({
 
   useEffect(() => {
     const state = runtime.getState();
-    // Check if messages array exists (even if empty) - this means history load has completed
-    const messagesLoaded = Array.isArray(state.messages);
-    
-    // If messages have been loaded (array exists), we're no longer in initial loading
-    // This handles both empty chats ([]) and chats with messages
+    const messagesLoaded = Array.isArray(state.messages) && state.messages.length > 0;
+    const isEmptyChat = Array.isArray(state.messages) && state.messages.length === 0;
+
+    // If messages have actual content, we're no longer in initial loading
     if (messagesLoaded) {
       setIsInitialLoading(false);
-      return; // Early return if already loaded
+      return;
+    }
+
+    // If empty array AND has pending message, keep loading to avoid showing empty chat
+    if (isEmptyChat && hasPendingMessage) {
+      return;
     }
 
     // Safety timeout: Clear loading after 10 seconds if history never loads
-    // This prevents infinite loading in case of network errors or adapter failures
     const timeoutId = setTimeout(() => {
       setIsInitialLoading((prev) => {
-        // Only clear if still loading
         if (prev) {
-          console.warn("History load timeout - clearing initial loading state");
           return false;
         }
         return prev;
       });
     }, 10000);
 
-    // Messages haven't loaded yet, subscribe to changes
+    // Subscribe to runtime changes
     const unsubscribe = runtime.subscribe(() => {
       const nextState = runtime.getState();
-      // Once messages array exists (history load completed), clear loading
-      // This works for both empty chats ([]) and chats with messages
-      if (Array.isArray(nextState.messages)) {
+
+      if (Array.isArray(nextState.messages) && nextState.messages.length > 0) {
         clearTimeout(timeoutId);
         setIsInitialLoading(false);
+        unsubscribe();
+        return;
+      }
+
+      if (Array.isArray(nextState.messages) && nextState.messages.length === 0) {
+        setTimeout(() => {
+          const finalState = runtime.getState();
+          if (Array.isArray(finalState.messages) && finalState.messages.length === 0) {
+            if (hasPendingMessage) {
+              return;
+            }
+            clearTimeout(timeoutId);
+            setIsInitialLoading(false);
+            unsubscribe();
+          }
+        }, 500);
       }
     });
 
@@ -101,18 +119,43 @@ export const Thread: FC<ThreadProps> = ({
       clearTimeout(timeoutId);
       unsubscribe();
     };
-  }, [runtime]);
+  }, [runtime, hasPendingMessage]);
+
+  // Watch for message additions to clear loading when pending message sends
+  useEffect(() => {
+    if (!hasPendingMessage || !isInitialLoading) {
+      return;
+    }
+
+    const unsubscribe = runtime.subscribe(() => {
+      const state = runtime.getState();
+      const messageCount = Array.isArray(state.messages) ? state.messages.length : 0;
+
+      if (messageCount > 0) {
+        setIsInitialLoading(false);
+        unsubscribe();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [hasPendingMessage, isInitialLoading, runtime]);
 
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">
       <div className="h-full w-full bg-background">
-        {isInitialLoading ? (
-          <div className="flex items-center justify-center h-full space-x-1 mt-2">
-            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
-            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
-            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
-          </div>
-        ) : (
+        {(() => {
+          if (isInitialLoading) {
+            return (
+              <div className="flex items-center justify-center h-full space-x-1 mt-2">
+                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+              </div>
+            );
+          } else {
+            return (
           <>
             {/* Built-in loading state - no manual state needed */}
             <ThreadPrimitive.If empty>
@@ -143,7 +186,9 @@ export const Thread: FC<ThreadProps> = ({
               />
             </div>
           </>
-        )}
+            );
+          }
+        })()}
       </div>
     </ThreadPrimitive.Root>
   );

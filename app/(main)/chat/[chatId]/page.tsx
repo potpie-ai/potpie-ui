@@ -108,8 +108,6 @@ const ChatV2 = () => {
 
   // Fallback handler for when resume completely fails - polls for completed message
   const handleFailedResume = async () => {
-    console.log("[Chat Page] Resume failed, polling for completed message as fallback");
-
     try {
       const maxAttempts = 5;
       for (let i = 0; i < maxAttempts; i++) {
@@ -126,7 +124,6 @@ const ChatV2 = () => {
           const alreadyInThread = threadMessages.some((msg: any) => msg.id === latestAssistantMsg.id);
 
           if (!alreadyInThread) {
-            console.log("[Chat Page] Found completed message from polling, reloading history");
             // Trigger a history reload by clearing and re-fetching
             // The runtime's history adapter will pick this up
             toast.info("Message completed. Reloading...");
@@ -138,10 +135,10 @@ const ChatV2 = () => {
       }
 
       // If we get here, polling didn't find anything
-      console.error("[Chat Page] Fallback polling failed to find completed message");
+      console.error("Fallback polling failed to find completed message");
       toast.error("Could not connect to streaming session. Please refresh the page.");
     } catch (error) {
-      console.error("[Chat Page] Error in fallback polling:", error);
+      console.error("Error in fallback polling:", error);
       toast.error("Failed to recover streaming session. Please try again.");
     }
   };
@@ -176,8 +173,6 @@ const ChatV2 = () => {
 
         // CASE 1: Active session exists - RESUME IT
         if (activeSession && activeSession.status === 'active') {
-          console.log("[Chat Page] Active session detected, resuming:", activeSession);
-
           try {
             // Trigger resume via runtime - the runtime adapter will handle calling resumeWithCursor
             const thread = runtime.thread;
@@ -190,18 +185,15 @@ const ChatV2 = () => {
             const lastMessage = messages[messages.length - 1];
 
             if (lastMessage && lastMessage.role === 'user') {
-              console.log("[Chat Page] Triggering resume for message:", lastMessage.id);
               thread.startRun(lastMessage.id);
-
-              console.log("[Chat Page] Resume initiated successfully");
               dispatch(clearPendingMessage());
               return;
             } else {
-              console.warn("[Chat Page] No user message found to resume, falling back to composer");
+              console.warn("No user message found to resume, falling back to composer");
               // Fall through to CASE 2
             }
           } catch (error) {
-            console.error("[Chat Page] Error resuming active session:", error);
+            console.error("Error resuming active session:", error);
             toast.error("Failed to connect to streaming session. Retrying...");
 
             // Reset to allow retry
@@ -216,8 +208,6 @@ const ChatV2 = () => {
 
         // CASE 2: No active session or resume failed - SEND VIA COMPOSER
         if (runtime.thread) {
-          console.log("[Chat Page] Sending pending message via composer");
-
           const composer = runtime.thread.composer;
           if (!composer) {
             throw new Error("Composer not available");
@@ -225,14 +215,12 @@ const ChatV2 = () => {
 
           composer.setText(pendingMessage);
           composer.send();
-
-          console.log("[Chat Page] Message sent successfully via composer");
           dispatch(clearPendingMessage());
         } else {
           throw new Error("Thread not available on runtime");
         }
       } catch (error) {
-        console.error("[Chat Page] Error handling pending message:", error);
+        console.error("Error handling pending message:", error);
         toast.error("Failed to send message. You can retry in the chat.");
 
         // Allow retry on error
@@ -376,20 +364,17 @@ const ChatV2 = () => {
       }
 
       try {
-        console.log("[Chat Page] Checking for active session...");
         const session = await ChatService.detectActiveSession(currentConversationId);
 
         if (session && session.status === 'active') {
-          console.log("[Chat Page] Active session detected:", session);
           setActiveSession(session);
         } else {
-          console.log("[Chat Page] No active session found");
           setActiveSession(null);
         }
       } catch (error: any) {
         // 404 is expected when no active session exists
         if (error.response?.status !== 404) {
-          console.error("[Chat Page] Error detecting active session:", error);
+          console.error("Error detecting active session:", error);
         }
         setActiveSession(null);
       }
@@ -449,10 +434,12 @@ const ChatV2 = () => {
             conversation_id={currentConversationId}
             isSessionResuming={activeSession !== null}
             isBackgroundTaskActive={isBackgroundTaskActive}
+            hasPendingMessage={!!pendingMessage && !hasSentPendingMessage.current}
           />
         </AssistantRuntimeProvider>
       </div>
 
+      {/* Debug logging */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

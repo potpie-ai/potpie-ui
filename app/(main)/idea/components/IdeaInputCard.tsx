@@ -88,7 +88,9 @@ export default function IdeaInputCard({
   };
 
   return (
-    <div className="relative bg-background border border-zinc-300 rounded-lg overflow-hidden" style={{ boxShadow: '0px 5px 11px 0px rgba(144, 119, 106, 0.1)' }}>
+    <div className={`relative bg-background border border-zinc-300 rounded-lg shadow-lg overflow-hidden transition-opacity duration-200 ${
+      (loading || isSubmitting) ? "opacity-90 pointer-events-none" : ""
+    }`}>
       {/* Terminal Header Bar */}
       <div className="flex items-center justify-between px-3.5 py-2 bg-zinc-50 border-b border-zinc-200">
         <div className="flex items-center gap-1.5">
@@ -98,8 +100,14 @@ export default function IdeaInputCard({
             <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/80 hover:bg-yellow-500 transition-colors cursor-pointer" />
             <div className="w-2.5 h-2.5 rounded-full bg-green-400/80 hover:bg-green-500 transition-colors cursor-pointer" />
           </div>
-          <div className="ml-2.5 text-[10px] font-mono text-zinc-500">
-            potpie-terminal
+          <div className="ml-3 text-xs font-mono text-zinc-500 flex items-center gap-2">
+            <span>potpie-terminal</span>
+            {(loading || isSubmitting) && (
+              <span className="flex items-center gap-1.5 text-zinc-600">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="animate-pulse">Processing...</span>
+              </span>
+            )}
           </div>
         </div>
         <div className="text-[10px] font-mono text-zinc-400">
@@ -119,8 +127,10 @@ export default function IdeaInputCard({
             onChange={handleInputChange}
             onKeyDown={onKeyDown}
             placeholder="Describe your feature idea... (e.g., Integrate payment with stripe.)"
-            className="w-full min-h-[85px] max-h-[240px] bg-transparent text-lg font-mono text-foreground placeholder:text-zinc-400 resize-none focus:outline-none flex-1 leading-relaxed"
-            disabled={loading}
+            className={`w-full min-h-[100px] max-h-[280px] bg-transparent text-xl font-mono text-foreground placeholder:text-zinc-400 resize-none focus:outline-none flex-1 leading-relaxed ${
+              (loading || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+            disabled={loading || isSubmitting}
           />
         </div>
 
@@ -144,7 +154,7 @@ export default function IdeaInputCard({
                     color: selectedRepo ? "var(--accent-color)" : "var(--muted-text)",
                     ...(selectedRepo && { borderColor: "var(--foreground-color)" }),
                   }}
-                  disabled={loading}
+                  disabled={loading || isSubmitting}
                 >
                   {selectedRepoData && isLocalRepoPath ? (
                     <FolderOpen 
@@ -283,7 +293,7 @@ export default function IdeaInputCard({
                     color: selectedBranch ? "var(--accent-color)" : "var(--muted-text)",
                     ...(selectedBranch && { borderColor: "var(--foreground-color)" }),
                   }}
-                  disabled={loading || !selectedRepo}
+                  disabled={loading || isSubmitting || !selectedRepo}
                 >
                   <GitBranch 
                     className="h-3 w-3 flex-shrink-0" 
@@ -361,8 +371,8 @@ export default function IdeaInputCard({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
-              disabled={loading}
+              className="h-9 w-9"
+              disabled={loading || isSubmitting}
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
@@ -372,8 +382,8 @@ export default function IdeaInputCard({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 gap-1.5"
-              disabled={loading}
+              className="h-9 gap-2"
+              disabled={loading || isSubmitting}
             >
               <Paperclip className="h-3.5 w-3.5" />
               <span className="text-xs">Attach</span>
@@ -387,8 +397,8 @@ export default function IdeaInputCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10 rounded-full"
-                disabled={loading}
+                className="h-11 w-11 rounded-full"
+                disabled={loading || isSubmitting}
               >
                 <Mic className="h-[18px] w-[18px]" />
               </Button>
@@ -403,27 +413,33 @@ export default function IdeaInputCard({
                 disabled={loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent}
                 className={`h-11 w-11 rounded-full shadow-sm transition-all duration-200 ${
                   loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
-                    ? "bg-zinc-200 text-zinc-400 cursor-not-allowed"
+                    ? "cursor-not-allowed opacity-70"
                     : "hover:scale-105"
                 }`}
                 style={{
-                  backgroundColor: loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
-                    ? undefined
-                    : "var(--foreground-color)",
-                  color: loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
-                    ? undefined
-                    : "var(--accent-color)"
+                  backgroundColor: loading || isSubmitting
+                    ? "var(--foreground-color)"
+                    : (!input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
+                      ? undefined
+                      : "var(--foreground-color)"),
+                  color: loading || isSubmitting
+                    ? "var(--accent-color)"
+                    : (!input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
+                      ? "var(--muted-text)"
+                      : "var(--accent-color)")
                 }}
                 title={
-                  !selectedRepo
-                    ? "Please select a repository first"
-                    : !selectedBranch
-                    ? "Please select a branch"
-                    : !selectedAgent
-                    ? "Please select an agent (Ask, Build, or Debug)"
-                    : !input.trim()
-                    ? "Please enter a feature idea"
-                    : "Start analysis"
+                  loading || isSubmitting
+                    ? "Processing..."
+                    : !selectedRepo
+                      ? "Please select a repository first"
+                      : !selectedBranch
+                        ? "Please select a branch"
+                        : !selectedAgent
+                          ? "Please select an agent (Ask, Build, or Debug)"
+                          : !input.trim()
+                            ? "Please enter a feature idea"
+                            : "Start analysis"
                 }
               >
                 {loading || isSubmitting ? (

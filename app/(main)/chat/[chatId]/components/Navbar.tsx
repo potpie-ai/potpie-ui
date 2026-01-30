@@ -278,7 +278,7 @@ const Navbar = ({
 
   if (hidden) return null;
   return (
-    <header className="sticky top-0 z-50 bg-muted border-b border-[#E3E3E3]">
+    <header className="sticky top-0 z-50 bg-[#FFFDFC] border-b border-[#E3E3E3]">
       {showTitle && (
         <div className="flex h-[52px] w-full">
           <div className="flex items-center justify-between w-full px-4 lg:px-6">

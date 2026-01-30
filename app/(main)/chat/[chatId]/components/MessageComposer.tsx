@@ -387,7 +387,7 @@ const MessageComposer = ({
           <button
             type="button"
             title="Enhance Prompt"
-            className="size-8 p-2 transition ease-in bg-background hover:bg-orange-200 rounded-md flex items-center justify-center"
+            className="size-8 p-2 transition ease-in bg-white hover:bg-orange-200 rounded-md flex items-center justify-center"
             onClick={handleEnhancePrompt}
             disabled={isDisabled}
           >
@@ -399,15 +399,15 @@ const MessageComposer = ({
             type="button"
             disabled={isDisabled}
             title="Send"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-background hover:bg-gray-100"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100"
             onClick={handleSend}
           >
             <SendHorizontalIcon />
           </button>
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
-          <ComposerPrimitive.Cancel 
-            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-background hover:bg-gray-100 border-none cursor-pointer"
+          <ComposerPrimitive.Cancel
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer"
           >
             <CircleStopIcon />
           </ComposerPrimitive.Cancel>
@@ -417,7 +417,7 @@ const MessageComposer = ({
   };
 
   return (
-    <div className="flex flex-col w-full p-2">
+    <div className="flex flex-col w-full py-2 bg-white rounded-lg">
       {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
 
       {selectedNodes.length > 0 && (

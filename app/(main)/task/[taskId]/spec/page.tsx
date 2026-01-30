@@ -161,7 +161,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                     </h4>
 
                   </div>
-                  <div className="text-sm text-muted-foreground leading-relaxed font-sans text-left [&_p]:my-0 [&_p]:leading-relaxed [&_p]:text-left [&_p]:text-muted-foreground">
+                  <div className="text-sm text-muted-foreground leading-relaxed font-sans text-left [&_p]:my-2 [&_p]:leading-relaxed [&_p]:text-left [&_p]:text-muted-foreground">
                     <SharedMarkdown content={item.details} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left" />
                   </div>
                 </div>

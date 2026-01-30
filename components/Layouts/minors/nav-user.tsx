@@ -2,7 +2,7 @@
 
 import {
   Bell,
-  ChevronsUpDown,
+  ChevronRight,
   CreditCard,
   LogOut,
   Receipt,
@@ -48,17 +48,25 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-muted data-[state=open]:text-sidebar-accent-foreground"
+              className="w-full justify-between px-6 py-3 data-[state=open]:bg-transparent data-[state=open]:text-[#00291C] hover:bg-transparent"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Avatar className="h-9 w-9 rounded-full">
+                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarFallback className="rounded-full bg-[#E5EAE8] text-[#00291C]">
+                    {user.name?.charAt(0) || "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col flex-1 min-w-0 text-left">
+                  <span className="truncate text-sm font-normal text-[#091828] leading-tight">
+                    {user.name}
+                  </span>
+                  <span className="truncate text-sm font-normal text-[#747575] leading-tight">
+                    {user.email}
+                  </span>
+                </div>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <ChevronRight className="ml-auto size-5 text-[#00291C] flex-shrink-0" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

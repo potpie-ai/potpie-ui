@@ -24,7 +24,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { useQuery } from "@tanstack/react-query";
 import { clearChat } from "@/lib/state/Reducers/chat";
 
-import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
 import { Button } from "@/components/ui/button";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
@@ -141,20 +140,22 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarMenu>
-          <SidebarMenuItem className="mt-5">
-            <SidebarMenuButton
-              className="flex gap-3 text-[#00291C] text-md font-medium mx-auto py-5 w-[90%] items-center justify-center bg-[#B4D13F] hover:bg-[#B4D13F]"
-              onClick={() => redirectToNewIdea()}
-            >
-              <Plus className="size-5" /> <span>New Chat</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="px-6 pt-6 pb-1">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                className="flex gap-2 text-[#EFE6DF] text-sm font-medium w-full items-center justify-start bg-[#295245] hover:bg-[#295245] px-3 py-2 rounded-lg"
+                onClick={() => redirectToNewIdea()}
+              >
+                <Plus className="size-4" /> <span>New chat</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
         {SidebarItems.map((item) => (
           <SidebarGroup key={item.title}>
             <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
-            <SidebarGroupContent className="ml-3 w-auto">
+            <SidebarGroupContent>
               <SidebarMenu>
                 {item.links.map((link) => {
                   const isActive = pathname === link.href.split("/").pop();
@@ -170,12 +171,10 @@ export function AppSidebar() {
                           href={link.href}
                           className="flex gap-2 items-center w-full"
                         >
-                          <div className="flex gap-2 text-[#00291C]">
-                            {link.icons && <span>{link.icons}</span>}
-                            <span>{link.title}</span>
-                          </div>
+                          {link.icons && <span>{link.icons}</span>}
+                          <span>{link.title}</span>
                           {link.description && (
-                            <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300">
+                            <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto">
                               {link.description}
                             </span>
                           )}
@@ -190,12 +189,6 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <Separator />
         <NavUser
           user={{
             avatar: user?.photoURL,

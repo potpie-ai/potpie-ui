@@ -4,9 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import Image from "next/image";
-import { Search } from "lucide-react";
 import IdeaInputCard from "./components/IdeaInputCard";
-import { Input } from "@/components/ui/input";
 import RepositorySelector from "./components/RepositorySelector";
 import ParsingStatusCard from "./components/ParsingStatusCard";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -1118,24 +1116,6 @@ export default function IdeaPage() {
           opacity: 0.75,
         }}
       />
-
-      {/* Horizontal Navbar */}
-      <nav className="absolute top-0 left-0 right-0 z-20 bg-white/80 backdrop-blur-sm border-b border-zinc-200 h-16">
-      </nav>
-
-      {/* Search Bar Overlay on Navbar */}
-      <div className="absolute top-4 left-0 right-0 z-30 px-4">
-        <div className="flex justify-center">
-          <div className="relative w-full max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="search"
-              className="w-full pl-10 pr-4 h-10 bg-white border border-zinc-300 rounded-md focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-        </div>
-      </div>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col items-center justify-start px-4 pt-40 pb-4 relative z-10">

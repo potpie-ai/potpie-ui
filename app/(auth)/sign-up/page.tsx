@@ -508,6 +508,17 @@ const Signup = () => {
                     )}
                   </div>
 
+                  <p className="mt-4 text-xs text-[#656969] text-center">
+                    By clicking, you are agreeing to our{" "}
+                    <Link href="https://potpie.ai/terms-of-service" target="_blank" rel="noopener noreferrer" className="text-[#656969] hover:text-[#022D2C] underline underline-offset-2 font-medium">
+                      terms of service
+                    </Link>
+                    {" "}and{" "}
+                    <Link href="https://potpie.ai/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[#656969] hover:text-[#022D2C] underline underline-offset-2 font-medium">
+                      privacy policies
+                    </Link>
+                  </p>
+
                   <Button
                     type="submit"
                     disabled={isLoading}

@@ -184,7 +184,7 @@ export default function IdeaInputCard({
                   />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[340px] max-h-[360px] overflow-y-auto p-1.5 bg-background border border-zinc-200 rounded-xl shadow-lg" align="start">
+              <DropdownMenuContent className="w-[380px] max-h-[400px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
                 {reposLoading ? (
                   <div className="p-7 text-center">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
@@ -312,7 +312,7 @@ export default function IdeaInputCard({
                   />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[250px] max-h-[270px] overflow-y-auto p-1.5 bg-background border border-zinc-200 rounded-xl shadow-lg" align="start">
+              <DropdownMenuContent className="w-[280px] max-h-[300px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
                 {!selectedRepo ? (
                   <div className="p-5 text-center">
                     <p className="text-[10px] text-zinc-500">Please select a repository first</p>

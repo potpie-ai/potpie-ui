@@ -14,8 +14,8 @@ export default function AIAnalysisBanner() {
             AI Agent Analysis
           </h3>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            The AI agent has analyzed your requirements and made assumptions for each question. 
-            Hover over any question to edit. Questions marked with &apos;Needs input&apos; require your confirmation.
+            The AI agent has analyzed your requirements and recommended options for each question.
+            Select your preferred option or specify your own. Answer all questions before saving.
           </p>
         </div>
       </div>

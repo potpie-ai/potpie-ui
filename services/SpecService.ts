@@ -15,6 +15,10 @@ import {
   SubmitSpecGenerationResponse,
   SpecStatusResponse,
   RecipeDetailsResponse,
+  SpecChatRequest,
+  SpecChatResponse,
+  SpecUndoRequest,
+  SpecUndoResponse,
 } from "@/lib/types/spec";
 
 export default class SpecService {
@@ -268,6 +272,56 @@ export default class SpecService {
       return response.data;
     } catch (error: any) {
       console.error("[SpecService] Error fetching recipe details:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Chat with Spec Editor Agent to edit spec content
+   * @param specId - The spec ID
+   * @param request - Chat request with message and optional edit_history
+   * @returns Chat response with spec_output, undo_token, next_actions, etc.
+   */
+  static async chatSpec(
+    specId: string,
+    request: SpecChatRequest,
+  ): Promise<SpecChatResponse> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post<SpecChatResponse>(
+        `${this.API_BASE}/spec/${specId}/chat`,
+        request,
+        { headers },
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("[SpecService] Error in spec chat:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Undo a spec edit using the undo_token from a previous chat response
+   * @param specId - The spec ID
+   * @param request - Undo request with undo_token
+   * @returns Undo response with restored spec_output
+   */
+  static async undoSpecEdit(
+    specId: string,
+    request: SpecUndoRequest,
+  ): Promise<SpecUndoResponse> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post<SpecUndoResponse>(
+        `${this.API_BASE}/spec/${specId}/undo`,
+        request,
+        { headers },
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("[SpecService] Error undoing spec edit:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }

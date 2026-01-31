@@ -7,17 +7,19 @@ import { Check, Loader2 } from "lucide-react";
 interface AdditionalContextSectionProps {
   context: string;
   onContextChange: (context: string) => void;
-  onGeneratePlan: () => void;
+  onSaveAndSubmit: () => void;
   isGenerating: boolean;
   recipeId: string | null;
+  unansweredCount?: number;
 }
 
 export default function AdditionalContextSection({
   context,
   onContextChange,
-  onGeneratePlan,
+  onSaveAndSubmit,
   isGenerating,
   recipeId,
+  unansweredCount = 0,
 }: AdditionalContextSectionProps) {
   return (
     <div className="bg-background border-zinc-100 px-6 py-4">
@@ -31,29 +33,36 @@ export default function AdditionalContextSection({
               Add any extra requirements, constraints, or notes
             </p>
           </div>
-          
+
           <Textarea
             value={context}
             onChange={(e) => onContextChange(e.target.value)}
             placeholder="Example: Use TypeScript for type safety, follow RESTful API conventions..."
             className="min-h-[80px] text-xs resize-none border-zinc-200 focus:border-zinc-300 rounded-lg leading-relaxed"
           />
-          
+
+          {unansweredCount > 0 && (
+            <p className="text-xs text-amber-600">
+              Please answer all {unansweredCount} remaining question(s) before
+              saving.
+            </p>
+          )}
+
           <div className="flex items-center justify-end">
             <Button
-              onClick={onGeneratePlan}
+              onClick={onSaveAndSubmit}
               disabled={isGenerating || !recipeId}
               className="h-8 px-6 bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
                 <>
                   <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-                  Generating...
+                  Saving...
                 </>
               ) : (
                 <>
                   <Check className="w-3 h-3 mr-1.5" />
-                  Generate Implementation Plan
+                  Save & Generate Plan
                 </>
               )}
             </Button>

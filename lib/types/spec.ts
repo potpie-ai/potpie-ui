@@ -106,6 +106,37 @@ export interface CreateRecipeCodegenResponse {
   message: string;
 }
 
+/** Option format for new API (label + description) */
+export interface QuestionOption {
+  label: string;
+  description?: string;
+}
+
+/** AI recommendation with index and reasoning */
+export interface AnswerRecommendation {
+  idx: number | null;
+  reasoning?: string;
+}
+
+/** Context reference for display */
+export interface ContextReference {
+  path?: string;
+  type?: string;
+  [key: string]: unknown;
+}
+
+/** New API question format */
+export interface RecipeQuestionNew {
+  id?: string;
+  question: string;
+  criticality?: "important" | "optional" | string;
+  options?: QuestionOption[] | null;
+  expected_answer_type?: string;
+  answer_recommendation?: AnswerRecommendation | null;
+  context_refs?: ContextReference[] | null;
+}
+
+/** Legacy question format (backward compatible) */
 export interface RecipeQuestion {
   id: string;
   question: string;
@@ -116,10 +147,18 @@ export interface RecipeQuestion {
   order: number;
 }
 
+/** Union type - API may return either format */
+export type RecipeQuestionUnion = RecipeQuestion | (RecipeQuestionNew & { id: string });
+
 export interface RecipeQuestionsResponse {
   recipe_id: string;
-  recipe_status: "PENDING_QUESTIONS" | "QUESTIONS_READY" | "ERROR";
-  questions: RecipeQuestion[];
+  recipe_status:
+    | "PENDING_QUESTIONS"
+    | "QUESTIONS_READY"
+    | "SPEC_IN_PROGRESS"
+    | "IN_PROGRESS"
+    | "ERROR";
+  questions: RecipeQuestionUnion[];
 }
 
 export interface SubmitSpecGenerationRequest {
@@ -275,4 +314,50 @@ export interface RecipeDetailsResponse {
   repo_name: string | null;
   branch_name: string | null;
   questions_and_answers: QuestionAnswerPair[];
+}
+
+// Spec Editor Chat API types
+export type SpecChatIntent =
+  | "add"
+  | "modify"
+  | "remove"
+  | "clarify"
+  | "reorder"
+  | "regenerate"
+  | "explain";
+
+export interface SpecChatEditHistoryItem {
+  message: string;
+  response: string;
+}
+
+export interface SpecChatRequest {
+  message: string;
+  edit_history?: SpecChatEditHistoryItem[];
+}
+
+export interface SpecChatResponse {
+  intent: SpecChatIntent;
+  message: string;
+  explanation: string;
+  spec_output: SpecOutput;
+  undo_token: string;
+  next_actions: string[];
+  conflicts?: Array<{
+    path: string;
+    description: string;
+    severity: "high" | "medium" | "low";
+  }>;
+  warnings?: string[];
+  suggestions?: string[];
+  regenerate_triggered: boolean;
+}
+
+export interface SpecUndoRequest {
+  undo_token: string;
+}
+
+export interface SpecUndoResponse {
+  spec_output: SpecOutput;
+  message: string;
 }

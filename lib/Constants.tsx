@@ -1,19 +1,6 @@
 import { auth } from "@/configs/Firebase-config";
 import formbricksApp from "@formbricks/js";
-import {
-  BotIcon,
-  CircleAlert,
-  Github,
-  Code,
-  Slack,
-  LucideFileText,
-  MessagesSquare,
-  Zap,
-  Plug,
-  Cookie,
-  Hammer,
-  SparkleIcon,
-} from "lucide-react";
+import { CircleAlert } from "lucide-react";
 import Image from "next/image";
 
 const user = auth.currentUser || ("" as any);
@@ -109,13 +96,27 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     title: "Codebase Chat",
     links: [
       {
-        icons: <MessagesSquare size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/All chat.svg"
+            alt="All chats"
+            width={20}
+            height={20}
+          />
+        ),
         title: "All chats",
         href: "/all-chats",
         disabled: false,
       },
       {
-        icons: <BotIcon size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/Custom Agents.svg"
+            alt="Custom Agents"
+            width={20}
+            height={20}
+          />
+        ),
         title: "Custom Agents",
         href: "/all-agents",
         disabled: false,
@@ -126,7 +127,14 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     title: "Idea",
     links: [
       {
-        icons: <SparkleIcon size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/Idea.svg"
+            alt="Idea"
+            width={20}
+            height={20}
+          />
+        ),
         title: "Idea",
         href: "/idea",
         disabled: false,
@@ -137,7 +145,14 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     title: "Workflows",
     links: [
       {
-        icons: <Zap size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/Build.svg"
+            alt="Workflows"
+            width={20}
+            height={20}
+          />
+        ),
         title: "Workflows",
         href: "/workflows",
         disabled: false,
@@ -148,7 +163,14 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     title: "Integrations",
     links: [
       {
-        icons: <Plug size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/Integration.svg"
+            alt="Integrations"
+            width={20}
+            height={20}
+          />
+        ),
         title: "Integrations",
         href: "/integrations",
         disabled: false,
@@ -159,8 +181,14 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     title: "Knowledge Base",
     links: [
       {
-        icons: <Github size={20} strokeWidth={1.5} />,
-        icon: Github,
+        icons: (
+          <Image
+            src="/images/Repositories.svg"
+            alt="Repositories"
+            width={20}
+            height={20}
+          />
+        ),
         title: "Repositories",
         href: "/repositories",
         disabled: false,
@@ -171,7 +199,14 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     title: "Extensions",
     links: [
       {
-        icons: <Code size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/VS Code.svg"
+            alt="VS Code"
+            width={20}
+            height={20}
+          />
+        ),
         title: "VS Code",
         href: "https://marketplace.visualstudio.com/items?itemName=PotpieAI.potpie-vscode-extension",
         disabled: false,
@@ -182,13 +217,27 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     title: "Support",
     links: [
       {
-        icons: <LucideFileText size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/Documentation.svg"
+            alt="Documentation"
+            width={20}
+            height={20}
+          />
+        ),
         title: "Documentation",
         href: "https://docs.potpie.ai",
         disabled: false,
       },
       {
-        icons: <Github size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/Open Source.svg"
+            alt="Open source"
+            width={20}
+            height={20}
+          />
+        ),
         title: "Open source",
         href: "https://github.com/potpie-ai/potpie",
         disabled: false,

@@ -10,17 +10,20 @@ import {
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
+import { getUserFriendlyError } from "@/lib/utils/errorMessages";
+import { isNewUser, deleteUserAndSignOut } from "@/lib/utils/emailValidation";
+import AuthService from "@/services/AuthService";
 import axios from "axios";
-import getHeaders from "@/app/utils/headers.util";
 
-import { LucideCheck, LucideGithub } from "lucide-react";
+import { LucideGithub } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 export default function Signin() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const source = searchParams.get("source");
   const agent_id = searchParams.get("agent_id");
@@ -34,7 +37,9 @@ export default function Signin() {
       const url = new URL(redirectPath, window.location.origin);
       redirectAgent_id = url.searchParams.get("agent_id") || "";
     } catch (e) {
-      console.error("Error parsing redirect URL:", e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error parsing redirect URL:", e);
+      }
     }
   }
 
@@ -90,41 +95,77 @@ export default function Signin() {
   const onGithub = async () => {
     signInWithPopup(auth, provider)
       .then(async (result) => {
+        // VALIDATION CHECKPOINT: Block new GitHub signups
+        const isNew = isNewUser(result);
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('GitHub sign-in - Is New User:', isNew);
+        }
+        
+        // Block all new GitHub signups
+        if (isNew) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Blocking new GitHub signup attempt');
+          }
+          
+          // Delete Firebase user account and sign out
+          const deletionSucceeded = await deleteUserAndSignOut(result.user);
+          
+          // Log deletion failure for monitoring (caller can act on result if needed)
+          if (!deletionSucceeded) {
+            console.error('[ERROR] Failed to delete blocked GitHub signup user:', {
+              userId: result.user?.uid,
+              email: result.user?.email,
+            });
+          }
+          
+          // Show concise error message
+          toast.error('GitHub sign-ups are no longer supported — please sign in with Google.');
+          
+          return; // Don't proceed to backend
+        }
+        
+        // Existing users can proceed
         const credential = GithubAuthProvider.credentialFromResult(result);
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-        if (credential) {
+        if (credential && credential.accessToken) {
           try {
-            const headers = await getHeaders();
-            const userSignup = await axios.post(
-              `${baseUrl}/api/v1/signup`,
-              {
-                uid: result.user.uid,
-                email: result.user.email,
-                displayName:
-                  result.user.displayName || result.user.email?.split("@")[0],
-                emailVerified: result.user.emailVerified,
-                createdAt: result.user.metadata?.creationTime
-                  ? new Date(result.user.metadata.creationTime).toISOString()
-                  : "",
-                lastLoginAt: result.user.metadata?.lastSignInTime
-                  ? new Date(result.user.metadata.lastSignInTime).toISOString()
-                  : "",
-                providerData: result.user.providerData,
-                accessToken: credential.accessToken,
-                providerUsername: (result as any)._tokenResponse.screenName,
-              },
-              { headers: headers }
+            const userSignup = await AuthService.signupWithGitHub(
+              result.user,
+              credential.accessToken,
+              (result as any)._tokenResponse.screenName
             );
 
             posthog.identify(result.user.uid, {
               email: result.user.email,
               name: result.user?.displayName || "",
             });
+            
+            // CRITICAL: Check GitHub linking from backend response
+            // Even if signing in with GitHub, check the flag for consistency
+            if (userSignup.needs_github_linking) {
+              // Redirect to onboarding to link GitHub (shouldn't happen for GitHub sign-in, but handle it)
+              toast.info('Almost there! Link your GitHub to unlock the magic');
+              const urlSearchParams = new URLSearchParams(window.location.search);
+              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              const prompt = urlSearchParams.get("prompt") || "";
+
+              const onboardingParams = new URLSearchParams();
+              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
+              if (result.user.email) onboardingParams.append('email', result.user.email);
+              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
+              if (plan) onboardingParams.append('plan', plan);
+              if (prompt) onboardingParams.append('prompt', prompt);
+              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+
+              window.location.href = `/onboarding?${onboardingParams.toString()}`;
+              return;
+            }
+            
             //if this is a new user
-            if (!userSignup.data.exists) {
+            if (!userSignup.exists) {
               // For new users, redirect to onboarding
               toast.success(
-                "Account created successfully as " + result.user.displayName
+                "Welcome aboard " + result.user.displayName + "! Let's get started"
               );
 
               const urlSearchParams = new URLSearchParams(
@@ -137,11 +178,24 @@ export default function Signin() {
               ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
-              return (window.location.href = `/onboarding?uid=${result.user.uid}&email=${encodeURIComponent(result.user.email || "")}&name=${encodeURIComponent(result.user.displayName || "")}&plan=${plan}&prompt=${encodeURIComponent(prompt)}&agent_id=${encodeURIComponent(finalAgent_id || "")}`);
+              const onboardingParams = new URLSearchParams();
+              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
+              if (result.user.email) onboardingParams.append('email', result.user.email);
+              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
+              if (plan) onboardingParams.append('plan', plan);
+              if (prompt) onboardingParams.append('prompt', prompt);
+              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+
+              window.location.href = `/onboarding?${onboardingParams.toString()}`;
+              return;
             }
 
+            // For existing users, GitHub is already linked (they signed in with GitHub)
+            // So we can proceed directly
             if (source === "vscode") {
-              handleExternalRedirect(userSignup.data.token);
+              if (userSignup.token) {
+                handleExternalRedirect(userSignup.token);
+              }
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
@@ -149,24 +203,34 @@ export default function Signin() {
             }
 
             toast.success(
-              "Logged in successfully as " + result.user.displayName
+              "Welcome back " + result.user.displayName + "! Let's build something amazing"
             );
           } catch (e: any) {
-            console.error("API error:", e);
-            toast.error("Sign-in unsuccessful");
+            if (process.env.NODE_ENV !== 'production') {
+              console.error("API error:", e);
+            }
+            toast.error(e.message || "Sign-in unsuccessful");
           }
         }
       })
       .catch((error) => {
+        // Handle user cancellation - don't show error
+        if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+          // User cancelled, don't show error
+          return;
+        }
+        
         const errorCode = error.code;
         const errorMessage = error.message;
         const email = error.customData?.email;
         const credential = GithubAuthProvider.credentialFromError(error);
-        toast.error(errorMessage);
+        const friendlyError = getUserFriendlyError(error);
+        toast.error(friendlyError);
       });
   };
+
   return (
-    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative">
+    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition">
       <div className="flex items-center justify-center w-1/2 h-full p-6">
         <div className="relative h-full w-full rounded-lg overflow-hidden">
           <Image
@@ -178,15 +242,16 @@ export default function Signin() {
         </div>
       </div>
 
-      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-2">
-        <div className="flex items-center justify-center flex-row gap-2">
+      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-4">
+        <div className="flex items-center justify-center flex-row gap-3 mb-4">
           <Image
             src={"/images/potpie-blue.svg"}
             width={100}
             height={100}
             alt="logo"
+            className="transition-transform duration-300 hover:scale-105"
           />
-          <h1 className="text-7xl font-bold text-gray-700">potpie</h1>
+          <h1 className="text-7xl font-bold text-gray-800 tracking-tight">potpie</h1>
         </div>
         <div className="flex items-center justify-center flex-col text-border w-full max-w-xs">
           {/* Email/Password Login Form */}

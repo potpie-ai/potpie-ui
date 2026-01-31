@@ -189,6 +189,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         messageToSend,
         [], // No nodes for now
         [], // No images for now
+        [], // No attachment IDs for now
         (messageText, _toolCalls, citations) => {
           // Update the temporary message with streaming content
           setMessages((prevMessages) => {

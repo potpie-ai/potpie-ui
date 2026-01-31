@@ -20,7 +20,9 @@ export default function AuthLayout({
       // Handle VSCode authentication flow
       if (source === "vscode") {
         user.getIdToken().then((token: any) => {
-          console.log("token", token);
+          if (process.env.NODE_ENV === 'development') {
+            console.log("token", token);
+          }
           window.location.href = `http://localhost:54333/auth/callback?token=${token}`;
         });
         return;
@@ -36,7 +38,9 @@ export default function AuthLayout({
       if (!window.location.pathname.startsWith('/onboarding') && 
           !window.location.pathname.startsWith('/sign-up') && 
           !window.location.pathname.startsWith('/link-github')) {
-        console.log("redirecting to", redirectUrl ? decodeURIComponent(redirectUrl) : "/");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("redirecting to", redirectUrl ? decodeURIComponent(redirectUrl) : "/");
+        }
         router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
       }
     }

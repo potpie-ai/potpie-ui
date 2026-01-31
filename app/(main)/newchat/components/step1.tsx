@@ -57,6 +57,7 @@ import { ParsingStatusEnum } from "@/lib/Constants";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import ParsingProgress from "./ParsingProgress";
+import FileSelector, { ParseFilters } from "./FileSelector";
 
 const repoLinkSchema = z.object({
   repoLink: z
@@ -85,17 +86,18 @@ const getRepoIdentifier = (repo: RepoIdentifier) => {
   return repo?.name || "";
 };
 
-const Step1: React.FC<Step1Props> = ({
-  setProjectId,
-  setChatStep,
-}) => {
-
+const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
   const { repoName, branchName } = useSelector(
     (state: RootState) => state.RepoAndBranch
   );
 
   const dispatch = useDispatch();
 
+  const [filters, setFilters] = useState<ParseFilters>({
+    excluded_directories: [],
+    excluded_files: [],
+    excluded_extensions: [],
+  });
 
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [isPublicRepoDailog, setIsPublicRepoDailog] = useState(false);
@@ -134,7 +136,8 @@ const Step1: React.FC<Step1Props> = ({
     try {
       const parseResponse = await BranchAndRepositoryService.parseRepo(
         repo_name,
-        branch_name
+        branch_name,
+        filters
       );
       const projectId = parseResponse.project_id;
       const initialStatus = parseResponse.status;
@@ -167,16 +170,16 @@ const Step1: React.FC<Step1Props> = ({
     try {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      
+
       dispatch(setRepoName(repo_path));
       dispatch(setBranchName(branch_name));
-      
+
       const parseResponse = await axios.post(
         `${baseUrl}/api/v1/parse`,
-        { repo_path, branch_name },
+        { repo_path, branch_name, filters },
         { headers }
       );
-      
+
       const projectId = parseResponse.data.project_id;
       const initialStatus = parseResponse.data.status;
 
@@ -212,7 +215,10 @@ const Step1: React.FC<Step1Props> = ({
             const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
             const matchingRepo = data.find((repo: RepoIdentifier) => {
               const repoIdentifier = getRepoIdentifier(repo);
-              return repoIdentifier && repoIdentifier.toLowerCase() === decodedDefaultRepo;
+              return (
+                repoIdentifier &&
+                repoIdentifier.toLowerCase() === decodedDefaultRepo
+              );
             });
             dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
           }
@@ -239,17 +245,22 @@ const Step1: React.FC<Step1Props> = ({
         }
         // Handle default branch selection if provided
         else if (data?.length > 0 && defaultBranch) {
-          const matchingBranch = data.find((branch: string) => 
-            branch.toLowerCase() === decodeURIComponent(defaultBranch).toLowerCase()
+          const matchingBranch = data.find(
+            (branch: string) =>
+              branch.toLowerCase() ===
+              decodeURIComponent(defaultBranch).toLowerCase()
           );
-          dispatch(setBranchName(matchingBranch ? decodeURIComponent(defaultBranch) : ""));
+          dispatch(
+            setBranchName(
+              matchingBranch ? decodeURIComponent(defaultBranch) : ""
+            )
+          );
         }
         return data;
       });
     },
     enabled: !!repoName && repoName !== "",
   });
-
 
   const {
     data: PublicRepo,
@@ -260,6 +271,7 @@ const Step1: React.FC<Step1Props> = ({
     queryFn: async () => {
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = inputValue.match(regex);
+    
       if (!match) {
         setLinkedRepoName(null);
         setIsValidLink(false);
@@ -267,46 +279,127 @@ const Step1: React.FC<Step1Props> = ({
         toast.error("Invalid repository URL. Please try again.");
         return "Invalid repository URL.";
       }
-  
+    
       const ownerRepo = `${match[1]}/${match[2]}`;
-  
+    
+      const repoExistsPublic = async (repo: string) => {
+        try {
+          const res = await fetch(`https://api.github.com/repos/${repo}`);
+          return res.status === 200;
+        } catch {
+          return false;
+        }
+      };
+    
       try {
-        if(linkedRepoName === ownerRepo){
-        handleSetPublicRepoDialog(false);
-        setIsValidLink(true);
+        if (linkedRepoName === ownerRepo) {
+          handleSetPublicRepoDialog(false);
+          setIsValidLink(true);
           return "Repo is public";
         }
-        const response =
-          await BranchAndRepositoryService.check_public_repo(ownerRepo);
-  
-        if (response.is_public) {
+    
+        const response = await BranchAndRepositoryService.check_public_repo(ownerRepo);
+        console.log("Public repo check response:", response);
+    
+        let isPublic = false;
+    
+        // Handle response formats: boolean / string / object
+        if (typeof response === "boolean") {
+          isPublic = response;
+        } else if (typeof response === "string") {
+          isPublic = response.toLowerCase() === "true";
+        } else if (typeof response === "object" && response !== null) {
+          isPublic =
+            response.is_public === true ||
+            response.isPublic === true ||
+            response.public === true;
+        }
+    
+        if (isPublic) {
           setIsValidLink(true);
           setLinkedRepoName(ownerRepo);
-          dispatch(setRepoName(ownerRepo))
-        } else {
-          setIsValidLink(false);
-          setLinkedRepoName(null);
-          toast.error("Repo is not public. Try linking a private repo.");
+          dispatch(setRepoName(ownerRepo));
+          handleSetPublicRepoDialog(false);
+          return response;
         }
+    
+        // Not public based on response: show popup ONLY if explicitly private
+        const isExplicitlyPrivate =
+          response === false ||
+          response === "False" ||
+          response === "false" ||
+          (typeof response === "object" &&
+            response !== null &&
+            (response.is_public === false ||
+              response.isPublic === false ||
+              response.public === false));
+    
+        setIsValidLink(false);
+        setLinkedRepoName(null);
         handleSetPublicRepoDialog(false);
+    
+        if (isExplicitlyPrivate) {
+          toast.error("This repository is private. Please link it through GitHub to import it.");
+          openPopup();
+        } else {
+          toast.error("Unable to verify repository visibility. Please try again.");
+        }
+    
         return response;
       } catch (error: any) {
         setLinkedRepoName(null);
         handleSetPublicRepoDialog(false);
-        
-        openPopup();
-       toast.error("Repo is not public try linking new private repo...")
-        throw error;
+    
+        const statusCode = error?.response?.status;
+        const errorMessage = error?.response?.data?.message || error?.message;
+    
+        console.error("Error checking public repo:", {
+          statusCode,
+          errorMessage,
+          error: error?.response?.data,
+          ownerRepo,
+        });
+    
+        // Fix: 404 can be invalid repo OR private repo
+        if (statusCode === 404) {
+          const exists = await repoExistsPublic(ownerRepo);
+    
+          if (!exists) {
+            toast.error("Repository does not exist. Please check the URL.");
+            return false;
+          }
+    
+          toast.error("Repository is private or not accessible. Please link it through GitHub.");
+          openPopup();
+          return false;
+        }
+    
+        if (statusCode === 401) {
+          toast.error(
+            "Backend is not authenticated with GitHub (401). This does not mean the repo is private. Configure GitHub auth and retry."
+          );
+          return false;
+        }
+    
+        if (statusCode === 403) {
+          toast.error(
+            "GitHub API forbidden or rate-limited (403). This does not mean the repo is private. Try again later."
+          );
+          return false;
+        }
+    
+        toast.error("Unable to verify repository right now. Please try again.");
+        return false;
       }
     },
+    
     enabled: false,
     retry: false,
   });
-  
 
   const [showTooltip, setShowTooltip] = useState(false);
   const handleRepoSelect = (repo: string) => {
-     dispatch(setRepoName(repo));
+    dispatch(setRepoName(repo));
     setInputValue(repo);
     setLinkedRepoName(null);
   };
@@ -326,8 +419,43 @@ const Step1: React.FC<Step1Props> = ({
     setIsParseDisabled(!repoName || !branchName || parsingStatus !== "");
   }, [repoName, branchName, parsingStatus, inputValue, isValidLink]);
 
+  // Fetch existing filters when repo and branch are selected
   useEffect(() => {
-    if(isPublicRepoDailog){
+    const fetchExistingFilters = async () => {
+      // Reset filters first when repo/branch changes
+      const defaultFilters = {
+        excluded_directories: [],
+        excluded_files: [],
+        excluded_extensions: [],
+      };
+      setFilters(defaultFilters);
+
+      if (repoName && branchName) {
+        try {
+          const statusResponse =
+            await BranchAndRepositoryService.checkParsingStatus(
+              repoName,
+              branchName
+            );
+          if (statusResponse?.current_filters) {
+            const existingFilters = statusResponse.current_filters;
+            setFilters({
+              excluded_directories: existingFilters.excluded_directories || [],
+              excluded_files: existingFilters.excluded_files || [],
+              excluded_extensions: existingFilters.excluded_extensions || [],
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching existing filters:", error);
+        }
+      }
+    };
+
+    fetchExistingFilters();
+  }, [repoName, branchName]);
+
+  useEffect(() => {
+    if (isPublicRepoDailog) {
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = inputValue.match(regex);
       if (match) {
@@ -339,7 +467,7 @@ const Step1: React.FC<Step1Props> = ({
   }, [inputValue, isPublicRepoDailog]);
 
   useEffect(() => {
-    if(isLocalRepoDailog){
+    if (isLocalRepoDailog) {
       // Simple validation for local repo path - just check if it's not empty
       setIsValidLink(!!localRepoPath && !!localBranchName);
     }
@@ -347,17 +475,16 @@ const Step1: React.FC<Step1Props> = ({
 
   // Function to safely set the public repo dialog state
   const handleSetPublicRepoDialog = (value: boolean) => {
-    // Only allow opening the dialog if we're not on localhost
-    if (value && process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost')) {
-      return;
-    }
     setIsPublicRepoDailog(value);
   };
 
   return (
     <div className="text-black max-w-[900px]">
       <h1 className="text-lg">Select a repository and branch</h1>
-      <Link href="https://docs.potpie.ai/quickstart" className="text-primary underline">
+      <Link
+        href="https://docs.potpie.ai/quickstart"
+        className="text-primary underline"
+      >
         Need help?
       </Link>
       <div className="flex items-center gap-4 mt-4">
@@ -365,131 +492,143 @@ const Step1: React.FC<Step1Props> = ({
           <Skeleton className="flex-1 h-10" />
         ) : (
           <>
-          <Popover open={repoOpen} onOpenChange={setRepoOpen}>
-            <PopoverTrigger asChild className="flex-1">
-              {UserRepositorys?.length === 0 || !repoName ? (
-                <Button
-                  className="flex gap-3 items-center font-semibold justify-start"
-                  variant="outline"
-                >
-                  <Github
-                    className="h-4 w-4 text-[#7A7A7A]"
-                    strokeWidth={1.5}
-                  />
-                  Select Repository
-                </Button>
-              ) : (
-                <Button
-                  className="flex gap-3 items-center font-semibold justify-start"
-                  variant="outline"
-                >
-                  {repoName.startsWith('/') || repoName.includes(':\\') || repoName.includes(':/') ? (
-                    <Folder
-                      className="h-4 w-4 text-[#7A7A7A]"
-                      strokeWidth={1.5}
-                    />
-                  ) : (
+            <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+              <PopoverTrigger asChild className="flex-1">
+                {UserRepositorys?.length === 0 || !repoName ? (
+                  <Button
+                    className="flex gap-3 items-center font-semibold justify-start"
+                    variant="outline"
+                  >
                     <Github
                       className="h-4 w-4 text-[#7A7A7A]"
                       strokeWidth={1.5}
                     />
-                  )}
-                  <span className="truncate text-ellipsis whitespace-nowrap">
-                    {repoName}
-                  </span>
-                </Button>
-              )}
-            </PopoverTrigger>
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-              <Command defaultValue={defaultRepo ?? undefined}>
-                <CommandInput
-                  value={searchValue}
-                  onValueChange={(e) => {
-                    setSearchValue(e);
-                  }}
-                  placeholder="Search repo or paste local path (e.g., /Users/...)"
-                />
-                <CommandList>
-                  <CommandEmpty>
-                    {searchValue.startsWith("https://github.com/") && !process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
-                      <Button
-                        onClick={() => {handleSetPublicRepoDialog(true);setInputValue(searchValue)}}
-                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
-                      >
-                          <Plus className="size-4" /> <p> Public Repository</p>
-                      </Button>
-                    ) : searchValue && searchValue.trim() !== "" && 
-                        (searchValue.startsWith('/') || searchValue.includes(':\\') || searchValue.includes(':/')) && 
-                        process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
-                      <Button
-                        onClick={() => {setIsLocalRepoDailog(true);setLocalRepoPath(searchValue)}}
-                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
-                      >
-                          <Plus className="size-4" /> <p> Local Repository</p>
-                      </Button>
-                    ) : searchValue && searchValue.trim() !== "" ? (
-                      "No repositories found."
+                    Select Repository
+                  </Button>
+                ) : (
+                  <Button
+                    className="flex gap-3 items-center font-semibold justify-start"
+                    variant="outline"
+                  >
+                    {repoName.startsWith("/") ||
+                    repoName.includes(":\\") ||
+                    repoName.includes(":/") ? (
+                      <Folder
+                        className="h-4 w-4 text-[#7A7A7A]"
+                        strokeWidth={1.5}
+                      />
                     ) : (
-                      "No results found."
+                      <Github
+                        className="h-4 w-4 text-[#7A7A7A]"
+                        strokeWidth={1.5}
+                      />
                     )}
-                  </CommandEmpty>
-
-                  <CommandGroup>
-                  {isValidLink && linkedRepoName && (
-                      <CommandItem
-                        value={linkedRepoName}
-                        onSelect={() => handleRepoSelect(linkedRepoName)}
-                      >
-                        {linkedRepoName}
-                      </CommandItem>
-                    )}
-                    {UserRepositorys?.map((value: any) => {
-                      const repoIdentifier = getRepoIdentifier(value);
-                      if (!repoIdentifier) {
-                        return null;
-                      }
-                      return (
-                        <CommandItem
-                          key={value.id}
-                          value={repoIdentifier}
-                          onSelect={(value) => {
-                            dispatch(setRepoName(value));
-                            setRepoOpen(false);
+                    <span className="truncate text-ellipsis whitespace-nowrap">
+                      {repoName}
+                    </span>
+                  </Button>
+                )}
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                <Command defaultValue={defaultRepo ?? undefined}>
+                  <CommandInput
+                    value={searchValue}
+                    onValueChange={(e) => {
+                      setSearchValue(e);
+                    }}
+                    placeholder="Search repo or paste local path (e.g., /Users/...)"
+                  />
+                  <CommandList>
+                    <CommandEmpty>
+                      {searchValue.startsWith("https://github.com/") ? (
+                        <Button
+                          onClick={() => {
+                            handleSetPublicRepoDialog(true);
+                            setInputValue(searchValue);
                           }}
+                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2"
                         >
-                          {repoIdentifier}
+                          <Plus className="size-4" /> <p> Public Repository</p>
+                        </Button>
+                      ) : searchValue &&
+                        searchValue.trim() !== "" &&
+                        (searchValue.startsWith("/") ||
+                          searchValue.includes(":\\") ||
+                          searchValue.includes(":/")) &&
+                        process.env.NEXT_PUBLIC_BASE_URL?.includes(
+                          "localhost"
+                        ) ? (
+                        <Button
+                          onClick={() => {
+                            setIsLocalRepoDailog(true);
+                            setLocalRepoPath(searchValue);
+                          }}
+                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2"
+                        >
+                          <Plus className="size-4" /> <p> Local Repository</p>
+                        </Button>
+                      ) : searchValue && searchValue.trim() !== "" ? (
+                        "No repositories found."
+                      ) : (
+                        "No results found."
+                      )}
+                    </CommandEmpty>
+
+                    <CommandGroup>
+                      {isValidLink && linkedRepoName && (
+                        <CommandItem
+                          value={linkedRepoName}
+                          onSelect={() => handleRepoSelect(linkedRepoName)}
+                        >
+                          {linkedRepoName}
                         </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                  <CommandSeparator className="my-1" />
-                  {!process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
-                    <>
-                      <CommandItem
-                        value="public"
-                        onSelect={() => handleSetPublicRepoDialog(true)}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Plus className="size-4" /> Public Repository
-                        </span>
-                      </CommandItem>
-                      <CommandSeparator className="my-1" />
-                    </>
-                  )}
-                  {process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
-                    <>
-                      <CommandItem
-                        value="local"
-                        onSelect={() => setIsLocalRepoDailog(true)}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Folder className="size-4" /> Local Repository
-                        </span>
-                      </CommandItem>
-                      <CommandSeparator className="my-1" />
-                    </>
-                  )}
-                  {!process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') && (
+                      )}
+                      {UserRepositorys?.map((value: any) => {
+                        const repoIdentifier = getRepoIdentifier(value);
+                        if (!repoIdentifier) {
+                          return null;
+                        }
+                        return (
+                          <CommandItem
+                            key={value.id}
+                            value={repoIdentifier}
+                            onSelect={(value) => {
+                              handleRepoSelect(value);
+                              setRepoOpen(false);
+                            }}
+                          >
+                            {repoIdentifier}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                    <CommandSeparator className="my-1" />
+                    {!process.env.NEXT_PUBLIC_BASE_URL?.includes("localhost") && (
+                      <>
+                        <CommandItem
+                          value="public"
+                          onSelect={() => handleSetPublicRepoDialog(true)}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Plus className="size-4" /> Public Repository
+                          </span>
+                        </CommandItem>
+                        <CommandSeparator className="my-1" />
+                      </>
+                    )}
+                    {process.env.NEXT_PUBLIC_BASE_URL?.includes("localhost") && (
+                      <>
+                        <CommandItem
+                          value="local"
+                          onSelect={() => setIsLocalRepoDailog(true)}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Folder className="size-4" /> Local Repository
+                          </span>
+                        </CommandItem>
+                        <CommandSeparator className="my-1" />
+                      </>
+                    )}
                     <CommandItem>
                       <span
                         className="flex items-center gap-2"
@@ -501,13 +640,12 @@ const Step1: React.FC<Step1Props> = ({
                         <Plus className="size-4" /> Link new repository
                       </span>
                     </CommandItem>
-                  )}
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-          
-          {/* No separate local repo button */}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+            {/* No separate local repo button */}
           </>
         )}
         {UserBranchLoading ? (
@@ -604,16 +742,27 @@ const Step1: React.FC<Step1Props> = ({
           )}
         </div>
       </div>
-      
+
+      <FileSelector
+        filters={filters}
+        setFilters={setFilters}
+        repoName={repoName}
+        branchName={branchName}
+        isParsing={parsingStatus !== ""}
+      />
+
       {/* Parsing Status with new ParsingProgress component */}
       {parsingStatus && (
-  <ParsingProgress 
-    status={parsingStatus} 
-    onRetry={() => branchName && parseRepo(repoName, branchName)} 
-  />
-)}
-      
-      <Dialog open={isPublicRepoDailog} onOpenChange={handleSetPublicRepoDialog}>
+        <ParsingProgress
+          status={parsingStatus}
+          onRetry={() => branchName && parseRepo(repoName, branchName)}
+        />
+      )}
+
+      <Dialog
+        open={isPublicRepoDailog}
+        onOpenChange={handleSetPublicRepoDialog}
+      >
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Parse Public Repository</DialogTitle>
@@ -655,13 +804,14 @@ const Step1: React.FC<Step1Props> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       <Dialog open={isLocalRepoDailog} onOpenChange={setIsLocalRepoDailog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Import Local Repository</DialogTitle>
             <DialogDescription>
-              Confirm the path to your local repository and specify the branch name
+              Confirm the path to your local repository and specify the branch
+              name
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

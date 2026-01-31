@@ -3,8 +3,62 @@ import getHeaders from "@/app/utils/headers.util";
 import { Visibility } from "@/lib/Constants";
 import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
+import { ValidationResponse, AttachmentUploadResponse, AttachmentInfo, ContextUsageResponse } from "@/lib/types/attachment";
 
 export default class ChatService {
+  private static extractJsonObjects(input: string): {
+    objects: string[];
+    remaining: string;
+  } {
+    const objects: string[] = [];
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+    let startIndex = -1;
+
+    for (let i = 0; i < input.length; i++) {
+      const char = input[i]!;
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        if (inString) {
+          escapeNext = true;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === "{") {
+        if (depth === 0) {
+          startIndex = i;
+        }
+        depth++;
+      } else if (char === "}") {
+        if (depth === 0) continue;
+        depth--;
+        if (depth === 0 && startIndex !== -1) {
+          objects.push(input.slice(startIndex, i + 1));
+          startIndex = -1;
+        }
+      }
+    }
+
+    const remaining =
+      depth > 0 && startIndex !== -1 ? input.slice(startIndex) : "";
+
+    return { objects, remaining };
+  }
+
   // Method for creating a chat with a shared agent
   static async createChat(params: {
     agent_id: string;
@@ -38,7 +92,9 @@ export default class ChatService {
     }
   }
 
-  static async detectActiveSession(conversationId: string): Promise<SessionInfo | null> {
+  static async detectActiveSession(
+    conversationId: string
+  ): Promise<SessionInfo | null> {
     try {
       const headers = await getHeaders();
       const response = await axios.get(
@@ -54,7 +110,9 @@ export default class ChatService {
     }
   }
 
-  static async checkBackgroundTaskStatus(conversationId: string): Promise<TaskStatus> {
+  static async checkBackgroundTaskStatus(
+    conversationId: string
+  ): Promise<TaskStatus> {
     try {
       const headers = await getHeaders();
       const response = await axios.get(
@@ -67,7 +125,11 @@ export default class ChatService {
     }
   }
 
-  static generateSessionId(conversationId: string, userId: string, prevHumanMessageId?: string): string {
+  static generateSessionId(
+    conversationId: string,
+    userId: string,
+    prevHumanMessageId?: string
+  ): string {
     // Format: conversation:{user_id}:{prev_human_message_id}
     const messageId = prevHumanMessageId || Date.now().toString();
     return `conversation:${userId}:${messageId}`;
@@ -76,8 +138,17 @@ export default class ChatService {
   static async resumeActiveSession(
     conversationId: string,
     sessionId: string,
-    onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void
-  ): Promise<{ success: boolean; reason?: string; message?: string; citations?: string[] }> {
+    onMessageUpdate: (
+      message: string,
+      tool_calls: any[],
+      citations: string[]
+    ) => void
+  ): Promise<{
+    success: boolean;
+    reason?: string;
+    message?: string;
+    citations?: string[];
+  }> {
     try {
       const headers = await getHeaders();
 
@@ -91,7 +162,7 @@ export default class ChatService {
 
       if (response.status === 404) {
         // Session no longer exists or expired
-        return { success: false, reason: 'session_not_found' };
+        return { success: false, reason: "session_not_found" };
       }
 
       if (!response.ok) {
@@ -104,45 +175,98 @@ export default class ChatService {
       let currentMessage = "";
       let currentCitations: string[] = [];
       let currentToolCalls: any[] = [];
+      let buffer = ""; // Buffer for incomplete JSON chunks
 
       if (reader) {
+        const processJsonSegment = (jsonStr: string) => {
+          if (!jsonStr) return;
+
+          try {
+            const data = JSON.parse(jsonStr);
+
+            if (data.message !== undefined) {
+              const messageWithEmojis = data.message.replace(
+                /\\u[\dA-F]{4}/gi,
+                (match: string) =>
+                  String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
+              );
+              currentMessage += messageWithEmojis;
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
+            }
+
+            if (data.tool_calls !== undefined) {
+              // DEBUG: Log raw tool calls from backend (resume)
+              console.log(
+                "[SubAgent Stream] Raw tool_calls received (resume):",
+                {
+                  count: data.tool_calls.length,
+                  tool_calls: data.tool_calls,
+                  full_data: data,
+                }
+              );
+
+              currentToolCalls.push(...data.tool_calls);
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
+            }
+
+            if (data.citations !== undefined) {
+              currentCitations = data.citations;
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
+            }
+          } catch (e) {
+            // Try to recover by extracting multiple JSON objects
+            const extracted = ChatService.extractJsonObjects(jsonStr);
+            if (extracted.objects.length > 1) {
+              extracted.objects.forEach(processJsonSegment);
+              if (extracted.remaining.trim()) {
+                console.warn(
+                  "Residual data after recovering JSON chunk in resume:",
+                  extracted.remaining
+                );
+              }
+              return;
+            }
+            console.warn("Failed to parse JSON chunk in resume:", jsonStr, e);
+          }
+        };
+
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value);
+            // Decode chunk and add to buffer
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
 
-            // Process chunks using same logic as streamMessage
-            chunk.split(/(?<=})\s*(?={)/).forEach((jsonStr) => {
-              try {
-                const data = JSON.parse(jsonStr);
+            // Extract and process complete JSON objects from buffer
+            const extracted = ChatService.extractJsonObjects(buffer);
+            buffer = extracted.remaining;
+            extracted.objects.forEach(processJsonSegment);
+          }
 
-                if (data.message !== undefined) {
-                  const messageWithEmojis = data.message.replace(
-                    /\\u[\dA-F]{4}/gi,
-                    (match: string) =>
-                      String.fromCodePoint(
-                        parseInt(match.replace(/\\u/g, ""), 16)
-                      )
-                  );
-                  currentMessage += messageWithEmojis;
-                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                }
+          // Process any remaining complete JSON in buffer after stream ends
+          const extracted = ChatService.extractJsonObjects(buffer);
+          buffer = extracted.remaining;
+          extracted.objects.forEach(processJsonSegment);
 
-                if (data.tool_calls !== undefined) {
-                  currentToolCalls.push(...data.tool_calls);
-                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                }
-
-                if (data.citations !== undefined) {
-                  currentCitations = data.citations;
-                  onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                }
-              } catch (e) {
-                // Silently handle parsing errors
-              }
-            });
+          if (buffer.trim()) {
+            console.warn(
+              "Unprocessed JSON buffer after resume stream end:",
+              buffer
+            );
           }
         } finally {
           reader.releaseLock();
@@ -152,11 +276,11 @@ export default class ChatService {
       return {
         success: true,
         message: currentMessage,
-        citations: currentCitations
+        citations: currentCitations,
       };
     } catch (error) {
       console.error("Error resuming session:", error);
-      return { success: false, reason: 'network_error' };
+      return { success: false, reason: "network_error" };
     }
   }
 
@@ -165,38 +289,55 @@ export default class ChatService {
     message: string,
     selectedNodes: any[],
     images: File[] = [],
+    attachmentIds: string[] = [],
     onMessageUpdate: (
       message: string,
       tool_calls: any[],
       citations: string[]
     ) => void,
-    sessionId?: string // New optional parameter
+    sessionId?: string, // New optional parameter
+    abortSignal?: AbortSignal
   ): Promise<{ message: string; citations: string[]; sessionId: string }> {
     let currentSessionId = sessionId;
 
     // Check for existing active session if no sessionId provided
     if (!currentSessionId) {
       const activeSession = await this.detectActiveSession(conversationId);
-      if (activeSession && activeSession.status === 'active') {
-        throw new Error("Background task already active. Cannot start new stream.");
+      if (activeSession && activeSession.status === "active") {
+        throw new Error(
+          "Background task already active. Cannot start new stream."
+        );
       }
 
       // Generate new session ID
-      currentSessionId = this.generateSessionId(conversationId, "current_user_id", Date.now().toString());
+      currentSessionId = this.generateSessionId(
+        conversationId,
+        "current_user_id",
+        Date.now().toString()
+      );
     }
 
     try {
       const headers = await getHeaders();
       const formData = new FormData();
 
-      formData.append('content', message);
-      formData.append('node_ids', JSON.stringify(selectedNodes));
-      formData.append('session_id', currentSessionId);
+      formData.append("content", message);
+      formData.append("node_ids", JSON.stringify(selectedNodes));
+      formData.append("session_id", currentSessionId);
+
+      // Add attachment IDs if present
+      console.log('[ChatService] streamMessage - attachmentIds:', attachmentIds);
+      if (attachmentIds.length > 0) {
+        console.log('[ChatService] streamMessage - Adding attachment_ids to FormData:', JSON.stringify(attachmentIds));
+        formData.append('attachment_ids', JSON.stringify(attachmentIds));
+      } else {
+        console.warn('[ChatService] streamMessage - No attachment IDs to send');
+      }
 
       // Only process images if multimodal is enabled
       const enabledImages = isMultimodalEnabled() ? images : [];
       enabledImages.forEach((image, index) => {
-        formData.append('images', image);
+        formData.append("images", image);
       });
 
       const response = await this.streamWithRetry(
@@ -207,15 +348,26 @@ export default class ChatService {
           body: formData,
         },
         onMessageUpdate,
-        3 // max retries
+        3, // max retries
+        abortSignal
       );
 
       return {
         message: response.message,
         citations: response.citations,
-        sessionId: currentSessionId
+        sessionId: currentSessionId,
       };
     } catch (error) {
+      if (
+        abortSignal?.aborted ||
+        (error instanceof DOMException && error.name === "AbortError")
+      ) {
+        return {
+          message: "",
+          citations: [],
+          sessionId: currentSessionId!,
+        };
+      }
       console.error("Stream failed, attempting fallback polling:", error);
 
       // Fallback to polling if stream fails completely
@@ -232,14 +384,22 @@ export default class ChatService {
   static async streamWithRetry(
     url: string,
     options: RequestInit,
-    onMessageUpdate: (message: string, tool_calls: any[], citations: string[]) => void,
-    maxRetries: number
+    onMessageUpdate: (
+      message: string,
+      tool_calls: any[],
+      citations: string[]
+    ) => void,
+    maxRetries: number,
+    abortSignal?: AbortSignal
   ): Promise<{ message: string; citations: string[] }> {
     let retries = 0;
 
     while (retries <= maxRetries) {
       try {
-        const response = await fetch(url, options);
+        const response = await fetch(url, {
+          ...options,
+          signal: abortSignal,
+        });
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -251,54 +411,125 @@ export default class ChatService {
         let currentMessage = "";
         let currentCitations: string[] = [];
         let currentToolCalls: any[] = [];
+        let buffer = ""; // Buffer for incomplete JSON chunks
+
+        const processJsonSegment = (jsonStr: string) => {
+          if (!jsonStr) return;
+
+          try {
+            const data = JSON.parse(jsonStr);
+
+            if (data.message !== undefined) {
+              const messageWithEmojis = data.message.replace(
+                /\\u[\dA-F]{4}/gi,
+                (match: string) =>
+                  String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
+              );
+              currentMessage += messageWithEmojis;
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
+            }
+
+            if (data.tool_calls !== undefined) {
+              // DEBUG: Log raw tool calls from backend (streamMessage)
+              console.log(
+                "[SubAgent Stream] Raw tool_calls received (stream):",
+                {
+                  count: data.tool_calls.length,
+                  tool_calls: data.tool_calls,
+                  full_data: data,
+                }
+              );
+
+              currentToolCalls.push(...data.tool_calls);
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
+            }
+
+            if (data.citations !== undefined) {
+              currentCitations = data.citations;
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations
+              );
+            }
+          } catch (e) {
+            // Try to recover by extracting multiple JSON objects
+            const extracted = ChatService.extractJsonObjects(jsonStr);
+            if (extracted.objects.length > 1) {
+              extracted.objects.forEach(processJsonSegment);
+              if (extracted.remaining.trim()) {
+                console.warn(
+                  "Residual data after recovering JSON chunk:",
+                  extracted.remaining
+                );
+              }
+              return;
+            }
+            console.warn("Failed to parse JSON chunk:", jsonStr, e);
+          }
+        };
 
         if (reader) {
+          const cancelReader = () => {
+            try {
+              reader.cancel();
+            } catch (e) {
+              console.warn("Failed to cancel reader after abort:", e);
+            }
+          };
+
+          if (abortSignal) {
+            if (abortSignal.aborted) {
+              cancelReader();
+              throw new DOMException("Aborted", "AbortError");
+            }
+            abortSignal.addEventListener("abort", cancelReader, { once: true });
+          }
+
           try {
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
 
-              const chunk = decoder.decode(value);
+              const chunk = decoder.decode(value, { stream: true });
+              buffer += chunk;
 
-              // Process chunks (existing logic from lines 92-133)
-              chunk.split(/(?<=})\s*(?={)/).forEach((jsonStr) => {
-                try {
-                  const data = JSON.parse(jsonStr);
+              const extracted = ChatService.extractJsonObjects(buffer);
+              buffer = extracted.remaining;
+              extracted.objects.forEach(processJsonSegment);
+            }
 
-                  if (data.message !== undefined) {
-                    const messageWithEmojis = data.message.replace(
-                      /\\u[\dA-F]{4}/gi,
-                      (match: string) =>
-                        String.fromCodePoint(
-                          parseInt(match.replace(/\\u/g, ""), 16)
-                        )
-                    );
-                    currentMessage += messageWithEmojis;
-                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                  }
+            const extracted = ChatService.extractJsonObjects(buffer);
+            buffer = extracted.remaining;
+            extracted.objects.forEach(processJsonSegment);
 
-                  if (data.tool_calls !== undefined) {
-                    currentToolCalls.push(...data.tool_calls);
-                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                  }
-
-                  if (data.citations !== undefined) {
-                    currentCitations = data.citations;
-                    onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
-                  }
-                } catch (e) {
-                  // Silently handle parsing errors
-                }
-              });
+            if (buffer.trim()) {
+              console.warn("Unprocessed JSON buffer after stream end:", buffer);
             }
           } finally {
             reader.releaseLock();
+            if (abortSignal) {
+              abortSignal.removeEventListener("abort", cancelReader);
+            }
           }
         }
 
         return { message: currentMessage, citations: currentCitations };
-
       } catch (error) {
+        if (
+          abortSignal?.aborted ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
+          throw error;
+        }
         retries++;
         if (retries > maxRetries) {
           throw error;
@@ -306,7 +537,7 @@ export default class ChatService {
 
         // Exponential backoff: 1s, 2s, 4s
         const delay = Math.pow(2, retries - 1) * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
         console.warn(`Retry ${retries}/${maxRetries} after ${delay}ms delay`);
       }
     }
@@ -331,13 +562,13 @@ export default class ChatService {
             const latestMessage = messages[0];
             return {
               message: latestMessage.text,
-              citations: latestMessage.citations || []
+              citations: latestMessage.citations || [],
             };
           }
         }
 
         // Wait 2 seconds before next poll
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (error) {
         console.error("Error polling for final message:", error);
       }
@@ -361,10 +592,10 @@ export default class ChatService {
     );
 
     return response.data.map(
-      (message: { 
-        id: any; 
-        content: any; 
-        type: string; 
+      (message: {
+        id: any;
+        content: any;
+        type: string;
         citations: any;
         has_attachments?: boolean;
         attachments?: any[];
@@ -452,10 +683,10 @@ export default class ChatService {
           method: "POST",
           headers: {
             ...headers,
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            node_ids: selectedNodes
+            node_ids: selectedNodes,
           }),
         }
       );
@@ -469,6 +700,49 @@ export default class ChatService {
       let currentMessage = "";
       let currentCitations: string[] = [];
       let currentToolCalls: any[] = [];
+      let buffer = ""; // Buffer for incomplete JSON chunks
+
+      const processJsonSegment = (jsonStr: string) => {
+        if (!jsonStr) return;
+
+        try {
+          const data = JSON.parse(jsonStr);
+
+          if (data.message !== undefined) {
+            const messageWithEmojis = data.message.replace(
+              /\\u[\dA-F]{4}/gi,
+              (match: string) =>
+                String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
+            );
+            currentMessage += messageWithEmojis;
+            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+          }
+
+          if (data.tool_calls !== undefined) {
+            currentToolCalls.push(...data.tool_calls);
+            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+          }
+
+          if (data.citations !== undefined) {
+            currentCitations = data.citations;
+            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+          }
+        } catch (e) {
+          // Try to recover by extracting multiple JSON objects
+          const extracted = ChatService.extractJsonObjects(jsonStr);
+          if (extracted.objects.length > 1) {
+            extracted.objects.forEach(processJsonSegment);
+            if (extracted.remaining.trim()) {
+              console.warn(
+                "Residual data after recovering JSON chunk in regenerate:",
+                extracted.remaining
+              );
+            }
+            return;
+          }
+          console.warn("Failed to parse JSON chunk in regenerate:", jsonStr, e);
+        }
+      };
 
       if (reader) {
         try {
@@ -476,49 +750,26 @@ export default class ChatService {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value);
+            // Decode chunk and add to buffer
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
 
-            chunk.split(/(?<=})\s*(?={)/).forEach((jsonStr) => {
-              try {
-                const data = JSON.parse(jsonStr);
+            // Extract and process complete JSON objects from buffer
+            const extracted = ChatService.extractJsonObjects(buffer);
+            buffer = extracted.remaining;
+            extracted.objects.forEach(processJsonSegment);
+          }
 
-                if (data.message !== undefined) {
-                  const messageWithEmojis = data.message.replace(
-                    /\\u[\dA-F]{4}/gi,
-                    (match: string) =>
-                      String.fromCodePoint(
-                        parseInt(match.replace(/\\u/g, ""), 16)
-                      )
-                  );
-                  currentMessage += messageWithEmojis;
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
-                }
+          // Process any remaining complete JSON in buffer after stream ends
+          const extracted = ChatService.extractJsonObjects(buffer);
+          buffer = extracted.remaining;
+          extracted.objects.forEach(processJsonSegment);
 
-                if (data.tool_calls !== undefined) {
-                  currentToolCalls.push(...data.tool_calls);
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
-                }
-
-                if (data.citations !== undefined) {
-                  currentCitations = data.citations;
-                  onMessageUpdate(
-                    currentMessage,
-                    currentToolCalls,
-                    currentCitations
-                  );
-                }
-              } catch (e) {
-                // Silently handle parsing errors
-              }
-            });
+          if (buffer.trim()) {
+            console.warn(
+              "Unprocessed JSON buffer after regenerate stream end:",
+              buffer
+            );
           }
         } finally {
           reader.releaseLock();
@@ -555,9 +806,9 @@ export default class ChatService {
           project_ids: projectId ? [projectId] : [],
           agent_ids: [agentId],
         },
-        { 
+        {
           headers: headers,
-          params: isHidden ? { hidden: true } : undefined
+          params: isHidden ? { hidden: true } : undefined,
         }
       );
       return response.data;
@@ -684,6 +935,164 @@ export default class ChatService {
     } catch (error) {
       console.error("Error enhancing prompt:", error);
       throw error;
+    }
+  }
+
+  // Document validation before upload
+  static async validateDocument(
+    conversationId: string,
+    file: File
+  ): Promise<ValidationResponse> {
+    const headers = await getHeaders();
+    const formData = new FormData();
+
+    formData.append('conversation_id', conversationId);
+    formData.append('file_size', file.size.toString());
+    formData.append('file_name', file.name);
+    formData.append('mime_type', file.type);
+
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/validate-document`,
+        formData,
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('Document validation error:', error);
+      throw new Error(
+        error.response?.data?.detail || 'Failed to validate document'
+      );
+    }
+  }
+
+  // Upload document or image
+  static async uploadAttachment(
+    file: File,
+    messageId?: string,
+    onProgress?: (progress: number) => void,
+    signal?: AbortSignal
+  ): Promise<AttachmentUploadResponse> {
+    const headers = await getHeaders();
+    const formData = new FormData();
+
+    formData.append('file', file);
+    if (messageId) {
+      formData.append('message_id', messageId);
+    }
+
+    try {
+      // Create headers without Content-Type so axios can set multipart/form-data with boundary
+      const uploadHeaders = { ...headers };
+      delete (uploadHeaders as any)['Content-Type'];
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/upload`,
+        formData,
+        {
+          headers: uploadHeaders,
+          signal,
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total && onProgress) {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              onProgress(percentCompleted);
+            }
+          },
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('File upload error:', error);
+      throw new Error(
+        error.response?.data?.detail || 'Failed to upload file'
+      );
+    }
+  }
+
+  // Get attachment metadata including token count
+  static async getAttachmentInfo(
+    attachmentId: string
+  ): Promise<AttachmentInfo> {
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/${attachmentId}/info`,
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('Get attachment info error:', error);
+      throw new Error(
+        error.response?.data?.detail || 'Failed to get attachment info'
+      );
+    }
+  }
+
+  // Get context usage for conversation
+  static async getContextUsage(
+    conversationId: string
+  ): Promise<ContextUsageResponse> {
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/context-usage`,
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('Get context usage error:', error);
+      throw new Error(
+        error.response?.data?.detail || 'Failed to get context usage'
+      );
+    }
+  }
+
+  // Download attachment
+  static async downloadAttachment(
+    attachmentId: string,
+    fileName: string
+  ): Promise<void> {
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/media/${attachmentId}/download`,
+        {
+          headers,
+          responseType: 'blob'
+        }
+      );
+
+      // Create download link
+      const url = window.URL.createObjectURL(response.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      console.error('Download attachment error:', error);
+      throw new Error(
+        error.response?.data?.detail || 'Failed to download attachment'
+      );
+    }
+  }
+
+  static async stopMessage(conversationId: string): Promise<void> {
+    try {
+      const headers = await getHeaders();
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/stop/`,
+        {},
+        { headers }
+      );
+    } catch (error) {
+      console.error("Error stopping message:", error);
+      // Don't throw - we still want to clean up even if stop endpoint fails
     }
   }
 }

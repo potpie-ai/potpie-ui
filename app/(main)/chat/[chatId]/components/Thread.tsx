@@ -1,44 +1,56 @@
+"use client";
 import {
   ActionBarPrimitive,
-  BranchPickerPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
-  useComposerRuntime,
-  useMessage,
-  useMessageRuntime,
   useThreadRuntime,
+  useMessage,
+  type ToolCallMessagePartComponent,
 } from "@assistant-ui/react";
-import { useEffect, useMemo, useState, type FC, useCallback } from "react";
-import { useSelector } from "react-redux";
-import { RootState } from "@/lib/state/store";
+import type { PropsWithChildren } from "react";
 import {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  type FC,
+  useCallback,
+} from "react";
+import {
+  AlertTriangle,
   ArrowDownIcon,
   CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   CopyIcon,
-  ExternalLinkIcon,
-  Loader,
   RefreshCwIcon,
+  Loader,
 } from "lucide-react";
-import { cn, isMultimodalEnabled } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { MermaidDiagram } from "@/components/chat/MermaidDiagram";
-import MyCodeBlock from "@/components/codeBlock";
+import {
+  MarkdownText,
+  StandaloneMarkdown,
+} from "@/components/assistant-ui/markdown-text";
+import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
 import MessageComposer from "./MessageComposer";
 import { motion } from "motion/react";
+import {
+  Accordion,
+  AccordionTrigger,
+  AccordionContent,
+  AccordionItem,
+} from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Accordion, AccordionTrigger } from "@/components/ui/accordion";
-import { AccordionContent, AccordionItem } from "@radix-ui/react-accordion";
+import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
+import type { DocumentAttachment } from "@/lib/types/attachment";
 
 interface ThreadProps {
   projectId: string;
   writeDisabled: boolean;
   userImageURL: string;
   conversation_id: string;
+  isSessionResuming: boolean;
+  isBackgroundTaskActive: boolean;
 }
 
 export const Thread: FC<ThreadProps> = ({
@@ -46,26 +58,124 @@ export const Thread: FC<ThreadProps> = ({
   writeDisabled,
   userImageURL,
   conversation_id,
+  isSessionResuming,
+  isBackgroundTaskActive,
 }) => {
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [pendingDocumentAttachments, setPendingDocumentAttachments] = useState<
+    DocumentAttachment[] | null
+  >(null);
+  // Once we show pending docs on a message, store by message id so they stay visible after clearing pending
+  const [committedDocumentAttachmentsByMessageId, setCommittedDocumentAttachmentsByMessageId] =
+    useState<Record<string, DocumentAttachment[]>>({});
   const runtime = useThreadRuntime();
-  const [isLoading, setIsLoading] = useState(true);
-  const { backgroundTaskActive, sessionResuming } = useSelector((state: RootState) => state.chat);
+  const [messagesSnapshot, setMessagesSnapshot] = useState(
+    () => runtime.getState().messages ?? []
+  );
+  const prevLastUserMessageIdRef = useRef<string | null>(null);
 
+  // Subscribe to thread so we see new messages (e.g. just-sent user message)
   useEffect(() => {
-    const unsubscribe = runtime.subscribe(() => {
-      setIsLoading(
-        (runtime.getState().extras as any)?.loading === true || false
-      );
+    setMessagesSnapshot(runtime.getState().messages ?? []);
+    const unsub = runtime.subscribe(() => {
+      setMessagesSnapshot(runtime.getState().messages ?? []);
     });
-    return () => unsubscribe();
+    return unsub;
   }, [runtime]);
 
-  let userMessage = useMemo(() => {
-    return UserMessageWithURL(userImageURL);
-  }, [userImageURL]);
+  // Commit pending only when a *new* user message appears (last user message id changed)
+  // so we don't wrongly attach pending docs to the previous message
+  const lastUserMessageId = useMemo(() => {
+    const messages = messagesSnapshot;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i].id;
+    }
+    return null;
+  }, [messagesSnapshot]);
 
-  // Add loading state for background tasks
-  if (backgroundTaskActive && !sessionResuming) {
+  useEffect(() => {
+    if (
+      lastUserMessageId != null &&
+      lastUserMessageId !== prevLastUserMessageIdRef.current &&
+      pendingDocumentAttachments != null &&
+      pendingDocumentAttachments.length > 0
+    ) {
+      setCommittedDocumentAttachmentsByMessageId((prev) => ({
+        ...prev,
+        [lastUserMessageId]: pendingDocumentAttachments,
+      }));
+      setPendingDocumentAttachments(null);
+    }
+    prevLastUserMessageIdRef.current = lastUserMessageId;
+  }, [lastUserMessageId, pendingDocumentAttachments]);
+
+  // Move useMemo before any early returns to satisfy React Hooks rules
+  const userMessage = useMemo(() => {
+    const UserMessageComponent = () => (
+      <UserMessage
+        userPhotoURL={userImageURL}
+        pendingDocumentAttachments={pendingDocumentAttachments}
+        setPendingDocumentAttachments={setPendingDocumentAttachments}
+        committedDocumentAttachmentsByMessageId={
+          committedDocumentAttachmentsByMessageId
+        }
+        setCommittedDocumentAttachmentsByMessageId={
+          setCommittedDocumentAttachmentsByMessageId
+        }
+      />
+    );
+    UserMessageComponent.displayName = "UserMessageComponent";
+    return UserMessageComponent;
+  }, [
+    userImageURL,
+    pendingDocumentAttachments,
+    committedDocumentAttachmentsByMessageId,
+  ]);
+
+  useEffect(() => {
+    const state = runtime.getState();
+    // Check if messages array exists (even if empty) - this means history load has completed
+    const messagesLoaded = Array.isArray(state.messages);
+
+    // If messages have been loaded (array exists), we're no longer in initial loading
+    // This handles both empty chats ([]) and chats with messages
+    if (messagesLoaded) {
+      setIsInitialLoading(false);
+      return; // Early return if already loaded
+    }
+
+    // Safety timeout: Clear loading after 10 seconds if history never loads
+    // This prevents infinite loading in case of network errors or adapter failures
+    const timeoutId = setTimeout(() => {
+      setIsInitialLoading((prev) => {
+        // Only clear if still loading
+        if (prev) {
+          console.warn("History load timeout - clearing initial loading state");
+          return false;
+        }
+        return prev;
+      });
+    }, 10000);
+
+    // Messages haven't loaded yet, subscribe to changes
+    const unsubscribe = runtime.subscribe(() => {
+      const nextState = runtime.getState();
+      // Once messages array exists (history load completed), clear loading
+      // This works for both empty chats ([]) and chats with messages
+      if (Array.isArray(nextState.messages)) {
+        clearTimeout(timeoutId);
+        setIsInitialLoading(false);
+      }
+    });
+
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
+  }, [runtime]);
+
+  // Loading state for background tasks (not for normal streaming)
+  if (isBackgroundTaskActive && !isSessionResuming) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -81,14 +191,15 @@ export const Thread: FC<ThreadProps> = ({
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">
       <div className="h-full w-full bg-background">
-        {isLoading ? (
+        {isInitialLoading ? (
           <div className="flex items-center justify-center h-full space-x-1 mt-2">
             <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
             <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
             <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
           </div>
         ) : (
-          <div className="bg-background h-full w-full">
+          <>
+            {/* Built-in loading state - no manual state needed */}
             <ThreadPrimitive.If empty>
               <div className="w-full h-full flex justify-center items-center">
                 <ThreadWelcome showSuggestions={!writeDisabled} />
@@ -96,7 +207,7 @@ export const Thread: FC<ThreadProps> = ({
             </ThreadPrimitive.If>
 
             <ThreadPrimitive.If empty={false}>
-              <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)]">
+              <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)] thread-viewport">
                 <div className="pb-36 bg-inherit min-w-96 w-full">
                   <ThreadPrimitive.Messages
                     components={{
@@ -110,118 +221,17 @@ export const Thread: FC<ThreadProps> = ({
 
             <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center justify-center">
               <ThreadScrollToBottom />
-              {
-                <Composer
-                  projectId={projectId}
-                  disabled={writeDisabled}
-                  conversation_id={conversation_id}
-                />
-              }
+              <Composer
+                projectId={projectId}
+                disabled={writeDisabled}
+                conversation_id={conversation_id}
+                setPendingDocumentAttachments={setPendingDocumentAttachments}
+              />
             </div>
-          </div>
+          </>
         )}
       </div>
     </ThreadPrimitive.Root>
-  );
-};
-
-const parseMessage = (message: string) => {
-  if (message == undefined) {
-    return;
-  }
-  const sections = [];
-  let lastIndex = 0;
-  let inCodeBlock = false;
-  let currentLanguage = "";
-  let currentCode = "";
-
-  const lines = message.split("\n");
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const codeBlockMatch = line.match(/^```(\w+)?$/);
-
-    if (codeBlockMatch) {
-      if (!inCodeBlock) {
-        // Start of code block
-        if (lastIndex < i) {
-          // Add text section before code block
-          sections.push({
-            type: "text",
-            content: lines.slice(lastIndex, i).join("\n"),
-          });
-        }
-        inCodeBlock = true;
-        currentLanguage = codeBlockMatch[1] || "";
-        currentCode = "";
-        lastIndex = i + 1;
-      } else {
-        // End of code block
-        sections.push({
-          type: "code",
-          content: currentCode.trim(),
-          language: currentLanguage,
-        });
-        inCodeBlock = false;
-        lastIndex = i + 1;
-      }
-    } else if (inCodeBlock) {
-      currentCode += line + "\n";
-    }
-  }
-
-  if (lastIndex < lines.length) {
-    sections.push({
-      type: "text",
-      content: lines.slice(lastIndex).join("\n"),
-    });
-  }
-
-  return sections;
-};
-
-const CustomMarkdown = ({ content }: { content: string }) => {
-  return <SharedMarkdown content={content} />;
-};
-
-const MarkdownComponent = (content: any) => {
-  const parsedSections = parseMessage(content.content.text);
-
-  return (
-    <ul>
-      {parsedSections?.map((section, index) => {
-        return (
-          <li key={index}>
-            {section.type === "text" && (
-              <CustomMarkdown content={section.content} />
-            )}
-            {section.type === "code" && section.language === "mermaid" && (
-              <motion.div
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: "backInOut", stiffness: 50 }}
-                className="pb-4 text-xs max-w-4xl"
-              >
-                <MermaidDiagram chart={section.content} />
-              </motion.div>
-            )}
-            {section.type === "code" && section.language !== "mermaid" && (
-              <motion.div
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: "backInOut", stiffness: 50 }}
-                className="pb-4 text-xs max-w-4xl"
-              >
-                <MyCodeBlock
-                  code={section.content}
-                  language={section.language || "json"}
-                />
-              </motion.div>
-            )}
-          </li>
-        );
-      })}
-    </ul>
   );
 };
 
@@ -286,66 +296,81 @@ const Composer: FC<{
   projectId: string;
   disabled: boolean;
   conversation_id: string;
-}> = ({ projectId, disabled, conversation_id }) => {
-  const composer = useComposerRuntime();
-  const [key, setKey] = useState(0);
-  const runtime = useThreadRuntime();
-  const [isStreaming, setIsStreaming] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = runtime.subscribe(() => {
-      setIsStreaming(
-        (runtime.getState().extras as any)?.streaming === true || false
-      );
-    });
-    return () => unsubscribe();
-  }, [runtime]);
-
-  const setSelectedNodesInConfig = useCallback(
-    (selectedNodes: any[]) => {
-      composer.setRunConfig({
-        custom: {
-          selectedNodes: selectedNodes,
-        },
-      });
-    },
-    [composer]
-  );
-
+  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
+}> = ({ projectId, disabled, conversation_id, setPendingDocumentAttachments }) => {
   return (
-    <ComposerPrimitive.Root
-      className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out"
-      onSubmit={() => {
-        setKey(key + 1);
-      }}
-    >
+    <ComposerPrimitive.Root className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out">
       <MessageComposer
         projectId={projectId}
         conversation_id={conversation_id}
-        setSelectedNodesInConfig={setSelectedNodesInConfig}
-        disabled={isStreaming || disabled}
-        key={key}
-        input={""}
-        nodes={[]}
+        disabled={disabled}
+        setPendingDocumentAttachments={setPendingDocumentAttachments}
       />
     </ComposerPrimitive.Root>
   );
 };
 
-const UserMessageWithURL = (userPhotoURL: string) => {
-  const node: FC = () => {
-    return UserMessage({ userPhotoURL: userPhotoURL });
-  };
-  return node;
-};
-
-const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
+const UserMessage: FC<{
+  userPhotoURL: string;
+  pendingDocumentAttachments: DocumentAttachment[] | null;
+  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
+  committedDocumentAttachmentsByMessageId: Record<
+    string,
+    DocumentAttachment[]
+  >;
+  setCommittedDocumentAttachmentsByMessageId: React.Dispatch<
+    React.SetStateAction<Record<string, DocumentAttachment[]>>
+  >;
+}> = ({
+  userPhotoURL,
+  pendingDocumentAttachments,
+  setPendingDocumentAttachments,
+  committedDocumentAttachmentsByMessageId,
+  setCommittedDocumentAttachmentsByMessageId,
+}) => {
   const message = useMessage();
-  
-  // Separate text and image content
-  const textContent = message.content.find(c => c.type === "text");
-  const imageContent = message.content.filter(c => c.type === "image");
-  
+  const runtime = useThreadRuntime();
+  const [messagesSnapshot, setMessagesSnapshot] = useState(
+    () => runtime.getState().messages ?? []
+  );
+
+  useEffect(() => {
+    setMessagesSnapshot(runtime.getState().messages ?? []);
+    const unsub = runtime.subscribe(() => {
+      setMessagesSnapshot(runtime.getState().messages ?? []);
+    });
+    return unsub;
+  }, [runtime]);
+
+  const metadataDocumentAttachments =
+    (message.metadata as any)?.custom?.documentAttachments ?? [];
+
+  // For just-sent messages, metadata may not be populated yet; use pending or committed docs
+  const lastUserMessage = useMemo(() => {
+    const messages = messagesSnapshot;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i];
+    }
+    return null;
+  }, [messagesSnapshot]);
+
+  const isLastUserMessage = lastUserMessage?.id === message.id;
+  const committedForThisMessage = committedDocumentAttachmentsByMessageId[message.id];
+  const showPending =
+    metadataDocumentAttachments.length === 0 &&
+    !(committedForThisMessage?.length) &&
+    isLastUserMessage &&
+    (pendingDocumentAttachments?.length ?? 0) > 0;
+
+  const documentAttachments =
+    metadataDocumentAttachments.length > 0
+      ? metadataDocumentAttachments
+      : committedForThisMessage?.length
+        ? committedForThisMessage
+        : showPending
+          ? pendingDocumentAttachments!
+          : [];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -355,30 +380,53 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          {/* Only render image previews if multimodal enabled and images exist */}
-          {isMultimodalEnabled() && imageContent.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {imageContent.map((img: any, index: number) => (
-                <div key={index} className="relative">
-                  <img
-                    src={img.image}
-                    alt={`Uploaded ${index + 1}`}
-                    className="w-16 h-16 object-cover rounded-lg border border-gray-300"
-                  />
-                </div>
-              ))}
+          {/* Document Attachments */}
+          {documentAttachments.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {documentAttachments.map((attachment: any, index: number) => {
+                const tokenCount =
+                  attachment.token_count || attachment.file_metadata?.token_count;
+                const metadata = attachment.metadata || attachment.file_metadata;
+
+                return (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 text-xs bg-white rounded-lg p-2 border"
+                  >
+                    <span className="text-lg">
+                      {attachment.attachment_type === "pdf" && "📄"}
+                      {attachment.attachment_type === "spreadsheet" && "📊"}
+                      {attachment.attachment_type === "code" && "💻"}
+                      {attachment.attachment_type === "document" && "📝"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {attachment.file_name}
+                      </div>
+                      {tokenCount && (
+                        <div className="text-gray-500">
+                          {tokenCount.toLocaleString()} tokens
+                        </div>
+                      )}
+                      {metadata?.page_count && (
+                        <div className="text-gray-400 text-xs">
+                          {metadata.page_count} pages
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
-          
-          {/* Render text content */}
-          {textContent && (
-            <div className="break-words">{(textContent as any).text}</div>
-          )}
-          
-          {/* Fallback: if no custom content, use original */}
-          {imageContent.length === 0 && !textContent && (
-            <MessagePrimitive.Content />
-          )}
+
+          <UserMessageAttachments />
+
+          <MessagePrimitive.Parts
+            components={{
+              Image: () => null,
+            }}
+          />
         </div>
       </MessagePrimitive.Root>
       <Avatar className="mr-4 rounded-md bg-transparent">
@@ -435,93 +483,343 @@ const ThreadScrollToBottom: FC = () => {
   );
 };
 
-const AssistantMessage: FC = () => {
-  const message = useMessage();
-  const runtime = useMessageRuntime();
-  const threadRuntime = useThreadRuntime();
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [text, setText] = useState<string>(
-    (message.content[0] as any)?.text || ""
-  );
-  const [isRunning, setIsRunning] = useState(false);
-  const [accordianTransitionDone, setAccordianTransitionDone] = useState(false);
-  const [accordionValue, setAccordianValue] = useState("tool-results");
-  const [toolcallHeading, setToolcallHeading] = useState("Reasoning ...");
-  const [toolsState, setToolsState] = useState<
-    { id: string; message: string; status: string; details_summary: string }[]
-  >([]);
-  const [isError, setIsError] = useState(false);
+// Custom ToolCall component for assistant-ui
+interface ToolCallStreamState {
+  event_type: string;
+  response: string; // Maps to tool_response from API (status message)
+  details: { summary: string }; // Maps to tool_call_details.summary from API
+  accumulated_response?: string; // Accumulated from stream_part chunks
+  is_complete?: boolean; // Whether this is the final part
+  is_streaming?: boolean; // Whether this tool call is currently streaming
+}
 
+const CustomToolCall: ToolCallMessagePartComponent = ({
+  toolCallId,
+  toolName,
+  argsText,
+  result,
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
+  const threadRuntime = useThreadRuntime();
+
+  // Get the full message to access the complete tool call part with streamState
+  const message = useMessage();
+  const toolCallPart = message.content.find(
+    (c) => c.type === "tool-call" && (c as any).toolCallId === toolCallId
+  ) as any;
+
+  // Extract tool call state - check streamState first (for streaming), then result (for completed)
+  const streamState = toolCallPart?.streamState as
+    | ToolCallStreamState
+    | undefined;
+  const resultState = result as any as ToolCallStreamState | undefined;
+  // Use streamState if available (current streaming state), otherwise use resultState (final state)
+  const currentState = streamState ?? resultState;
+
+  // Track call and result events separately
+  // According to API docs:
+  // - "call" event: tool_response = status message, summary = what tool will do
+  // - "result" event: tool_response = completion message, summary = result details, stream_part = streaming content
+  const [callState, setCallState] = useState<ToolCallStreamState | null>(null);
+  const [resultStateLocal, setResultStateLocal] =
+    useState<ToolCallStreamState | null>(null);
+
+  // Update state based on event_type from the current state
   useEffect(() => {
-    if (isStreaming && text.length < 1200) {
-      setToolcallHeading("Reasoning ...");
+    if (!currentState) return;
+
+    const eventType = currentState.event_type || "";
+
+    if (eventType === "call" || eventType === "delegation_call") {
+      setCallState(currentState);
+    } else if (eventType === "result" || eventType === "delegation_result") {
+      setResultStateLocal(currentState);
     }
-    if (accordianTransitionDone) {
+  }, [currentState]);
+
+  // Use accumulated_response if streaming, otherwise use response
+  const isStreamingFromState = currentState?.is_streaming ?? false;
+  const isComplete =
+    currentState?.is_complete !== undefined ? currentState.is_complete : true;
+  const eventType = currentState?.event_type || "";
+
+  // Status messages (tool_response from API)
+  const callStatusMessage = callState?.response || "";
+  const resultStatusMessage = resultStateLocal?.response || "";
+
+  // Detailed summaries (tool_call_details.summary from API)
+  const callSummary = callState?.details?.summary || "";
+  const resultSummary = resultStateLocal?.details?.summary || "";
+
+  // Streaming content (accumulated stream_part)
+  const streamingContent = resultStateLocal?.accumulated_response || "";
+
+  const isError = toolCallPart?.isError ?? currentState?.event_type === "error";
+  const isCompleted =
+    (eventType === "result" ||
+      eventType === "delegation_result" ||
+      isComplete) &&
+    !isError;
+  const hasCallInfo = !!(callStatusMessage || callSummary);
+  const hasResultInfo = !!(
+    resultStatusMessage ||
+    resultSummary ||
+    streamingContent
+  );
+
+  // Track thread running state
+  const [threadIsRunning, setThreadIsRunning] = useState(false);
+
+  // Subscribe to thread runtime to track streaming state
+  useEffect(() => {
+    if (!message.isLast) {
+      setThreadIsRunning(false);
       return;
     }
-    if (isStreaming && text.length < 1200) {
-      setAccordianValue("tool-results");
-      setToolcallHeading("Reasoning ...");
-    } else if (isStreaming && text.length > 1200) {
-      setAccordianValue("");
-      setToolcallHeading("Reasoning completed");
-      setAccordianTransitionDone(true);
-    }
-  }, [isStreaming, text, accordianTransitionDone]);
 
-  useEffect(() => {
-    if (!message.isLast) return;
+    const unsubscribe = threadRuntime.subscribe(() => {
+      const runtimeState = threadRuntime.getState();
+      const lastMessage = runtimeState.messages.at(-1);
+      const running = lastMessage?.id === message.id && runtimeState.isRunning;
+      setThreadIsRunning(running);
+    });
 
-    const unsubscribeRuntime = runtime.subscribe(() => {
-      setText((runtime.getState().content[0] as any)?.text || "");
-      const tool_calls = runtime
-        .getState()
-        .content.filter((content) => content.type === "tool-call");
+    // Set initial state
+    const initialState = threadRuntime.getState();
+    const lastMessage = initialState.messages.at(-1);
+    const running = lastMessage?.id === message.id && initialState.isRunning;
+    setThreadIsRunning(running);
 
-      const callStates = tool_calls.map((call) => {
-        return {
-          id: call.toolCallId,
-          message: (call.result as any)?.response,
-          status: (call.result as any)?.event_type,
-          details_summary: (call.result as any)?.details?.summary,
-        };
-      });
-      let res: {
-        id: string;
-        message: string;
-        status: string;
-        details_summary: string;
-      }[] = [];
-      for (var i = 0; i < callStates.length; i++) {
-        const curr = callStates[i];
-        const existing_call_index = res.findIndex((val) => curr.id === val.id);
-        if (existing_call_index === -1) {
-          res.push(curr);
-        } else {
-          curr.details_summary =
-            res[existing_call_index].details_summary +
-            "\n" +
-            curr.details_summary;
-          res[existing_call_index] = curr;
+    return unsubscribe;
+  }, [message.isLast, message.id, threadRuntime]);
+
+  // Check if streaming is ongoing for this tool call
+  // Streaming if: has streamState (actively receiving updates), not completed, not error, and thread is running
+  // Also check the is_streaming flag from the state
+  const isToolCallStreaming =
+    (isStreamingFromState || (!!streamState && !isCompleted && !isError)) &&
+    message.isLast &&
+    threadIsRunning;
+
+  // Deduplicate status messages - if result message is same as call message, don't show both
+  const showCallStatus =
+    callStatusMessage && callStatusMessage !== resultStatusMessage;
+  const showResultStatus =
+    resultStatusMessage && resultStatusMessage !== callStatusMessage;
+
+  // Deduplicate summaries - if they're the same, only show one
+  const showCallSummary =
+    callSummary &&
+    callSummary !== resultSummary &&
+    callSummary !== streamingContent;
+  const showResultSummary =
+    resultSummary &&
+    resultSummary !== callSummary &&
+    resultSummary !== streamingContent;
+
+  // Combine all content for the collapsible block
+  const hasAnyContent = hasCallInfo || hasResultInfo || !isCompleted;
+  const displayStatus = showResultStatus
+    ? resultStatusMessage
+    : showCallStatus
+      ? callStatusMessage
+      : toolName;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -5 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="w-full max-w-2xl my-2 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 border-l-4 border-l-neutral-400 dark:border-l-neutral-500 shadow-sm"
+    >
+      {hasAnyContent && (
+        <Accordion
+          type="single"
+          collapsible
+          value={isExpanded ? toolCallId : ""}
+          onValueChange={(value) => {
+            setIsExpanded(value === toolCallId);
+          }}
+          className="w-full"
+        >
+          <AccordionItem value={toolCallId} className="border-0">
+            <AccordionTrigger className="py-2 px-3 hover:no-underline text-xs text-muted-foreground flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                {isError ? (
+                  <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                ) : isCompleted ? (
+                  <CheckIcon className="h-3 w-3 text-green-600 flex-shrink-0" />
+                ) : (
+                  <Loader className="h-3 w-3 animate-spin flex-shrink-0" />
+                )}
+                <span className="text-xs text-foreground/70">
+                  {displayStatus}
+                </span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="pt-0 pb-2 px-3">
+              <div className="space-y-2 text-xs">
+                {/* Call Event - Tool execution info */}
+                {showCallStatus && (
+                  <div className="text-foreground/80 italic">
+                    {callStatusMessage}
+                  </div>
+                )}
+                {showCallSummary && (
+                  <div className="text-foreground/70 bg-white/30 dark:bg-neutral-900/30 rounded px-2 py-1.5 border border-neutral-200/50 dark:border-neutral-700/50">
+                    <StandaloneMarkdown
+                      text={callSummary}
+                      className="markdown-content break-words text-xs"
+                    />
+                  </div>
+                )}
+
+                {/* Result Event - Tool result */}
+                {showResultStatus && (
+                  <div className="text-foreground/90 font-medium">
+                    {resultStatusMessage}
+                  </div>
+                )}
+                {/* Streaming content (from stream_part) */}
+                {streamingContent && (
+                  <div className="text-foreground/90 bg-white/50 dark:bg-neutral-900/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
+                    {isToolCallStreaming && !isCompleted && (
+                      <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
+                    )}
+                    <StandaloneMarkdown
+                      text={streamingContent}
+                      className="markdown-content break-words text-xs"
+                    />
+                  </div>
+                )}
+                {/* Result summary (from tool_call_details.summary) */}
+                {showResultSummary && (
+                  <div className="text-foreground/80 bg-white/30 dark:bg-neutral-900/30 rounded px-2 py-1.5 border border-neutral-200/50 dark:border-neutral-700/50">
+                    <StandaloneMarkdown
+                      text={resultSummary}
+                      className="markdown-content break-words text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      )}
+    </motion.div>
+  );
+};
+
+// Wrapper for tool call that works outside MessagePrimitive.Parts context
+const InlineToolCall: FC<{ part: any }> = ({ part }) => {
+  // CustomToolCall uses useMessage() internally, so it should work
+  // We just need to ensure the part is in the message content
+  const ToolCallComponent = CustomToolCall as any;
+
+  return (
+    <div className="w-full my-4">
+      <ToolCallComponent
+        toolCallId={part.toolCallId}
+        toolName={part.toolName || "tool"}
+        argsText={part.argsText || ""}
+        result={part.result}
+      />
+    </div>
+  );
+};
+
+// Custom inline message content renderer - renders parts in order, interleaving tool calls with text
+const InlineMessageContent: FC = () => {
+  const message = useMessage();
+
+  return (
+    <div className="inline-message-content">
+      {message.content.map((part, index) => {
+        if (part.type === "text") {
+          // Only render non-empty text segments
+          if (!part.text || !part.text.trim()) {
+            return null;
+          }
+          return (
+            <div key={`text-${index}`} className="w-full my-1">
+              <StandaloneMarkdown
+                text={part.text}
+                className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
+              />
+            </div>
+          );
+        } else if (part.type === "tool-call") {
+          const toolCallPart = part as any;
+          return (
+            <InlineToolCall
+              key={`tool-${toolCallPart.toolCallId}`}
+              part={toolCallPart}
+            />
+          );
+        } else if (part.type === "reasoning") {
+          // Reasoning parts are handled by MessagePrimitive.Parts
+          // We'll render them using the Reasoning component directly
+          const reasoningPart = part as any;
+          return (
+            <div key={`reasoning-${index}`} className="w-full my-2">
+              <Reasoning type="reasoning" text={reasoningPart.text || ""} />
+            </div>
+          );
         }
-      }
-      setToolsState(res);
-    });
+        return null;
+      })}
+    </div>
+  );
+};
 
-    const unsubscribeThreadRuntime = threadRuntime.subscribe(() => {
-      setIsStreaming(
-        (threadRuntime.getState().extras as any).streaming || false
-      );
-      setIsError((threadRuntime.getState().extras as any).error || false);
-      threadRuntime.getState().messages.at(-1)?.id === message.id &&
-        setIsRunning(threadRuntime.getState().isRunning);
-    });
+// Custom ToolGroup component - renders tool calls inline with message content
+// This is kept for compatibility but should not be used with InlineMessageContent
+const CustomToolGroup: FC<
+  PropsWithChildren<{ startIndex: number; endIndex: number }>
+> = ({ startIndex, endIndex, children }) => {
+  const message = useMessage();
+  const toolGroupRef = useRef<HTMLDivElement>(null);
 
-    return () => {
-      unsubscribeRuntime();
-      unsubscribeThreadRuntime();
-    };
-  }, [message.isLast, message.id, runtime, threadRuntime]);
+  // Get tool calls from THIS message's content
+  const toolCalls = message.content
+    .slice(startIndex, endIndex + 1)
+    .filter((c) => c.type === "tool-call") as Array<{
+    type: "tool-call";
+    toolCallId: string;
+    result?: any;
+    streamState?: ToolCallStreamState;
+    isError?: boolean;
+  }>;
+
+  // Show tool calls inline - no wrapper accordion, just render them directly
+  if (toolCalls.length === 0) return null;
+
+  return (
+    <div ref={toolGroupRef} className="my-2">
+      <ul className="w-full space-y-1">{children}</ul>
+    </div>
+  );
+};
+
+const AssistantMessage: FC = () => {
+  const message = useMessage();
+  const threadRuntime = useThreadRuntime();
+
+  // Check if message is loading (has no text content yet) and thread is running
+  const textContent = message.content.find((c) => c.type === "text");
+  const hasText =
+    textContent &&
+    textContent.type === "text" &&
+    textContent.text.trim().length > 0;
+
+  // Check if there are any tool calls (reasoning) in the message
+  const hasToolCalls = message.content.some((c) => c.type === "tool-call");
+
+  const isRunning = threadRuntime.getState().isRunning;
+  const isLastMessage = message.isLast;
+
+  // Only show skeleton when running, no text, and no tool calls (no streaming has started)
+  const showSkeleton = isLastMessage && isRunning && !hasText && !hasToolCalls;
 
   return (
     <motion.div
@@ -534,104 +832,18 @@ const AssistantMessage: FC = () => {
           <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
           <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
         </Avatar>
+
         <div className="rounded-md text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
-          {toolsState.length > 0 && !isRunning && (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="mb-4"
-            >
-              <Accordion
-                type="single"
-                collapsible
-                value={accordionValue}
-                onValueChange={() => {
-                  if (accordionValue === "") {
-                    setAccordianValue("tool-results");
-                  } else {
-                    setAccordianValue("");
-                  }
-                }}
-              >
-                <AccordionItem value="tool-results" className="">
-                  <AccordionTrigger className="w-96 p-0 flex flex-row justify-start items-center">
-                    <div className="italic mr-2">{toolcallHeading}</div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="bg-transparent">
-                      <motion.ul
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.5 }}
-                        className="w-full"
-                      >
-                        {toolsState.map((toolState, index) => (
-                          <motion.li
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{
-                              duration: 0.3,
-                              ease: "easeOut",
-                            }}
-                            key={toolState.id}
-                            className="m-1 rounded-sm"
-                          >
-                            <Accordion
-                              type="single"
-                              className=""
-                              collapsible
-                              defaultValue={toolState.id}
-                            >
-                              <AccordionItem value={toolState.id} className="">
-                                <AccordionTrigger className="p-0 flex flex-row justify-start items-center">
-                                  <div>
-                                    {toolState.status === "result" ? (
-                                      <CheckIcon
-                                        className="h-4 w-4"
-                                        color="green"
-                                      />
-                                    ) : (
-                                      <Loader className="h-4 w-4 animate-spin" />
-                                    )}
-                                  </div>
-                                  <div className="italic ml-2 mr-2">
-                                    {toolState.message}
-                                  </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-12 max-h-96 overflow-y-scroll">
-                                  <SharedMarkdown
-                                    content={toolState.details_summary}
-                                    className="markdown-content break-words break-before-avoid stroke-red-600 text-xs"
-                                  />
-                                </AccordionContent>
-                              </AccordionItem>
-                            </Accordion>
-                          </motion.li>
-                        ))}
-                      </motion.ul>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </motion.div>
-          )}
-          {!isRunning && text && (
-            <div>
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                transition={{
-                  height: { duration: 1, ease: "backInOut" },
-                  opacity: { duration: 0.3, delay: 0.5 },
-                }}
-                className="overflow-hidden"
-              >
-                <MarkdownComponent content={{ text: text }} />
-              </motion.div>
+          {/* Error display */}
+          <MessagePrimitive.Error>
+            <div className="text-red-400 mb-2">
+              There was an error while serving your request. Please try again or
+              try with a different model
             </div>
-          )}
-          {(isRunning || !text) && !isError && (
+          </MessagePrimitive.Error>
+
+          {/* Show skeleton when message is loading but has no content yet */}
+          {showSkeleton && (
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -646,22 +858,19 @@ const AssistantMessage: FC = () => {
               <Skeleton key={3} className="h-4 w-1/3"></Skeleton>
             </motion.div>
           )}
-          {isError && (
-            <div className="text-red-400">
-              There was an error while serving your request. Please try again or
-              try with a different model
-            </div>
-          )}
+
+          {/* Render message content inline - tool calls appear between text segments */}
+          <InlineMessageContent />
         </div>
-        {!isRunning && <AssistantActionBar streaming={isStreaming} />}
+
+        <AssistantActionBar />
       </MessagePrimitive.Root>
     </motion.div>
   );
 };
 
-const AssistantActionBar: FC<{ streaming: boolean }> = ({ streaming }) => {
-  const current_message = useMessage();
-
+const AssistantActionBar: FC = () => {
+  // No need for useMessage() - MessagePrimitive.If provides context automatically
   return (
     <ActionBarPrimitive.Root
       autohide="not-last"
@@ -678,40 +887,16 @@ const AssistantActionBar: FC<{ streaming: boolean }> = ({ streaming }) => {
           </MessagePrimitive.If>
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
-      {current_message.isLast && !streaming && (
-        <ActionBarPrimitive.Reload asChild>
-          <TooltipIconButton tooltip="Refresh">
-            <RefreshCwIcon />
-          </TooltipIconButton>
-        </ActionBarPrimitive.Reload>
-      )}
-    </ActionBarPrimitive.Root>
-  );
-};
 
-const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
-  className,
-  ...rest
-}) => {
-  return (
-    <BranchPickerPrimitive.Root
-      hideWhenSingleBranch
-      className={cn("text-black inline-flex items-center text-xs", className)}
-      {...rest}
-    >
-      <BranchPickerPrimitive.Previous asChild>
-        <TooltipIconButton tooltip="Previous">
-          <ChevronLeftIcon />
-        </TooltipIconButton>
-      </BranchPickerPrimitive.Previous>
-      <span className="font-medium">
-        <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
-      </span>
-      <BranchPickerPrimitive.Next asChild>
-        <TooltipIconButton tooltip="Next">
-          <ChevronRightIcon />
-        </TooltipIconButton>
-      </BranchPickerPrimitive.Next>
-    </BranchPickerPrimitive.Root>
+      <MessagePrimitive.If last>
+        <ThreadPrimitive.If running={false}>
+          <ActionBarPrimitive.Reload asChild>
+            <TooltipIconButton tooltip="Refresh">
+              <RefreshCwIcon />
+            </TooltipIconButton>
+          </ActionBarPrimitive.Reload>
+        </ThreadPrimitive.If>
+      </MessagePrimitive.If>
+    </ActionBarPrimitive.Root>
   );
 };

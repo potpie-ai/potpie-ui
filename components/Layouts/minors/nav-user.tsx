@@ -7,6 +7,8 @@ import {
   LogOut,
   Receipt,
   SubscriptIcon,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -39,6 +41,7 @@ export function NavUser({
     name: string;
     email: string;
     avatar: string;
+    emailVerified?: boolean;
   };
 }) {
   const router = useRouter();
@@ -59,10 +62,21 @@ export function NavUser({
                 <AvatarFallback className="rounded-lg">CN</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
+                <div className="flex items-center gap-1">
+                  <span className="truncate font-semibold">{user.name}</span>
+                  {user.emailVerified ? (
+                    <span title="Email verified">
+                      <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                    </span>
+                  ) : (
+                    <span title="Email not verified">
+                      <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                    </span>
+                  )}
+                </div>
+                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <ChevronsUpDown className="ml-auto size-4 text-muted-foreground opacity-90" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -79,11 +93,21 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{user.name}</span>
-                  <span className="truncate text-xs">{user.email}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-xs">{user.email}</span>
+                    {user.emailVerified ? (
+                      <span title="Email verified">
+                        <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                      </span>
+                    ) : (
+                      <span title="Email not verified">
+                        <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem
                 className="hover:bg-accent cursor-pointer"

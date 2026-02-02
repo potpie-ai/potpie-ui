@@ -469,4 +469,3 @@ const ChatV2 = () => {
 };
 
 export default ChatV2;
-

@@ -13,7 +13,7 @@ import type { SSOLoginResponse } from '@/types/auth';
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCustomToken } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCustomToken, sendEmailVerification } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { validateWorkEmail } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
@@ -279,6 +279,18 @@ const Signup = () => {
       // Create user with Firebase
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
+
+      // Send email verification using custom template from Firebase Console
+      try {
+        await sendEmailVerification(user);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Email verification sent to', user.email);
+        }
+      } catch (verificationError: any) {
+        // Log error but don't block signup flow
+        console.error('Failed to send email verification:', verificationError);
+        // Continue with signup even if verification email fails
+      }
 
       // Call signup API
       const userSignup = await AuthService.signupWithEmailPassword(user);

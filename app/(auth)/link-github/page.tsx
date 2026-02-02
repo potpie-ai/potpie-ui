@@ -50,13 +50,13 @@ const LinkGithub = () => {
       const originalUser = auth.currentUser;
       const linkToUserId = originalUser?.uid;
 
-      if (!linkToUserId) {
+      if (!linkToUserId || !originalUser) {
         toast.error("Please sign in with your work email first, then link GitHub.");
         return;
       }
 
       // Link GitHub to the currently signed-in work/SSO user
-      const result = await linkWithPopup(auth.currentUser, provider);
+      const result = await linkWithPopup(originalUser, provider);
 
       // Extract GitHub provider UID from providerData (stable across sessions)
       const githubProviderUid =

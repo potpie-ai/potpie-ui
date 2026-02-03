@@ -47,12 +47,14 @@ const Navbar = ({
   chatTitle,
   disableShare = false,
   className,
+  showTitle: showTitleProp,
 }: {
   showShare?: boolean;
   hidden?: boolean;
   chatTitle?: string;
   disableShare?: boolean;
   className?: string;
+  showTitle?: boolean;
 }) => {
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
@@ -66,7 +68,7 @@ const Navbar = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
-  const showTitle = pathname.split("/").pop() !== "newchat";
+  const showTitle = showTitleProp !== undefined ? showTitleProp : pathname.split("/").pop() !== "newchat";
   const [shareWithLink, setShareWithLink] = useState(false);
   const [accessList, setAccessList] = useState<string[]>([]);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
@@ -276,7 +278,7 @@ const Navbar = ({
 
   if (hidden) return null;
   return (
-    <header className="sticky top-0 z-50 bg-muted border-b border-[#E3E3E3]">
+    <header className="sticky top-0 z-50 bg-[#FFFDFC] border-b border-[#E3E3E3]">
       {showTitle && (
         <div className="flex h-[52px] w-full">
           <div className="flex items-center justify-between w-full px-4 lg:px-6">
@@ -338,7 +340,7 @@ const Navbar = ({
                     <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
+                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-background p-6">
                   <DialogHeader>
                     <DialogTitle className="text-center font-semibold text-xl">
                       Share Chat with Others
@@ -398,7 +400,7 @@ const Navbar = ({
                               {email !== user?.email && (
                                 <Button
                                   onClick={() => handleDelete(email)}
-                                  className="absolute -top-3 -right-3 bg-white rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
+                                  className="absolute -top-3 -right-3 bg-background rounded-full p-1 h-5 w-5 shadow hover:bg-primary-100 text-gray-600 hover:text-primary transition"
                                   aria-label="Delete viewer"
                                 >
                                   <X size={14} />

@@ -3,11 +3,7 @@
 import React, { FC, useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { LucideCopy, LucideCopyCheck, Maximize2 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 interface MermaidDiagramProps {
   chart: string;
@@ -18,20 +14,23 @@ const preprocessMermaidChart = (chart: string): string => {
   try {
     let processedChart = chart;
 
-    console.log('Original chart:', chart);
+    console.log("Original chart:", chart);
+
+    // Preserve the first line (diagram type) to avoid breaking type detection
+    const lines = processedChart.split("\n");
+    const firstLine = lines[0] || "";
 
     // Extract all defined nodes and subgraphs more comprehensively
     const definedNodes = new Set<string>();
     const subgraphs = new Map<string, string[]>();
-    const lines = processedChart.split('\n');
     let currentSubgraph: string | null = null;
 
-    // First pass: identify all nodes and subgraphs
-    for (let i = 0; i < lines.length; i++) {
+    // First pass: identify all nodes and subgraphs (skip first line which contains diagram type)
+    for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
       const trimmedLine = line.trim();
 
-      if (!trimmedLine || trimmedLine.startsWith('%%')) continue;
+      if (!trimmedLine || trimmedLine.startsWith("%%")) continue;
 
       // Track subgraph boundaries
       const subgraphMatch = trimmedLine.match(/^subgraph\s+(\w+)(?:\[.*?\])?/);
@@ -41,17 +40,17 @@ const preprocessMermaidChart = (chart: string): string => {
         continue;
       }
 
-      if (trimmedLine === 'end') {
+      if (trimmedLine === "end") {
         currentSubgraph = null;
         continue;
       }
 
       // Find all node definitions (more comprehensive patterns)
       const nodePatterns = [
-        /(\w+)\[.*?\]/g,  // Node with label: NodeName[Label]
+        /(\w+)\[.*?\]/g, // Node with label: NodeName[Label]
         /(\w+)\(".*?"\)/g, // Node with round brackets: NodeName("Label")
-        /(\w+)\{.*?\}/g,   // Node with curly brackets: NodeName{Label}
-        /(\w+)\>.*?\]/g,   // Flag node: NodeName>Label]
+        /(\w+)\{.*?\}/g, // Node with curly brackets: NodeName{Label}
+        /(\w+)\>.*?\]/g, // Flag node: NodeName>Label]
         /(\w+)\((.*?)\)/g, // Round node: NodeName(Label)
       ];
 
@@ -85,15 +84,22 @@ const preprocessMermaidChart = (chart: string): string => {
       }
     }
 
-    console.log('Defined nodes:', Array.from(definedNodes));
-    console.log('Subgraphs:', Object.fromEntries(subgraphs));
+    console.log("Defined nodes:", Array.from(definedNodes));
+    console.log("Subgraphs:", Object.fromEntries(subgraphs));
 
     // Second pass: fix undefined references
     let fixedChart = processedChart;
     const fixedLines: string[] = [];
 
     let activeSubgraph: string | null = null;
-    for (const line of lines) {
+
+    // Always include the first line (diagram type) unchanged
+    if (firstLine) {
+      fixedLines.push(firstLine);
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
       let fixedLine = line;
       const trimmedLine = line.trim();
 
@@ -104,14 +110,17 @@ const preprocessMermaidChart = (chart: string): string => {
         fixedLines.push(fixedLine);
         continue;
       }
-      if (trimmedLine === 'end') {
+      if (trimmedLine === "end") {
         activeSubgraph = null;
         fixedLines.push(fixedLine);
         continue;
       }
 
       // Skip non-connection lines
-      if (!trimmedLine.includes('-->') && !trimmedLine.includes('--') || trimmedLine.startsWith('%%')) {
+      if (
+        (!trimmedLine.includes("-->") && !trimmedLine.includes("--")) ||
+        trimmedLine.startsWith("%%")
+      ) {
         fixedLines.push(fixedLine);
         continue;
       }
@@ -119,19 +128,30 @@ const preprocessMermaidChart = (chart: string): string => {
       // Handle specific problematic patterns
 
       // Fix: "SDKClient -- HTTP CRUD Calls --> API" where API is a subgraph
-      if (trimmedLine.includes('-- HTTP CRUD Calls -->') && trimmedLine.includes('API')) {
-        if (subgraphs.has('API')) {
-          const nodesInAPI = subgraphs.get('API') || [];
+      if (
+        trimmedLine.includes("-- HTTP CRUD Calls -->") &&
+        trimmedLine.includes("API")
+      ) {
+        if (subgraphs.has("API")) {
+          const nodesInAPI = subgraphs.get("API") || [];
           if (nodesInAPI.length > 0) {
             // Replace with first node in API subgraph
-            fixedLine = fixedLine.replace(/--\s*HTTP\s+CRUD\s+Calls\s*-->\s*API/, `-- "HTTP CRUD Calls" --> ${nodesInAPI[0]}`);
-            console.log(`Auto-fixed: Replaced API subgraph reference with ${nodesInAPI[0]} and quoted label`);
+            fixedLine = fixedLine.replace(
+              /--\s*HTTP\s+CRUD\s+Calls\s*-->\s*API/,
+              `-- "HTTP CRUD Calls" --> ${nodesInAPI[0]}`,
+            );
+            console.log(
+              `Auto-fixed: Replaced API subgraph reference with ${nodesInAPI[0]} and quoted label`,
+            );
           }
         }
       }
 
       // Fix: Multi-word labels in connections should be quoted
-      fixedLine = fixedLine.replace(/--\s*([A-Z][A-Za-z\s]+[A-Za-z])\s*-->/g, '-- "$1" -->');
+      fixedLine = fixedLine.replace(
+        /--\s*([A-Z][A-Za-z\s]+[A-Za-z])\s*-->/g,
+        '-- "$1" -->',
+      );
 
       // Fix: "A0 -- uses -->|"verify_id_token"| firebase_py["firebase.py"]"
       // where firebase_py isn't defined
@@ -139,11 +159,13 @@ const preprocessMermaidChart = (chart: string): string => {
       if (undefinedNodeMatch) {
         const undefinedNode = undefinedNodeMatch[1];
         if (!definedNodes.has(undefinedNode)) {
-          const indent = activeSubgraph ? '  ' : '';
+          const indent = activeSubgraph ? "  " : "";
           const nodeDefLine = `${indent}${undefinedNode}["${undefinedNode}"]`;
           fixedLines.push(nodeDefLine);
           definedNodes.add(undefinedNode);
-          console.log(`Auto-fixed: Added missing node definition for '${undefinedNode}'`);
+          console.log(
+            `Auto-fixed: Added missing node definition for '${undefinedNode}'`,
+          );
         }
       }
 
@@ -160,8 +182,13 @@ const preprocessMermaidChart = (chart: string): string => {
           const nodesInSubgraph = subgraphs.get(toNode) || [];
           if (nodesInSubgraph.length > 0) {
             const replacement = nodesInSubgraph[0];
-            fixedLine = fixedLine.replace(new RegExp(`\\b${toNode}\\b`, 'g'), replacement);
-            console.log(`Auto-fixed: Replaced subgraph '${toNode}' with node '${replacement}'`);
+            fixedLine = fixedLine.replace(
+              new RegExp(`\\b${toNode}\\b`, "g"),
+              replacement,
+            );
+            console.log(
+              `Auto-fixed: Replaced subgraph '${toNode}' with node '${replacement}'`,
+            );
           }
         }
       }
@@ -169,16 +196,16 @@ const preprocessMermaidChart = (chart: string): string => {
       fixedLines.push(fixedLine);
     }
 
-    const result = fixedLines.join('\n');
+    const result = fixedLines.join("\n");
 
     if (result !== chart) {
-      console.log('Chart was auto-fixed');
-      console.log('Fixed chart:', result);
+      console.log("Chart was auto-fixed");
+      console.log("Fixed chart:", result);
     }
 
     return result;
   } catch (error) {
-    console.error('Error in preprocessing:', error);
+    console.error("Error in preprocessing:", error);
     return chart; // Return original if preprocessing fails
   }
 };
@@ -190,7 +217,10 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalSvg, setModalSvg] = useState<string>("");
   const containerRef = useRef<HTMLDivElement>(null);
-  const diagramId = useMemo(() => `mermaid-${Date.now()}-${Math.random().toString(36)}`, []);
+  const diagramId = useMemo(
+    () => `mermaid-${Date.now()}-${Math.random().toString(36)}`,
+    [],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -203,13 +233,13 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
 
         if (!chart || !chart.trim()) {
           if (isMounted) {
-            setError('Empty chart content');
+            setError("Empty chart content");
           }
           return;
         }
 
         // Dynamically import mermaid for code splitting
-        const mermaid = (await import('mermaid')).default;
+        const mermaid = (await import("mermaid")).default;
 
         // Use a simple, unique ID without special characters
         const simpleId = `diagram${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -217,22 +247,90 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
         // Initialize with minimal, safe configuration and better error handling
         mermaid.initialize({
           startOnLoad: false,
-          securityLevel: 'loose',
-          theme: 'default',
+          securityLevel: "loose",
+          theme: "base",
+          themeVariables: {
+            primaryColor: "#f3f4f6",
+            primaryTextColor: "#111827",
+            primaryBorderColor: "#9ca3af",
+            lineColor: "#6b7280",
+            secondaryColor: "#ffffff",
+            tertiaryColor: "#f9fafb",
+            background: "#ffffff",
+            mainBkg: "#f3f4f6",
+            secondBkg: "#e5e7eb",
+            tertiaryBkg: "#f9fafb",
+            altLineColor: "#9ca3af",
+            sectionBkgColor: "#f3f4f6",
+            altSectionBkgColor: "#ffffff",
+            gridColor: "#f3f4f6",
+            loopTextColor: "#111827",
+            noteBkgColor: "#fef3c7",
+            noteTextColor: "#92400e",
+            activationBkgColor: "#dbeafe",
+            activationBorderColor: "#3b82f6",
+            sequenceNumberColor: "#1e40af",
+            actorBkg: "#f3f4f6",
+            actorBorder: "#9ca3af",
+            actorTextColor: "#111827",
+            actorLineColor: "#6b7280",
+            signalColor: "#6b7280",
+            signalTextColor: "#111827",
+            labelBackgroundBkgColor: "#ffffff",
+            labelTextColor: "#111827",
+            labelBoxBorderColor: "#d1d5db",
+            edgeLabelBackground: "#ffffff",
+            clusterBkg: "#f9fafb",
+            clusterBorder: "#d1d5db",
+            defaultLinkColor: "#6b7280",
+            titleColor: "#111827",
+            fontFamily: "monospace",
+            fontSize: "12px",
+          },
           flowchart: {
             useMaxWidth: true,
-            htmlLabels: false
-          },
-          logLevel: 'fatal', // Minimize console output
-          suppressErrorRendering: true // Suppress mermaid's built-in error display since we handle errors
+            htmlLabels: false,
+            padding: 0,
+            look: "neo",
+          } as any,
+          logLevel: "fatal", // Minimize console output
+          suppressErrorRendering: true, // Suppress mermaid's built-in error display since we handle errors
         });
 
         // Clean the chart content and apply intelligent fixes
         let cleanChart = chart.trim();
 
-        // Validate basic mermaid syntax before attempting render
-        if (!cleanChart.match(/^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart)/)) {
-          throw new Error('Invalid mermaid diagram type. Must start with graph, flowchart, etc.');
+        // First, validate basic mermaid syntax before attempting any preprocessing
+        if (
+          !cleanChart.match(
+            /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart)/,
+          )
+        ) {
+          console.error(
+            "Invalid diagram type found in:",
+            cleanChart.substring(0, 200),
+          );
+          throw new Error(
+            "Invalid mermaid diagram type. Must start with graph, flowchart, etc.",
+          );
+        }
+
+        // Inject neo look and dagre layout for flowcharts and graphs
+        if (cleanChart.match(/^(flowchart|graph)\s+/)) {
+          // Check if already has layout directive
+          if (!cleanChart.includes("%%{init:")) {
+            // Insert initialization directive at the beginning
+            cleanChart = cleanChart.replace(
+              /^(flowchart|graph)\s+/,
+              "%%{init: {'layout': 'dagre', 'look': 'neo'}}%%\n$1 ",
+            );
+          } else {
+            // Modify existing init to include layout and look
+            cleanChart = cleanChart.replace(
+              /%%{init:\s*({.*?})}%%/,
+              "%%{init: {$1, 'layout': 'dagre', 'look': 'neo'}}%%",
+            );
+          }
         }
 
         // Apply intelligent preprocessing to fix common syntax issues
@@ -242,83 +340,149 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
         const renderResult = await mermaid.render(simpleId, cleanChart);
 
         if (!renderResult || !renderResult.svg) {
-          throw new Error('Mermaid render returned empty result');
+          throw new Error("Mermaid render returned empty result");
         }
 
         if (isMounted) {
-          // Clean up any problematic elements in the SVG
+          // Clean up any problematic elements in the SVG but preserve colors
           const cleanedSvg = renderResult.svg
-            .replace(/<a[^>]*>/g, '<span>')
-            .replace(/<\/a>/g, '</span>')
-            .replace(/onclick="[^"]*"/g, '')
-            .replace(/onmouseover="[^"]*"/g, '')
-            .replace(/onmouseout="[^"]*"/g, '')
-            .replace(/href="[^"]*"/g, '');
+            .replace(/<a[^>]*>/g, "<span>")
+            .replace(/<\/a>/g, "</span>")
+            .replace(/onclick="[^"]*"/g, "")
+            .replace(/onmouseover="[^"]*"/g, "")
+            .replace(/onmouseout="[^"]*"/g, "")
+            .replace(/href="[^"]*"/g, "")
+            .replace(/stroke-width="[^"]*"/g, 'stroke-width="1"');
 
           // Sanitize SVG with DOMPurify configured for Mermaid diagrams
-          const { default: DOMPurify } = await import('dompurify');
+          const { default: DOMPurify } = await import("dompurify");
           const safeSvg = DOMPurify.sanitize(cleanedSvg, {
             USE_PROFILES: { svg: true, svgFilters: true },
             ADD_TAGS: [
-              'foreignObject', 'switch', 'marker', 'pattern', 'mask', 'clipPath',
-              'metadata', 'title', 'desc', 'defs', 'symbol', 'use'
+              "foreignObject",
+              "switch",
+              "marker",
+              "pattern",
+              "mask",
+              "clipPath",
+              "metadata",
+              "title",
+              "desc",
+              "defs",
+              "symbol",
+              "use",
             ],
             ADD_ATTR: [
-              'style', 'transform', 'font-family', 'font-size', 'font-weight',
-              'text-anchor', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray',
-              'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
-              'width', 'height', 'viewBox', 'preserveAspectRatio', 'opacity',
-              'fill-opacity', 'stroke-opacity', 'marker-start', 'marker-mid', 'marker-end',
-              'clip-path', 'mask', 'filter', 'dominant-baseline', 'alignment-baseline',
-              'baseline-shift', 'text-decoration', 'letter-spacing', 'word-spacing',
-              'direction', 'unicode-bidi'
+              "style",
+              "transform",
+              "font-family",
+              "font-size",
+              "font-weight",
+              "text-anchor",
+              "fill",
+              "stroke",
+              "stroke-width",
+              "stroke-dasharray",
+              "d",
+              "cx",
+              "cy",
+              "r",
+              "rx",
+              "ry",
+              "x",
+              "y",
+              "x1",
+              "y1",
+              "x2",
+              "y2",
+              "width",
+              "height",
+              "viewBox",
+              "preserveAspectRatio",
+              "opacity",
+              "fill-opacity",
+              "stroke-opacity",
+              "marker-start",
+              "marker-mid",
+              "marker-end",
+              "clip-path",
+              "mask",
+              "filter",
+              "dominant-baseline",
+              "alignment-baseline",
+              "baseline-shift",
+              "text-decoration",
+              "letter-spacing",
+              "word-spacing",
+              "direction",
+              "unicode-bidi",
             ],
-            FORBID_TAGS: ['script', 'object', 'embed', 'link', 'meta', 'base'],
-            FORBID_ATTR: ['onload', 'onerror', 'onmouseover', 'onclick', 'href', 'xlink:href']
+            FORBID_TAGS: ["script", "object", "embed", "link", "meta", "base"],
+            FORBID_ATTR: [
+              "onload",
+              "onerror",
+              "onmouseover",
+              "onclick",
+              "href",
+              "xlink:href",
+            ],
           });
 
           // Verify we have a valid SVG
-          if (!safeSvg.includes('<svg')) {
-            throw new Error('Rendered result is not a valid SVG');
+          if (!safeSvg.includes("<svg")) {
+            throw new Error("Rendered result is not a valid SVG");
           }
 
           setSvg(safeSvg);
           setError(null);
         }
-
       } catch (err) {
-        console.error('Mermaid render error:', err);
-        console.error('Chart content that failed:', chart);
-        console.error('Error type:', typeof err, err?.constructor?.name);
+        console.error("Mermaid render error:", err);
+        console.error("Chart content that failed:", chart);
+        console.error("Error type:", typeof err, err?.constructor?.name);
 
         if (isMounted) {
-          let errorMessage = 'Failed to render mermaid diagram';
-          let detailedError = '';
+          let errorMessage = "Failed to render mermaid diagram";
+          let detailedError = "";
 
           if (err instanceof Error) {
             detailedError = err.message;
 
             // Handle specific Mermaid parsing errors more gracefully
-            if (err.message.includes('Parse error') || err.message.includes('Syntax error')) {
-              errorMessage = 'Invalid mermaid syntax - check node references and connections';
-            } else if (err.message.includes('Cannot read properties of null') || err.message.includes('Cannot read properties of undefined')) {
-              errorMessage = 'Mermaid parsing error - likely undefined node or edge reference';
-            } else if (err.message.includes('Invalid mermaid diagram type')) {
-              errorMessage = 'Diagram must start with: graph, flowchart, sequenceDiagram, etc.';
-            } else if (err.message.includes('Rendered result is not a valid SVG')) {
-              errorMessage = 'Mermaid failed to generate valid SVG output';
-            } else if (err.message.includes('Mermaid render returned empty result')) {
-              errorMessage = 'Mermaid returned empty result - check diagram syntax';
+            if (
+              err.message.includes("Parse error") ||
+              err.message.includes("Syntax error")
+            ) {
+              errorMessage =
+                "Invalid mermaid syntax - check node references and connections";
+            } else if (
+              err.message.includes("Cannot read properties of null") ||
+              err.message.includes("Cannot read properties of undefined")
+            ) {
+              errorMessage =
+                "Mermaid parsing error - likely undefined node or edge reference";
+            } else if (err.message.includes("Invalid mermaid diagram type")) {
+              errorMessage =
+                "Diagram must start with: graph, flowchart, sequenceDiagram, etc.";
+            } else if (
+              err.message.includes("Rendered result is not a valid SVG")
+            ) {
+              errorMessage = "Mermaid failed to generate valid SVG output";
+            } else if (
+              err.message.includes("Mermaid render returned empty result")
+            ) {
+              errorMessage =
+                "Mermaid returned empty result - check diagram syntax";
             } else {
               errorMessage = `Mermaid error: ${err.message}`;
             }
           } else {
             // Handle non-Error objects
-            errorMessage = 'Unknown mermaid rendering error';
+            errorMessage = "Unknown mermaid rendering error";
             detailedError = String(err);
           }
 
-          console.warn('Setting error state:', errorMessage);
+          console.warn("Setting error state:", errorMessage);
           setError(errorMessage);
         }
       }
@@ -336,27 +500,47 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
   // Keyboard shortcuts effect
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isModalOpen) {
+      if (event.key === "Escape" && isModalOpen) {
         setIsModalOpen(false);
       }
     };
 
     if (isModalOpen) {
-      document.addEventListener('keydown', handleKeydown);
+      document.addEventListener("keydown", handleKeydown);
       // Prevent body scroll when modal is open
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     }
 
     return () => {
-      document.removeEventListener('keydown', handleKeydown);
-      document.body.style.overflow = '';
+      document.removeEventListener("keydown", handleKeydown);
+      document.body.style.overflow = "";
     };
   }, [isModalOpen]);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(chart);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(chart);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy to clipboard:", err);
+      // Fallback for older browsers or when clipboard API is not available
+      const textArea = document.createElement("textarea");
+      textArea.value = chart;
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (fallbackErr) {
+        console.error("Fallback copy failed:", fallbackErr);
+      } finally {
+        document.body.removeChild(textArea);
+      }
+    }
   };
 
   const handleModalOpen = async () => {
@@ -364,66 +548,192 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
 
     // Re-render diagram for modal with larger dimensions
     try {
-      const mermaid = (await import('mermaid')).default;
+      const mermaid = (await import("mermaid")).default;
       const simpleId = `modal-diagram${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
       // Configure for larger modal rendering with explicit sizing
       await mermaid.initialize({
         startOnLoad: false,
-        securityLevel: 'loose',
-        theme: 'default',
+        securityLevel: "loose",
+        theme: "base",
+        themeVariables: {
+          primaryColor: "#f3f4f6",
+          primaryTextColor: "#111827",
+          primaryBorderColor: "#9ca3af",
+          lineColor: "#6b7280",
+          secondaryColor: "#ffffff",
+          tertiaryColor: "#f9fafb",
+          background: "#ffffff",
+          mainBkg: "#f3f4f6",
+          secondBkg: "#e5e7eb",
+          tertiaryBkg: "#f9fafb",
+          altLineColor: "#9ca3af",
+          sectionBkgColor: "#f3f4f6",
+          altSectionBkgColor: "#ffffff",
+          gridColor: "#f3f4f6",
+          loopTextColor: "#111827",
+          noteBkgColor: "#fef3c7",
+          noteTextColor: "#92400e",
+          activationBkgColor: "#dbeafe",
+          activationBorderColor: "#3b82f6",
+          sequenceNumberColor: "#1e40af",
+          actorBkg: "#f3f4f6",
+          actorBorder: "#9ca3af",
+          actorTextColor: "#111827",
+          actorLineColor: "#6b7280",
+          signalColor: "#6b7280",
+          signalTextColor: "#111827",
+          labelBackgroundBkgColor: "#ffffff",
+          labelTextColor: "#111827",
+          labelBoxBorderColor: "#d1d5db",
+          edgeLabelBackground: "#ffffff",
+          clusterBkg: "#f9fafb",
+          clusterBorder: "#d1d5db",
+          defaultLinkColor: "#6b7280",
+          titleColor: "#111827",
+          fontFamily: "monospace",
+          fontSize: "12px",
+        },
         flowchart: {
           htmlLabels: false,
-          useMaxWidth: false
-        },
-        logLevel: 'fatal',
-        suppressErrorRendering: true
+          useMaxWidth: false,
+          padding: 0,
+          look: "neo",
+        } as any,
+        logLevel: "fatal",
+        suppressErrorRendering: true,
       });
 
       // Use the same cleaned chart logic with preprocessing
       let cleanChart = preprocessMermaidChart(chart.trim());
 
+      // First validate basic mermaid syntax before any other processing
+      if (
+        !cleanChart.match(
+          /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart)/,
+        )
+      ) {
+        console.error(
+          "Invalid diagram type in modal:",
+          cleanChart.substring(0, 200),
+        );
+        throw new Error(
+          "Invalid mermaid diagram type. Must start with graph, flowchart, etc.",
+        );
+      }
+
+      // Inject neo look and dagre layout for flowcharts and graphs
+      if (cleanChart.match(/^(flowchart|graph)\s+/)) {
+        // Check if already has layout directive
+        if (!cleanChart.includes("%%{init:")) {
+          // Insert initialization directive at the beginning
+          cleanChart = cleanChart.replace(
+            /^(flowchart|graph)\s+/,
+            "%%{init: {'layout': 'dagre', 'look': 'neo'}}%%\n$1 ",
+          );
+        } else {
+          // Modify existing init to include layout and look
+          cleanChart = cleanChart.replace(
+            /%%{init:\s*({.*?})}%%/,
+            "%%{init: {$1, 'layout': 'dagre', 'look': 'neo'}}%%",
+          );
+        }
+      }
+
       const { svg: renderedSvg } = await mermaid.render(simpleId, cleanChart);
 
       let cleanedSvg = renderedSvg
-        .replace(/<a[^>]*>/g, '<span>')
-        .replace(/<\/a>/g, '</span>')
-        .replace(/onclick="[^"]*"/g, '')
-        .replace(/onmouseover="[^"]*"/g, '')
-        .replace(/onmouseout="[^"]*"/g, '')
-        .replace(/href="[^"]*"/g, '');
+        .replace(/<a[^>]*>/g, "<span>")
+        .replace(/<\/a>/g, "</span>")
+        .replace(/onclick="[^"]*"/g, "")
+        .replace(/onmouseover="[^"]*"/g, "")
+        .replace(/onmouseout="[^"]*"/g, "")
+        .replace(/href="[^"]*"/g, "")
+        .replace(/stroke-width="[^"]*"/g, 'stroke-width="1"');
 
       // Sanitize SVG with DOMPurify configured for Mermaid diagrams
-      const { default: DOMPurify } = await import('dompurify');
+      const { default: DOMPurify } = await import("dompurify");
       const safeModalSvg = DOMPurify.sanitize(cleanedSvg, {
         USE_PROFILES: { svg: true, svgFilters: true },
         ADD_TAGS: [
-          'foreignObject', 'switch', 'marker', 'pattern', 'mask', 'clipPath',
-          'metadata', 'title', 'desc', 'defs', 'symbol', 'use'
+          "foreignObject",
+          "switch",
+          "marker",
+          "pattern",
+          "mask",
+          "clipPath",
+          "metadata",
+          "title",
+          "desc",
+          "defs",
+          "symbol",
+          "use",
         ],
         ADD_ATTR: [
-          'style', 'transform', 'font-family', 'font-size', 'font-weight',
-          'text-anchor', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray',
-          'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
-          'width', 'height', 'viewBox', 'preserveAspectRatio', 'opacity',
-          'fill-opacity', 'stroke-opacity', 'marker-start', 'marker-mid', 'marker-end',
-          'clip-path', 'mask', 'filter', 'dominant-baseline', 'alignment-baseline',
-          'baseline-shift', 'text-decoration', 'letter-spacing', 'word-spacing',
-          'direction', 'unicode-bidi'
+          "style",
+          "transform",
+          "font-family",
+          "font-size",
+          "font-weight",
+          "text-anchor",
+          "fill",
+          "stroke",
+          "stroke-width",
+          "stroke-dasharray",
+          "d",
+          "cx",
+          "cy",
+          "r",
+          "rx",
+          "ry",
+          "x",
+          "y",
+          "x1",
+          "y1",
+          "x2",
+          "y2",
+          "width",
+          "height",
+          "viewBox",
+          "preserveAspectRatio",
+          "opacity",
+          "fill-opacity",
+          "stroke-opacity",
+          "marker-start",
+          "marker-mid",
+          "marker-end",
+          "clip-path",
+          "mask",
+          "filter",
+          "dominant-baseline",
+          "alignment-baseline",
+          "baseline-shift",
+          "text-decoration",
+          "letter-spacing",
+          "word-spacing",
+          "direction",
+          "unicode-bidi",
         ],
-        FORBID_TAGS: ['script', 'object', 'embed', 'link', 'meta', 'base'],
-        FORBID_ATTR: ['onload', 'onerror', 'onmouseover', 'onclick', 'href', 'xlink:href']
+        FORBID_TAGS: ["script", "object", "embed", "link", "meta", "base"],
+        FORBID_ATTR: [
+          "onload",
+          "onerror",
+          "onmouseover",
+          "onclick",
+          "href",
+          "xlink:href",
+        ],
       });
 
       // Modify SVG for better scaling in modal
       const scaledSvg = safeModalSvg.replace(
         /<svg([^>]*)>/,
-        '<svg$1 style="width: 100%; height: auto; max-width: none; transform: scale(1.5); transform-origin: center;">'
+        '<svg$1 style="width: 100%; height: auto; max-width: none; transform: scale(1.5); transform-origin: center;">',
       );
 
       setModalSvg(scaledSvg);
     } catch (err) {
-      console.error('Error rendering modal diagram:', err);
+      console.error("Error rendering modal diagram:", err);
       // Fall back to regular SVG
       setModalSvg(svg);
     }
@@ -433,9 +743,14 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
     return (
       <div className="relative bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-yellow-800">Mermaid Diagram - Fallback View</span>
+          <span className="text-sm font-semibold text-yellow-800">
+            Mermaid Diagram - Fallback View
+          </span>
           <button
-            onClick={handleCopy}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
             className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors"
           >
             Copy Source
@@ -445,7 +760,9 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
           <p className="font-medium mb-1">Unable to render diagram:</p>
           <p className="mb-2">{error}</p>
           <details className="cursor-pointer">
-            <summary className="text-xs font-medium hover:text-yellow-800">View diagram source</summary>
+            <summary className="text-xs font-medium hover:text-yellow-800">
+              View diagram source
+            </summary>
             <pre className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded overflow-x-auto mt-2 whitespace-pre-wrap">
               {chart}
             </pre>
@@ -456,9 +773,14 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
         <div className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded">
           <p className="font-medium mb-1">Common fixes:</p>
           <ul className="list-disc list-inside space-y-1">
-            <li>Check that all node names are defined before referencing them</li>
+            <li>
+              Check that all node names are defined before referencing them
+            </li>
             <li>Verify arrows point to existing nodes (not subgraph names)</li>
-            <li>Ensure diagram starts with: graph, flowchart, sequenceDiagram, etc.</li>
+            <li>
+              Ensure diagram starts with: graph, flowchart, sequenceDiagram,
+              etc.
+            </li>
             <li>Check for typos in node names and connections</li>
           </ul>
         </div>
@@ -467,85 +789,99 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
   }
 
   return (
-    <div ref={containerRef} className="relative bg-gray-100 rounded-lg shadow-lg mt-4">
-      <div className="flex justify-between items-center bg-gray-300 px-4 py-1 rounded-t-lg">
-        <span className="text-sm font-semibold text-gray-800">Mermaid Diagram</span>
-        <div className="flex gap-2">
+    <div
+      ref={containerRef}
+      className="relative bg-white rounded-none shadow-none mt-4"
+    >
+      <div className="relative">
+        <div
+          className="p-4 bg-white rounded-none overflow-x-auto mermaid-diagram"
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+        <div className="absolute top-2 right-2 flex gap-1 z-10">
+          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Expand diagram to full screen"
+                className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <Maximize2 className="size-3" />
+              </button>
+            </DialogTrigger>
+            <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] p-0 overflow-hidden">
+              <div className="flex flex-col h-full min-h-[80vh] sm:min-h-[70vh]">
+                <div className="absolute top-2 right-2 flex gap-1 z-10">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopy();
+                    }}
+                    className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800"
+                  >
+                    {copied ? (
+                      <LucideCopyCheck className="size-3" />
+                    ) : (
+                      <LucideCopy className="size-3" />
+                    )}
+                  </button>
+                </div>
+                <div
+                  className="flex-1 p-6 bg-white overflow-auto min-h-0 flex justify-center items-center"
+                  style={{
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  <div
+                    className="flex justify-center items-center"
+                    style={{
+                      minWidth: "100%",
+                      minHeight: "100%",
+                      padding: "40px",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: modalSvg || svg }}
+                  />
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <button
-            onClick={handleModalOpen}
-            aria-label="Expand diagram to full screen"
-            className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <Maximize2 className="size-4"/>
-          </button>
-          <button
-            onClick={handleCopy}
-            className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors text-gray-800"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
+            className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800"
           >
             {copied ? (
-              <>
-                <LucideCopyCheck className="size-4"/> <span className="ml-1">Copied!</span>
-              </>
+              <LucideCopyCheck className="size-3" />
             ) : (
-              <>
-                <LucideCopy className="size-4"/> <span className="ml-1">Copy</span>
-              </>
+              <LucideCopy className="size-3" />
             )}
           </button>
         </div>
       </div>
-      <div
-        className="p-4 bg-white rounded-b-lg overflow-x-auto mermaid-diagram"
-        dangerouslySetInnerHTML={{ __html: svg }}
-      />
-
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent
-          className="max-w-[98vw] max-h-[98vh] w-[98vw] h-[98vh] p-0 overflow-hidden"
-        >
-          <div className="flex flex-col h-full min-h-[80vh] sm:min-h-[70vh]">
-            <div className="flex justify-between items-center bg-gray-300 px-3 sm:px-4 py-2 flex-shrink-0 relative">
-              <span className="text-xs sm:text-sm font-semibold text-gray-800 truncate">
-                Mermaid Diagram - Full Screen
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleCopy}
-                  className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors text-gray-800"
-                >
-                  {copied ? (
-                    <div className="flex gap-1 sm:gap-2 items-center">
-                      <LucideCopyCheck className="size-3 sm:size-4"/>
-                      <span className="hidden sm:inline">Copied!</span>
-                    </div>
-                  ) : (
-                    <div className="flex gap-1 sm:gap-2 items-center">
-                      <LucideCopy className="size-3 sm:size-4"/>
-                      <span className="hidden sm:inline">Copy</span>
-                    </div>
-                  )}
-                </button>
-              </div>
-            </div>
-            <div
-              className="flex-1 p-6 bg-white overflow-auto min-h-0 flex justify-center items-center"
-              style={{
-                WebkitOverflowScrolling: 'touch' // Smooth scrolling on mobile
-              }}
-            >
-              <div
-                className="flex justify-center items-center"
-                style={{
-                  minWidth: '100%',
-                  minHeight: '100%',
-                  padding: '40px' // Extra padding to accommodate scaling
-                }}
-                dangerouslySetInnerHTML={{ __html: modalSvg || svg }}
-              />
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <style jsx>{`
+        .mermaid-diagram svg {
+          filter: none !important;
+        }
+        .mermaid-diagram svg * {
+          stroke-width: 1px !important;
+          stroke-dasharray: none !important;
+          opacity: 1 !important;
+        }
+        .mermaid-diagram svg text {
+          font-family: monospace !important;
+          font-size: 12px !important;
+        }
+        .mermaid-diagram svg .edgePath path,
+        .mermaid-diagram svg .edgePath .path {
+          stroke-width: 1px !important;
+          fill: none !important;
+        }
+        .mermaid-diagram svg .linePath {
+          stroke-width: 1px !important;
+        }
+      `}</style>
     </div>
   );
 };

@@ -137,7 +137,7 @@ const ExclusionSummary = ({ filters, onRemoveDirectory, onRemoveFile, onRemoveEx
 
     if (!hasExclusions) {
         return (
-            <div className="p-4 rounded-lg border border-dashed border-gray-200 bg-gray-50/50">
+            <div className="p-4 rounded-lg border border-dashed border-gray-200 bg-background/50">
                 <p className="text-sm text-gray-400 text-center">
                     No exclusions configured. All files will be parsed.
                 </p>
@@ -146,7 +146,7 @@ const ExclusionSummary = ({ filters, onRemoveDirectory, onRemoveFile, onRemoveEx
     }
 
     return (
-        <div className="rounded-lg border border-gray-200 bg-gray-50/50 overflow-hidden">
+        <div className="rounded-lg border border-gray-200 bg-background/50 overflow-hidden">
             <div className="flex items-center justify-between px-4 pt-4 pb-3">
                 <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
                     Exclusion Summary
@@ -162,7 +162,7 @@ const ExclusionSummary = ({ filters, onRemoveDirectory, onRemoveFile, onRemoveEx
 
             {/* File Count Summary */}
             {totalFiles !== undefined && filesToParse !== undefined && (
-                <div className="mx-4 mb-3 px-3 py-1.5 rounded-md bg-gray-50 border border-gray-200">
+                <div className="mx-4 mb-3 px-3 py-1.5 rounded-md bg-background border border-gray-200">
                     <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-3">
                             <span className="text-gray-500">Total: <span className="font-medium text-gray-700">{totalFiles.toLocaleString()}</span></span>
@@ -371,7 +371,7 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
     };
 
     return (
-        <div className="w-full border rounded-md p-3 bg-white mt-4 shadow-sm">
+        <div className="w-full border rounded-md p-3 bg-background mt-4 shadow-sm">
             <Collapsible open={isOpen} onOpenChange={setIsOpen}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -422,7 +422,7 @@ const FileSelector: React.FC<FileSelectorProps> = ({ filters, setFilters, repoNa
                                 <FolderTree className="h-3.5 w-3.5" />
                                 File Tree
                             </h4>
-                            <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[400px] border rounded-lg bg-gray-50/30">
+                            <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[400px] border rounded-lg bg-background/30">
                                 {repoName && branchName ? (
                                     <FileTree
                                         repoName={repoName}

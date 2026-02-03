@@ -61,6 +61,10 @@ const config = {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
   			},
+  			'accent-color': 'var(--accent-color)',
+  			'primary-color': 'var(--primary-color)',
+  			'foreground-color': 'var(--foreground-color)',
+  			'muted-text': 'var(--muted-text)',
   			sidebar: {
   				DEFAULT: 'hsl(var(--sidebar-background))',
   				foreground: 'hsl(var(--sidebar-foreground))',

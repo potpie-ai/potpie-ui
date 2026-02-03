@@ -18,6 +18,10 @@ import { useEffect, useCallback, useMemo, useState, useRef } from "react";
 import ChatService from "@/services/ChatService";
 import { SessionInfo } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/lib/state/store";
+import { clearPendingMessage } from "@/lib/state/Reducers/chat";
+import { toast } from "sonner";
 
 // Type for tool call result structure from backend
 interface ToolCallResult {
@@ -26,24 +30,12 @@ interface ToolCallResult {
   details: {
     summary: string;
   };
-  accumulated_response?: string; // Accumulated from stream_part chunks
-  is_complete?: boolean; // Whether this is the final part
-  is_streaming?: boolean; // Whether this tool call is currently streaming
 }
 
 interface StreamingToolCallPart extends ToolCallMessagePart {
   streamState?: ToolCallResult;
   result?: ToolCallResult;
   isError?: boolean;
-  timestamp?: number; // When this tool call was first created
-  lastUpdated?: number; // When this tool call was last updated
-}
-
-// Content part with timestamp for ordering
-interface TimestampedContentPart {
-  part: TextMessagePart | StreamingToolCallPart;
-  timestamp: number;
-  type: "text" | "tool-call";
 }
 
 // Type for backend message structure
@@ -60,20 +52,193 @@ interface BackendMessage {
   created_at?: string;
 }
 
+// Resume session info interface
+interface ResumeSessionInfo {
+  sessionId: string;
+  cursor: string;
+}
+
+// Streaming state interface (for ongoing streams)
+interface StreamingState {
+  sessionId: string | null;
+  currentCursor: string;
+  isStreaming: boolean;
+  isReconnecting: boolean;
+  reconnectAttempts: number;
+}
+
 // Return type for the hook
 export interface ChatRuntimeResult {
   runtime: ReturnType<typeof useLocalRuntime>;
-  isSessionResuming: boolean;
   isBackgroundTaskActive: boolean;
 }
 
 // Create the adapter that bridges our Redis backend to assistant-ui
 const createChatAdapter = (
   chatId: string,
-  isBackgroundTaskActiveRef: React.MutableRefObject<boolean>
+  isBackgroundTaskActiveRef: React.MutableRefObject<boolean>,
+  streamingStateRef: React.MutableRefObject<StreamingState>,
+  resumeSessionRef: React.MutableRefObject<ResumeSessionInfo | null>
 ): ChatModelAdapter => {
   return {
     async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
+      console.log("[Adapter] run() called with messages:", messages.length);
+
+      // Check if this is a resume run FIRST
+      const resumeSession = resumeSessionRef.current;
+
+      // inside createChatAdapter -> run function
+      if (resumeSession) {
+        const { sessionId, cursor } = resumeSession;
+        resumeSessionRef.current = null;
+
+        // 1. A simple queue to bridge callback -> generator
+        const queue: any[] = [];
+        let resolve: ((value: any) => void) | null = null;
+        let finished = false;
+
+        const pushToQueue = (
+          accumulatedText: string,
+          toolCallsMap: Map<string, any>
+        ) => {
+          const content: (TextMessagePart | ToolCallMessagePart)[] = [];
+
+          // Reasoning (tool calls) first, then text - reasoning appears at top
+          // Ensure tool calls are valid before pushing
+          for (const tool of toolCallsMap.values()) {
+            if (tool.toolCallId && tool.toolName) {
+              content.push(tool);
+            }
+          }
+
+          // Always ensure text is a valid string, even if empty
+          content.push({ type: "text", text: accumulatedText || "" });
+
+          const chunk = { content };
+          if (resolve) {
+            resolve(chunk);
+            resolve = null;
+          } else {
+            queue.push(chunk);
+          }
+        };
+
+        // Map to accumulate tool calls during resume
+        const accumulatedToolCalls = new Map<string, StreamingToolCallPart>();
+
+        // 2. Start the backend call
+        ChatService.resumeWithCursor(
+          chatId,
+          sessionId,
+          cursor,
+          (message, tool_calls) => {
+            // Process tool calls into the map
+            tool_calls.forEach((toolCallJson) => {
+              try {
+                const parsed =
+                  typeof toolCallJson === "string"
+                    ? JSON.parse(toolCallJson)
+                    : toolCallJson;
+                const {
+                  call_id,
+                  tool_name,
+                  tool_call_details,
+                  event_type,
+                  tool_response,
+                } = parsed;
+
+                const rawArgs = tool_call_details?.arguments;
+
+                const previous =
+                  accumulatedToolCalls.get(call_id) ??
+                  ({
+                    type: "tool-call" as const,
+                    toolCallId: call_id,
+                    toolName: tool_name,
+                    args:
+                      typeof rawArgs === "object" && rawArgs !== null
+                        ? rawArgs
+                        : {},
+                    argsText:
+                      typeof rawArgs === "string"
+                        ? rawArgs
+                        : JSON.stringify(rawArgs ?? {}, null, 2),
+                  } as StreamingToolCallPart);
+
+                const argsValue =
+                  rawArgs === undefined
+                    ? previous.args
+                    : typeof rawArgs === "object" && rawArgs !== null
+                      ? rawArgs
+                      : {};
+
+                const argsTextValue =
+                  rawArgs === undefined
+                    ? previous.argsText
+                    : typeof rawArgs === "string"
+                      ? rawArgs
+                      : JSON.stringify(rawArgs, null, 2);
+
+                const streamState: ToolCallResult = {
+                  event_type,
+                  response: tool_response,
+                  details: tool_call_details,
+                };
+
+                const next: StreamingToolCallPart = {
+                  ...previous,
+                  streamState,
+                  toolName: tool_name,
+                  args: argsValue,
+                  argsText: argsTextValue,
+                };
+
+                if (event_type === "result" || event_type === "error") {
+                  next.result = streamState;
+                  next.isError = event_type === "error";
+                } else {
+                  next.result = undefined;
+                  next.isError = false;
+                }
+
+                accumulatedToolCalls.set(call_id, next);
+              } catch (e) {
+                console.error("Error processing tool call during resume:", e);
+              }
+            });
+
+            // Push the current state to the queue
+            pushToQueue(message, accumulatedToolCalls);
+          },
+          abortSignal
+        )
+          .then(() => {
+            finished = true;
+            if (resolve) resolve(null);
+          })
+          .catch((err) => {
+            finished = true;
+            if (resolve) resolve(null);
+          });
+
+        // 3. The Generator Loop
+        while (true) {
+          if (queue.length > 0) {
+            yield queue.shift();
+          } else if (finished) {
+            break;
+          } else {
+            const next = await new Promise((res) => {
+              resolve = res;
+            });
+            if (!next) break;
+            yield next;
+          }
+        }
+        return;
+      }
+
+      // NORMAL MODE: Existing code for regular message streaming
       // Prevent new messages during background tasks
       if (isBackgroundTaskActiveRef.current) {
         console.warn("Cannot send message while background task is active");
@@ -119,13 +284,15 @@ const createChatAdapter = (
         }
       }
 
+      // Initialize streaming state
+      streamingStateRef.current.isStreaming = true;
+      streamingStateRef.current.currentCursor = "0-0";
+      streamingStateRef.current.sessionId = null;
+
       // Convert callback-based ChatService to async iterable
       const streamAsyncIterable = async function* () {
         let accumulatedText = "";
-        let previousTextLength = 0;
         let accumulatedToolCalls = new Map<string, StreamingToolCallPart>();
-        // Track content parts in chronological order
-        let contentParts: TimestampedContentPart[] = [];
         let resolveNext: ((value: boolean) => void) | null = null;
         let rejectStream: ((error: Error) => void) | null = null;
         let hasUpdate = false;
@@ -172,38 +339,8 @@ const createChatAdapter = (
           (message: string, tool_calls: any[], citations: string[]) => {
             if (abortSignal?.aborted || aborted) return;
 
-            const now = Date.now();
-
-            // Track text changes - if text has grown, it's a new segment
-            const textChanged = message.length > previousTextLength;
-            let newTextSegment = "";
-
-            if (textChanged && accumulatedText !== message) {
-              // New text segment arrived
-              newTextSegment = message.slice(previousTextLength);
-              previousTextLength = message.length;
-              accumulatedText = message;
-            }
-
-            // Track if we have tool calls in this update
-            const hasToolCalls = tool_calls && tool_calls.length > 0;
-
-            // If we have new text and no tool calls, add it immediately
-            // If we have new text and tool calls, we'll add it before tool calls
-            if (newTextSegment.trim() && !hasToolCalls) {
-              contentParts.push({
-                part: { type: "text" as const, text: newTextSegment },
-                timestamp: now,
-                type: "text",
-              });
-            } else if (newTextSegment.trim() && hasToolCalls) {
-              // Text arrived before tool calls in this callback
-              contentParts.push({
-                part: { type: "text" as const, text: newTextSegment },
-                timestamp: now,
-                type: "text",
-              });
-            }
+            // Update accumulated state
+            accumulatedText = message;
 
             tool_calls.forEach((toolCallJson) => {
               try {
@@ -212,37 +349,18 @@ const createChatAdapter = (
                   typeof toolCallJson === "string"
                     ? JSON.parse(toolCallJson)
                     : toolCallJson;
-
-                // DEBUG: Log subagent streaming response
-                console.log("[SubAgent Stream] Tool call update:", {
-                  tool_name: parsed.tool_name,
-                  call_id: parsed.call_id,
-                  event_type: parsed.event_type,
-                  has_stream_part: parsed.stream_part !== undefined,
-                  stream_part_length: parsed.stream_part?.length || 0,
-                  is_complete: parsed.is_complete,
-                  has_tool_response: !!parsed.tool_response,
-                  tool_response_length: parsed.tool_response?.length || 0,
-                  full_data: parsed,
-                });
-
                 const {
                   call_id,
                   tool_name,
                   tool_call_details,
                   event_type,
                   tool_response,
-                  stream_part,
-                  is_complete,
                 } = parsed;
 
                 const rawArgs = tool_call_details?.arguments;
 
-                const previous = accumulatedToolCalls.get(call_id);
-                const isNewToolCall = !previous;
-
-                const toolCallPart: StreamingToolCallPart =
-                  previous ??
+                const previous =
+                  accumulatedToolCalls.get(call_id) ??
                   ({
                     type: "tool-call" as const,
                     toolCallId: call_id,
@@ -255,104 +373,34 @@ const createChatAdapter = (
                       typeof rawArgs === "string"
                         ? rawArgs
                         : JSON.stringify(rawArgs ?? {}, null, 2),
-                    timestamp: now,
-                    lastUpdated: now,
                   } as StreamingToolCallPart);
 
                 const argsValue =
                   rawArgs === undefined
-                    ? toolCallPart.args
+                    ? previous.args
                     : typeof rawArgs === "object" && rawArgs !== null
                       ? rawArgs
                       : {};
 
                 const argsTextValue =
                   rawArgs === undefined
-                    ? toolCallPart.argsText
+                    ? previous.argsText
                     : typeof rawArgs === "string"
                       ? rawArgs
                       : JSON.stringify(rawArgs, null, 2);
 
-                // Handle streaming tool calls
-                let accumulatedResponse = "";
-                let isStreaming = false;
-                let finalResponse = tool_response || "";
-
-                if (stream_part !== undefined && stream_part !== null) {
-                  // This is a streaming update
-                  const previousState = previous?.streamState;
-                  const previousAccumulated =
-                    previousState?.accumulated_response || "";
-
-                  // DEBUG: Log stream part details
-                  console.log("[SubAgent Stream] Stream part received:", {
-                    call_id,
-                    tool_name,
-                    stream_part_length: stream_part.length,
-                    previous_accumulated_length: previousAccumulated.length,
-                    is_complete,
-                  });
-
-                  // Accumulate stream parts
-                  accumulatedResponse = previousAccumulated + stream_part;
-
-                  // Determine final response:
-                  // - If is_complete is true and tool_response is provided, prefer tool_response (authoritative final value)
-                  // - Otherwise, use accumulated response if tool_response is empty or shorter
-                  if (is_complete === true && tool_response) {
-                    // Final chunk: prefer tool_response as it's the authoritative complete response
-                    finalResponse = tool_response;
-                    // Update accumulated to match final response for consistency
-                    accumulatedResponse = tool_response;
-                  } else if (
-                    !tool_response ||
-                    tool_response.length < accumulatedResponse.length
-                  ) {
-                    // Use accumulated response during streaming or if tool_response is partial
-                    finalResponse = accumulatedResponse;
-                  } else {
-                    // tool_response is provided and is longer/complete
-                    finalResponse = tool_response;
-                  }
-
-                  // Check if streaming is complete
-                  isStreaming = !(is_complete === true);
-                } else {
-                  // Regular (non-streaming) tool call
-                  accumulatedResponse = tool_response || "";
-                  finalResponse = tool_response || "";
-                  isStreaming = false;
-                }
-
                 const streamState: ToolCallResult = {
                   event_type,
-                  response: finalResponse,
+                  response: tool_response,
                   details: tool_call_details,
-                  accumulated_response: accumulatedResponse || finalResponse,
-                  is_complete: is_complete !== undefined ? is_complete : true,
-                  is_streaming: isStreaming,
                 };
 
-                // DEBUG: Log final stream state
-                console.log("[SubAgent Stream] Stream state updated:", {
-                  call_id,
-                  tool_name,
-                  event_type,
-                  response_length: finalResponse.length,
-                  accumulated_length:
-                    streamState.accumulated_response?.length || 0,
-                  is_complete: streamState.is_complete,
-                  is_streaming: streamState.is_streaming,
-                });
-
                 const next: StreamingToolCallPart = {
-                  ...toolCallPart,
+                  ...previous,
                   streamState,
                   toolName: tool_name,
                   args: argsValue,
                   argsText: argsTextValue,
-                  timestamp: toolCallPart.timestamp ?? now,
-                  lastUpdated: now,
                 };
 
                 if (event_type === "result" || event_type === "error") {
@@ -364,29 +412,6 @@ const createChatAdapter = (
                 }
 
                 accumulatedToolCalls.set(call_id, next);
-
-                // If this is a new tool call, add it to content parts
-                if (isNewToolCall) {
-                  contentParts.push({
-                    part: next,
-                    timestamp: now,
-                    type: "tool-call",
-                  });
-                } else {
-                  // Update existing tool call in content parts
-                  const existingIndex = contentParts.findIndex(
-                    (cp) =>
-                      cp.type === "tool-call" &&
-                      (cp.part as any).toolCallId === call_id
-                  );
-                  if (existingIndex !== -1) {
-                    contentParts[existingIndex] = {
-                      part: next,
-                      timestamp: contentParts[existingIndex].timestamp, // Keep original timestamp
-                      type: "tool-call",
-                    };
-                  }
-                }
               } catch (e) {
                 console.warn("Error parsing tool call:", e);
               }
@@ -403,14 +428,22 @@ const createChatAdapter = (
               });
             }
           },
-          undefined,
+          streamingStateRef.current.sessionId || undefined,
           abortSignal ?? undefined
-        ).catch((error) => {
-          if (!aborted && rejectStream) {
-            rejectStream(error);
-          }
-          throw error;
-        });
+        )
+          .then((result) => {
+            // Store final session ID
+            streamingStateRef.current.sessionId = result.sessionId;
+            streamingStateRef.current.isStreaming = false;
+            return result;
+          })
+          .catch((error) => {
+            streamingStateRef.current.isStreaming = false;
+            if (!aborted && rejectStream) {
+              rejectStream(error);
+            }
+            throw error;
+          });
 
         // Yield updates as they arrive
         let streamFinished = false;
@@ -433,117 +466,29 @@ const createChatAdapter = (
             if (hasUpdate && !aborted) {
               hasUpdate = false;
 
-              // Sort content parts by timestamp to maintain chronological order
-              const sortedParts = [...contentParts].sort(
-                (a, b) => a.timestamp - b.timestamp
-              );
-
-              // Build final content array from sorted parts
-              // For text, we need to merge consecutive text segments
-              const finalContent: (TextMessagePart | ToolCallMessagePart)[] =
-                [];
-              let currentTextSegments: string[] = [];
-              let textIndex = 0; // Track position in accumulated text
-
-              for (const { part } of sortedParts) {
-                if (part.type === "text") {
-                  currentTextSegments.push(part.text);
-                  textIndex += part.text.length;
-                } else {
-                  // If we have accumulated text, add it first
-                  if (currentTextSegments.length > 0) {
-                    finalContent.push({
-                      type: "text" as const,
-                      text: currentTextSegments.join(""),
-                    });
-                    currentTextSegments = [];
-                  }
-                  // Add tool call
-                  finalContent.push(part);
-                }
-              }
-
-              // Add any remaining text segments
-              if (currentTextSegments.length > 0) {
-                finalContent.push({
-                  type: "text" as const,
-                  text: currentTextSegments.join(""),
-                });
-              }
-
-              // Fallback: if no content parts but we have text, include it
-              // This handles the case where text arrives but hasn't been added to contentParts yet
-              if (
-                finalContent.length === 0 &&
-                accumulatedText &&
-                contentParts.length === 0
-              ) {
-                finalContent.push({
-                  type: "text" as const,
-                  text: accumulatedText,
-                });
-              }
-
+              // Yield current accumulated state
+              // Reasoning (tool calls) first, then text - reasoning appears at top
               yield {
-                content: finalContent as readonly (
-                  | TextMessagePart
-                  | ToolCallMessagePart
-                )[],
+                content: [
+                  ...Array.from(accumulatedToolCalls.values()),
+                  ...(accumulatedText
+                    ? [{ type: "text" as const, text: accumulatedText }]
+                    : []),
+                ] as readonly (TextMessagePart | ToolCallMessagePart)[],
               };
             }
           }
 
           // Final yield after stream completes to ensure all content is sent
-          if (!aborted) {
-            // Sort content parts by timestamp
-            const sortedParts = [...contentParts].sort(
-              (a, b) => a.timestamp - b.timestamp
-            );
-
-            // Build final content array
-            const finalContent: (TextMessagePart | ToolCallMessagePart)[] = [];
-            let currentTextSegments: string[] = [];
-
-            for (const { part } of sortedParts) {
-              if (part.type === "text") {
-                currentTextSegments.push(part.text);
-              } else {
-                if (currentTextSegments.length > 0) {
-                  finalContent.push({
-                    type: "text" as const,
-                    text: currentTextSegments.join(""),
-                  });
-                  currentTextSegments = [];
-                }
-                finalContent.push(part);
-              }
-            }
-
-            if (currentTextSegments.length > 0) {
-              finalContent.push({
-                type: "text" as const,
-                text: currentTextSegments.join(""),
-              });
-            }
-
-            // Fallback: if no content parts but we have text, include it
-            // This handles the case where text arrives but hasn't been added to contentParts yet
-            if (
-              finalContent.length === 0 &&
-              accumulatedText &&
-              contentParts.length === 0
-            ) {
-              finalContent.push({
-                type: "text" as const,
-                text: accumulatedText,
-              });
-            }
-
+          // Reasoning (tool calls) first, then text - reasoning appears at top
+          if (!aborted && accumulatedText) {
             yield {
-              content: finalContent as readonly (
-                | TextMessagePart
-                | ToolCallMessagePart
-              )[],
+              content: [
+                ...Array.from(accumulatedToolCalls.values()),
+                ...(accumulatedText
+                  ? [{ type: "text" as const, text: accumulatedText }]
+                  : []),
+              ] as readonly (TextMessagePart | ToolCallMessagePart)[],
             };
           }
         } catch (error) {
@@ -555,6 +500,7 @@ const createChatAdapter = (
           if (abortSignal) {
             abortSignal.removeEventListener("abort", handleAbort);
           }
+          streamingStateRef.current.isStreaming = false;
         }
       };
 
@@ -761,9 +707,18 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
 export function useChatRuntime(
   chatId: string | null | undefined
 ): ChatRuntimeResult {
-  // Local state for session management (no Redux)
-  const [isSessionResuming, setIsSessionResuming] = useState(false);
+  console.log("[Runtime] useChatRuntime called with chatId:", chatId);
+  // Keep only isBackgroundTaskActive
   const [isBackgroundTaskActive, setIsBackgroundTaskActive] = useState(false);
+
+  // Streaming state ref (for ongoing streams)
+  const streamingStateRef = useRef<StreamingState>({
+    sessionId: null,
+    currentCursor: "0-0",
+    isStreaming: false,
+    isReconnecting: false,
+    reconnectAttempts: 0,
+  });
 
   // Use ref for the adapter to avoid stale closure issues
   const isBackgroundTaskActiveRef = useRef(isBackgroundTaskActive);
@@ -771,29 +726,27 @@ export function useChatRuntime(
     isBackgroundTaskActiveRef.current = isBackgroundTaskActive;
   }, [isBackgroundTaskActive]);
 
-  // Ref to store runtime for use in resume callback
-  const runtimeRef = useRef<ReturnType<typeof useLocalRuntime> | null>(null);
-
-  // State to trigger history reload after resume
-  const [historyReloadKey, setHistoryReloadKey] = useState(0);
+  // Resume session ref - must be before resumeActiveSession
+  const resumeSessionRef = useRef<ResumeSessionInfo | null>(null);
 
   // Create the chat adapter - use ref to avoid recreation on state change
   const adapter = useMemo(() => {
     const safeChatId: string = (chatId || "") as string;
-    return createChatAdapter(safeChatId, isBackgroundTaskActiveRef);
-  }, [chatId]); // Only recreate when chatId changes, not backgroundTaskActive
+    return createChatAdapter(
+      safeChatId,
+      isBackgroundTaskActiveRef,
+      streamingStateRef,
+      resumeSessionRef
+    );
+  }, [chatId]); // Only recreate when chatId changes
 
-  // Create the history adapter - recreate when reload key changes to force reload
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Create the history adapter
   const historyAdapter = useMemo(() => {
     if (!chatId) {
       return undefined;
     }
-    // historyReloadKey is in dependencies to force recreation when it changes
-    // We access it here to satisfy the linter, even though we don't use the value
-    void historyReloadKey;
     return createHistoryAdapter(chatId);
-  }, [chatId, historyReloadKey]);
+  }, [chatId]);
 
   // Create the attachments adapter
   const attachmentsAdapter = useMemo(() => {
@@ -811,111 +764,247 @@ export function useChatRuntime(
         },
   });
 
-  // Store runtime in ref for use in resume callback
-  useEffect(() => {
-    runtimeRef.current = runtime;
-  }, [runtime]);
-
-  // Resume active session helper
+  // Resume active session handler - must be after runtime is created
   const resumeActiveSession = useCallback(
-    async (sessionInfo: SessionInfo) => {
+    async (
+      sessionInfo: SessionInfo,
+      runtime: ReturnType<typeof useLocalRuntime>
+    ) => {
+      if (!chatId) return;
+
+      console.log(
+        "[Runtime] Preparing resume for session:",
+        sessionInfo.sessionId
+      );
+
+      // Set the resume ref so the Adapter's run() method knows what to do
+      resumeSessionRef.current = {
+        sessionId: sessionInfo.sessionId,
+        cursor: sessionInfo.cursor || "0-0",
+      };
+
+      setIsBackgroundTaskActive(true);
+
       try {
-        if (!chatId) return;
+        // Access the thread specifically
+        const thread = runtime.thread;
 
-        setIsSessionResuming(true);
-
-        const runtime = runtimeRef.current;
-        if (!runtime) {
-          console.warn("Runtime not available for resume");
-          setIsSessionResuming(false);
+        if (!thread) {
+          console.error("[Runtime] Thread not available on runtime");
+          setIsBackgroundTaskActive(false);
           return;
         }
 
-        // Track initial message count
-        const initialMessages = await ChatService.loadMessages(chatId, 0, 1000);
-        let lastMessageCount = initialMessages.length;
+        // Helper to get messages from current state
+        const getMessages = () => thread.getState().messages;
 
-        // Set up periodic checking for updates during resume
-        // This allows the UI to show progress as messages are saved to the backend
-        const updateInterval = setInterval(async () => {
-          try {
-            const messages = await ChatService.loadMessages(chatId, 0, 1000);
-            const currentCount = messages.length;
-
-            // If new messages arrived, trigger history reload to show them
-            if (currentCount > lastMessageCount) {
-              lastMessageCount = currentCount;
-              // Trigger history adapter reload by changing the key
-              setHistoryReloadKey((prev) => prev + 1);
-            }
-          } catch (error) {
-            console.warn(
-              "Error checking for message updates during resume:",
-              error
-            );
-          }
-        }, 1500); // Check every 1.5 seconds to avoid too frequent reloads
-
-        // Resume the session stream from backend
-        await ChatService.resumeActiveSession(
-          chatId,
-          sessionInfo.sessionId,
-          (message: string, tool_calls: any[], citations: string[]) => {
-            // The callback receives streaming updates, but we can't directly inject them
-            // into the runtime. Instead, we rely on the backend saving messages incrementally
-            // and the periodic check above to reload and display them.
-            // This ensures the UI stays in sync with the backend state.
-          }
-        );
-
-        // Clear the update interval
-        clearInterval(updateInterval);
-
-        // Final reload after resume completes to ensure all messages are displayed
-        const finalMessages = await ChatService.loadMessages(chatId, 0, 1000);
-        if (finalMessages.length > lastMessageCount) {
-          setHistoryReloadKey((prev) => prev + 1);
+        // Wait for messages to be available (History Load)
+        if (!getMessages() || getMessages().length === 0) {
+          await new Promise<void>((resolve) => {
+            const unsubscribe = thread.subscribe(() => {
+              if (getMessages()?.length > 0) {
+                unsubscribe();
+                resolve();
+              }
+            });
+            setTimeout(() => {
+              unsubscribe();
+              resolve();
+            }, 5000);
+          });
         }
 
+        const messages = getMessages();
+        const lastMsg = messages?.[messages.length - 1];
+
+        // Trigger the adapter. startRun() will call your Adapter's run()
+        // using the existing messages in the thread as context.
+        // ✅ FIX: Explicitly pass the ID of the user message.
+        // This tells assistant-ui: "Start a run responding TO this specific message."
+        // This bypasses the internal state lookup that was causing the parentId error.
+        if (lastMsg?.role === "user") {
+          console.log(
+            "[Runtime] Triggering startRun to resume stream for message:",
+            lastMsg.id
+          );
+
+          // Passing the ID is the critical part to avoid the 'parentId' TypeError
+          await thread.startRun(lastMsg.id);
+
+          console.log("[Runtime] Resume stream completed");
+        } else {
+          console.log(
+            "[Runtime] Last message is not from user, skipping resume. Role:",
+            lastMsg?.role
+          );
+        }
+
+        // Reset background task state after resume completes
+        // Note: This happens after startRun() completes, which means the adapter has finished streaming
         setIsBackgroundTaskActive(false);
-        setIsSessionResuming(false);
       } catch (error) {
-        console.error("Error resuming session:", error);
+        console.error("[Runtime] Error triggering resume:", error);
+        resumeSessionRef.current = null;
         setIsBackgroundTaskActive(false);
-        setIsSessionResuming(false);
       }
     },
-    [chatId]
+    [chatId, runtime]
   );
 
-  // Handle active session detection on mount
+  // Check for active session on mount
   useEffect(() => {
-    const checkActiveSession = async () => {
-      if (!chatId) return;
+    console.log("[Runtime] useEffect triggered, chatId:", chatId);
+    let isMounted = true;
+
+    const checkAndResume = async () => {
+      if (!chatId) {
+        console.log("[Runtime] No chatId, skipping session check");
+        return;
+      }
 
       try {
+        console.log("[Runtime] Checking for active session...");
         const activeSession = await ChatService.detectActiveSession(chatId);
-        // Resume if status is "active" - this means there's an ongoing background task
-        if (activeSession && activeSession.status === "active") {
-          setIsBackgroundTaskActive(true);
-          // Resume active session
-          await resumeActiveSession(activeSession);
-        } else {
-          // If status is "completed" or "idle", no need to resume
-          setIsBackgroundTaskActive(false);
+        console.log("[Runtime] Active session result:", activeSession);
+
+        if (!isMounted) {
+          console.log("[Runtime] Component unmounted, skipping");
+          return;
+        }
+
+        if (!activeSession) {
+          console.log("[Runtime] No active session found");
+          return;
+        }
+
+        if (activeSession.status !== "active") {
+          console.log(
+            "[Runtime] Session status is not active:",
+            activeSession.status
+          );
+          return;
+        }
+
+        console.log(
+          "[Runtime] Active session detected:",
+          activeSession.sessionId
+        );
+
+        // Access the thread from runtime
+        const thread = runtime.thread;
+
+        if (!thread) {
+          console.error("[Runtime] Thread not available on runtime");
+          return;
+        }
+
+        // Ensure history is loaded - use getState() to access messages
+        const getMessages = () => thread.getState().messages;
+        if (!getMessages() || getMessages().length === 0) {
+          // Wait for history load...
+          await new Promise<void>((resolve) => {
+            const unsubscribe = thread.subscribe(() => {
+              const msgs = getMessages();
+              if (msgs && msgs.length > 0) {
+                unsubscribe();
+                resolve();
+              }
+            });
+            setTimeout(() => {
+              unsubscribe();
+              resolve();
+            }, 5000);
+          });
+        }
+
+        if (isMounted) {
+          await resumeActiveSession(activeSession, runtime);
         }
       } catch (error) {
-        console.error("Error checking active session:", error);
-        setIsBackgroundTaskActive(false);
+        console.error("[Runtime] Error checking active session:", error);
       }
     };
 
-    checkActiveSession();
-  }, [chatId, resumeActiveSession]);
+    const timer = setTimeout(checkAndResume, 300);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [chatId, runtime, resumeActiveSession]);
+
+  // Handle resume marker in adapter - remove temporary user message
+  // This is handled in the adapter's run() method by checking for resume mode first
 
   return {
     runtime,
-    isSessionResuming,
     isBackgroundTaskActive,
   };
+}
+
+// Hook for handling pending messages from idea page
+export function usePendingMessageHandler(
+  runtime: ReturnType<typeof useLocalRuntime>,
+  chatId: string | null | undefined
+) {
+  const dispatch = useDispatch<AppDispatch>();
+  const pendingMessage = useSelector(
+    (state: RootState) => state.chat.pendingMessage
+  );
+  const hasSentPendingMessage = useRef(false);
+
+  useEffect(() => {
+    if (!pendingMessage || !chatId || hasSentPendingMessage.current) {
+      return;
+    }
+
+    console.log(
+      "[PendingMessage] Detected pending message, sending via runtime:",
+      pendingMessage
+    );
+    hasSentPendingMessage.current = true;
+
+    // Wait for runtime to be ready
+    const sendPendingMessage = async () => {
+      try {
+        // Small delay to ensure runtime is fully initialized
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const thread = runtime.thread;
+        if (!thread) {
+          console.error("[PendingMessage] Thread not available");
+          dispatch(clearPendingMessage());
+          return;
+        }
+
+        // Send message through thread's composer
+        // This ensures it goes through the adapter and proper streaming happens
+        const composer = thread.composer;
+        if (!composer) {
+          console.error("[PendingMessage] Composer not available");
+          dispatch(clearPendingMessage());
+          return;
+        }
+
+        composer.setText(pendingMessage);
+
+        // Trigger send
+        await composer.send();
+
+        console.log(
+          "[PendingMessage] Successfully sent pending message via runtime"
+        );
+
+        // Clear pending message
+        dispatch(clearPendingMessage());
+      } catch (error) {
+        console.error("[PendingMessage] Error sending pending message:", error);
+        toast.error("Failed to send message. You can retry in the chat.");
+
+        // Clear pending message even on error to prevent infinite retry
+        dispatch(clearPendingMessage());
+      }
+    };
+
+    sendPendingMessage();
+  }, [pendingMessage, chatId, runtime, dispatch]);
 }

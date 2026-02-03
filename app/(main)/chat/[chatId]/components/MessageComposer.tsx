@@ -422,7 +422,9 @@ const MessageComposer = ({
           </button>
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
-          <ComposerPrimitive.Cancel className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer">
+          <ComposerPrimitive.Cancel
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer"
+          >
             <CircleStopIcon />
           </ComposerPrimitive.Cancel>
         </ThreadPrimitive.If>
@@ -431,7 +433,7 @@ const MessageComposer = ({
   };
 
   return (
-    <div className="flex flex-col w-full p-2">
+    <div className="flex flex-col w-full py-2 bg-white rounded-lg">
       {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
 
       {selectedNodes.length > 0 && (
@@ -447,7 +449,7 @@ const MessageComposer = ({
               {node.name}
               <button
                 type="button"
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-rose-600 transition hover:bg-white hover:text-rose-800"
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-background/80 text-rose-600 transition hover:bg-background hover:text-rose-800"
                 onClick={() => handleNodeDeselect(node)}
                 aria-label={`Remove ${node.name}`}
               >
@@ -460,9 +462,8 @@ const MessageComposer = ({
 
       <div
         ref={containerRef}
-        className="flex flex-col w-full items-start gap-4"
+        className="flex flex-col w-full items-start gap-4 outline-none"
         tabIndex={0}
-        style={{ outline: "none" }}
       >
         {/* Attachment Previews - using assistant-ui components */}
         {isMultimodalEnabled() && <ComposerAttachments />}
@@ -584,7 +585,7 @@ const ModelSelection: FC<{
     <Dialog>
       {currentModel ? (
         <DialogTrigger
-          className="p-2 transition ease-in bg-white hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
+          className="p-2 transition ease-in bg-background hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
           disabled={disabled}
           onClick={handleModelList}
         >

@@ -278,8 +278,7 @@ export const WebhookTriggerNode: FC<{
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <WebhookIcon
-              className="w-5 h-5 mr-2"
-              style={{ color: "#374151" }}
+              className="w-5 h-5 mr-2 text-gray-700"
             />
             <h3 className="font-semibold text-gray-700 flex items-center gap-1">
               Webhook Trigger

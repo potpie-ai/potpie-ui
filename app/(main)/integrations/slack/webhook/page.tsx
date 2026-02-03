@@ -19,7 +19,7 @@ export default function SlackWebhookPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto p-6">
         {/* Header */}
         <div className="text-center mb-8">
@@ -51,7 +51,7 @@ export default function SlackWebhookPage() {
                   </code>{" "}
                   event to your webhook endpoint.
                 </p>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-background rounded-lg p-4">
                   <code className="text-sm font-mono text-gray-800">
                     POST /api/v1/integrations/slack/webhook
                   </code>
@@ -71,7 +71,7 @@ export default function SlackWebhookPage() {
                   The webhook receives a JSON payload with the following
                   structure:
                 </p>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-background rounded-lg p-4">
                   <pre className="text-xs font-mono text-gray-800 overflow-x-auto">
                     {`{
   "token": "verification_token",
@@ -156,7 +156,7 @@ export default function SlackWebhookPage() {
                 <p className="text-sm text-gray-600 mb-4">
                   Here&apos;s a basic example of how to handle the webhook:
                 </p>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-background rounded-lg p-4">
                   <pre className="text-xs font-mono text-gray-800 overflow-x-auto">
                     {`@app.route('/api/v1/integrations/slack/webhook', methods=['POST'])
 def slack_webhook():

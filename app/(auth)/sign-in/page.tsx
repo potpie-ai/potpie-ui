@@ -3,12 +3,9 @@ import { Button } from "@/components/ui/button";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  GithubAuthProvider,
-  // signInWithEmailAndPassword, // Removed
-  signInWithPopup,
-} from "firebase/auth";
+import { GithubAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
+import { isFirebaseEnabled } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import { isNewUser, deleteUserAndSignOut } from "@/lib/utils/emailValidation";
@@ -37,7 +34,7 @@ export default function Signin() {
       const url = new URL(redirectPath, window.location.origin);
       redirectAgent_id = url.searchParams.get("agent_id") || "";
     } catch (e) {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.error("Error parsing redirect URL:", e);
       }
     }
@@ -93,38 +90,59 @@ export default function Signin() {
   };
 
   const onGithub = async () => {
+    // In dev without Firebase, GitHub OAuth won't work - use mock and redirect
+    if (!isFirebaseEnabled()) {
+      const result = await auth.signInWithPopup(provider);
+      posthog.identify(result.user.uid, {
+        email: result.user.email,
+        name: result.user?.displayName || "",
+      });
+      toast.success("Dev mode: signed in with mock user");
+      if (finalAgent_id) {
+        window.location.href = `/shared-agent?agent_id=${finalAgent_id}`;
+      } else {
+        window.location.href = "/newchat";
+      }
+      return;
+    }
+
     signInWithPopup(auth, provider)
       .then(async (result) => {
         // VALIDATION CHECKPOINT: Block new GitHub signups
         const isNew = isNewUser(result);
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log('GitHub sign-in - Is New User:', isNew);
+
+        if (process.env.NODE_ENV === "development") {
+          console.log("GitHub sign-in - Is New User:", isNew);
         }
-        
+
         // Block all new GitHub signups
         if (isNew) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('Blocking new GitHub signup attempt');
+          if (process.env.NODE_ENV === "development") {
+            console.log("Blocking new GitHub signup attempt");
           }
-          
+
           // Delete Firebase user account and sign out
           const deletionSucceeded = await deleteUserAndSignOut(result.user);
-          
+
           // Log deletion failure for monitoring (caller can act on result if needed)
           if (!deletionSucceeded) {
-            console.error('[ERROR] Failed to delete blocked GitHub signup user:', {
-              userId: result.user?.uid,
-              email: result.user?.email,
-            });
+            console.error(
+              "[ERROR] Failed to delete blocked GitHub signup user:",
+              {
+                userId: result.user?.uid,
+                email: result.user?.email,
+              },
+            );
           }
-          
+
           // Show concise error message
-          toast.error('GitHub sign-ups are no longer supported — please sign in with Google.');
-          
+          toast.error(
+            "GitHub sign-ups are no longer supported — please sign in with Google.",
+          );
+
           return; // Don't proceed to backend
         }
-        
+
         // Existing users can proceed
         const credential = GithubAuthProvider.credentialFromResult(result);
         if (credential && credential.accessToken) {
@@ -132,44 +150,21 @@ export default function Signin() {
             const userSignup = await AuthService.signupWithGitHub(
               result.user,
               credential.accessToken,
-              (result as any)._tokenResponse.screenName
+              (result as any)._tokenResponse.screenName,
             );
 
             posthog.identify(result.user.uid, {
               email: result.user.email,
               name: result.user?.displayName || "",
             });
-            
+
             // CRITICAL: Check GitHub linking from backend response
             // Even if signing in with GitHub, check the flag for consistency
             if (userSignup.needs_github_linking) {
               // Redirect to onboarding to link GitHub (shouldn't happen for GitHub sign-in, but handle it)
-              toast.info('Almost there! Link your GitHub to unlock the magic');
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
-              const prompt = urlSearchParams.get("prompt") || "";
-
-              const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
-
-              window.location.href = `/onboarding?${onboardingParams.toString()}`;
-              return;
-            }
-            
-            //if this is a new user
-            if (!userSignup.exists) {
-              // For new users, redirect to onboarding
-              toast.success(
-                "Welcome aboard " + result.user.displayName + "! Let's get started"
-              );
-
+              toast.info("Almost there! Link your GitHub to unlock the magic");
               const urlSearchParams = new URLSearchParams(
-                window.location.search
+                window.location.search,
               );
               const plan = (
                 urlSearchParams.get("plan") ||
@@ -179,12 +174,51 @@ export default function Signin() {
               const prompt = urlSearchParams.get("prompt") || "";
 
               const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+              if (result.user.uid)
+                onboardingParams.append("uid", result.user.uid);
+              if (result.user.email)
+                onboardingParams.append("email", result.user.email);
+              if (result.user.displayName)
+                onboardingParams.append("name", result.user.displayName);
+              if (plan) onboardingParams.append("plan", plan);
+              if (prompt) onboardingParams.append("prompt", prompt);
+              if (finalAgent_id)
+                onboardingParams.append("agent_id", finalAgent_id);
+
+              window.location.href = `/onboarding?${onboardingParams.toString()}`;
+              return;
+            }
+
+            //if this is a new user
+            if (!userSignup.exists) {
+              // For new users, redirect to onboarding
+              toast.success(
+                "Welcome aboard " +
+                  result.user.displayName +
+                  "! Let's get started",
+              );
+
+              const urlSearchParams = new URLSearchParams(
+                window.location.search,
+              );
+              const plan = (
+                urlSearchParams.get("plan") ||
+                urlSearchParams.get("PLAN") ||
+                ""
+              ).toLowerCase();
+              const prompt = urlSearchParams.get("prompt") || "";
+
+              const onboardingParams = new URLSearchParams();
+              if (result.user.uid)
+                onboardingParams.append("uid", result.user.uid);
+              if (result.user.email)
+                onboardingParams.append("email", result.user.email);
+              if (result.user.displayName)
+                onboardingParams.append("name", result.user.displayName);
+              if (plan) onboardingParams.append("plan", plan);
+              if (prompt) onboardingParams.append("prompt", prompt);
+              if (finalAgent_id)
+                onboardingParams.append("agent_id", finalAgent_id);
 
               window.location.href = `/onboarding?${onboardingParams.toString()}`;
               return;
@@ -203,10 +237,12 @@ export default function Signin() {
             }
 
             toast.success(
-              "Welcome back " + result.user.displayName + "! Let's build something amazing"
+              "Welcome back " +
+                result.user.displayName +
+                "! Let's build something amazing",
             );
           } catch (e: any) {
-            if (process.env.NODE_ENV !== 'production') {
+            if (process.env.NODE_ENV !== "production") {
               console.error("API error:", e);
             }
             toast.error(e.message || "Sign-in unsuccessful");
@@ -215,11 +251,14 @@ export default function Signin() {
       })
       .catch((error) => {
         // Handle user cancellation - don't show error
-        if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        if (
+          error.code === "auth/popup-closed-by-user" ||
+          error.code === "auth/cancelled-popup-request"
+        ) {
           // User cancelled, don't show error
           return;
         }
-        
+
         const errorCode = error.code;
         const errorMessage = error.message;
         const email = error.customData?.email;
@@ -251,7 +290,9 @@ export default function Signin() {
             alt="logo"
             className="transition-transform duration-300 hover:scale-105"
           />
-          <h1 className="text-7xl font-bold text-gray-800 tracking-tight">potpie</h1>
+          <h1 className="text-7xl font-bold text-gray-800 tracking-tight">
+            potpie
+          </h1>
         </div>
         <div className="flex items-center justify-center flex-col text-border w-full max-w-xs">
           {/* Email/Password Login Form */}

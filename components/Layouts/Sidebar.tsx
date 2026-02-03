@@ -53,7 +53,7 @@ export function AppSidebar() {
 
   const userId = user?.uid;
   const { total_human_messages } = useSelector(
-    (state: RootState) => state.UserInfo
+    (state: RootState) => state.UserInfo,
   );
   const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["userSubscription", userId],
@@ -67,7 +67,7 @@ export function AppSidebar() {
     queryFn: () =>
       MinorService.fetchUserUsage(
         dayjs(userSubscription.end_date).subtract(30, "day").toISOString(),
-        userSubscription.end_date
+        userSubscription.end_date,
       ),
     enabled: !!userId && !!userSubscription,
   });
@@ -77,7 +77,14 @@ export function AppSidebar() {
     queryKey: ["accountInfo", userId],
     queryFn: async () => {
       if (!user?.uid) throw new Error("No user ID");
-      const token = await user.getIdToken();
+      // Guard: user may be from localStorage (mock mode) and lack getIdToken
+      const token =
+        typeof user.getIdToken === "function"
+          ? await user.getIdToken()
+          : ((typeof window !== "undefined"
+              ? localStorage.getItem("token")
+              : null) ?? undefined);
+      if (!token) throw new Error("No auth token available");
       return authClient.getAccount(token);
     },
     enabled: !!userId && !!user,
@@ -105,17 +112,23 @@ export function AppSidebar() {
 
   useEffect(() => {
     if (!usageLoading && !subscriptionLoading && userSubscription) {
-      const maxCredits = userSubscription.plan_type === planTypesEnum.PRO ? 500 : 50;
+      const maxCredits =
+        userSubscription.plan_type === planTypesEnum.PRO ? 500 : 50;
       const usedCredits = total_human_messages || 0;
 
       const calculatedProgress = Math.min(
         (usedCredits / maxCredits) * 100,
-        100
+        100,
       );
 
       setProgress(calculatedProgress);
     }
-  }, [usageLoading, subscriptionLoading, total_human_messages, userSubscription]);
+  }, [
+    usageLoading,
+    subscriptionLoading,
+    total_human_messages,
+    userSubscription,
+  ]);
 
   const handleTrack = () => {
     formbricksApp.track("report-btn", {
@@ -143,7 +156,11 @@ export function AppSidebar() {
                 width={35}
                 height={35}
               />
-              <span className="text-2xl"><span className="text-foreground">potpie</span><span className="text-primary">.</span><span className="text-foreground">ai</span></span>
+              <span className="text-2xl">
+                <span className="text-foreground">potpie</span>
+                <span className="text-primary">.</span>
+                <span className="text-foreground">ai</span>
+              </span>
             </Link>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -200,14 +217,17 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href={`/user-subscription?end_date=${userSubscription?.end_date ? new Date(userSubscription.end_date).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : ''}&plan_type=${userSubscription?.plan_type}`} className="w-full">
+            <Link
+              href={`/user-subscription?end_date=${userSubscription?.end_date ? new Date(userSubscription.end_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : ""}&plan_type=${userSubscription?.plan_type}`}
+              className="w-full"
+            >
               <Card className="bg-background border border-gray-200 text-black">
                 <CardHeader className="p-2 pt-0 md:p-4">
                   <CardTitle className="text-lg text-black">
                     {(() => {
                       const now = new Date();
                       const subscriptionEndDate = new Date(
-                        userSubscription?.end_date || 0
+                        userSubscription?.end_date || 0,
                       );
 
                       if (subscriptionLoading)
@@ -260,8 +280,11 @@ export function AppSidebar() {
                   <Link
                     href={"/user-subscription"}
                     className="w-full inset-0"
-                    style={{ 
-                      display: userSubscription?.plan_type === planTypesEnum.PRO ? 'none' : 'block' 
+                    style={{
+                      display:
+                        userSubscription?.plan_type === planTypesEnum.PRO
+                          ? "none"
+                          : "block",
                     }}
                   >
                     <Button
@@ -284,7 +307,8 @@ export function AppSidebar() {
             email: accountInfo?.email || user?.email || "",
             name: user?.displayName,
             // Use verification status from backend (work email), fallback to Firebase status
-            emailVerified: accountInfo?.email_verified ?? user?.emailVerified ?? false,
+            emailVerified:
+              accountInfo?.email_verified ?? user?.emailVerified ?? false,
           }}
         />
       </SidebarFooter>

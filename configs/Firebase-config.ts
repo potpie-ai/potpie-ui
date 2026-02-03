@@ -69,15 +69,6 @@ if (hasRequiredConfig) {
 
 // Function to initialize mock Firebase implementation
 function initializeMockFirebase() {
-  // Create a minimal Firebase app to satisfy type requirements
-  firebase_app = getApps().length === 0 ? 
-    initializeApp({ apiKey: "fake-key", authDomain: "fake.firebaseapp.com", projectId: "fake-project" }) : 
-    getApps()[0];
-  
-  // Get the real auth instance
-  auth = getAuth(firebase_app);
-  db = getFirestore(firebase_app);
-  
   // Create a mock user
   const mockUser = generateMockUser();
   
@@ -86,59 +77,63 @@ function initializeMockFirebase() {
     (window as any).__usingMockFirebase = true;
   }
   
-  // Set the current user
-  // @ts-ignore - We're deliberately overriding for mock purposes
-  auth.currentUser = mockUser;
+  // Create mock auth object instead of using real Firebase
+  auth = {
+    currentUser: mockUser,
+    signInWithPopup: async (provider: any) => {
+      return {
+        user: mockUser as User,
+        providerId: 'github.com',
+        operationType: 'signIn' as const,
+      };
+    },
+    onIdTokenChanged: function(nextOrObserver: NextOrObserver<User | null>): Unsubscribe {
+      // Handle different types of parameters
+      if (typeof nextOrObserver === 'function') {
+        setTimeout(() => {
+          nextOrObserver(mockUser as User);
+        }, 0);
+      } else if (nextOrObserver && typeof nextOrObserver === 'object') {
+        // Observer object with next method
+        setTimeout(() => {
+          if (nextOrObserver.next) {
+            nextOrObserver.next(mockUser as User);
+          }
+        }, 0);
+      }
+      
+      // Return unsubscribe function
+      return () => {};
+    },
+    onAuthStateChanged: function(nextOrObserver: NextOrObserver<User | null>): Unsubscribe {
+      // Handle different types of parameters
+      if (typeof nextOrObserver === 'function') {
+        setTimeout(() => {
+          nextOrObserver(mockUser as User);
+        }, 0);
+      } else if (nextOrObserver && typeof nextOrObserver === 'object') {
+        // Observer object with next method
+        setTimeout(() => {
+          if (nextOrObserver.next) {
+            nextOrObserver.next(mockUser as User);
+          }
+        }, 0);
+      }
+      
+      // Return unsubscribe function
+      return () => {};
+    },
+  } as Auth;
   
-  // Mock signInWithPopup for GitHub authentication
-  // @ts-ignore - Adding mock implementation
-  auth.signInWithPopup = async (provider) => {
-    return {
-      user: mockUser as User,
-      providerId: 'github.com',
-      operationType: 'signIn',
-    };
-  };
+  // Create mock Firebase app and db
+  firebase_app = {
+    name: '[DEFAULT]',
+    options: {},
+    automaticDataCollectionEnabled: false,
+  } as FirebaseApp;
   
-  // Override onIdTokenChanged with mock implementation
-  auth.onIdTokenChanged = function(nextOrObserver: NextOrObserver<User | null>): Unsubscribe {
-    // Handle different types of parameters
-    if (typeof nextOrObserver === 'function') {
-      setTimeout(() => {
-        nextOrObserver(mockUser as User);
-      }, 0);
-    } else if (nextOrObserver && typeof nextOrObserver === 'object') {
-      // Observer object with next method
-      setTimeout(() => {
-        if (nextOrObserver.next) {
-          nextOrObserver.next(mockUser as User);
-        }
-      }, 0);
-    }
-    
-    // Return unsubscribe function
-    return () => {};
-  };
-  
-  // Override onAuthStateChanged with mock implementation
-  auth.onAuthStateChanged = function(nextOrObserver: NextOrObserver<User | null>): Unsubscribe {
-    // Handle different types of parameters
-    if (typeof nextOrObserver === 'function') {
-      setTimeout(() => {
-        nextOrObserver(mockUser as User);
-      }, 0);
-    } else if (nextOrObserver && typeof nextOrObserver === 'object') {
-      // Observer object with next method
-      setTimeout(() => {
-        if (nextOrObserver.next) {
-          nextOrObserver.next(mockUser as User);
-        }
-      }, 0);
-    }
-    
-    // Return unsubscribe function
-    return () => {};
-  };
+  // Create minimal mock Firestore
+  db = {} as Firestore;
 }
 
 export { firebase_app, auth, db };

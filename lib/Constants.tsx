@@ -1,5 +1,4 @@
 import { auth } from "@/configs/Firebase-config";
-import formbricksApp from "@formbricks/js";
 import {
   BotIcon,
   CircleAlert,

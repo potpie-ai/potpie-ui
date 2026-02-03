@@ -1,10 +1,9 @@
 "use client";
 import React from "react";
-import { onIdTokenChanged } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { isFirebaseEnabled, generateMockUser } from "@/lib/utils";
+import { isFirebaseEnabled } from "@/lib/utils";
 
 export const AuthContext = React.createContext<any>({
   user: null,
@@ -38,15 +37,33 @@ export const AuthContextProvider = ({
   React.useEffect(() => {
     if (!isFirebaseActive) {
       // In local/mock mode, load user from localStorage
+      // JSON.parse strips functions - we must restore getIdToken so layout/sidebar don't crash
       const storedUser =
         typeof window !== "undefined" ? localStorage.getItem("user") : null;
-      setUser(storedUser ? JSON.parse(storedUser) : null);
+      let parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      if (parsedUser && typeof parsedUser.getIdToken !== "function") {
+        const token =
+          typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        parsedUser = {
+          ...parsedUser,
+          getIdToken: async () => token || "mock-token-for-local-development",
+        };
+      }
+      setUser(parsedUser);
       setLoading(false);
 
       // Listen for storage events to update user state on logout/login in other tabs
       const handleStorage = (event: StorageEvent) => {
         if (event.key === "user") {
-          const newUser = event.newValue ? JSON.parse(event.newValue) : null;
+          let newUser = event.newValue ? JSON.parse(event.newValue) : null;
+          if (newUser && typeof newUser.getIdToken !== "function") {
+            const token = localStorage.getItem("token");
+            newUser = {
+              ...newUser,
+              getIdToken: async () =>
+                token || "mock-token-for-local-development",
+            };
+          }
           setUser(newUser);
         }
       };
@@ -57,18 +74,22 @@ export const AuthContextProvider = ({
     }
 
     // Use real Firebase auth when Firebase is enabled or forced
+    // Dynamic import to avoid loading firebase/auth when not needed (dev mode without Firebase)
     console.log("AuthContext: Using REAL Firebase authentication");
-    const unsubscribe = onIdTokenChanged(auth, (firebaseUser) => {
-      console.log(
-        `AuthContext: onIdTokenChanged fired, user: ${firebaseUser ? "found" : "null"}`
-      );
-      if (firebaseUser) {
-        console.log(`AuthContext: User ID: ${firebaseUser.uid}`);
-      }
-      setUser(firebaseUser);
-      setLoading(false);
+    const unsubRef = { current: () => {} };
+    void import("firebase/auth").then(({ onIdTokenChanged }) => {
+      unsubRef.current = onIdTokenChanged(auth, (firebaseUser) => {
+        console.log(
+          `AuthContext: onIdTokenChanged fired, user: ${firebaseUser ? "found" : "null"}`,
+        );
+        if (firebaseUser) {
+          console.log(`AuthContext: User ID: ${firebaseUser.uid}`);
+        }
+        setUser(firebaseUser);
+        setLoading(false);
+      });
     });
-    return () => unsubscribe();
+    return () => unsubRef.current();
   }, [isFirebaseActive]);
 
   return (

@@ -166,6 +166,7 @@ export default function RepoPage() {
                 question: newQ.question,
                 options,
                 needsInput: true, // "Other" always available for MCQs
+                multipleChoice: newQ.multiple_choice ?? false,
                 assumed: assumedLabel,
                 reasoning: newQ.answer_recommendation?.reasoning,
                 answerRecommendationIdx: recIdx ?? null,
@@ -398,6 +399,7 @@ export default function RepoPage() {
             is_user_modified?: boolean;
           };
           const question = questions.find((qu: MCQQuestion) => qu.id === qId);
+          const isMultipleChoice = question?.multipleChoice ?? false;
           const options = question?.options
             ? (Array.isArray(question.options)
                 ? question.options.map((o) =>
@@ -406,26 +408,54 @@ export default function RepoPage() {
                 : [])
             : [];
           let selectedOptionIdx: number | undefined;
+          let selectedOptionIndices: number[] | undefined;
           let textAnswer = ans.text_answer;
+          
           if (ans.mcq_answer && options.length > 0) {
-            const letter = ans.mcq_answer.trim().toUpperCase();
-            if (letter.length === 1 && letter >= "A" && letter <= "Z") {
-              selectedOptionIdx = letter.charCodeAt(0) - 65;
-              if (
-                selectedOptionIdx >= 0 &&
-                selectedOptionIdx < options.length
-              ) {
-                const selOpt = options[selectedOptionIdx];
-                textAnswer =
-                  typeof selOpt === "string" ? selOpt : selOpt.label;
+            const mcqAnswer = ans.mcq_answer.trim().toUpperCase();
+            
+            if (isMultipleChoice && mcqAnswer.includes(",")) {
+              // Multiple selections: parse comma-separated letters (e.g., "A,B,C")
+              const letters = mcqAnswer.split(",").map(l => l.trim());
+              const indices = letters
+                .filter(l => l.length === 1 && l >= "A" && l <= "Z")
+                .map(l => l.charCodeAt(0) - 65)
+                .filter(idx => idx >= 0 && idx < options.length)
+                .sort((a, b) => a - b);
+              
+              if (indices.length > 0) {
+                selectedOptionIndices = indices;
+                const selectedLabels = indices
+                  .map(idx => {
+                    const opt = options[idx];
+                    return typeof opt === "string" ? opt : opt.label;
+                  })
+                  .join(", ");
+                textAnswer = selectedLabels;
+              }
+            } else {
+              // Single selection: parse single letter (e.g., "A")
+              const letter = mcqAnswer.split(",")[0].trim(); // Take first if comma-separated
+              if (letter.length === 1 && letter >= "A" && letter <= "Z") {
+                selectedOptionIdx = letter.charCodeAt(0) - 65;
+                if (
+                  selectedOptionIdx >= 0 &&
+                  selectedOptionIdx < options.length
+                ) {
+                  const selOpt = options[selectedOptionIdx];
+                  textAnswer =
+                    typeof selOpt === "string" ? selOpt : selOpt.label;
+                }
               }
             }
           }
+          
           answersMap.set(qId, {
             questionId: qId,
             textAnswer,
             mcqAnswer: ans.mcq_answer,
             selectedOptionIdx,
+            selectedOptionIndices,
             isUserModified: ans.is_user_modified || false,
           });
         }
@@ -522,15 +552,28 @@ export default function RepoPage() {
           ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
           : [];
         let hasAnswer = false;
+        const isMultipleChoice = q.multipleChoice ?? false;
         if (answer?.isOther && answer.otherText?.trim()) {
           hasAnswer = true;
-        } else if (answer?.selectedOptionIdx != null && answer.selectedOptionIdx >= 0 && answer.selectedOptionIdx < options.length) {
-          hasAnswer = true;
-        } else if (answer?.textAnswer?.trim()) {
-          hasAnswer = true;
-        } else if (answer?.mcqAnswer && options.length > 0) {
-          const idx = (answer.mcqAnswer.charCodeAt(0) ?? 65) - 65;
-          if (idx >= 0 && idx < options.length) hasAnswer = true;
+        } else if (isMultipleChoice) {
+          // Multiple choice: check if any options are selected
+          if (answer?.selectedOptionIndices && answer.selectedOptionIndices.length > 0) {
+            hasAnswer = answer.selectedOptionIndices.some(
+              idx => idx >= 0 && idx < options.length
+            );
+          } else if (answer?.textAnswer?.trim()) {
+            hasAnswer = true;
+          }
+        } else {
+          // Single choice
+          if (answer?.selectedOptionIdx != null && answer.selectedOptionIdx >= 0 && answer.selectedOptionIdx < options.length) {
+            hasAnswer = true;
+          } else if (answer?.textAnswer?.trim()) {
+            hasAnswer = true;
+          } else if (answer?.mcqAnswer && options.length > 0) {
+            const idx = (answer.mcqAnswer.charCodeAt(0) ?? 65) - 65;
+            if (idx >= 0 && idx < options.length) hasAnswer = true;
+          }
         }
         if (!hasAnswer) {
           unansweredIds.push(q.id);
@@ -586,9 +629,27 @@ export default function RepoPage() {
 
         const answer = state.answers.get(qId);
         let answerStr: string | undefined;
+        const isMultipleChoice = question.multipleChoice ?? false;
 
         if (answer?.isOther && answer.otherText?.trim()) {
           answerStr = `Other: ${answer.otherText.trim()}`;
+        } else if (isMultipleChoice && answer?.selectedOptionIndices && answer.selectedOptionIndices.length > 0) {
+          // Multiple choice: format selected options as comma-separated labels
+          const options = Array.isArray(question.options)
+            ? question.options.map((o) => (typeof o === "string" ? { label: o } : o))
+            : [];
+          const selectedLabels = answer.selectedOptionIndices
+            .filter(idx => idx >= 0 && idx < options.length)
+            .map(idx => {
+              const opt = options[idx];
+              return typeof opt === "string" ? opt : opt.label;
+            })
+            .join(", ");
+          if (selectedLabels) {
+            answerStr = selectedLabels;
+          } else if (answer?.textAnswer?.trim()) {
+            answerStr = answer.textAnswer.trim();
+          }
         } else if (answer?.textAnswer?.trim()) {
           answerStr = answer.textAnswer.trim();
         } else if (answer?.mcqAnswer && question.options) {
@@ -678,12 +739,18 @@ export default function RepoPage() {
 
   // Count answered questions (excluding skipped ones)
   const answeredCount = Array.from(state.answers.entries()).filter(
-    ([qId, a]) =>
-      !state.skippedQuestions.has(qId) &&
-      ((a.isOther && a.otherText?.trim()) ||
-        (a.selectedOptionIdx != null && a.selectedOptionIdx >= 0) ||
-        a.textAnswer?.trim() ||
-        a.mcqAnswer)
+    ([qId, a]) => {
+      if (state.skippedQuestions.has(qId)) return false;
+      const question = state.questions.find(q => q.id === qId);
+      const isMultipleChoice = question?.multipleChoice ?? false;
+      
+      if (a.isOther && a.otherText?.trim()) return true;
+      if (isMultipleChoice && a.selectedOptionIndices && a.selectedOptionIndices.length > 0) return true;
+      if (a.selectedOptionIdx != null && a.selectedOptionIdx >= 0) return true;
+      if (a.textAnswer?.trim()) return true;
+      if (a.mcqAnswer) return true;
+      return false;
+    }
   ).length;
 
   // Total questions minus skipped ones
@@ -698,14 +765,20 @@ export default function RepoPage() {
     const opts = Array.isArray(q.options)
       ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
       : [];
-    return !(
+    const isMultipleChoice = q.multipleChoice ?? false;
+    
+    // Check if question has an answer
+    const hasAnswer =
       (a?.isOther && a.otherText?.trim()) ||
+      (isMultipleChoice && a?.selectedOptionIndices && a.selectedOptionIndices.length > 0 && 
+        a.selectedOptionIndices.some(idx => idx >= 0 && idx < opts.length)) ||
       (a?.selectedOptionIdx != null &&
         a.selectedOptionIdx >= 0 &&
         a.selectedOptionIdx < opts.length) ||
       a?.textAnswer?.trim() ||
-      (a?.mcqAnswer && opts.length > 0)
-    );
+      (a?.mcqAnswer && opts.length > 0);
+    
+    return !hasAnswer;
   }).length;
 
   // Set repo and branch in Redux store when recipeId is available

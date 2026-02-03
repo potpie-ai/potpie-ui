@@ -11,8 +11,10 @@ export interface QuestionAnswer {
   textAnswer?: string;
   /** Legacy: option letter (A, B, C). New: use selectedOptionIdx or isOther + otherText */
   mcqAnswer?: string;
-  /** New: index of selected option (0-based), -1 or undefined = not selected */
+  /** New: index of selected option (0-based), -1 or undefined = not selected (single selection) */
   selectedOptionIdx?: number;
+  /** New: indices of selected options (0-based) for multiple choice questions */
+  selectedOptionIndices?: number[];
   /** New: true when "Other (specify your own)" is selected */
   isOther?: boolean;
   /** New: user input when isOther is true - submitted as "Other: <value>" */

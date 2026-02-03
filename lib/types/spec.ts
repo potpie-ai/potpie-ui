@@ -130,6 +130,7 @@ export interface RecipeQuestionNew {
   id?: string;
   question: string;
   criticality?: "important" | "optional" | string;
+  multiple_choice?: boolean;
   options?: QuestionOption[] | null;
   expected_answer_type?: string;
   answer_recommendation?: AnswerRecommendation | null;

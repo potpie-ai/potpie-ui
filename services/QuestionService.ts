@@ -15,6 +15,8 @@ export interface MCQQuestion {
   /** Options as strings (legacy) or MCQOption[] (new API) - normalized to MCQOption[] internally */
   options: string[] | MCQOption[];
   needsInput: boolean;
+  /** Whether multiple options can be selected (true) or only one (false) */
+  multipleChoice?: boolean;
   /** Legacy: preferred option label. New: derived from answer_recommendation.idx */
   assumed?: string;
   /** AI reasoning for recommended option */

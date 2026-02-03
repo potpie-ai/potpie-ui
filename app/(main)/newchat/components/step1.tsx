@@ -146,10 +146,13 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         setProjectId(projectId);
       }
 
-      if (initialStatus === ParsingStatusEnum.READY) {
-        setParsingStatus(ParsingStatusEnum.READY);
+      // Advance to step 2 immediately if already READY or INFERRING
+      if (initialStatus === ParsingStatusEnum.READY || initialStatus === ParsingStatusEnum.INFERRING) {
+        setParsingStatus(initialStatus);
         setChatStep(2);
-        return;
+        if (initialStatus === ParsingStatusEnum.READY) {
+          return;
+        }
       }
 
       await BranchAndRepositoryService.pollParsingStatus(
@@ -187,10 +190,13 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         setProjectId(projectId);
       }
 
-      if (initialStatus === ParsingStatusEnum.READY) {
-        setParsingStatus(ParsingStatusEnum.READY);
+      // Advance to step 2 immediately if already READY or INFERRING
+      if (initialStatus === ParsingStatusEnum.READY || initialStatus === ParsingStatusEnum.INFERRING) {
+        setParsingStatus(initialStatus);
         setChatStep(2);
-        return;
+        if (initialStatus === ParsingStatusEnum.READY) {
+          return;
+        }
       }
 
       await BranchAndRepositoryService.pollParsingStatus(

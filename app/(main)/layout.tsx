@@ -5,7 +5,12 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
 import posthog from "posthog-js";
-import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/Layouts/Sidebar";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
@@ -34,7 +39,7 @@ export default function RootLayout({
   const agent_id = searchParams.get("agent_id");
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [isSendingVerification, setIsSendingVerification] = useState(false);
-  
+
   const handleResendVerification = async () => {
     if (!auth.currentUser) {
       toast.error("No user found. Please sign in again.");
@@ -48,45 +53,56 @@ export default function RootLayout({
     }
 
     const workEmail = accountInfo?.email || user?.email;
-    
+
     setIsSendingVerification(true);
     try {
       // Get Firebase token for authentication
       const token = await auth.currentUser.getIdToken();
-      
+
       // Call backend API to send verification email to work email
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8000'}/api/v1/account/resend-verification`,
+        `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8000"}/api/v1/account/resend-verification`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       const data = await response.json();
 
       if (!response.ok) {
         // Check if this is a GitHub provider error
-        if (data.action === 'sign_in_with_work_email') {
+        if (data.action === "sign_in_with_work_email") {
           toast.error(
-            data.message || "Please sign in with your work email (Google) to verify your email address.",
+            data.message ||
+              "Please sign in with your work email (Google) to verify your email address.",
             {
               duration: 5000,
-            }
+            },
           );
           return;
         }
-        throw new Error(data.error || data.message || 'Failed to send verification email');
+        throw new Error(
+          data.error || data.message || "Failed to send verification email",
+        );
       }
 
-      toast.success(`Verification email sent to ${data.email || workEmail}! Please check your inbox (and spam folder).`);
-      console.log("Verification email sent successfully to work email:", data.email || workEmail);
+      toast.success(
+        `Verification email sent to ${data.email || workEmail}! Please check your inbox (and spam folder).`,
+      );
+      console.log(
+        "Verification email sent successfully to work email:",
+        data.email || workEmail,
+      );
     } catch (error: any) {
       console.error("Failed to send verification email:", error);
-      toast.error(error?.message || "Failed to send verification email. Please try again.");
+      toast.error(
+        error?.message ||
+          "Failed to send verification email. Please try again.",
+      );
     } finally {
       setIsSendingVerification(false);
     }
@@ -97,27 +113,37 @@ export default function RootLayout({
     queryKey: ["accountInfo", user?.uid],
     queryFn: async () => {
       if (!user?.uid) throw new Error("No user ID");
-      const token = await user.getIdToken();
+      // Guard: user may be from localStorage (mock mode) and lack getIdToken
+      const token =
+        typeof user.getIdToken === "function"
+          ? await user.getIdToken()
+          : ((typeof window !== "undefined"
+              ? localStorage.getItem("token")
+              : null) ?? undefined);
+      if (!token) throw new Error("No auth token available");
       return authClient.getAccount(token);
     },
     enabled: !!user?.uid && !!user,
     retry: false,
   });
-  
+
   if (user == null) {
     // Preserve all query parameters when redirecting to sign-in
     const queryString = searchParams.toString();
     const redirectPath = queryString ? `${pathname}?${queryString}` : pathname;
-    
+
     if (repo && branch) {
       dispatch(setRepoName(repo));
       dispatch(setBranchName(branch));
     }
-    
+
     router.push(`/sign-in?redirect=${encodeURIComponent(redirectPath)}`);
     return null;
   }
-  posthog.identify(user.id, { email: user.email, name: user?.name || "" });
+  posthog.identify(user.uid ?? user.id, {
+    email: user.email,
+    name: user?.name ?? (user?.displayName || ""),
+  });
 
   // Use verification status from backend (work email), not Firebase (which might be GitHub email)
   const workEmail = accountInfo?.email || user?.email;
@@ -139,7 +165,8 @@ export default function RootLayout({
                     Email verification required
                   </p>
                   <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                    Please verify your email address ({workEmail}) to continue using all features.
+                    Please verify your email address ({workEmail}) to continue
+                    using all features.
                   </p>
                 </div>
               </div>
@@ -169,7 +196,7 @@ export default function RootLayout({
         <main
           className={cn(
             "flex flex-1 flex-col gap-4 lg:gap-6",
-            `${GeistSans.variable} ${GeistMono.variable}`
+            `${GeistSans.variable} ${GeistMono.variable}`,
           )}
         >
           {children}

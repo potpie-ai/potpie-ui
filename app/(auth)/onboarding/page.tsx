@@ -5,7 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import React, { useRef, useState, useEffect } from "react";
 import { auth } from "@/configs/Firebase-config";
 import { GithubAuthProvider, linkWithPopup } from "firebase/auth";
-import { LucideGithub, LucideCheck, LoaderCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import {
+  LucideGithub,
+  LucideCheck,
+  LoaderCircle,
+  ArrowRight,
+  ArrowLeft,
+} from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
@@ -16,9 +22,9 @@ import Link from "next/link";
 // Helper function to extract company name from email domain
 const extractCompanyNameFromEmail = (email: string): string => {
   if (!email || !email.includes("@")) return "";
-  
+
   const domain = email.split("@")[1]?.toLowerCase() || "";
-  
+
   // List of common personal email providers
   const personalDomains = [
     "gmail.com",
@@ -35,15 +41,15 @@ const extractCompanyNameFromEmail = (email: string): string => {
     "live.com",
     "msn.com",
   ];
-  
+
   // If it's a personal domain, return empty string
   if (personalDomains.includes(domain)) return "";
-  
+
   // Extract company name from domain
   // e.g., "momentum.sh" -> "Momentum", "acme.com" -> "Acme"
   const domainParts = domain.split(".");
   const mainPart = domainParts[0] || domain;
-  
+
   // Capitalize first letter
   return mainPart.charAt(0).toUpperCase() + mainPart.slice(1);
 };
@@ -55,10 +61,10 @@ const Onboarding = () => {
   const plan = searchParams.get("plan");
   const prompt = searchParams.get("prompt");
   const agent_id = searchParams.get("agent_id");
-  
+
   // Extract company name from email
   const autoCompanyName = email ? extractCompanyNameFromEmail(email) : "";
-  
+
   const [formData, setFormData] = useState({
     email: email || "",
     name: name || "",
@@ -81,16 +87,16 @@ const Onboarding = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1); // 1 = form, 2 = GitHub linking
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
-  
+
   // Store the UID from URL params in state to prevent it from changing
   // This is the Google SSO UID we want to link GitHub to
   const [targetUserId, setTargetUserId] = useState<string | null>(uidFromUrl);
-  
+
   // Update targetUserId when component mounts or URL changes
   useEffect(() => {
     if (uidFromUrl) {
       setTargetUserId(uidFromUrl);
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.log("Target user ID (from URL):", uidFromUrl);
       }
     }
@@ -105,43 +111,55 @@ const Onboarding = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Import auth only on client side
-        const { getAuth, onAuthStateChanged } = await import("firebase/auth");
-        const auth = getAuth();
+        // Use centralized auth from Firebase-config (avoids getAuth() which can
+        // trigger _getInitializePromise errors when app isn't ready)
+        const { onAuthStateChanged } = await import("firebase/auth");
 
         onAuthStateChanged(auth, (user) => {
           if (user) {
             // User is signed in - use authenticated user's email if URL email doesn't match
             const authenticatedEmail = user.email || "";
             const urlEmail = email || "";
-            
+
             // Compute company name from authenticated email
-            const newCompanyName = authenticatedEmail ? extractCompanyNameFromEmail(authenticatedEmail) : "";
-            
+            const newCompanyName = authenticatedEmail
+              ? extractCompanyNameFromEmail(authenticatedEmail)
+              : "";
+
             // If emails don't match, prefer the authenticated user's email
             // This handles cases where SSO login doesn't set URL params correctly
-            if (authenticatedEmail && authenticatedEmail !== urlEmail && urlEmail) {
-              if (process.env.NODE_ENV === 'development') {
-                console.warn(`Email mismatch: URL has ${urlEmail}, but authenticated as ${authenticatedEmail}. Using authenticated email.`);
+            if (
+              authenticatedEmail &&
+              authenticatedEmail !== urlEmail &&
+              urlEmail
+            ) {
+              if (process.env.NODE_ENV === "development") {
+                console.warn(
+                  `Email mismatch: URL has ${urlEmail}, but authenticated as ${authenticatedEmail}. Using authenticated email.`,
+                );
               }
               // Update form data with authenticated email and auto-populate company name
-              setFormData(prev => ({ 
-                ...prev, 
+              setFormData((prev) => ({
+                ...prev,
                 email: authenticatedEmail,
-                companyName: prev.companyName || newCompanyName
+                companyName: prev.companyName || newCompanyName,
               }));
             } else if (authenticatedEmail && newCompanyName) {
               // If company name is empty, try to extract from authenticated email
               // Use functional updater to check current state and only update if needed
-              setFormData(prev => {
+              setFormData((prev) => {
                 // Only update if company name is empty and we have a new company name
-                if (!prev.companyName && newCompanyName && newCompanyName !== prev.companyName) {
+                if (
+                  !prev.companyName &&
+                  newCompanyName &&
+                  newCompanyName !== prev.companyName
+                ) {
                   return { ...prev, companyName: newCompanyName };
                 }
                 return prev;
               });
             }
-            
+
             setIsAuthenticated(true);
             setAuthError("");
           } else {
@@ -151,7 +169,7 @@ const Onboarding = () => {
           }
         });
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === "development") {
           console.error("Auth check error:", error);
         }
         setAuthError("Authentication error. Please try again.");
@@ -161,13 +179,12 @@ const Onboarding = () => {
     checkAuth();
   }, [email, router]);
 
-
   const handleCheckoutRedirect = async (uid: string) => {
     try {
       const subUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
       const response = await axios.get(
         `${subUrl}/create-checkout-session?user_id=${uid}&plan_type=${plan}`,
-        { headers: { "Content-Type": "application/json" } }
+        { headers: { "Content-Type": "application/json" } },
       );
 
       if (response.data.url) {
@@ -176,7 +193,7 @@ const Onboarding = () => {
         throw new Error("No checkout URL received");
       }
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.error("Error getting checkout URL:", error);
       }
     }
@@ -184,12 +201,12 @@ const Onboarding = () => {
 
   const submitOnboarding = async () => {
     if (isSubmitting) return; // Prevent double submission
-    
+
     setIsSubmitting(true);
     try {
       if (!isAuthenticated) {
         throw new Error(
-          authError || "Authentication required. Please sign in."
+          authError || "Authentication required. Please sign in.",
         );
       }
 
@@ -221,7 +238,7 @@ const Onboarding = () => {
 
         const token = await user.getIdToken();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-        
+
         const response = await axios.post(
           `${baseUrl}/api/v1/user/onboarding`,
           {
@@ -235,21 +252,25 @@ const Onboarding = () => {
           },
           {
             headers: { Authorization: `Bearer ${token}` },
-          }
+          },
         );
 
         if (response.data.success) {
-        toast.success("Onboarding information saved!");
+          toast.success("Onboarding information saved!");
         } else {
-          throw new Error(response.data.message || "Failed to save onboarding data");
+          throw new Error(
+            response.data.message || "Failed to save onboarding data",
+          );
         }
       } catch (error: any) {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === "development") {
           console.error("Error saving onboarding data:", error);
         }
-        
+
         if (error.response?.status === 403) {
-          throw new Error("You can only save onboarding data for your own account");
+          throw new Error(
+            "You can only save onboarding data for your own account",
+          );
         } else if (error.response?.status === 401) {
           throw new Error("Authentication required. Please sign in again.");
         } else if (error.response?.data?.detail) {
@@ -257,7 +278,9 @@ const Onboarding = () => {
         } else if (error.message) {
           throw new Error(error.message);
         } else {
-          throw new Error("Error saving user data to database. Please try again.");
+          throw new Error(
+            "Error saving user data to database. Please try again.",
+          );
         }
       }
 
@@ -268,22 +291,28 @@ const Onboarding = () => {
         if (user) {
           const token = await user.getIdToken();
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-          const response = await axios.get(
-            `${baseUrl}/api/v1/providers/me`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
-          
-          githubLinked = response.data.providers?.some(
-            (p: any) => p.provider_type === 'firebase_github'
-          ) || false;
+          const response = await axios.get(`${baseUrl}/api/v1/providers/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          githubLinked =
+            response.data.providers?.some(
+              (p: any) => p.provider_type === "firebase_github",
+            ) || false;
         }
       } catch (error: any) {
         // Silently handle errors - user might not exist yet or endpoint might fail
         // This is expected for new users who haven't linked GitHub yet
-        if (process.env.NODE_ENV === 'development' && error.response?.status !== 404 && error.response?.status !== 401) {
-          console.warn("Error checking GitHub link (non-critical):", error.response?.status, error.message);
+        if (
+          process.env.NODE_ENV === "development" &&
+          error.response?.status !== 404 &&
+          error.response?.status !== 401
+        ) {
+          console.warn(
+            "Error checking GitHub link (non-critical):",
+            error.response?.status,
+            error.message,
+          );
         }
         // Assume not linked if check fails
         githubLinked = false;
@@ -302,11 +331,11 @@ const Onboarding = () => {
       }
       // Otherwise, wait for GitHub linking (handled by linkGithub function)
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.error("Error saving onboarding data:", error);
       }
       toast.error(
-        error.message || "Error saving onboarding data. Please try again."
+        error.message || "Error saving onboarding data. Please try again.",
       );
     } finally {
       setIsSubmitting(false);
@@ -315,14 +344,14 @@ const Onboarding = () => {
 
   const proceedToNextStep = () => {
     if (!targetUserId) return;
-    
+
     if (agent_id) {
       router.push(`/shared-agent?agent_id=${agent_id}`);
     } else if (plan) {
       handleCheckoutRedirect(targetUserId);
     } else if (prompt) {
       router.push(
-        `/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`
+        `/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`,
       );
     } else {
       router.push("/idea");
@@ -333,11 +362,7 @@ const Onboarding = () => {
     if (popupRef.current) {
       popupRef.current.close();
     }
-    const popup = window.open(
-      githubAppUrl,
-      "_blank",
-      "width=1000,height=700"
-    );
+    const popup = window.open(githubAppUrl, "_blank", "width=1000,height=700");
     popupRef.current = popup;
   };
 
@@ -350,22 +375,30 @@ const Onboarding = () => {
       // This is the Google SSO UID that was passed when redirecting to onboarding
       // This is the user we want to link GitHub to
       if (!targetUserId) {
-        throw new Error("User ID not found. Please sign in again and try linking GitHub.");
+        throw new Error(
+          "User ID not found. Please sign in again and try linking GitHub.",
+        );
       }
-      
+
       const originalUserUid = targetUserId; // This is the Google SSO UID we want to link to
-      
+
       // Verify the user is authenticated before proceeding
       const currentUser = auth.currentUser;
       if (!currentUser) {
         throw new Error("No authenticated user found. Please sign in again.");
       }
-      
+
       // Log for debugging - note that currentUser.uid might be different after GitHub popup
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.log("=== GitHub Linking Debug ===");
-        console.log("Target user ID (Google SSO UID from URL):", originalUserUid);
-        console.log("Current auth.currentUser.uid (before popup):", currentUser.uid);
+        console.log(
+          "Target user ID (Google SSO UID from URL):",
+          originalUserUid,
+        );
+        console.log(
+          "Current auth.currentUser.uid (before popup):",
+          currentUser.uid,
+        );
         console.log("These may differ - we'll use targetUserId for linking");
       }
 
@@ -377,7 +410,7 @@ const Onboarding = () => {
       // Link GitHub to the CURRENT authenticated user (work/SSO) without switching accounts
       const result = await linkWithPopup(currentUser, provider);
       const credential = GithubAuthProvider.credentialFromResult(result);
-      
+
       if (!credential) {
         throw new Error("Failed to get GitHub credentials");
       }
@@ -385,8 +418,8 @@ const Onboarding = () => {
       const githubProviderUid =
         result.user.providerData.find((p) => p.providerId === "github.com")
           ?.uid || result.user.uid; // GitHub provider UID from providerData
-      
-      if (process.env.NODE_ENV === 'development') {
+
+      if (process.env.NODE_ENV === "development") {
         console.log("GitHub provider UID:", githubProviderUid);
         console.log("Linking GitHub to original user UID:", originalUserUid);
       }
@@ -417,17 +450,17 @@ const Onboarding = () => {
           providerUsername: (result as any)._tokenResponse.screenName,
           githubFirebaseUid: githubProviderUid, // Store GitHub provider UID for reference
         },
-        { headers: headers }
+        { headers: headers },
       );
 
       toast.success("GitHub connected! You're all set to code");
       // Small delay for smooth transition
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 300));
       setHasGithubLinked(true);
-      
+
       // Open GitHub app installation popup
       openGithubAppPopup();
-      
+
       // If onboarding is already submitted, proceed to next step
       if (onboardingSubmitted) {
         // Wait a bit for popup to open, then proceed
@@ -440,11 +473,13 @@ const Onboarding = () => {
         setCurrentStep(2);
       }
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.error("GitHub linking error:", error);
       }
       if (error.code === "auth/popup-closed-by-user") {
-        toast.error("GitHub sign-in cancelled. No worries, try again when ready!");
+        toast.error(
+          "GitHub sign-in cancelled. No worries, try again when ready!",
+        );
       } else {
         toast.error(getUserFriendlyError(error));
       }
@@ -518,8 +553,12 @@ const Onboarding = () => {
                 {/* Progress Indicator */}
                 <div className="mb-6">
                   <div className="flex items-center gap-2">
-                    <div className={`h-1 flex-1 rounded-full ${currentStep >= 1 ? 'bg-[#B7F600]' : 'bg-[#EBEBEB]'}`}></div>
-                    <div className={`h-1 flex-1 rounded-full ${currentStep >= 2 ? 'bg-[#B7F600]' : 'bg-[#EBEBEB]'}`}></div>
+                    <div
+                      className={`h-1 flex-1 rounded-full ${currentStep >= 1 ? "bg-[#B7F600]" : "bg-[#EBEBEB]"}`}
+                    ></div>
+                    <div
+                      className={`h-1 flex-1 rounded-full ${currentStep >= 2 ? "bg-[#B7F600]" : "bg-[#EBEBEB]"}`}
+                    ></div>
                   </div>
                 </div>
 
@@ -532,7 +571,8 @@ const Onboarding = () => {
                         Welcome! Let&apos;s get you set up
                       </h1>
                       <p className="text-center text-sm text-[#656969]">
-                        We just need a few details to personalize your experience
+                        We just need a few details to personalize your
+                        experience
                       </p>
                     </div>
 
@@ -582,12 +622,16 @@ const Onboarding = () => {
 
                         <div className="space-y-1">
                           <label className="block text-sm font-medium text-[#022D2C]">
-                            How did you find us? <span className="ml-0.5">*</span>
+                            How did you find us?{" "}
+                            <span className="ml-0.5">*</span>
                           </label>
                           <select
                             value={formData.source}
                             onChange={(e) =>
-                              setFormData({ ...formData, source: e.target.value })
+                              setFormData({
+                                ...formData,
+                                source: e.target.value,
+                              })
                             }
                             className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
                             required
@@ -610,7 +654,10 @@ const Onboarding = () => {
                             placeholder="Enter your industry"
                             value={formData.industry}
                             onChange={(e) =>
-                              setFormData({ ...formData, industry: e.target.value })
+                              setFormData({
+                                ...formData,
+                                industry: e.target.value,
+                              })
                             }
                             className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
                             required
@@ -626,7 +673,10 @@ const Onboarding = () => {
                             placeholder="Enter your job title"
                             value={formData.jobTitle}
                             onChange={(e) =>
-                              setFormData({ ...formData, jobTitle: e.target.value })
+                              setFormData({
+                                ...formData,
+                                jobTitle: e.target.value,
+                              })
                             }
                             className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
                             required
@@ -642,7 +692,10 @@ const Onboarding = () => {
                             placeholder="Enter your company name"
                             value={formData.companyName}
                             onChange={(e) =>
-                              setFormData({ ...formData, companyName: e.target.value })
+                              setFormData({
+                                ...formData,
+                                companyName: e.target.value,
+                              })
                             }
                             className="w-full px-3 py-2.5 rounded-lg border border-[#EBEBEB] bg-white text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none focus:ring-2 focus:ring-[#B7F600] focus:border-transparent text-sm"
                             required
@@ -697,7 +750,10 @@ const Onboarding = () => {
                     {/* GitHub Logo */}
                     <div className="flex justify-center mb-6">
                       <div className="bg-[#022D2C] rounded-full p-6 w-20 h-20 flex items-center justify-center">
-                        <LucideGithub className="text-[#FFF9F5] w-10 h-10" fill="#FFF9F5" />
+                        <LucideGithub
+                          className="text-[#FFF9F5] w-10 h-10"
+                          fill="#FFF9F5"
+                        />
                       </div>
                     </div>
 
@@ -736,12 +792,15 @@ const Onboarding = () => {
                           disabled={isLinkingGithub}
                         >
                           <LucideGithub className="w-5 h-5" />
-                          {isLinkingGithub ? "Linking..." : "Link GitHub Account"}
+                          {isLinkingGithub
+                            ? "Linking..."
+                            : "Link GitHub Account"}
                         </Button>
 
                         {/* Disclaimer */}
                         <p className="text-[#656969] text-xs text-center">
-                          We&apos;ll only access repositories you explicitly authorize
+                          We&apos;ll only access repositories you explicitly
+                          authorize
                         </p>
                       </>
                     ) : (
@@ -796,7 +855,9 @@ const Onboarding = () => {
               </p>
 
               <div className="mt-7">
-                <p className="text-base font-medium text-[#FFF9F5]">{testimonials[currentTestimonial].name}</p>
+                <p className="text-base font-medium text-[#FFF9F5]">
+                  {testimonials[currentTestimonial].name}
+                </p>
                 <p className="mt-1 text-sm font-medium text-[rgba(255,249,245,0.72)]">
                   {testimonials[currentTestimonial].title}
                 </p>
@@ -815,7 +876,10 @@ const Onboarding = () => {
                       className="block h-1 rounded-full transition-all"
                       style={{
                         width: index === currentTestimonial ? 16 : 4,
-                        background: index === currentTestimonial ? "#FFF9F5" : "rgba(255,249,245,0.35)",
+                        background:
+                          index === currentTestimonial
+                            ? "#FFF9F5"
+                            : "rgba(255,249,245,0.35)",
                       }}
                     />
                   </button>

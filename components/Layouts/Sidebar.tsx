@@ -56,7 +56,7 @@ export function AppSidebar() {
 
   const userId = user?.uid;
   const { total_human_messages } = useSelector(
-    (state: RootState) => state.UserInfo
+    (state: RootState) => state.UserInfo,
   );
   const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["userSubscription", userId],
@@ -70,7 +70,7 @@ export function AppSidebar() {
     queryFn: () =>
       MinorService.fetchUserUsage(
         dayjs(userSubscription.end_date).subtract(30, "day").toISOString(),
-        userSubscription.end_date
+        userSubscription.end_date,
       ),
     enabled: !!userId && !!userSubscription,
   });
@@ -80,7 +80,14 @@ export function AppSidebar() {
     queryKey: ["accountInfo", userId],
     queryFn: async () => {
       if (!user?.uid) throw new Error("No user ID");
-      const token = await user.getIdToken();
+      // Guard: user may be from localStorage (mock mode) and lack getIdToken
+      const token =
+        typeof user.getIdToken === "function"
+          ? await user.getIdToken()
+          : ((typeof window !== "undefined"
+              ? localStorage.getItem("token")
+              : null) ?? undefined);
+      if (!token) throw new Error("No auth token available");
       return authClient.getAccount(token);
     },
     enabled: !!userId && !!user,
@@ -108,17 +115,23 @@ export function AppSidebar() {
 
   useEffect(() => {
     if (!usageLoading && !subscriptionLoading && userSubscription) {
-      const maxCredits = userSubscription.plan_type === planTypesEnum.PRO ? 500 : 50;
+      const maxCredits =
+        userSubscription.plan_type === planTypesEnum.PRO ? 500 : 50;
       const usedCredits = total_human_messages || 0;
 
       const calculatedProgress = Math.min(
         (usedCredits / maxCredits) * 100,
-        100
+        100,
       );
 
       setProgress(calculatedProgress);
     }
-  }, [usageLoading, subscriptionLoading, total_human_messages, userSubscription]);
+  }, [
+    usageLoading,
+    subscriptionLoading,
+    total_human_messages,
+    userSubscription,
+  ]);
 
   const handleTrack = () => {
     formbricksApp.track("report-btn", {
@@ -219,7 +232,8 @@ export function AppSidebar() {
             email: accountInfo?.email || user?.email || "",
             name: user?.displayName,
             // Use verification status from backend (work email), fallback to Firebase status
-            emailVerified: accountInfo?.email_verified ?? user?.emailVerified ?? false,
+            emailVerified:
+              accountInfo?.email_verified ?? user?.emailVerified ?? false,
           }}
         />
       </SidebarFooter>

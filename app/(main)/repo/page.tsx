@@ -15,7 +15,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Github, FileText, Loader2, GitBranch } from "lucide-react";
 import {
   QAAnswer,
-  SubmitSpecGenerationResponse,
+  SubmitRecipeAnswersResponse,
   RecipeQuestionsResponse,
 } from "@/lib/types/spec";
 import type {
@@ -96,6 +96,8 @@ export default function RepoPage() {
     const fetchQuestions = async () => {
       setQuestionsPolling(true);
       setState((prev) => ({ ...prev, pageState: "generating" }));
+      
+      let questionsProcessed = false;
 
       try {
         // First, try a direct fetch to see if questions are already available
@@ -110,8 +112,8 @@ export default function RepoPage() {
               "[Repo Page] Questions already available, status:",
               questionsData.recipe_status
             );
-            // Process questions immediately
             processQuestions(questionsData);
+            questionsProcessed = true;
             return;
           }
         } catch (error) {
@@ -121,10 +123,24 @@ export default function RepoPage() {
           );
         }
 
-        // If direct fetch didn't return questions, poll for them
+        // Poll with callback to display questions immediately when available
         console.log("[Repo Page] Polling for questions...");
-        questionsData = await QuestionService.pollRecipeQuestions(recipeId);
-        processQuestions(questionsData);
+        questionsData = await QuestionService.pollRecipeQuestions(
+          recipeId,
+          (partialData) => {
+            // This callback fires as soon as questions are available
+            if (!questionsProcessed) {
+              console.log("[Repo Page] Questions received via polling callback");
+              processQuestions(partialData);
+              questionsProcessed = true;
+            }
+          }
+        );
+        
+        // Final fallback (in case callback wasn't triggered)
+        if (!questionsProcessed) {
+          processQuestions(questionsData);
+        }
       } catch (error: any) {
         console.error("Error fetching questions:", error);
         toast.error(error.message || "Failed to load questions");
@@ -424,8 +440,8 @@ export default function RepoPage() {
 
       console.log("Submitting QA answers with recipeId:", activeRecipeId);
 
-      // Collect all answers in the new format
-      const qaAnswers: Array<{ question_id: string; answer: string }> = [];
+      // Collect answers in API format: { "question-id": "answer" }
+      const answers: Record<string, string> = {};
 
       state.answers.forEach((answer, qId) => {
         if (state.skippedQuestions.has(qId)) return;
@@ -434,28 +450,21 @@ export default function RepoPage() {
         if (!question) return;
 
         if (answer.textAnswer || answer.mcqAnswer) {
-          qaAnswers.push({
-            question_id: qId,
-            answer: answer.textAnswer || answer.mcqAnswer || "",
-          });
+          answers[qId] = answer.textAnswer || answer.mcqAnswer || "";
         }
       });
 
       // Add additional context if provided (as a special question)
       if (state.additionalContext.trim()) {
-        qaAnswers.push({
-          question_id: "additional_context",
-          answer: state.additionalContext.trim(),
-        });
+        answers["additional_context"] = state.additionalContext.trim();
       }
 
-      // Call new spec generation API
-      return await SpecService.submitSpecGeneration({
-        recipe_id: activeRecipeId,
-        qa_answers: qaAnswers,
+      // API: POST /api/v1/recipes/{recipe_id}/submit-answers
+      return await SpecService.submitRecipeAnswers(activeRecipeId, {
+        answers,
       });
     },
-    onSuccess: (response: SubmitSpecGenerationResponse) => {
+    onSuccess: (response: SubmitRecipeAnswersResponse) => {
       toast.success("Spec generation started successfully");
       // Navigate to spec page with recipeId
       const activeRecipeId = recipeId || recipeIdFromUrl;

@@ -92,7 +92,7 @@ export interface CreateRecipeResponse {
   message: string; // e.g., "Recipe created successfully. Use recipe_id for subsequent operations."
 }
 
-// New recipe codegen types
+// New recipe codegen types - API: POST /api/v1/recipes/
 export interface CreateRecipeCodegenRequest {
   user_prompt: string;
   project_id: string;
@@ -106,6 +106,78 @@ export interface CreateRecipeCodegenResponse {
   message: string;
 }
 
+// API response: { recipe: { id, project_id, ... } }
+export interface CreateRecipeApiResponse {
+  recipe: {
+    id: string;
+    project_id: string;
+    user_prompt: string;
+    additional_links?: string[];
+    status: string;
+    created_by?: string;
+  };
+}
+
+// API: POST /api/v1/recipes/{recipe_id}/questions/generate
+export interface GenerateQuestionsRequest {
+  user_prompt: string;
+  additional_links?: string[];
+}
+
+export interface GenerateQuestionsResponse {
+  recipe_id: string;
+  status: string;
+  created_at: string;
+}
+
+// API question format - GET /api/v1/recipes/{recipe_id}/questions
+export interface QuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface AnswerRecommendation {
+  idx: number | null;
+  reasoning?: string;
+}
+
+export interface ContextReference {
+  source?: string;
+  reference?: string;
+  description?: string;
+}
+
+export interface RecipeQuestionApi {
+  id?: string;
+  question: string;
+  criticality?: "BLOCKER" | "IMPORTANT" | "NICE_TO_HAVE" | string;
+  multiple_choice?: boolean;
+  options?: QuestionOption[];
+  answer_recommendation?: AnswerRecommendation | null;
+  context_refs?: ContextReference[] | null;
+}
+
+// API response: { recipe_id, generation_status, questions, generated_at, error_message }
+export interface RecipeQuestionsApiResponse {
+  recipe_id: string;
+  generation_status: "pending" | "completed" | "error" | string;
+  questions: RecipeQuestionApi[];
+  generated_at?: string | null;
+  error_message?: string | null;
+}
+
+// API: POST /api/v1/recipes/{recipe_id}/answers
+export interface SubmitRecipeAnswersRequest {
+  answers: Record<string, string | string[]>;
+}
+
+export interface SubmitRecipeAnswersResponse {
+  message: string;
+  recipe_id: string;
+  new_status: string;
+}
+
+// Legacy/UI format - normalized for components
 export interface RecipeQuestion {
   id: string;
   question: string;
@@ -119,6 +191,7 @@ export interface RecipeQuestion {
 export interface RecipeQuestionsResponse {
   recipe_id: string;
   recipe_status: "PENDING_QUESTIONS" | "QUESTIONS_READY" | "ERROR";
+  generation_status?: "pending" | "completed" | "error" | string;
   questions: RecipeQuestion[];
 }
 
@@ -275,4 +348,28 @@ export interface RecipeDetailsResponse {
   repo_name: string | null;
   branch_name: string | null;
   questions_and_answers: QuestionAnswerPair[];
+}
+
+// Spec chat API types (spec agent)
+export interface SpecChatRequest {
+  message: string;
+  edit_history: Array<{ message: string; response: string }>;
+}
+
+export interface SpecChatResponse {
+  explanation?: string;
+  message?: string;
+  spec_output?: SpecOutput | null;
+  undo_token?: string | null;
+  next_actions?: string[];
+  regenerate_triggered?: boolean;
+}
+
+export interface SpecUndoRequest {
+  undo_token: string;
+}
+
+export interface SpecUndoResponse {
+  spec_output: SpecOutput;
+  message?: string;
 }

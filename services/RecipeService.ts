@@ -42,7 +42,7 @@ export default class RecipeService {
     try {
       const headers = await getHeaders();
       const response = await axios.get<AllRecipesResponse>(
-        `${this.getBaseUrl()}/api/v1/recipe/codegen`,
+        `${this.getBaseUrl()}/api/v1/recipes/`,
         {
           params: { start, limit },
           headers,
@@ -59,7 +59,7 @@ export default class RecipeService {
     try {
       const headers = await getHeaders();
       const response = await axios.get<RecipeDetails>(
-        `${this.getBaseUrl()}/api/v1/recipe/codegen/${recipeId}/details`,
+        `${this.getBaseUrl()}/api/v1/recipes/${recipeId}/details`,
         { headers }
       );
       return response.data;

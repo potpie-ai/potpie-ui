@@ -142,6 +142,19 @@ export default function RepoPage() {
       // Check if questions are available (regardless of status)
       // This handles cases where status is SPEC_IN_PROGRESS but questions are still available
       if (questionsData.questions && questionsData.questions.length > 0) {
+        // Load localStorage answers for this recipeId to preserve user changes
+        let localStorageAnswers: Record<string, any> = {};
+        if (typeof window !== "undefined" && recipeId) {
+          try {
+            const storageKey = `qa_answers_${recipeId}`;
+            const stored = localStorage.getItem(storageKey);
+            if (stored) {
+              localStorageAnswers = JSON.parse(stored);
+            }
+          } catch (error) {
+            console.warn("Failed to load answers from localStorage:", error);
+          }
+        }
         // Convert RecipeQuestion[] or RecipeQuestionNew[] to MCQQuestion[] format
         const mcqQuestions: MCQQuestion[] = questionsData.questions.map(
           (q, index) => {
@@ -202,9 +215,30 @@ export default function RepoPage() {
           sectionsMap.get(q.section)!.push(q);
         });
 
-        // Initialize answers with AI recommendation (answer_recommendation.idx) when available
+        // Initialize answers - prioritize localStorage, then AI recommendation
         const initialAnswers = new Map<string, QuestionAnswer>();
+        
+        // First, load from localStorage if available
         mcqQuestions.forEach((q) => {
+          if (localStorageAnswers[q.id]?.isUserModified) {
+            const storedAnswer = localStorageAnswers[q.id];
+            initialAnswers.set(q.id, {
+              questionId: q.id,
+              textAnswer: storedAnswer.textAnswer,
+              mcqAnswer: storedAnswer.mcqAnswer,
+              selectedOptionIdx: storedAnswer.selectedOptionIdx,
+              selectedOptionIndices: storedAnswer.selectedOptionIndices,
+              isOther: storedAnswer.isOther,
+              otherText: storedAnswer.otherText,
+              isUserModified: true,
+            });
+          }
+        });
+        
+        // Then, set AI recommendations for questions without localStorage answers
+        mcqQuestions.forEach((q) => {
+          if (initialAnswers.has(q.id)) return; // Skip if already loaded from localStorage
+          
           const options = Array.isArray(q.options)
             ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
             : [];
@@ -388,11 +422,51 @@ export default function RepoPage() {
       sectionsMap.get(q.section)!.push(q);
     });
 
-    // Load existing answers
+    // Load existing answers - prioritize localStorage (user modifications), then API, then current state
     const answersMap = new Map<string, QuestionAnswer>();
+    const currentAnswers = state.answers; // Get current state answers to preserve user modifications
+    
+    // First, try to load from localStorage (preserves user changes across navigation)
+    let localStorageAnswers: Record<string, any> = {};
+    if (typeof window !== "undefined" && recipeId) {
+      try {
+        const storageKey = `qa_answers_${recipeId}`;
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          localStorageAnswers = JSON.parse(stored);
+        }
+      } catch (error) {
+        console.warn("Failed to load answers from localStorage:", error);
+      }
+    }
+    
     if (existingData?.answers) {
       Object.entries(existingData.answers).forEach(
         ([qId, answer]: [string, unknown]) => {
+          // Priority 1: Check localStorage for user-modified answers
+          if (localStorageAnswers[qId]?.isUserModified) {
+            const storedAnswer = localStorageAnswers[qId];
+            answersMap.set(qId, {
+              questionId: qId,
+              textAnswer: storedAnswer.textAnswer,
+              mcqAnswer: storedAnswer.mcqAnswer,
+              selectedOptionIdx: storedAnswer.selectedOptionIdx,
+              selectedOptionIndices: storedAnswer.selectedOptionIndices,
+              isOther: storedAnswer.isOther,
+              otherText: storedAnswer.otherText,
+              isUserModified: true,
+            });
+            return;
+          }
+          
+          // Priority 2: Check if user has modified this answer in current state
+          const currentAnswer = currentAnswers.get(qId);
+          if (currentAnswer?.isUserModified) {
+            // User has modified this answer locally, preserve it instead of loading from backend
+            answersMap.set(qId, currentAnswer);
+            return;
+          }
+          
           const ans = answer as {
             text_answer?: string;
             mcq_answer?: string;
@@ -448,6 +522,62 @@ export default function RepoPage() {
                 }
               }
             }
+          } else if (isMultipleChoice && ans.text_answer && options.length > 0) {
+            // Fallback: reconstruct selectedOptionIndices from text_answer for multiple choice
+            // This handles cases where mcq_answer wasn't saved but text_answer contains comma-separated labels
+            const textAnswerStr = ans.text_answer.trim();
+            if (textAnswerStr.includes(",")) {
+              // Try to match text_answer labels to options
+              const answerLabels = textAnswerStr.split(",").map(l => l.trim());
+              const matchedIndices: number[] = [];
+              
+              answerLabels.forEach(answerLabel => {
+                const matchedIdx = options.findIndex(opt => {
+                  const optLabel = typeof opt === "string" ? opt : opt.label;
+                  return optLabel.trim() === answerLabel || optLabel.trim().includes(answerLabel);
+                });
+                if (matchedIdx >= 0 && !matchedIndices.includes(matchedIdx)) {
+                  matchedIndices.push(matchedIdx);
+                }
+              });
+              
+              if (matchedIndices.length > 0) {
+                selectedOptionIndices = matchedIndices.sort((a, b) => a - b);
+                // Reconstruct mcq_answer from indices
+                const reconstructedMcqAnswer = matchedIndices
+                  .map(idx => String.fromCharCode(65 + idx))
+                  .join(",");
+                // Update textAnswer to ensure consistency
+                const reconstructedLabels = matchedIndices
+                  .map(idx => {
+                    const opt = options[idx];
+                    return typeof opt === "string" ? opt : opt.label;
+                  })
+                  .join(", ");
+                textAnswer = reconstructedLabels;
+              }
+            } else if (textAnswerStr && !textAnswerStr.startsWith("Other:")) {
+              // Single label match for multiple choice (edge case)
+              const matchedIdx = options.findIndex(opt => {
+                const optLabel = typeof opt === "string" ? opt : opt.label;
+                return optLabel.trim() === textAnswerStr || optLabel.trim().includes(textAnswerStr);
+              });
+              if (matchedIdx >= 0) {
+                selectedOptionIndices = [matchedIdx];
+              }
+            }
+          } else if (!isMultipleChoice && ans.text_answer && options.length > 0 && !ans.mcq_answer) {
+            // Fallback: reconstruct selectedOptionIdx from text_answer for single choice
+            const textAnswerStr = ans.text_answer.trim();
+            if (!textAnswerStr.startsWith("Other:")) {
+              const matchedIdx = options.findIndex(opt => {
+                const optLabel = typeof opt === "string" ? opt : opt.label;
+                return optLabel.trim() === textAnswerStr || optLabel.trim().includes(textAnswerStr);
+              });
+              if (matchedIdx >= 0) {
+                selectedOptionIdx = matchedIdx;
+              }
+            }
           }
           
           answersMap.set(qId, {
@@ -461,6 +591,13 @@ export default function RepoPage() {
         }
       );
     }
+    
+    // Preserve any user-modified answers that aren't in existingData
+    currentAnswers.forEach((answer, qId) => {
+      if (answer.isUserModified && !answersMap.has(qId)) {
+        answersMap.set(qId, answer);
+      }
+    });
 
     // Set AI assumptions as initial answers (answer_recommendation.idx or assumed)
     questions.forEach((q: MCQQuestion) => {
@@ -675,6 +812,16 @@ export default function RepoPage() {
         });
       }
 
+      // Clear localStorage after successful submission since answers are now saved on backend
+      if (typeof window !== "undefined" && activeRecipeId) {
+        try {
+          const storageKey = `qa_answers_${activeRecipeId}`;
+          localStorage.removeItem(storageKey);
+        } catch (error) {
+          console.warn("Failed to clear localStorage after submission:", error);
+        }
+      }
+      
       // Call new spec generation API
       return await SpecService.submitSpecGeneration({
         recipe_id: activeRecipeId,
@@ -712,7 +859,31 @@ export default function RepoPage() {
         isEditing: false,
         isUserModified: false,
       };
-      newAnswers.set(questionId, { ...existing, ...answer });
+      // Always mark as user modified when answer changes
+      const updatedAnswer = { ...existing, ...answer, isUserModified: true };
+      newAnswers.set(questionId, updatedAnswer);
+      
+      // Persist to localStorage to survive page navigation
+      if (typeof window !== "undefined" && recipeId) {
+        try {
+          const storageKey = `qa_answers_${recipeId}`;
+          const storedAnswers = localStorage.getItem(storageKey);
+          const answersToStore = storedAnswers ? JSON.parse(storedAnswers) : {};
+          answersToStore[questionId] = {
+            textAnswer: updatedAnswer.textAnswer,
+            mcqAnswer: updatedAnswer.mcqAnswer,
+            selectedOptionIdx: updatedAnswer.selectedOptionIdx,
+            selectedOptionIndices: updatedAnswer.selectedOptionIndices,
+            isOther: updatedAnswer.isOther,
+            otherText: updatedAnswer.otherText,
+            isUserModified: true,
+          };
+          localStorage.setItem(storageKey, JSON.stringify(answersToStore));
+        } catch (error) {
+          console.warn("Failed to persist answer to localStorage:", error);
+        }
+      }
+      
       // Clear validation highlight when user provides an answer
       const newUnanswered = new Set(prev.unansweredQuestionIds ?? []);
       newUnanswered.delete(questionId);

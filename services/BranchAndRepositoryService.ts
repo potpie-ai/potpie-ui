@@ -209,6 +209,8 @@ export default class BranchAndRepositoryService {
               return "Parsing your code";
             case ParsingStatusEnum.PARSED:
               return "Understanding your codebase";
+            case ParsingStatusEnum.INFERRING:
+              return "Enriching with AI insights";
             case ParsingStatusEnum.ERROR:
               return "Error";
             default:
@@ -216,14 +218,21 @@ export default class BranchAndRepositoryService {
           }
         };
     
+        let hasAdvancedToStep2 = false;
+
         while (parsingStatus !== ParsingStatusEnum.READY && Date.now() - startTime < maxDuration) {
           parsingStatus = await BranchAndRepositoryService.getParsingStatus(projectId);
-          setParsingStatus(getStatusMessage(parsingStatus));
+          setParsingStatus(parsingStatus);
     
-          if (parsingStatus === ParsingStatusEnum.READY) {
+          // Advance to step 2 when INFERRING or READY - allows chatting during AI enrichment
+          if ((parsingStatus === ParsingStatusEnum.INFERRING || parsingStatus === ParsingStatusEnum.READY) && !hasAdvancedToStep2) {
             if (setChatStep) {
               setChatStep(2); 
             }
+            hasAdvancedToStep2 = true;
+          }
+
+          if (parsingStatus === ParsingStatusEnum.READY) {
             setParsingStatus(ParsingStatusEnum.READY);
             return;
           }

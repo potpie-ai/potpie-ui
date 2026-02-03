@@ -18,7 +18,7 @@ export const DragPreview: FC<DragPreviewProps> = ({ nodeInfo }) => {
   const IconComponent = nodeInfo.icon;
 
   return (
-    <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3 max-w-xs opacity-90 h-28 flex flex-col">
+    <div className="bg-background border border-gray-300 rounded-lg shadow-lg p-3 max-w-xs opacity-90 h-28 flex flex-col">
       <div className="flex items-center mb-2">
         <div
           className="w-8 h-8 rounded-full flex items-center justify-center mr-2"

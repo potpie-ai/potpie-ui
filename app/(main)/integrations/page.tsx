@@ -780,14 +780,14 @@ const Integrations = () => {
       case "connecting":
         return "text-blue-600 bg-blue-50";
       default:
-        return "text-gray-600 bg-gray-50";
+        return "text-gray-600 bg-background";
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header Section */}
-      <div className="bg-gray-50 border-b border-gray-200 px-4 py-4">
+      <div className="bg-background border-b border-gray-200 px-4 py-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex-1 max-w-md">
@@ -798,7 +798,7 @@ const Integrations = () => {
                   placeholder="Search integrations..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-white"
+                  className="pl-10 bg-background"
                 />
               </div>
             </div>

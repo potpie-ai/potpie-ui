@@ -43,7 +43,7 @@ export const SharedMarkdown: FC<SharedMarkdownProps> = ({
           
           if (isInline) {
             return (
-              <code className="bg-green-200 rounded px-1 text-sm font-medium text-slate-900">
+              <code className="bg-slate-100 rounded px-1 text-sm font-medium text-slate-900">
                 {children}
               </code>
             );

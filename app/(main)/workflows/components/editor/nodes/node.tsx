@@ -76,7 +76,7 @@ export const NodeComponent = ({
       )}
 
       <div
-        className={`bg-white rounded-xl border-2 ${
+        className={`bg-background rounded-xl border-2 ${
           selected ? "border-orange-500 shadow-lg" : "border-gray-200"
         } shadow-md w-64 overflow-hidden transition-all duration-200 ${
           data.isNewlyDropped ? "animate-bounce-drop" : ""

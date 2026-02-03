@@ -75,6 +75,9 @@ const KeyManagement = () => {
     if (openrouterProviders.includes(provider)) {
       return "Please enter your OpenRouter API key. This provider is accessed through OpenRouter's API.";
     }
+    if (provider.toLowerCase() === "groq" || provider.toLowerCase() === "groqcloud") {
+      return "Please enter your GroqCloud API key. You can get it from https://console.groq.com/keys";
+    }
     return `Please enter your ${provider.charAt(0).toUpperCase() + provider.slice(1)} API key.`;
   };
 

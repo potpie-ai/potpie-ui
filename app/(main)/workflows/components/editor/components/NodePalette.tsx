@@ -94,7 +94,7 @@ const DraggableNode: FC<DraggableNodeProps> = ({
                   style={{
                     color:
                       nodeInfo.group === "linear" || nodeInfo.group === "sentry"
-                        ? "#6b7280" // gray-500 for linear and sentry
+                        ? "var(--muted-text)"
                         : colors.text,
                   }}
                 />

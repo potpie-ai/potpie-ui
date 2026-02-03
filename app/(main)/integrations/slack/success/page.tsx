@@ -23,7 +23,7 @@ export default function SlackSuccessPage() {
   const router = useRouter();
 
   const handleBackToApp = () => {
-    router.push("/newchat");
+    router.push("/idea");
   };
 
   const handleBackToIntegrations = () => {
@@ -31,7 +31,7 @@ export default function SlackSuccessPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto p-6">
         {/* Success Header */}
         <div className="text-center mb-8">
@@ -62,7 +62,7 @@ export default function SlackSuccessPage() {
                   First, you need to connect your Potpie API token to enable the
                   AI features.
                 </p>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-background rounded-lg p-4">
                   <code className="text-sm font-mono text-gray-800">
                     /authenticate
                   </code>
@@ -86,7 +86,7 @@ export default function SlackSuccessPage() {
                   Once authenticated, you can start conversations with AI
                   agents.
                 </p>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-background rounded-lg p-4">
                   <code className="text-sm font-mono text-gray-800">
                     /potpie
                   </code>
@@ -108,7 +108,7 @@ export default function SlackSuccessPage() {
                 <p className="text-sm text-gray-600 mb-4">
                   Keep the conversation going by mentioning the bot in threads.
                 </p>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-background rounded-lg p-4">
                   <code className="text-sm font-mono text-gray-800">
                     @PotpieAI your question here
                   </code>

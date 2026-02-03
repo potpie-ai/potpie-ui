@@ -179,7 +179,7 @@ export const NodePaletteContainer: FC<NodePaletteContainerProps> = ({
   return (
     <div
       ref={resizeRef}
-      className="border-t border-gray-200 bg-white transition-all duration-500 ease-out flex-shrink-0"
+      className="border-t border-gray-200 bg-background transition-all duration-500 ease-out flex-shrink-0"
       style={{
         height: `${currentHeight}px`,
       }}
@@ -192,7 +192,7 @@ export const NodePaletteContainer: FC<NodePaletteContainerProps> = ({
           }`}
           onMouseDown={handleResizeStart}
         >
-          <div className="w-6 h-6 rounded-full bg-white border border-gray-300 flex items-center justify-center shadow-sm">
+          <div className="w-6 h-6 rounded-full bg-background border border-gray-300 flex items-center justify-center shadow-sm">
             <GripHorizontal
               className={`w-3 h-3 transition-colors duration-200 ${
                 isResizing ? "text-gray-600" : "text-gray-500"

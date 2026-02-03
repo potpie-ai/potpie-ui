@@ -17,7 +17,7 @@ export default function ConfluenceRedirectPage() {
     return (
         <Suspense
             fallback={
-                <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="min-h-screen bg-background flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                 </div>
             }
@@ -139,7 +139,7 @@ function ConfluenceRedirectContent() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="min-h-screen bg-background flex items-center justify-center p-6">
             <Card className="w-full max-w-md">
                 <CardHeader>
                     <div className="flex items-center gap-3 mb-2">

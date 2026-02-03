@@ -500,79 +500,66 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
           <Skeleton className="flex-1 h-10" />
         ) : (
           <>
-            <Popover open={repoOpen} onOpenChange={setRepoOpen}>
-              <PopoverTrigger asChild className="flex-1">
-                {UserRepositorys?.length === 0 || !repoName ? (
-                  <Button
-                    className="flex gap-3 items-center font-semibold justify-start"
-                    variant="outline"
-                  >
+          <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+            <PopoverTrigger asChild className="flex-1">
+              {UserRepositorys?.length === 0 || !repoName ? (
+                <Button
+                  className="flex gap-3 items-center font-semibold justify-start"
+                  variant="outline"
+                >
+                  <Github
+                    className="h-4 w-4 text-[#7A7A7A]"
+                    strokeWidth={1.5}
+                  />
+                  Select Repository
+                </Button>
+              ) : (
+                <Button
+                  className="flex gap-3 items-center font-semibold justify-start"
+                  variant="outline"
+                >
+                  {repoName.startsWith('/') || repoName.includes(':\\') || repoName.includes(':/') ? (
+                    <Folder
+                      className="h-4 w-4 text-[#7A7A7A]"
+                      strokeWidth={1.5}
+                    />
+                  ) : (
                     <Github
                       className="h-4 w-4 text-[#7A7A7A]"
                       strokeWidth={1.5}
                     />
-                    Select Repository
-                  </Button>
-                ) : (
-                  <Button
-                    className="flex gap-3 items-center font-semibold justify-start"
-                    variant="outline"
-                  >
-                    {repoName.startsWith("/") ||
-                    repoName.includes(":\\") ||
-                    repoName.includes(":/") ? (
-                      <Folder
-                        className="h-4 w-4 text-[#7A7A7A]"
-                        strokeWidth={1.5}
-                      />
-                    ) : (
-                      <Github
-                        className="h-4 w-4 text-[#7A7A7A]"
-                        strokeWidth={1.5}
-                      />
-                    )}
-                    <span className="truncate text-ellipsis whitespace-nowrap">
-                      {repoName}
-                    </span>
-                  </Button>
-                )}
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                <Command defaultValue={defaultRepo ?? undefined}>
-                  <CommandInput
-                    value={searchValue}
-                    onValueChange={(e) => {
-                      setSearchValue(e);
-                    }}
-                    placeholder="Search repo or paste local path (e.g., /Users/...)"
-                  />
-                  <CommandList>
-                    <CommandEmpty>
-                      {searchValue.startsWith("https://github.com/") ? (
-                        <Button
-                          onClick={() => {
-                            handleSetPublicRepoDialog(true);
-                            setInputValue(searchValue);
-                          }}
-                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2"
-                        >
+                  )}
+                  <span className="truncate text-ellipsis whitespace-nowrap">
+                    {repoName}
+                  </span>
+                </Button>
+              )}
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+              <Command defaultValue={defaultRepo ?? undefined}>
+                <CommandInput
+                  value={searchValue}
+                  onValueChange={(e) => {
+                    setSearchValue(e);
+                  }}
+                  placeholder="Search repo or paste local path (e.g., /Users/...)"
+                />
+                <CommandList>
+                  <CommandEmpty>
+                    {searchValue.startsWith("https://github.com/") && !process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
+                      <Button
+                        onClick={() => {handleSetPublicRepoDialog(true);setInputValue(searchValue)}}
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-background hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                      >
                           <Plus className="size-4" /> <p> Public Repository</p>
-                        </Button>
-                      ) : searchValue &&
-                        searchValue.trim() !== "" &&
-                        (searchValue.startsWith("/") ||
-                          searchValue.includes(":\\") ||
-                          searchValue.includes(":/")) &&
-                        process.env.NEXT_PUBLIC_BASE_URL?.includes(
-                          "localhost"
-                        ) ? (
-                        <Button
-                          onClick={() => {
-                            setIsLocalRepoDailog(true);
-                            setLocalRepoPath(searchValue);
-                          }}
-                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-white hover:bg-primary text-accent-foreground w-full justify-start gap-2"
-                        >
+                      </Button>
+                    ) : searchValue && searchValue.trim() !== "" && 
+                        (searchValue.startsWith('/') || searchValue.includes(':\\') || searchValue.includes(':/')) && 
+                        process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
+                      <Button
+                        onClick={() => {setIsLocalRepoDailog(true);setLocalRepoPath(searchValue)}}
+                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-background hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
+                      >
                           <Plus className="size-4" /> <p> Local Repository</p>
                         </Button>
                       ) : searchValue && searchValue.trim() !== "" ? (

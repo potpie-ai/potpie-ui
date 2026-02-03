@@ -279,7 +279,132 @@ export default class ChatService {
       };
     } catch (error) {
       console.error("Error resuming session:", error);
-      return { success: false, reason: "network_error" };
+      return { success: false, reason: 'network_error' };
+    }
+  }
+
+  static async resumeWithCursor(
+    chatId: string,
+    sessionId: string,
+    cursor: string,
+    onMessageUpdate: (message: string, tool_calls: any[]) => void,
+    abortSignal?: AbortSignal
+  ): Promise<void> {
+    try {
+      const headers = await getHeaders();
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${chatId}/resume/${sessionId}?cursor=${cursor}`,
+        {
+          method: "POST",
+          headers: headers as HeadersInit,
+          signal: abortSignal,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let currentMessage = "";
+      let currentToolCalls: any[] = [];
+      let buffer = "";
+
+      if (reader) {
+        const processJsonSegment = (jsonStr: string) => {
+          if (!jsonStr) return;
+
+          try {
+            const data = JSON.parse(jsonStr);
+
+            if (data.message !== undefined) {
+              const messageWithEmojis = data.message.replace(
+                /\\u[\dA-F]{4}/gi,
+                (match: string) =>
+                  String.fromCodePoint(
+                    parseInt(match.replace(/\\u/g, ""), 16)
+                  )
+              );
+              currentMessage += messageWithEmojis;
+              onMessageUpdate(currentMessage, currentToolCalls);
+            }
+
+            if (data.tool_calls !== undefined) {
+              currentToolCalls.push(...data.tool_calls);
+              onMessageUpdate(currentMessage, currentToolCalls);
+            }
+          } catch (e) {
+            const extracted = ChatService.extractJsonObjects(jsonStr);
+            if (extracted.objects.length > 1) {
+              extracted.objects.forEach(processJsonSegment);
+              if (extracted.remaining.trim()) {
+                console.warn(
+                  "Residual data after recovering JSON chunk in resumeWithCursor:",
+                  extracted.remaining,
+                );
+              }
+              return;
+            }
+            console.warn("Failed to parse JSON chunk in resumeWithCursor:", jsonStr, e);
+          }
+        };
+
+        const cancelReader = () => {
+          try {
+            reader.cancel();
+          } catch (e) {
+            console.warn("Failed to cancel reader after abort:", e);
+          }
+        };
+
+        if (abortSignal) {
+          if (abortSignal.aborted) {
+            cancelReader();
+            throw new DOMException("Aborted", "AbortError");
+          }
+          abortSignal.addEventListener("abort", cancelReader, { once: true });
+        }
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+
+            const extracted = ChatService.extractJsonObjects(buffer);
+            buffer = extracted.remaining;
+            extracted.objects.forEach(processJsonSegment);
+          }
+
+          const extracted = ChatService.extractJsonObjects(buffer);
+          buffer = extracted.remaining;
+          extracted.objects.forEach(processJsonSegment);
+
+          if (buffer.trim()) {
+            console.warn("Unprocessed JSON buffer after resumeWithCursor stream end:", buffer);
+          }
+        } finally {
+          reader.releaseLock();
+          if (abortSignal) {
+            abortSignal.removeEventListener("abort", cancelReader);
+          }
+        }
+      }
+    } catch (error) {
+      if (
+        abortSignal?.aborted ||
+        (error instanceof DOMException && error.name === "AbortError")
+      ) {
+        console.log("Resume with cursor aborted");
+        return;
+      }
+      console.error("Error resuming with cursor:", error);
+      throw error;
     }
   }
 
@@ -781,21 +906,35 @@ export default class ChatService {
     title: string,
     projectId: string | null,
     agentId: string,
-    isHidden: boolean = false
+    isHidden: boolean = false,
+    repoName?: string | null,
+    branchName?: string | null
   ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
     try {
+      // Build request body with all required fields
+      const requestBody: any = {
+        user_id: userId,
+        title: title,
+        status: "active",
+        project_ids: projectId ? [projectId] : [],
+        agent_ids: [agentId],
+      };
+
+      // CRITICAL: Add repo_name and branch_name if provided
+      // This ensures backend has the context it needs
+      if (repoName) {
+        requestBody.repo_name = repoName;
+      }
+      if (branchName) {
+        requestBody.branch_name = branchName;
+      }
+
       const response = await axios.post(
         `${baseUrl}/api/v1/conversations/`,
-        {
-          user_id: userId,
-          title: title,
-          status: "active",
-          project_ids: projectId ? [projectId] : [],
-          agent_ids: [agentId],
-        },
-        {
+        requestBody,
+        { 
           headers: headers,
           params: isHidden ? { hidden: true } : undefined,
         }

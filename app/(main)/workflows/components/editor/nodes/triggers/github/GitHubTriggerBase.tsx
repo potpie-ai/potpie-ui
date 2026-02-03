@@ -382,7 +382,7 @@ export const GitHubTriggerNode: FC<{
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <Github className="w-5 h-5 mr-2" style={{ color: "#fff" }} />
+            <Github className="w-5 h-5 mr-2 text-white" />
             <h3 className="font-semibold text-white flex items-center gap-1">
               {nodeName}
               <TooltipProvider>

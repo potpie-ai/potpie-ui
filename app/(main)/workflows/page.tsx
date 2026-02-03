@@ -299,9 +299,9 @@ const Workflows = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header Section */}
-      <div className="bg-gray-50 border-b border-gray-200 px-4 py-6">
+      <div className="bg-background border-b border-gray-200 px-4 py-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex-1 max-w-md">
@@ -312,7 +312,7 @@ const Workflows = () => {
                   placeholder="Search workflows..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-white"
+                  className="pl-10 bg-background"
                 />
               </div>
             </div>
@@ -618,7 +618,7 @@ const Workflows = () => {
                   </AccordionTrigger>
 
                   <AccordionContent>
-                    <div className="px-6 pb-6 border-t border-gray-100 bg-gray-50">
+                    <div className="px-6 pb-6 border-t border-gray-100 bg-background">
                       <div className="pt-4 space-y-6">
                         {/* Workflow Details Section */}
                         <div>
@@ -628,7 +628,7 @@ const Workflows = () => {
                             </h4>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-4 rounded-lg border">
+                            <div className="bg-background p-4 rounded-lg border">
                               <h5 className="text-sm font-medium text-gray-700 mb-3">
                                 Configuration
                               </h5>
@@ -663,7 +663,7 @@ const Workflows = () => {
                                 </div>
                               </div>
                             </div>
-                            <div className="bg-white p-4 rounded-lg border">
+                            <div className="bg-background p-4 rounded-lg border">
                               <h5 className="text-sm font-medium text-gray-700 mb-3">
                                 Nodes
                               </h5>
@@ -712,7 +712,7 @@ const Workflows = () => {
                           <h4 className="text-sm font-semibold text-gray-700 mb-3">
                             Workflow Preview
                           </h4>
-                          <div className="bg-white rounded-lg border h-96">
+                          <div className="bg-background rounded-lg border h-96">
                             <WorkflowEditor
                               workflow={workflow}
                               mode="preview"

@@ -17,6 +17,9 @@ import {
   QAAnswer,
   SubmitSpecGenerationResponse,
   RecipeQuestionsResponse,
+  RecipeQuestion,
+  RecipeQuestionNew,
+  QuestionOption,
 } from "@/lib/types/spec";
 import type {
   MCQQuestion,
@@ -64,6 +67,7 @@ export default function RepoPage() {
     hoveredQuestion: null,
     expandedOptions: new Set(),
     skippedQuestions: new Set(),
+    unansweredQuestionIds: new Set(),
     isGenerating: false,
   });
 
@@ -138,16 +142,68 @@ export default function RepoPage() {
       // Check if questions are available (regardless of status)
       // This handles cases where status is SPEC_IN_PROGRESS but questions are still available
       if (questionsData.questions && questionsData.questions.length > 0) {
-        // Convert RecipeQuestion[] to MCQQuestion[] format
+        // Load localStorage answers for this recipeId to preserve user changes
+        let localStorageAnswers: Record<string, any> = {};
+        if (typeof window !== "undefined" && recipeId) {
+          try {
+            const storageKey = `qa_answers_${recipeId}`;
+            const stored = localStorage.getItem(storageKey);
+            if (stored) {
+              localStorageAnswers = JSON.parse(stored);
+            }
+          } catch (error) {
+            console.warn("Failed to load answers from localStorage:", error);
+          }
+        }
+        // Convert RecipeQuestion[] or RecipeQuestionNew[] to MCQQuestion[] format
         const mcqQuestions: MCQQuestion[] = questionsData.questions.map(
-          (q) => ({
-            id: q.id,
-            section: "General", // Default section, could be enhanced later
-            question: q.question,
-            options: q.options,
-            needsInput: q.allow_custom_answer,
-            assumed: q.preferred_option,
-          })
+          (q, index) => {
+            const isNewFormat = "answer_recommendation" in q || ("options" in q && q.options && q.options.length > 0 && typeof q.options[0] === "object");
+            const newQ = q as RecipeQuestionNew;
+
+            if (isNewFormat && newQ.options && Array.isArray(newQ.options) && newQ.options.length > 0 && typeof newQ.options[0] === "object") {
+              // New API format: options are {label, description}[]
+              const options = (newQ.options as QuestionOption[]).map((opt) => ({
+                label: opt.label,
+                description: opt.description,
+              }));
+              const recIdxRaw = newQ.answer_recommendation?.idx;
+              const recIdx = typeof recIdxRaw === "number" ? recIdxRaw : null;
+              const assumedLabel =
+                recIdx != null && recIdx >= 0 && recIdx < options.length
+                  ? options[recIdx].label
+                  : undefined;
+              return {
+                id: newQ.id ?? `q-${index}`,
+                section: "General",
+                question: newQ.question,
+                options,
+                needsInput: true, // "Other" always available for MCQs
+                multipleChoice: newQ.multiple_choice ?? false,
+                assumed: assumedLabel,
+                reasoning: newQ.answer_recommendation?.reasoning,
+                answerRecommendationIdx: recIdx ?? null,
+                expectedAnswerType: newQ.expected_answer_type,
+                contextRefs: newQ.context_refs ?? null,
+              };
+            }
+
+            // Legacy format: options are string[]
+            const legacyQ = q as RecipeQuestion;
+            const strOptions = legacyQ.options || [];
+            const options = strOptions.map((opt) =>
+              typeof opt === "string" ? { label: opt, description: undefined } : opt
+            );
+            return {
+              id: legacyQ.id,
+              section: "General",
+              question: legacyQ.question,
+              options,
+              needsInput: legacyQ.allow_custom_answer ?? true,
+              assumed: legacyQ.preferred_option,
+              answerRecommendationIdx: null,
+            };
+          }
         );
 
         // Group by section and set state
@@ -159,10 +215,63 @@ export default function RepoPage() {
           sectionsMap.get(q.section)!.push(q);
         });
 
+        // Initialize answers - prioritize localStorage, then AI recommendation
+        const initialAnswers = new Map<string, QuestionAnswer>();
+        
+        // First, load from localStorage if available
+        mcqQuestions.forEach((q) => {
+          if (localStorageAnswers[q.id]?.isUserModified) {
+            const storedAnswer = localStorageAnswers[q.id];
+            initialAnswers.set(q.id, {
+              questionId: q.id,
+              textAnswer: storedAnswer.textAnswer,
+              mcqAnswer: storedAnswer.mcqAnswer,
+              selectedOptionIdx: storedAnswer.selectedOptionIdx,
+              selectedOptionIndices: storedAnswer.selectedOptionIndices,
+              isOther: storedAnswer.isOther,
+              otherText: storedAnswer.otherText,
+              isUserModified: true,
+            });
+          }
+        });
+        
+        // Then, set AI recommendations for questions without localStorage answers
+        mcqQuestions.forEach((q) => {
+          if (initialAnswers.has(q.id)) return; // Skip if already loaded from localStorage
+          
+          const options = Array.isArray(q.options)
+            ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
+            : [];
+          let recIdx: number | undefined;
+          if (typeof q.answerRecommendationIdx === "number") {
+            recIdx = q.answerRecommendationIdx;
+          } else if (q.assumed) {
+            const found = options.findIndex(
+              (o) => (typeof o === "string" ? o : o.label) === q.assumed
+            );
+            if (found >= 0) recIdx = found;
+            else if (/^[A-Z]$/.test(q.assumed))
+              recIdx = q.assumed.charCodeAt(0) - 65;
+          }
+          if (recIdx != null && recIdx >= 0 && recIdx < options.length) {
+            const opt = options[recIdx];
+            const label = typeof opt === "string" ? opt : opt.label;
+            initialAnswers.set(q.id, {
+              questionId: q.id,
+              mcqAnswer: String.fromCharCode(65 + recIdx),
+              selectedOptionIdx: recIdx,
+              textAnswer: label,
+              isOther: false,
+              isUserModified: false,
+            });
+          }
+        });
+
         setState((prev) => ({
           ...prev,
           questions: mcqQuestions,
           sections: sectionsMap,
+          answers: initialAnswers,
           pageState: "questions",
         }));
 
@@ -297,8 +406,10 @@ export default function RepoPage() {
     }
   }, [recipeIdFromUrl]);
 
-  // Process questions when received
+  // Process questions when received (skip when in recipe flow - recipe has its own data source)
   useEffect(() => {
+    if (recipeId) return;
+
     const questions = questionsData?.questions || existingData?.questions || [];
     if (questions.length === 0) return;
 
@@ -311,34 +422,209 @@ export default function RepoPage() {
       sectionsMap.get(q.section)!.push(q);
     });
 
-    // Load existing answers
+    // Load existing answers - prioritize localStorage (user modifications), then API, then current state
     const answersMap = new Map<string, QuestionAnswer>();
+    const currentAnswers = state.answers; // Get current state answers to preserve user modifications
+    
+    // First, try to load from localStorage (preserves user changes across navigation)
+    let localStorageAnswers: Record<string, any> = {};
+    if (typeof window !== "undefined" && recipeId) {
+      try {
+        const storageKey = `qa_answers_${recipeId}`;
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          localStorageAnswers = JSON.parse(stored);
+        }
+      } catch (error) {
+        console.warn("Failed to load answers from localStorage:", error);
+      }
+    }
+    
     if (existingData?.answers) {
       Object.entries(existingData.answers).forEach(
         ([qId, answer]: [string, unknown]) => {
+          // Priority 1: Check localStorage for user-modified answers
+          if (localStorageAnswers[qId]?.isUserModified) {
+            const storedAnswer = localStorageAnswers[qId];
+            answersMap.set(qId, {
+              questionId: qId,
+              textAnswer: storedAnswer.textAnswer,
+              mcqAnswer: storedAnswer.mcqAnswer,
+              selectedOptionIdx: storedAnswer.selectedOptionIdx,
+              selectedOptionIndices: storedAnswer.selectedOptionIndices,
+              isOther: storedAnswer.isOther,
+              otherText: storedAnswer.otherText,
+              isUserModified: true,
+            });
+            return;
+          }
+          
+          // Priority 2: Check if user has modified this answer in current state
+          const currentAnswer = currentAnswers.get(qId);
+          if (currentAnswer?.isUserModified) {
+            // User has modified this answer locally, preserve it instead of loading from backend
+            answersMap.set(qId, currentAnswer);
+            return;
+          }
+          
           const ans = answer as {
             text_answer?: string;
             mcq_answer?: string;
             is_user_modified?: boolean;
           };
+          const question = questions.find((qu: MCQQuestion) => qu.id === qId);
+          const isMultipleChoice = question?.multipleChoice ?? false;
+          const options = question?.options
+            ? (Array.isArray(question.options)
+                ? question.options.map((o) =>
+                    typeof o === "string" ? { label: o } : o
+                  )
+                : [])
+            : [];
+          let selectedOptionIdx: number | undefined;
+          let selectedOptionIndices: number[] | undefined;
+          let textAnswer = ans.text_answer;
+          
+          if (ans.mcq_answer && options.length > 0) {
+            const mcqAnswer = ans.mcq_answer.trim().toUpperCase();
+            
+            if (isMultipleChoice && mcqAnswer.includes(",")) {
+              // Multiple selections: parse comma-separated letters (e.g., "A,B,C")
+              const letters = mcqAnswer.split(",").map(l => l.trim());
+              const indices = letters
+                .filter(l => l.length === 1 && l >= "A" && l <= "Z")
+                .map(l => l.charCodeAt(0) - 65)
+                .filter(idx => idx >= 0 && idx < options.length)
+                .sort((a, b) => a - b);
+              
+              if (indices.length > 0) {
+                selectedOptionIndices = indices;
+                const selectedLabels = indices
+                  .map(idx => {
+                    const opt = options[idx];
+                    return typeof opt === "string" ? opt : opt.label;
+                  })
+                  .join(", ");
+                textAnswer = selectedLabels;
+              }
+            } else {
+              // Single selection: parse single letter (e.g., "A")
+              const letter = mcqAnswer.split(",")[0].trim(); // Take first if comma-separated
+              if (letter.length === 1 && letter >= "A" && letter <= "Z") {
+                selectedOptionIdx = letter.charCodeAt(0) - 65;
+                if (
+                  selectedOptionIdx >= 0 &&
+                  selectedOptionIdx < options.length
+                ) {
+                  const selOpt = options[selectedOptionIdx];
+                  textAnswer =
+                    typeof selOpt === "string" ? selOpt : selOpt.label;
+                }
+              }
+            }
+          } else if (isMultipleChoice && ans.text_answer && options.length > 0) {
+            // Fallback: reconstruct selectedOptionIndices from text_answer for multiple choice
+            // This handles cases where mcq_answer wasn't saved but text_answer contains comma-separated labels
+            const textAnswerStr = ans.text_answer.trim();
+            if (textAnswerStr.includes(",")) {
+              // Try to match text_answer labels to options
+              const answerLabels = textAnswerStr.split(",").map(l => l.trim());
+              const matchedIndices: number[] = [];
+              
+              answerLabels.forEach(answerLabel => {
+                const matchedIdx = options.findIndex(opt => {
+                  const optLabel = typeof opt === "string" ? opt : opt.label;
+                  return optLabel.trim() === answerLabel || optLabel.trim().includes(answerLabel);
+                });
+                if (matchedIdx >= 0 && !matchedIndices.includes(matchedIdx)) {
+                  matchedIndices.push(matchedIdx);
+                }
+              });
+              
+              if (matchedIndices.length > 0) {
+                selectedOptionIndices = matchedIndices.sort((a, b) => a - b);
+                // Reconstruct mcq_answer from indices
+                const reconstructedMcqAnswer = matchedIndices
+                  .map(idx => String.fromCharCode(65 + idx))
+                  .join(",");
+                // Update textAnswer to ensure consistency
+                const reconstructedLabels = matchedIndices
+                  .map(idx => {
+                    const opt = options[idx];
+                    return typeof opt === "string" ? opt : opt.label;
+                  })
+                  .join(", ");
+                textAnswer = reconstructedLabels;
+              }
+            } else if (textAnswerStr && !textAnswerStr.startsWith("Other:")) {
+              // Single label match for multiple choice (edge case)
+              const matchedIdx = options.findIndex(opt => {
+                const optLabel = typeof opt === "string" ? opt : opt.label;
+                return optLabel.trim() === textAnswerStr || optLabel.trim().includes(textAnswerStr);
+              });
+              if (matchedIdx >= 0) {
+                selectedOptionIndices = [matchedIdx];
+              }
+            }
+          } else if (!isMultipleChoice && ans.text_answer && options.length > 0 && !ans.mcq_answer) {
+            // Fallback: reconstruct selectedOptionIdx from text_answer for single choice
+            const textAnswerStr = ans.text_answer.trim();
+            if (!textAnswerStr.startsWith("Other:")) {
+              const matchedIdx = options.findIndex(opt => {
+                const optLabel = typeof opt === "string" ? opt : opt.label;
+                return optLabel.trim() === textAnswerStr || optLabel.trim().includes(textAnswerStr);
+              });
+              if (matchedIdx >= 0) {
+                selectedOptionIdx = matchedIdx;
+              }
+            }
+          }
+          
           answersMap.set(qId, {
             questionId: qId,
-            textAnswer: ans.text_answer,
+            textAnswer,
             mcqAnswer: ans.mcq_answer,
-            isEditing: false,
+            selectedOptionIdx,
+            selectedOptionIndices,
             isUserModified: ans.is_user_modified || false,
           });
         }
       );
     }
+    
+    // Preserve any user-modified answers that aren't in existingData
+    currentAnswers.forEach((answer, qId) => {
+      if (answer.isUserModified && !answersMap.has(qId)) {
+        answersMap.set(qId, answer);
+      }
+    });
 
-    // Set AI assumptions as initial answers
+    // Set AI assumptions as initial answers (answer_recommendation.idx or assumed)
     questions.forEach((q: MCQQuestion) => {
-      if (q.assumed && !answersMap.has(q.id)) {
+      if (answersMap.has(q.id)) return;
+      const options = Array.isArray(q.options)
+        ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
+        : [];
+      let idx: number | undefined;
+      const qWithRec = q as MCQQuestion & { answerRecommendationIdx?: number };
+      if (typeof qWithRec.answerRecommendationIdx === "number") {
+        idx = qWithRec.answerRecommendationIdx;
+      } else if (q.assumed) {
+        const found = options.findIndex(
+          (o) => (typeof o === "string" ? o : o.label) === q.assumed
+        );
+        if (found >= 0) idx = found;
+        else if (/^[A-Z]$/.test(q.assumed))
+          idx = q.assumed.charCodeAt(0) - 65;
+      }
+      if (idx != null && idx >= 0 && idx < options.length) {
+        const opt = options[idx];
+        const label = typeof opt === "string" ? opt : opt.label;
         answersMap.set(q.id, {
           questionId: q.id,
-          mcqAnswer: q.assumed,
-          isEditing: false,
+          mcqAnswer: String.fromCharCode(65 + idx),
+          selectedOptionIdx: idx,
+          textAnswer: label,
           isUserModified: false,
         });
       }
@@ -373,7 +659,7 @@ export default function RepoPage() {
     return () => {
       timeoutIds.forEach((id) => clearTimeout(id));
     };
-  }, [questionsData, existingData]);
+  }, [questionsData, existingData, recipeId]);
 
   // Submit answers mutation
   const submitAnswersMutation = useMutation({
@@ -394,6 +680,53 @@ export default function RepoPage() {
   // Generate plan mutation
   const generatePlanMutation = useMutation({
     mutationFn: async () => {
+      // Validate: all questions must be answered (no NULL in payload)
+      const unansweredIds: string[] = [];
+      state.questions.forEach((q) => {
+        if (state.skippedQuestions.has(q.id)) return;
+        const answer = state.answers.get(q.id);
+        const options = Array.isArray(q.options)
+          ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
+          : [];
+        let hasAnswer = false;
+        const isMultipleChoice = q.multipleChoice ?? false;
+        if (answer?.isOther && answer.otherText?.trim()) {
+          hasAnswer = true;
+        } else if (isMultipleChoice) {
+          // Multiple choice: check if any options are selected
+          if (answer?.selectedOptionIndices && answer.selectedOptionIndices.length > 0) {
+            hasAnswer = answer.selectedOptionIndices.some(
+              idx => idx >= 0 && idx < options.length
+            );
+          } else if (answer?.textAnswer?.trim()) {
+            hasAnswer = true;
+          }
+        } else {
+          // Single choice
+          if (answer?.selectedOptionIdx != null && answer.selectedOptionIdx >= 0 && answer.selectedOptionIdx < options.length) {
+            hasAnswer = true;
+          } else if (answer?.textAnswer?.trim()) {
+            hasAnswer = true;
+          } else if (answer?.mcqAnswer && options.length > 0) {
+            const idx = (answer.mcqAnswer.charCodeAt(0) ?? 65) - 65;
+            if (idx >= 0 && idx < options.length) hasAnswer = true;
+          }
+        }
+        if (!hasAnswer) {
+          unansweredIds.push(q.id);
+        }
+      });
+
+      if (unansweredIds.length > 0) {
+        setState((prev) => ({
+          ...prev,
+          unansweredQuestionIds: new Set(unansweredIds),
+        }));
+        throw new Error(
+          `Please answer all questions before submitting. ${unansweredIds.length} question(s) need your input.`
+        );
+      }
+
       // Use recipeId from URL if available (new flow), otherwise fall back to projectId (old flow)
       const activeRecipeId = recipeId || recipeIdFromUrl;
 
@@ -424,20 +757,50 @@ export default function RepoPage() {
 
       console.log("Submitting QA answers with recipeId:", activeRecipeId);
 
-      // Collect all answers in the new format
+      // Collect all answers - format: option label OR "Other: <user_input>"
       const qaAnswers: Array<{ question_id: string; answer: string }> = [];
 
-      state.answers.forEach((answer, qId) => {
+      state.questions.forEach((question) => {
+        const qId = question.id;
         if (state.skippedQuestions.has(qId)) return;
 
-        const question = state.questions.find((q) => q.id === qId);
-        if (!question) return;
+        const answer = state.answers.get(qId);
+        let answerStr: string | undefined;
+        const isMultipleChoice = question.multipleChoice ?? false;
 
-        if (answer.textAnswer || answer.mcqAnswer) {
-          qaAnswers.push({
-            question_id: qId,
-            answer: answer.textAnswer || answer.mcqAnswer || "",
-          });
+        if (answer?.isOther && answer.otherText?.trim()) {
+          answerStr = `Other: ${answer.otherText.trim()}`;
+        } else if (isMultipleChoice && answer?.selectedOptionIndices && answer.selectedOptionIndices.length > 0) {
+          // Multiple choice: format selected options as comma-separated labels
+          const options = Array.isArray(question.options)
+            ? question.options.map((o) => (typeof o === "string" ? { label: o } : o))
+            : [];
+          const selectedLabels = answer.selectedOptionIndices
+            .filter(idx => idx >= 0 && idx < options.length)
+            .map(idx => {
+              const opt = options[idx];
+              return typeof opt === "string" ? opt : opt.label;
+            })
+            .join(", ");
+          if (selectedLabels) {
+            answerStr = selectedLabels;
+          } else if (answer?.textAnswer?.trim()) {
+            answerStr = answer.textAnswer.trim();
+          }
+        } else if (answer?.textAnswer?.trim()) {
+          answerStr = answer.textAnswer.trim();
+        } else if (answer?.mcqAnswer && question.options) {
+          const options = Array.isArray(question.options)
+            ? question.options.map((o) => (typeof o === "string" ? { label: o } : o))
+            : [];
+          const idx = answer.selectedOptionIdx ?? (answer.mcqAnswer?.charCodeAt(0) ?? 65) - 65;
+          if (idx >= 0 && idx < options.length) {
+            answerStr = typeof options[idx] === "string" ? options[idx] : options[idx].label;
+          }
+        }
+
+        if (answerStr) {
+          qaAnswers.push({ question_id: qId, answer: answerStr });
         }
       });
 
@@ -449,6 +812,16 @@ export default function RepoPage() {
         });
       }
 
+      // Clear localStorage after successful submission since answers are now saved on backend
+      if (typeof window !== "undefined" && activeRecipeId) {
+        try {
+          const storageKey = `qa_answers_${activeRecipeId}`;
+          localStorage.removeItem(storageKey);
+        } catch (error) {
+          console.warn("Failed to clear localStorage after submission:", error);
+        }
+      }
+      
       // Call new spec generation API
       return await SpecService.submitSpecGeneration({
         recipe_id: activeRecipeId,
@@ -486,49 +859,35 @@ export default function RepoPage() {
         isEditing: false,
         isUserModified: false,
       };
-      newAnswers.set(questionId, { ...existing, ...answer });
-      return { ...prev, answers: newAnswers };
-    });
-  };
-
-  const handleSaveAnswer = async (questionId: string) => {
-    const answer = state.answers.get(questionId);
-    if (!answer) return;
-
-    const answersToSubmit: Record<
-      string,
-      { text_answer?: string; mcq_answer?: string }
-    > = {
-      [questionId]: {
-        text_answer: answer.textAnswer,
-        mcq_answer: answer.mcqAnswer,
-      },
-    };
-
-    await submitAnswersMutation.mutateAsync(answersToSubmit);
-
-    setState((prev) => {
-      const newAnswers = new Map(prev.answers);
-      const existing = newAnswers.get(questionId);
-      if (existing) {
-        newAnswers.set(questionId, {
-          ...existing,
-          isEditing: false,
-          isUserModified: true,
-        });
+      // Always mark as user modified when answer changes
+      const updatedAnswer = { ...existing, ...answer, isUserModified: true };
+      newAnswers.set(questionId, updatedAnswer);
+      
+      // Persist to localStorage to survive page navigation
+      if (typeof window !== "undefined" && recipeId) {
+        try {
+          const storageKey = `qa_answers_${recipeId}`;
+          const storedAnswers = localStorage.getItem(storageKey);
+          const answersToStore = storedAnswers ? JSON.parse(storedAnswers) : {};
+          answersToStore[questionId] = {
+            textAnswer: updatedAnswer.textAnswer,
+            mcqAnswer: updatedAnswer.mcqAnswer,
+            selectedOptionIdx: updatedAnswer.selectedOptionIdx,
+            selectedOptionIndices: updatedAnswer.selectedOptionIndices,
+            isOther: updatedAnswer.isOther,
+            otherText: updatedAnswer.otherText,
+            isUserModified: true,
+          };
+          localStorage.setItem(storageKey, JSON.stringify(answersToStore));
+        } catch (error) {
+          console.warn("Failed to persist answer to localStorage:", error);
+        }
       }
-      return { ...prev, answers: newAnswers };
-    });
-  };
-
-  const handleCancelEdit = (questionId: string) => {
-    setState((prev) => {
-      const newAnswers = new Map(prev.answers);
-      const existing = newAnswers.get(questionId);
-      if (existing) {
-        newAnswers.set(questionId, { ...existing, isEditing: false });
-      }
-      return { ...prev, answers: newAnswers };
+      
+      // Clear validation highlight when user provides an answer
+      const newUnanswered = new Set(prev.unansweredQuestionIds ?? []);
+      newUnanswered.delete(questionId);
+      return { ...prev, answers: newAnswers, unansweredQuestionIds: newUnanswered };
     });
   };
 
@@ -551,14 +910,47 @@ export default function RepoPage() {
 
   // Count answered questions (excluding skipped ones)
   const answeredCount = Array.from(state.answers.entries()).filter(
-    ([qId, a]) =>
-      !state.skippedQuestions.has(qId) && (a.textAnswer || a.mcqAnswer)
+    ([qId, a]) => {
+      if (state.skippedQuestions.has(qId)) return false;
+      const question = state.questions.find(q => q.id === qId);
+      const isMultipleChoice = question?.multipleChoice ?? false;
+      
+      if (a.isOther && a.otherText?.trim()) return true;
+      if (isMultipleChoice && a.selectedOptionIndices && a.selectedOptionIndices.length > 0) return true;
+      if (a.selectedOptionIdx != null && a.selectedOptionIdx >= 0) return true;
+      if (a.textAnswer?.trim()) return true;
+      if (a.mcqAnswer) return true;
+      return false;
+    }
   ).length;
 
   // Total questions minus skipped ones
   const activeQuestionCount =
     state.questions.length - state.skippedQuestions.size;
   const skippedCount = state.skippedQuestions.size;
+
+  // Count unanswered (for validation display)
+  const unansweredCount = state.questions.filter((q) => {
+    if (state.skippedQuestions.has(q.id)) return false;
+    const a = state.answers.get(q.id);
+    const opts = Array.isArray(q.options)
+      ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
+      : [];
+    const isMultipleChoice = q.multipleChoice ?? false;
+    
+    // Check if question has an answer
+    const hasAnswer =
+      (a?.isOther && a.otherText?.trim()) ||
+      (isMultipleChoice && a?.selectedOptionIndices && a.selectedOptionIndices.length > 0 && 
+        a.selectedOptionIndices.some(idx => idx >= 0 && idx < opts.length)) ||
+      (a?.selectedOptionIdx != null &&
+        a.selectedOptionIdx >= 0 &&
+        a.selectedOptionIdx < opts.length) ||
+      a?.textAnswer?.trim() ||
+      (a?.mcqAnswer && opts.length > 0);
+    
+    return !hasAnswer;
+  }).length;
 
   // Set repo and branch in Redux store when recipeId is available
   useEffect(() => {
@@ -659,8 +1051,10 @@ export default function RepoPage() {
                       )}
                       answers={state.answers}
                       hoveredQuestion={state.hoveredQuestion}
-                      expandedOptions={state.expandedOptions}
                       skippedQuestions={state.skippedQuestions}
+                      unansweredQuestionIds={
+                        state.unansweredQuestionIds ?? new Set()
+                      }
                       onHover={(questionId) =>
                         setState((prev) => ({
                           ...prev,
@@ -668,19 +1062,6 @@ export default function RepoPage() {
                         }))
                       }
                       onAnswerChange={handleAnswerChange}
-                      onSave={handleSaveAnswer}
-                      onCancel={handleCancelEdit}
-                      onToggleOptions={(questionId) => {
-                        setState((prev) => {
-                          const newExpanded = new Set(prev.expandedOptions);
-                          if (newExpanded.has(questionId)) {
-                            newExpanded.delete(questionId);
-                          } else {
-                            newExpanded.add(questionId);
-                          }
-                          return { ...prev, expandedOptions: newExpanded };
-                        });
-                      }}
                       onToggleSkip={handleToggleSkip}
                     />
                   );
@@ -692,9 +1073,10 @@ export default function RepoPage() {
                 onContextChange={(context) =>
                   setState((prev) => ({ ...prev, additionalContext: context }))
                 }
-                onGeneratePlan={handleGeneratePlan}
+                onSaveAndSubmit={handleGeneratePlan}
                 isGenerating={state.isGenerating}
                 recipeId={recipeId}
+                unansweredCount={unansweredCount}
               />
             )}
              

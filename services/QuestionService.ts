@@ -2,14 +2,31 @@ import axios, { AxiosError } from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { RecipeQuestionsResponse } from "@/lib/types/spec";
 
+/** Normalized option for UI (supports both string and {label, description} formats) */
+export interface MCQOption {
+  label: string;
+  description?: string;
+}
+
 export interface MCQQuestion {
   id: string;
   section: string;
   question: string;
-  options: string[];
+  /** Options as strings (legacy) or MCQOption[] (new API) - normalized to MCQOption[] internally */
+  options: string[] | MCQOption[];
   needsInput: boolean;
+  /** Whether multiple options can be selected (true) or only one (false) */
+  multipleChoice?: boolean;
+  /** Legacy: preferred option label. New: derived from answer_recommendation.idx */
   assumed?: string;
+  /** AI reasoning for recommended option */
   reasoning?: string;
+  /** New API: index of recommended option (0-based) */
+  answerRecommendationIdx?: number | null;
+  /** New API: expected answer type (e.g., "mcq (bool)") */
+  expectedAnswerType?: string;
+  /** New API: optional context references */
+  contextRefs?: Array<{ path?: string; type?: string; [key: string]: unknown }> | null;
 }
 
 export interface QuestionAnswer {
@@ -225,18 +242,6 @@ export default class QuestionService {
         // If error status, throw
         if (data.recipe_status === 'ERROR') {
           throw new Error("Failed to generate questions");
-        }
-
-        // If status indicates spec generation has started but questions exist, return them
-        // This handles the case where user navigates back to the page after spec gen started
-        if (
-          ((data as any).recipe_status === 'SPEC_IN_PROGRESS' || 
-           (data as any).recipe_status === 'IN_PROGRESS') &&
-          (data as any).recipe_status === 'QUESTIONS_READY' &&
-          data.questions &&
-          data.questions.length > 0
-        ) {
-          return data;
         }
 
         // Otherwise, wait and poll again

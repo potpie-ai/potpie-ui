@@ -7,11 +7,20 @@ export type { MCQQuestion };
 export interface QuestionAnswer {
   question_id?: string;
   questionId?: string; // For backward compatibility with component state
+  /** Selected option label (e.g., "Hybrid Auth Strategy") or "Other: <user_input>" */
   textAnswer?: string;
+  /** Legacy: option letter (A, B, C). New: use selectedOptionIdx or isOther + otherText */
   mcqAnswer?: string;
+  /** New: index of selected option (0-based), -1 or undefined = not selected (single selection) */
+  selectedOptionIdx?: number;
+  /** New: indices of selected options (0-based) for multiple choice questions */
+  selectedOptionIndices?: number[];
+  /** New: true when "Other (specify your own)" is selected */
+  isOther?: boolean;
+  /** New: user input when isOther is true - submitted as "Other: <value>" */
+  otherText?: string;
   is_user_modified?: boolean;
   is_skipped?: boolean;
-  // For internal component state
   isEditing?: boolean;
   isUserModified?: boolean;
 }
@@ -29,6 +38,8 @@ export interface RepoPageState {
   hoveredQuestion: string | null;
   expandedOptions: Set<string>;
   skippedQuestions: Set<string>;
+  /** IDs of questions that need answers (for validation highlighting) */
+  unansweredQuestionIds?: Set<string>;
   isGenerating: boolean;
 }
 

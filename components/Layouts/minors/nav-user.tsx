@@ -30,6 +30,8 @@ import {
 import { signOut } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { isFirebaseEnabled } from "@/lib/utils";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { toast } from "sonner";
@@ -46,8 +48,10 @@ export function NavUser({
   };
 }) {
   const router = useRouter();
+  const { setUser } = useAuthContext();
+  const isFirebaseActive = isFirebaseEnabled();
   const [isSendingVerification, setIsSendingVerification] = useState(false);
-  
+
   const handleResendVerification = async () => {
     if (!auth.currentUser) {
       toast.error("No user found. Please sign in again.");
@@ -59,45 +63,56 @@ export function NavUser({
       toast.info("Your email is already verified!");
       return;
     }
-    
+
     setIsSendingVerification(true);
     try {
       // Get Firebase token for authentication
       const token = await auth.currentUser.getIdToken();
-      
+
       // Call backend API to send verification email to work email
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8000'}/api/v1/account/resend-verification`,
+        `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8000"}/api/v1/account/resend-verification`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       const data = await response.json();
 
       if (!response.ok) {
         // Check if this is a GitHub provider error
-        if (data.action === 'sign_in_with_work_email') {
+        if (data.action === "sign_in_with_work_email") {
           toast.error(
-            data.message || "Please sign in with your work email (Google) to verify your email address.",
+            data.message ||
+              "Please sign in with your work email (Google) to verify your email address.",
             {
               duration: 5000,
-            }
+            },
           );
           return;
         }
-        throw new Error(data.error || data.message || 'Failed to send verification email');
+        throw new Error(
+          data.error || data.message || "Failed to send verification email",
+        );
       }
 
-      toast.success(`Verification email sent to ${data.email || user.email}! Please check your inbox (and spam folder).`);
-      console.log("Verification email sent successfully to work email:", data.email || user.email);
+      toast.success(
+        `Verification email sent to ${data.email || user.email}! Please check your inbox (and spam folder).`,
+      );
+      console.log(
+        "Verification email sent successfully to work email:",
+        data.email || user.email,
+      );
     } catch (error: any) {
       console.error("Failed to send verification email:", error);
-      toast.error(error?.message || "Failed to send verification email. Please try again.");
+      toast.error(
+        error?.message ||
+          "Failed to send verification email. Please try again.",
+      );
     } finally {
       setIsSendingVerification(false);
     }
@@ -169,13 +184,15 @@ export function NavUser({
                   disabled={isSendingVerification}
                 >
                   <Mail />
-                  {isSendingVerification ? "Sending..." : "Resend Verification Email"}
+                  {isSendingVerification
+                    ? "Sending..."
+                    : "Resend Verification Email"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
               </>
             )}
             <DropdownMenuGroup>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="hover:bg-accent cursor-pointer"
                 onClick={() => router.push("/key-management")}
               >
@@ -205,7 +222,13 @@ export function NavUser({
               className="hover:bg-accent cursor-pointer"
               onClick={() => {
                 posthog.reset();
-                signOut(auth);
+                if (isFirebaseActive) {
+                  signOut(auth);
+                } else {
+                  localStorage.removeItem("user");
+                  localStorage.removeItem("token");
+                  setUser(null);
+                }
                 router.push("/sign-in");
               }}
             >

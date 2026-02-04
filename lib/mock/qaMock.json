@@ -44,7 +44,8 @@
           "description": "Existing AI UI implementation to ensure design consistency."
         }
       ],
-      "multiple_choice": true,
+      "multiple_choice": false,
+      "recommended": 2,
       "options": [
         {
           "description": "A global overlay accessible from any page.",
@@ -79,6 +80,7 @@
       },
       "criticality": "BLOCKER",
       "question": "Which LLM provider should be the default?",
+      "recommended": 0,
       "options": [
         {
           "description": "Use the existing OpenAI integration.",
@@ -97,7 +99,7 @@
           "label": "User-configured keys"
         }
       ],
-      "multiple_choice": true
+      "multiple_choice": false
     },
     {
       "criticality": "IMPORTANT",
@@ -119,14 +121,14 @@
         }
       ],
       "question": "Does the AI need access to private user data?",
-      "multiple_choice": true,
+      "multiple_choice": false,
       "answer_recommendation": {
         "reasoning": "Access to availability and bookings is necessary for the AI to provide meaningful scheduling assistance.",
         "idx": 0
       }
     },
     {
-      "multiple_choice": true,
+      "multiple_choice": false,
       "criticality": "IMPORTANT",
       "answer_recommendation": {
         "idx": 1,
@@ -167,7 +169,7 @@
         "reasoning": "Using tRPC v11 streaming maintains architectural consistency with the existing API layer.",
         "idx": 0
       },
-      "multiple_choice": true,
+      "multiple_choice": false,
       "criticality": "IMPORTANT",
       "context_refs": [
         {
@@ -209,12 +211,13 @@
     },
     {
       "criticality": "NICE_TO_HAVE",
-      "multiple_choice": true,
+      "multiple_choice": false,
       "answer_recommendation": {
         "idx": 1,
         "reasoning": "Focusing on a chat-only interface first avoids the complexity of defining and securing LLM tools."
       },
       "question": "Should the AI be able to perform actions?",
+      "recommended": 1,
       "options": [
         {
           "label": "Yes (Tool calling)",

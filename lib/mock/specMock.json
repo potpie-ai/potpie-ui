@@ -26,6 +26,48 @@
             "display_message": "Demo: Step 5 completed"
         }
     },
+    "selected_answers": [
+        {
+            "question": "What is the primary use case for the AI?",
+            "answer": "Help users find a time to meet",
+            "rationale": "Aligns with Cal.com's core scheduling value proposition"
+        },
+        {
+            "question": "Where should the chat interface be located in the UI?",
+            "answer": "Specific tab in Event Types",
+            "rationale": "Matches existing EventAITab UI pattern for design consistency"
+        },
+        {
+            "question": "Which LLM provider should be the default?",
+            "answer": "OpenAI",
+            "rationale": "Already present in yarn.lock, standard for Vercel AI SDK"
+        },
+        {
+            "question": "Does the AI need access to private user data?",
+            "answer": "Yes",
+            "rationale": "Necessary for meaningful scheduling assistance with availability and bookings"
+        },
+        {
+            "question": "Should chat history be persistent?",
+            "answer": "No (Ephemeral)",
+            "rationale": "Reduces initial database complexity, avoids migrations for V1"
+        },
+        {
+            "question": "Is streaming required?",
+            "answer": "tRPC v11 streaming",
+            "rationale": "Maintains architectural consistency with existing API layer"
+        },
+        {
+            "question": "Are there specific 'Must NOT Have' features for V1?",
+            "answer": "No file uploads, No voice-to-text, No group chats",
+            "rationale": "Reduces security and storage overhead for V1 release"
+        },
+        {
+            "question": "Should the AI be able to perform actions?",
+            "answer": "No (Chat only)",
+            "rationale": "Avoids complexity of defining and securing LLM tools for V1"
+        }
+    ],
     "spec_output": {
         "add": [
             {

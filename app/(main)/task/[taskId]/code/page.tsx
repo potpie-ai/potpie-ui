@@ -49,7 +49,7 @@ import {
 } from "@/lib/types/spec";
 
 // Demo mode delay in milliseconds (35 seconds)
-const DEMO_MODE_DELAY = 35000;
+const DEMO_MODE_DELAY = 1000;
 
 /**
  * VERTICAL TASK EXECUTION ENGINE
@@ -112,7 +112,254 @@ const StatusBadge = ({ status, tests }: { status: string; tests: any }) => {
   );
 };
 
-// Simple Syntax Highlighter
+// Diff-aware Syntax Highlighter for codegen output
+const DiffCodeBlock = ({ code }: { code: string }) => {
+  if (!code)
+    return (
+      <span className="text-zinc-500 italic font-mono text-[10px]">
+        Waiting for generation...
+      </span>
+    );
+
+  const lines = code.split("\n");
+
+  // Prisma keywords
+  const PRISMA_KEYWORDS = new Set([
+    "model", "enum", "generator", "datasource", "type"
+  ]);
+  
+  // Prisma types
+  const PRISMA_TYPES = new Set([
+    "String", "Int", "BigInt", "Float", "Decimal", "Boolean", "DateTime", 
+    "Json", "Bytes", "Unsupported"
+  ]);
+  
+  // SQL keywords for migrations
+  const SQL_KEYWORDS = new Set([
+    "CREATE", "TABLE", "ALTER", "DROP", "ADD", "COLUMN", "INDEX", "CONSTRAINT",
+    "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "ON", "DELETE", "UPDATE", "CASCADE",
+    "SET", "NULL", "NOT", "UNIQUE", "DEFAULT", "CHECK", "INSERT", "INTO", "VALUES",
+    "SELECT", "FROM", "WHERE", "AND", "OR", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER",
+    "IF", "EXISTS", "BEGIN", "END", "COMMIT", "ROLLBACK", "TRANSACTION", "EXTENSION",
+    "SERIAL", "BIGSERIAL", "VARCHAR", "TEXT", "INTEGER", "BIGINT", "BOOLEAN", "TIMESTAMP",
+    "TIMESTAMPTZ", "UUID", "JSONB", "ARRAY", "ENUM", "TYPE", "AS", "USING", "WITH", "ZONE"
+  ]);
+
+  return (
+    <div className="font-mono text-[10px] leading-relaxed">
+      {lines.map((line: string, i: number) => {
+        const trimmedLine = line.trimStart();
+        
+        // Handle diff-style headers (GENERATED:, CREATED:, CLASS IMPLEMENTED:, etc.)
+        if (trimmedLine.match(/^(GENERATED|CREATED|MODIFIED|CLASS IMPLEMENTED|INTERFACE|TYPES|MIGRATION|ROUTER|CONTAINER|FACTORY|COMPONENT|SERVICE|REPOSITORY|E2E TESTS|UNIT TESTS|TRANSLATIONS|PAGE|DTOs|RATE LIMITER|SYSTEM PROMPT|SCHEMA|PRISMA|DATABASE|SEED|QUERY):/i)) {
+          return (
+            <div key={i} className="text-blue-600 font-bold whitespace-pre bg-blue-50 -mx-4 px-4 py-0.5">
+              {line}
+            </div>
+          );
+        }
+        
+        // Handle bullet points (-- items) - but not SQL comments
+        if (trimmedLine.startsWith("-- ") && !trimmedLine.match(/^--\s+\w+/)) {
+          return (
+            <div key={i} className="text-zinc-600 whitespace-pre pl-2">
+              <span className="text-zinc-400">--</span>
+              <span className="text-zinc-700">{line.slice(line.indexOf("--") + 2)}</span>
+            </div>
+          );
+        }
+        
+        // Handle SQL comments (-- comment style)
+        if (trimmedLine.startsWith("--")) {
+          return (
+            <div key={i} className="text-zinc-400 italic whitespace-pre">
+              {line}
+            </div>
+          );
+        }
+        
+        // Handle comments (// and #)
+        if (trimmedLine.startsWith("//") || trimmedLine.startsWith("#")) {
+          return (
+            <div key={i} className="text-zinc-400 italic whitespace-pre">
+              {line}
+            </div>
+          );
+        }
+        
+        // Handle Prisma model/enum/generator/datasource declarations
+        if (trimmedLine.match(/^(model|enum|generator|datasource)\s+\w+/)) {
+          const match = trimmedLine.match(/^(model|enum|generator|datasource)\s+(\w+)/);
+          if (match) {
+            const keyword = match[1];
+            const name = match[2];
+            const rest = line.slice(line.indexOf(name) + name.length);
+            const beforeKeyword = line.slice(0, line.indexOf(keyword));
+            return (
+              <div key={i} className="whitespace-pre">
+                <span className="text-zinc-700">{beforeKeyword}</span>
+                <span className="text-pink-600 font-semibold">{keyword}</span>
+                <span className="text-zinc-700"> </span>
+                <span className="text-amber-600 font-semibold">{name}</span>
+                <span className="text-zinc-700">{rest}</span>
+              </div>
+            );
+          }
+        }
+        
+        // Handle Prisma decorators (@id, @default, @relation, etc.)
+        if (trimmedLine.includes("@")) {
+          const tokens = line.split(/(@\w+(?:\([^)]*\))?)/g);
+          return (
+            <div key={i} className="whitespace-pre">
+              {tokens.map((token, j) => {
+                if (token.startsWith("@")) {
+                  return <span key={j} className="text-amber-500 font-medium">{token}</span>;
+                }
+                // Check for Prisma types in the token
+                const typeMatch = token.match(/\b(String|Int|BigInt|Float|Decimal|Boolean|DateTime|Json|Bytes)\b/g);
+                if (typeMatch) {
+                  const parts = token.split(/\b(String|Int|BigInt|Float|Decimal|Boolean|DateTime|Json|Bytes)\b/);
+                  return (
+                    <span key={j}>
+                      {parts.map((part, k) => 
+                        PRISMA_TYPES.has(part) 
+                          ? <span key={k} className="text-teal-600 font-medium">{part}</span>
+                          : <span key={k} className="text-zinc-700">{part}</span>
+                      )}
+                    </span>
+                  );
+                }
+                return <span key={j} className="text-zinc-700">{token}</span>;
+              })}
+            </div>
+          );
+        }
+        
+        // Handle SQL statements (CREATE TABLE, ALTER TABLE, etc.)
+        if (trimmedLine.match(/^(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|SELECT|BEGIN|COMMIT|ROLLBACK)\b/i)) {
+          const tokens = line.split(/\b/);
+          return (
+            <div key={i} className="whitespace-pre">
+              {tokens.map((token, j) => {
+                if (SQL_KEYWORDS.has(token.toUpperCase())) {
+                  return <span key={j} className="text-purple-600 font-semibold">{token}</span>;
+                }
+                if (token.match(/^['"].*['"]$/)) {
+                  return <span key={j} className="text-emerald-600">{token}</span>;
+                }
+                if (/^\d+$/.test(token)) {
+                  return <span key={j} className="text-orange-500">{token}</span>;
+                }
+                return <span key={j} className="text-zinc-700">{token}</span>;
+              })}
+            </div>
+          );
+        }
+        
+        // Handle SQL data type lines (column definitions)
+        if (trimmedLine.match(/^\s*\w+\s+(VARCHAR|TEXT|INTEGER|BIGINT|SERIAL|BIGSERIAL|BOOLEAN|TIMESTAMP|TIMESTAMPTZ|UUID|JSONB|NUMERIC|DECIMAL|REAL|DOUBLE|BYTEA|CHAR|DATE|TIME|INTERVAL)/i)) {
+          const tokens = line.split(/\b/);
+          return (
+            <div key={i} className="whitespace-pre">
+              {tokens.map((token, j) => {
+                if (SQL_KEYWORDS.has(token.toUpperCase())) {
+                  return <span key={j} className="text-purple-600 font-semibold">{token}</span>;
+                }
+                return <span key={j} className="text-zinc-700">{token}</span>;
+              })}
+            </div>
+          );
+        }
+        
+        // Handle export/import lines
+        if (trimmedLine.startsWith("export") || trimmedLine.startsWith("import")) {
+          return (
+            <div key={i} className="whitespace-pre">
+              <span className="text-purple-600 font-semibold">{trimmedLine.split(" ")[0]}</span>
+              <span className="text-zinc-700">{line.slice(line.indexOf(" "))}</span>
+            </div>
+          );
+        }
+        
+        // Handle type/interface/class declarations
+        if (trimmedLine.match(/^(export\s+)?(type|interface|class|enum|function|const|let|var)\s/)) {
+          const match = trimmedLine.match(/^(export\s+)?(type|interface|class|enum|function|const|let|var)\s+(\w+)/);
+          if (match) {
+            const keyword = match[2];
+            const name = match[3];
+            const rest = line.slice(line.indexOf(name) + name.length);
+            const beforeKeyword = line.slice(0, line.indexOf(keyword));
+            return (
+              <div key={i} className="whitespace-pre">
+                <span className="text-zinc-700">{beforeKeyword}</span>
+                <span className="text-purple-600 font-semibold">{keyword}</span>
+                <span className="text-zinc-700"> </span>
+                <span className="text-blue-600 font-semibold">{name}</span>
+                <span className="text-zinc-700">{rest}</span>
+              </div>
+            );
+          }
+        }
+        
+        // Handle Prisma field definitions (fieldName Type @decorators)
+        if (trimmedLine.match(/^\w+\s+(String|Int|BigInt|Float|Decimal|Boolean|DateTime|Json|Bytes|\w+\[\]|\w+\?)/)) {
+          const tokens = line.split(/\b/);
+          return (
+            <div key={i} className="whitespace-pre">
+              {tokens.map((token, j) => {
+                if (PRISMA_TYPES.has(token)) {
+                  return <span key={j} className="text-teal-600 font-medium">{token}</span>;
+                }
+                if (token.startsWith("@")) {
+                  return <span key={j} className="text-amber-500 font-medium">{token}</span>;
+                }
+                return <span key={j} className="text-zinc-700">{token}</span>;
+              })}
+            </div>
+          );
+        }
+        
+        // Handle property definitions (key: value)
+        if (trimmedLine.match(/^\w+\s*[?]?:\s/)) {
+          const colonIndex = line.indexOf(":");
+          const key = line.slice(0, colonIndex);
+          const value = line.slice(colonIndex);
+          return (
+            <div key={i} className="whitespace-pre">
+              <span className="text-cyan-600">{key}</span>
+              <span className="text-zinc-700">{value}</span>
+            </div>
+          );
+        }
+        
+        // Handle generic SQL keywords in any line
+        if (trimmedLine.match(/\b(PRIMARY|FOREIGN|KEY|REFERENCES|CONSTRAINT|UNIQUE|INDEX|NOT NULL|DEFAULT|CHECK)\b/i)) {
+          const tokens = line.split(/\b/);
+          return (
+            <div key={i} className="whitespace-pre">
+              {tokens.map((token, j) => {
+                if (SQL_KEYWORDS.has(token.toUpperCase())) {
+                  return <span key={j} className="text-purple-600 font-semibold">{token}</span>;
+                }
+                return <span key={j} className="text-zinc-700">{token}</span>;
+              })}
+            </div>
+          );
+        }
+        
+        // Default - regular line
+        return (
+          <div key={i} className="text-zinc-700 whitespace-pre">
+            {line}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// Simple Syntax Highlighter for general code (used in test code display)
 const SimpleCodeBlock = ({ code }: { code: string }) => {
   if (!code)
     return (
@@ -122,29 +369,10 @@ const SimpleCodeBlock = ({ code }: { code: string }) => {
     );
 
   const KEYWORDS = new Set([
-    "import",
-    "from",
-    "const",
-    "let",
-    "var",
-    "async",
-    "await",
-    "function",
-    "return",
-    "if",
-    "else",
-    "try",
-    "catch",
-    "describe",
-    "test",
-    "it",
-    "expect",
-    "new",
-    "export",
-    "default",
-    "class",
-    "interface",
-    "type",
+    "import", "from", "const", "let", "var", "async", "await", "function",
+    "return", "if", "else", "try", "catch", "describe", "test", "it",
+    "expect", "new", "export", "default", "class", "interface", "type",
+    "throw", "for", "while", "of", "in", "true", "false", "null", "undefined"
   ]);
 
   const lines = code.split("\n");
@@ -154,57 +382,28 @@ const SimpleCodeBlock = ({ code }: { code: string }) => {
       {lines.map((line: string, i: number) => {
         if (line.trim().startsWith("//")) {
           return (
-            <div key={i} className="text-primary-color whitespace-pre">
+            <div key={i} className="text-zinc-400 italic whitespace-pre">
               {line}
             </div>
           );
         }
-        const parts = line.split(/(\s+|[(){}[\].,;:'"`])/);
-
+        
+        // Simple token-based highlighting
+        const tokens = line.split(/(\s+|[(){}[\].,;:'"<>=!&|?]+)/);
+        
         return (
           <div key={i} className="whitespace-pre">
-            {parts.map((part: string, j: number) => {
-              if (KEYWORDS.has(part))
-                return (
-                  <span key={j} className="text-purple-500 font-semibold">
-                    {part}
-                  </span>
-                );
-              if (part.match(/^['"`].*['"`]$/))
-                return (
-                  <span key={j} className="text-emerald-600">
-                    {part}
-                  </span>
-                );
-              if (part.match(/^['"`]/))
-                return (
-                  <span key={j} className="text-emerald-600">
-                    {part}
-                  </span>
-                );
-              if (
-                /^\w+$/.test(part) &&
-                j < parts.length - 1 &&
-                parts[j + 1].trim() === "("
-              ) {
-                return (
-                  <span key={j} className="text-primary-color">
-                    {part}
-                  </span>
-                );
+            {tokens.map((token: string, j: number) => {
+              if (KEYWORDS.has(token)) {
+                return <span key={j} className="text-purple-600 font-semibold">{token}</span>;
               }
-              if (/^\d+$/.test(part))
-                return (
-                  <span key={j} className="text-orange-500">
-                    {part}
-                  </span>
-                );
-
-              return (
-                <span key={j} className="text-primary-color">
-                  {part}
-                </span>
-              );
+              if (token.match(/^['"].*['"]$/)) {
+                return <span key={j} className="text-emerald-600">{token}</span>;
+              }
+              if (/^\d+$/.test(token)) {
+                return <span key={j} className="text-orange-500">{token}</span>;
+              }
+              return <span key={j} className="text-zinc-700">{token}</span>;
             })}
           </div>
         );
@@ -224,7 +423,7 @@ const mapApiStatusToUI = (apiStatus: string): string => {
   return statusMap[apiStatus] || apiStatus.toLowerCase();
 };
 
-// New MockTaskCard component handling inline expansion with test_diff and codegen_diff
+// New MockTaskCard component handling inline expansion with codegen_diff
 const MockTaskCard = React.forwardRef<HTMLDivElement, {
   task: MockTask;
   isExpanded: boolean;
@@ -242,81 +441,83 @@ const MockTaskCard = React.forwardRef<HTMLDivElement, {
   isGeneratingCode: externalIsGenerating,
   onCodeGenComplete,
 }, ref) => {
-  const [activeTab, setActiveTab] = React.useState<
-    "test_diff" | "codegen" | "test_code"
-  >("test_diff");
   const [isGeneratingCode, setIsGeneratingCode] = React.useState(false);
   const [streamedCode, setStreamedCode] = React.useState("");
   const [codeGenComplete, setCodeGenComplete] = React.useState(false);
   
-  // Ref to track if streaming has started for current external trigger
+  // Refs for streaming - these persist across re-renders without causing effect re-runs
   const streamingStartedRef = React.useRef(false);
   const intervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const currentIndexRef = React.useRef(0);
+  const onCodeGenCompleteRef = React.useRef(onCodeGenComplete);
 
-  const hasTestDiff = task.test_diff && task.test_diff.length > 0;
-  const hasTestCode = task.test_code && task.test_code.length > 0;
+  // Keep the callback ref updated
+  React.useEffect(() => {
+    onCodeGenCompleteRef.current = onCodeGenComplete;
+  }, [onCodeGenComplete]);
+
+  const hasCodegenDiff = task.codegen_diff && task.codegen_diff.length > 0;
   
   // Use external isGeneratingCode if provided, otherwise use internal state
   const actualIsGeneratingCode = externalIsGenerating !== undefined ? externalIsGenerating : isGeneratingCode;
 
-  // Reset streaming state when external trigger turns off
+  // Start streaming when externalIsGenerating becomes true
   React.useEffect(() => {
-    if (!externalIsGenerating) {
-      streamingStartedRef.current = false;
-    }
-  }, [externalIsGenerating]);
-
-  // Effect to handle external code generation trigger - now streams test_code
-  React.useEffect(() => {
-    if (externalIsGenerating && !streamingStartedRef.current && !codeGenComplete && hasTestCode) {
+    // Only start if external trigger is on, we haven't started yet, not complete, and have content
+    if (externalIsGenerating && !streamingStartedRef.current && !codeGenComplete && hasCodegenDiff) {
       streamingStartedRef.current = true;
       setIsGeneratingCode(true);
       setStreamedCode("");
-      setActiveTab("codegen");
+      currentIndexRef.current = 0;
 
-      // Stream test_code instead of codegen_diff
-      const codeToStream = task.test_code;
-      
-      let currentIndex = 0;
-      // Slower, more realistic streaming speed that feels like an agent is writing code
-      // ~50 chars/sec means a 500 char function takes ~10 seconds
-      const charsPerTick = 3; // Characters to add per tick
-      const tickInterval = 60; // Milliseconds between ticks
+      const codeToStream = task.codegen_diff;
+      const charsPerTick = 3;
+      const tickInterval = 60;
 
-      // Clear any existing interval
+      // Clear any existing interval first
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
 
       intervalRef.current = setInterval(() => {
-        if (currentIndex < codeToStream.length) {
+        if (currentIndexRef.current < codeToStream.length) {
           const nextChunk = codeToStream.slice(
-            currentIndex,
-            currentIndex + charsPerTick
+            currentIndexRef.current,
+            currentIndexRef.current + charsPerTick
           );
           setStreamedCode((prev) => prev + nextChunk);
-          currentIndex += charsPerTick;
+          currentIndexRef.current += charsPerTick;
         } else {
+          // Streaming complete
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
           }
           setIsGeneratingCode(false);
           setCodeGenComplete(true);
-          if (onCodeGenComplete) {
-            onCodeGenComplete();
+          streamingStartedRef.current = false;
+          if (onCodeGenCompleteRef.current) {
+            onCodeGenCompleteRef.current();
           }
         }
       }, tickInterval);
     }
     
+    // Only reset the started flag when external trigger turns off AND we're not currently streaming
+    if (!externalIsGenerating && !intervalRef.current) {
+      streamingStartedRef.current = false;
+    }
+  }, [externalIsGenerating, codeGenComplete, hasCodegenDiff, task.codegen_diff]);
+
+  // Cleanup only on unmount - NOT on re-renders
+  React.useEffect(() => {
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     };
-  }, [externalIsGenerating, codeGenComplete, hasTestCode, task.test_code, onCodeGenComplete]);
+  }, []);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -394,7 +595,7 @@ const MockTaskCard = React.forwardRef<HTMLDivElement, {
             <div
               className="h-full bg-blue-500 transition-all duration-300 ease-out"
               style={{
-                width: `${(streamedCode.length / (task.test_code?.length || 1)) * 100}%`,
+                width: `${(streamedCode.length / (task.codegen_diff?.length || 1)) * 100}%`,
               }}
             />
           </div>
@@ -404,231 +605,89 @@ const MockTaskCard = React.forwardRef<HTMLDivElement, {
       {/* Expanded Content Area */}
       {isExpanded && (
         <div className="border-t border-zinc-100 bg-zinc-50/50 animate-in slide-in-from-top-2 duration-200">
-          {/* Tabs */}
-          <div className="flex items-center justify-between px-4 border-b border-zinc-100 bg-background">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTab("test_diff");
-                }}
-                className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "test_diff" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
-              >
-                <TestTube className="w-3 h-3" />
-                Test Diff
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTab("test_code");
-                }}
-                className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "test_code" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
-              >
-                <ShieldCheck className="w-3 h-3" />
-                Test Code
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTab("codegen");
-                }}
-                className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "codegen" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
-              >
-                <FileDiff className="w-3 h-3" />
-                Code Gen
-                {codeGenComplete && (
-                  <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[9px]">
-                    ✓
-                  </span>
-                )}
-              </button>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 bg-background">
+            <div className="flex items-center gap-2">
+              <FileDiff className="w-3.5 h-3.5 text-primary-color" />
+              <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
+                Generated Code
+              </span>
+              {isGeneratingCode && (
+                <span className="text-[9px] text-blue-600 animate-pulse">
+                  Streaming...
+                </span>
+              )}
+              {codeGenComplete && (
+                <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[9px]">
+                  ✓
+                </span>
+              )}
             </div>
+            {(streamedCode || codeGenComplete) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyToClipboard(task.codegen_diff);
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-primary-color hover:bg-zinc-100 rounded transition-colors"
+              >
+                <Copy className="w-3 h-3" />
+                Copy
+              </button>
+            )}
           </div>
 
-          {/* Tab Views */}
+          {/* Code Gen Content */}
           <div className="p-4 min-h-[200px]">
-            {/* Test Diff Tab */}
-            {activeTab === "test_diff" && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <TestTube className="w-3.5 h-3.5 text-primary-color" />
-                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
-                      Expected Test Changes
-                    </span>
-                  </div>
-                  {hasTestDiff && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(task.test_diff);
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-primary-color hover:bg-zinc-100 rounded transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copy
-                    </button>
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {!streamedCode && !isGeneratingCode && !codeGenComplete ? (
+                <div className="h-40 flex flex-col items-center justify-center text-primary-color border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
+                  <Sparkles className="w-8 h-8 mb-3 opacity-50 text-primary-color" />
+                  {hasCodegenDiff ? (
+                    <>
+                      <p className="text-xs font-bold text-primary-color">
+                        Ready to generate code
+                      </p>
+                      <p className="text-[10px] text-primary-color mt-1">
+                        Click &quot;Generate Code&quot; button to start
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs font-bold text-primary-color">
+                        No code generation available
+                      </p>
+                      <p className="text-[10px] text-primary-color mt-1">
+                        This task doesn&apos;t have codegen diff defined
+                      </p>
+                    </>
                   )}
                 </div>
-
-                {hasTestDiff ? (
-                  <div className="bg-background rounded-lg border border-zinc-200 overflow-hidden">
-                    <div className="px-3 py-2 bg-zinc-50/80 border-b border-zinc-100 flex items-center gap-2">
+              ) : (
+                <div className="bg-background rounded-lg border border-zinc-200 overflow-hidden">
+                  <div className="px-3 py-2 bg-zinc-50/80 border-b border-zinc-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <FileText className="w-3 h-3 text-primary-color" />
                       <span className="text-[10px] font-mono font-medium text-primary-color">
                         {task.file}
                       </span>
                     </div>
-                    <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed bg-background max-h-[300px] overflow-y-auto">
-                      {task.test_diff
-                        .split("\n")
-                        .map((line: string, i: number) => (
-                          <div
-                            key={i}
-                            className={`${
-                              line.startsWith("+")
-                                ? "bg-emerald-50 text-emerald-900 -mx-3 px-3"
-                                : line.startsWith("-")
-                                  ? "bg-red-50 text-red-900 -mx-3 px-3"
-                                  : "text-primary-color"
-                            }`}
-                          >
-                            <span className="inline-block w-6 text-primary-color select-none text-right mr-3 border-r border-zinc-100 pr-2">
-                              {i + 1}
-                            </span>
-                            {line}
-                          </div>
-                        ))}
-                    </pre>
-                  </div>
-                ) : (
-                  <div className="h-32 flex flex-col items-center justify-center text-primary-color border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
-                    <TestTube className="w-6 h-6 mb-3 opacity-50" />
-                    <p className="text-xs font-bold">No test diff available</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Test Code Tab */}
-            {activeTab === "test_code" && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-primary-color" />
-                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
-                      Test Code Definition
-                    </span>
-                  </div>
-                  {task.test_code && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(task.test_code);
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-primary-color hover:bg-zinc-100 rounded transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copy
-                    </button>
-                  )}
-                </div>
-
-                <div className="bg-background rounded-lg border border-zinc-200 overflow-hidden">
-                  <div className="p-4 overflow-x-auto max-h-[300px] overflow-y-auto">
-                    <SimpleCodeBlock code={task.test_code || ""} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Code Gen Tab */}
-            {activeTab === "codegen" && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileDiff className="w-3.5 h-3.5 text-primary-color" />
-                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
-                      Generated Code
-                    </span>
-                    {isGeneratingCode && (
-                      <span className="text-[9px] text-blue-600 animate-pulse">
-                        Streaming...
+                    {codeGenComplete && (
+                      <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Complete
                       </span>
                     )}
                   </div>
-                  {(streamedCode || codeGenComplete) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(task.test_code);
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-primary-color hover:bg-zinc-100 rounded transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copy
-                    </button>
-                  )}
-                </div>
-
-                {!streamedCode && !isGeneratingCode && !codeGenComplete ? (
-                  <div className="h-40 flex flex-col items-center justify-center text-primary-color border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
-                    <Sparkles className="w-8 h-8 mb-3 opacity-50 text-primary-color" />
-                    {hasTestCode ? (
-                      <>
-                        <p className="text-xs font-bold text-primary-color">
-                          Ready to generate test code
-                        </p>
-                        <p className="text-[10px] text-primary-color mt-1">
-                          Click &quot;Generate Code&quot; button to start
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs font-bold text-primary-color">
-                          No code generation available
-                        </p>
-                        <p className="text-[10px] text-primary-color mt-1">
-                          This task doesn&apos;t have test code defined
-                        </p>
-                      </>
+                  <div className="p-4 overflow-x-auto max-h-[300px] overflow-y-auto">
+                    <DiffCodeBlock code={streamedCode || ""} />
+                    {isGeneratingCode && (
+                      <span className="inline-block w-2 h-4 bg-primary-color animate-pulse ml-1" />
                     )}
                   </div>
-                ) : (
-                  <div className="bg-zinc-900 rounded-lg border border-zinc-700 overflow-hidden">
-                    <div className="px-3 py-2 bg-zinc-800 border-b border-zinc-700 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3 h-3 text-zinc-400" />
-                        <span className="text-[10px] font-mono font-medium text-zinc-300">
-                          {task.file}
-                        </span>
-                      </div>
-                      {codeGenComplete && (
-                        <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Complete
-                        </span>
-                      )}
-                    </div>
-                    <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed text-zinc-100 max-h-[300px] overflow-y-auto">
-                      {(streamedCode || "")
-                        .split("\n")
-                        .map((line: string, i: number) => (
-                          <div key={i} className="text-zinc-100">
-                            <span className="inline-block w-6 text-zinc-500 select-none text-right mr-3 border-r border-zinc-700 pr-2">
-                              {i + 1}
-                            </span>
-                            {line}
-                          </div>
-                        ))}
-                      {isGeneratingCode && (
-                        <span className="inline-block w-2 h-4 bg-zinc-100 animate-pulse ml-1" />
-                      )}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1030,17 +1089,17 @@ export default function VerticalTaskExecution() {
     setIsAutoGenerating(true);
     setCompletedCodeGenTasks(new Set());
     
-    // Find first task with test_code
-    const tasksWithTestCode = activeMockPhase.tasks
+    // Find first task with codegen_diff
+    const tasksWithCodegenDiff = activeMockPhase.tasks
       .map((task, idx) => ({ task, idx }))
-      .filter(({ task }) => task.test_code && task.test_code.length > 0);
+      .filter(({ task }) => task.codegen_diff && task.codegen_diff.length > 0);
     
-    if (tasksWithTestCode.length === 0) {
+    if (tasksWithCodegenDiff.length === 0) {
       setIsAutoGenerating(false);
       return;
     }
     
-    const firstTaskIndex = tasksWithTestCode[0].idx;
+    const firstTaskIndex = tasksWithCodegenDiff[0].idx;
     const taskKey = `${activePlanItemKey}_task_${firstTaskIndex}`;
     
     // Expand the first task and start generating
@@ -1059,18 +1118,18 @@ export default function VerticalTaskExecution() {
     });
     setGeneratingTaskIndex(null);
     
-    // Find next task with test_code
+    // Find next task with codegen_diff
     setTimeout(() => {
       if (!activeMockPhase) return;
       
-      const tasksWithTestCode = activeMockPhase.tasks
+      const tasksWithCodegenDiff = activeMockPhase.tasks
         .map((t, idx) => ({ task: t, idx }))
-        .filter(({ task }) => task.test_code && task.test_code.length > 0);
+        .filter(({ task }) => task.codegen_diff && task.codegen_diff.length > 0);
       
       // Get updated completed tasks including the current one
       const currentCompleted = new Set([...completedCodeGenTasks, taskIdx]);
       
-      const nextTask = tasksWithTestCode.find(
+      const nextTask = tasksWithCodegenDiff.find(
         ({ idx }) => !currentCompleted.has(idx)
       );
       
@@ -1086,17 +1145,17 @@ export default function VerticalTaskExecution() {
         // All tasks in this phase are complete, mark phase as done
         setCompletedPhases(prev => new Set([...prev, activePlanItemKey]));
         
-        // Find next phase with tasks that have test_code
+        // Find next phase with tasks that have codegen_diff
         const currentPhaseIndex = mockPlanItemKeys.indexOf(activePlanItemKey);
         let nextPhaseKey: string | null = null;
         
         for (let i = currentPhaseIndex + 1; i < mockPlanItemKeys.length; i++) {
           const phaseKey = mockPlanItemKeys[i];
           const phase = MOCK_PLAN_DATA[phaseKey]?.[0];
-          const hasTasksWithTestCode = phase?.tasks.some(
-            task => task.test_code && task.test_code.length > 0
+          const hasTasksWithCodegenDiff = phase?.tasks.some(
+            task => task.codegen_diff && task.codegen_diff.length > 0
           );
-          if (hasTasksWithTestCode) {
+          if (hasTasksWithCodegenDiff) {
             nextPhaseKey = phaseKey;
             break;
           }
@@ -1114,7 +1173,7 @@ export default function VerticalTaskExecution() {
               const nextPhase = MOCK_PLAN_DATA[nextPhaseKey!]?.[0];
               const firstTask = nextPhase?.tasks
                 .map((t, idx) => ({ task: t, idx }))
-                .find(({ task }) => task.test_code && task.test_code.length > 0);
+                .find(({ task }) => task.codegen_diff && task.codegen_diff.length > 0);
               
               if (firstTask) {
                 const taskKey = `${nextPhaseKey}_task_${firstTask.idx}`;
@@ -1125,8 +1184,11 @@ export default function VerticalTaskExecution() {
             }, 500);
           }, 800);
         } else {
-          // All phases complete
+          // All phases complete - keep last task accordion open
           setIsAutoGenerating(false);
+          // Keep the last completed task expanded
+          const lastTaskKey = `${activePlanItemKey}_task_${taskIdx}`;
+          setExpandedMockTaskKey(lastTaskKey);
           toast.success("Code generation complete for all phases!");
         }
       }
@@ -1727,14 +1789,14 @@ export default function VerticalTaskExecution() {
                 onClick={startCodeGeneration}
                 disabled={!activeMockPhase || isAutoGenerating || 
                   activeMockPhase.tasks.every((task, idx) => 
-                    !task.test_code || task.test_code.length === 0 || completedCodeGenTasks.has(idx)
+                    !task.codegen_diff || task.codegen_diff.length === 0 || completedCodeGenTasks.has(idx)
                   )}
                 className={`
                   flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border
                   ${
                     isAutoGenerating || !activeMockPhase ||
                     activeMockPhase.tasks.every((task, idx) => 
-                      !task.test_code || task.test_code.length === 0 || completedCodeGenTasks.has(idx)
+                      !task.codegen_diff || task.codegen_diff.length === 0 || completedCodeGenTasks.has(idx)
                     )
                       ? "bg-zinc-100 border-zinc-200 text-primary-color cursor-not-allowed opacity-50"
                       : "bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color"
@@ -1796,11 +1858,10 @@ export default function VerticalTaskExecution() {
                         task={task}
                         isExpanded={expandedMockTaskKey === taskKey}
                         onToggle={() => {
-                          if (!isAutoGenerating) {
-                            setExpandedMockTaskKey(
-                              expandedMockTaskKey === taskKey ? null : taskKey
-                            );
-                          }
+                          // Allow toggling accordions even during code generation
+                          setExpandedMockTaskKey(
+                            expandedMockTaskKey === taskKey ? null : taskKey
+                          );
                         }}
                         taskIndex={taskIdx}
                         phaseIndex={activeMockPhase.order}
@@ -1851,7 +1912,7 @@ export default function VerticalTaskExecution() {
                   {isAutoGenerating && (
                     <div className="text-blue-600 animate-pulse">
                       <span className="text-zinc-400 select-none">{">"}</span>{" "}
-                      Generating code... Task {generatingTaskIndex !== null ? generatingTaskIndex + 1 : 0}/{activeMockPhase?.tasks.filter(t => t.test_code && t.test_code.length > 0).length || 0}
+                      Generating code... Task {generatingTaskIndex !== null ? generatingTaskIndex + 1 : 0}/{activeMockPhase?.tasks.filter(t => t.codegen_diff && t.codegen_diff.length > 0).length || 0}
                     </div>
                   )}
                   {completedCodeGenTasks.size > 0 && (

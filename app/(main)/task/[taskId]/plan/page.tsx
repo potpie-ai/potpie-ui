@@ -45,7 +45,7 @@ import { toast } from "sonner";
 import codegenMockData from "@/lib/mock/codegenMock.json";
 
 // Demo mode delay in milliseconds (35 seconds)
-const DEMO_MODE_DELAY = 35000;
+const DEMO_MODE_DELAY = 15000;
 
 /**
  * VERTICAL SLICE PLANNER (Auto-Generation Mode)

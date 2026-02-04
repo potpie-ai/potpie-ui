@@ -1,8 +1,8 @@
 {
   "plan_status": {
     "plan_id": "mock-plan-id-12345",
-    "spec_id": "mock-spec-id-12345",
-    "recipe_id": "mock-recipe-id",
+    "spec_id": "019c29f0-3395-788c-ad93-a17c1135f61c",
+    "recipe_id": "019c29ef-9f2f-74a2-bb1c-3c70af5b2b00",
     "plan_gen_status": "COMPLETED",
     "current_step": 5,
     "progress_percent": 100,
@@ -16,169 +16,166 @@
       "id": "item-1",
       "item_number": 1,
       "order": 0,
-      "title": "Set up Authentication Schema & Database",
-      "detailed_objective": "Create the foundational database schema for user authentication, including user table with proper fields for email, password hash, and timestamps. Configure Prisma as the ORM and establish PostgreSQL connection with appropriate pooling settings.",
+      "title": "Set up AI Chat Database Schema & Types",
+      "detailed_objective": "Create the foundational database schema for AI chat metadata logging with Prisma. Define TypeScript interfaces for chat messages, provider responses, and error types that will be used across the entire feature.",
       "implementation_steps": [
-        "Create `prisma/schema.prisma` with User model including id (UUID), email (unique), passwordHash, createdAt, and updatedAt",
-        "Configure `DATABASE_URL` environment variable in `.env` file",
-        "Create `src/lib/db.ts` with PrismaClient singleton pattern to prevent connection exhaustion",
-        "Run `prisma generate` to generate TypeScript types",
-        "Execute `prisma migrate dev --name init-user-schema` to create initial migration",
-        "Test database connection with a simple query"
+        "Add `AiChatInteraction` model to `packages/prisma/schema.prisma` with multi-tenancy fields (userId, profileId, teamId, orgId)",
+        "Include provider metadata fields: model, inputTokens, outputTokens, totalTokens, latency",
+        "Add status enum: SUCCESS, ERROR, RATE_LIMITED, TIMEOUT",
+        "Create indexes on userId, profileId, teamId, orgId, createdAt for query performance",
+        "Create `packages/features/ai-chat/lib/types.ts` with ChatMessage, AIProviderResponse, and error type definitions",
+        "Run `yarn prisma generate` and create migration with `yarn prisma migrate dev --name add-ai-chat-interaction`"
       ],
-      "description": "Initialize database schema for user authentication with Prisma ORM",
-      "verification_criteria": "Database connection established; User table created successfully; Prisma Client can query database without errors",
+      "description": "Initialize database schema and TypeScript types for AI chat feature",
+      "verification_criteria": "Prisma schema compiles without errors; TypeScript types are exported correctly; Migration runs successfully; No PII fields in schema",
       "files": [
-        { "path": "prisma/schema.prisma", "type": "create" },
-        { "path": "src/lib/db.ts", "type": "create" },
-        { "path": ".env", "type": "modify" },
-        { "path": "package.json", "type": "modify" }
+        { "path": "packages/prisma/schema.prisma", "type": "modify" },
+        { "path": "packages/features/ai-chat/lib/types.ts", "type": "create" },
+        { "path": "packages/prisma/migrations/", "type": "create" }
       ],
       "context_handoff": {
-        "db_provider": "PostgreSQL",
-        "orm": "Prisma",
-        "user_id_type": "UUID v4",
-        "email_constraint": "UNIQUE"
+        "multi_tenancy": "userId, profileId, teamId, orgId",
+        "status_values": "SUCCESS, ERROR, RATE_LIMITED, TIMEOUT",
+        "no_pii": "Message content never stored"
       },
-      "reasoning": "Starting with the database layer ensures we have a solid foundation before implementing business logic. UUID is chosen over auto-increment for better security and distributed system compatibility.",
-      "architecture": "flowchart TB\n    subgraph DB[\"PostgreSQL Database\"]\n        User[(\"User Table<br/>id: UUID PK<br/>email: VARCHAR UNIQUE<br/>passwordHash: VARCHAR<br/>createdAt: TIMESTAMP<br/>updatedAt: TIMESTAMP\")]\n    end\n    subgraph App[\"Application Layer\"]\n        Prisma[\"PrismaClient<br/>Singleton Pattern<br/>Connection Pool: 10\"]\n    end\n    Prisma -->|\"TCP/5432\"| User"
+      "reasoning": "Starting with the data layer ensures type safety across the application. Multi-tenancy fields follow Cal.com's existing patterns for team/org scoping.",
+      "architecture": "flowchart TB\n    subgraph DB[\"PostgreSQL Database\"]\n        AiChat[(\"AiChatInteraction<br/>id: UUID PK<br/>userId, profileId, teamId, orgId<br/>model, tokens, latency<br/>status: ENUM<br/>createdAt: TIMESTAMP\")]\n    end\n    subgraph Types[\"TypeScript Types\"]\n        ChatMsg[\"ChatMessage<br/>role, content, timestamp\"]\n        Response[\"AIProviderResponse<br/>content, model, usage, latency\"]\n    end\n    Types -->|\"Prisma Client\"| DB"
     },
     {
       "id": "item-2",
       "item_number": 2,
       "order": 1,
-      "title": "Implement Password Hashing & JWT Utilities",
-      "detailed_objective": "Build core authentication utilities for secure password hashing using bcrypt and JWT token generation/verification. These utilities will be used across the application for user authentication flows.",
+      "title": "Implement AI Provider Abstraction & OpenAI Integration",
+      "detailed_objective": "Build the AI provider abstraction layer with an interface that supports multiple LLM providers. Implement the OpenAI provider as the default, with proper error handling, retry logic, and token usage tracking.",
       "implementation_steps": [
-        "Install dependencies: `bcryptjs` and `jsonwebtoken`",
-        "Create `src/utils/password.ts` with hashPassword() and verifyPassword() functions",
-        "Set bcrypt salt rounds to 12 for optimal security/performance balance",
-        "Create `src/utils/jwt.ts` with generateToken() and verifyToken() functions",
-        "Configure JWT_SECRET and JWT_EXPIRES_IN environment variables",
-        "Add token payload type definitions with userId and email",
-        "Write unit tests for password hashing and JWT operations"
+        "Create `packages/features/ai-chat/lib/providers/AIProvider.interface.ts` with generateResponse() method",
+        "Define AIProviderResponse type with content, model, usage (inputTokens, outputTokens, totalTokens), and latency",
+        "Create `packages/features/ai-chat/lib/providers/openai.ts` implementing the interface",
+        "Add environment variables: OPENAI_API_KEY, OPENAI_MODEL (default: gpt-4o-mini), OPENAI_MAX_TOKENS (default: 2000)",
+        "Implement retry logic: 3 retries with exponential backoff (1s, 2s, 4s) for 5xx errors only",
+        "Map OpenAI errors: 429 → rate limit, 401 → invalid key, 5xx → transient",
+        "Add `@openai/openai` dependency to `packages/features/ai-chat/package.json`",
+        "Create `packages/features/ai-chat/lib/providers/noop.ts` for testing"
       ],
-      "description": "Core authentication utilities for password security and token management",
-      "verification_criteria": "Password hashing produces different hashes for same input; Verification correctly validates passwords; JWT tokens can be generated and verified; Tokens expire correctly",
+      "description": "Provider abstraction layer with OpenAI implementation for LLM interactions",
+      "verification_criteria": "OpenAI provider generates responses correctly; Retry logic handles transient errors; Token usage is tracked accurately; NoOp provider works for tests",
       "files": [
-        { "path": "src/utils/password.ts", "type": "create" },
-        { "path": "src/utils/jwt.ts", "type": "create" },
-        { "path": "src/types/auth.ts", "type": "create" },
-        { "path": ".env", "type": "modify" },
-        { "path": "src/utils/__tests__/password.test.ts", "type": "create" },
-        { "path": "src/utils/__tests__/jwt.test.ts", "type": "create" }
+        { "path": "packages/features/ai-chat/lib/providers/AIProvider.interface.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/lib/providers/openai.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/lib/providers/noop.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/package.json", "type": "modify" }
       ],
       "context_handoff": {
-        "hash_algorithm": "bcrypt",
-        "salt_rounds": 12,
-        "jwt_algorithm": "HS256",
-        "token_expiry": "7d"
+        "default_model": "gpt-4o-mini",
+        "max_tokens": 2000,
+        "temperature": 0.7,
+        "retry_strategy": "3x backoff for 5xx only"
       },
-      "reasoning": "bcrypt is industry standard for password hashing with built-in salting. HS256 JWT provides good balance of security and performance for this use case.",
-      "architecture": "flowchart LR\n    subgraph Utils[\"Authentication Utilities\"]\n        Hash[\"hashPassword()<br/>bcrypt + salt\"]\n        Verify[\"verifyPassword()<br/>compare hash\"]\n        Gen[\"generateToken()<br/>JWT sign\"]\n        Check[\"verifyToken()<br/>JWT verify\"]\n    end\n    Hash --> Verify\n    Gen --> Check"
+      "reasoning": "Provider abstraction enables easy switching between OpenAI, Anthropic, or other providers. OpenAI is the default based on existing yarn.lock dependencies.",
+      "architecture": "flowchart LR\n    subgraph Providers[\"AI Providers\"]\n        Interface[\"AIProvider Interface<br/>generateResponse()\"]\n        OpenAI[\"OpenAI Provider<br/>gpt-4o-mini\"]\n        NoOp[\"NoOp Provider<br/>Testing\"]\n    end\n    Interface --> OpenAI\n    Interface --> NoOp\n    OpenAI -->|\"API Call\"| API[\"OpenAI API\"]"
     },
     {
       "id": "item-3",
       "item_number": 3,
       "order": 2,
-      "title": "Build Authentication Service Layer",
-      "detailed_objective": "Create a service layer that handles all authentication business logic including user registration, login, and token refresh. This service will orchestrate database operations and utility functions.",
+      "title": "Build Rate Limiting & Repository Layer",
+      "detailed_objective": "Implement per-user rate limiting using Redis for distributed environments. Create the repository layer for logging AI chat metadata with proper tenant scoping and security constraints.",
       "implementation_steps": [
-        "Create `src/services/auth.service.ts` with AuthService class",
-        "Implement registerUser() method: validate email, check existing user, hash password, create user record",
-        "Implement loginUser() method: find user, verify password, generate JWT token",
-        "Implement refreshToken() method: verify old token, generate new token",
-        "Implement getUserById() method for token validation",
-        "Add email validation using regex or validation library",
-        "Implement rate limiting considerations in service layer",
-        "Add comprehensive error handling with custom error types"
+        "Create `packages/features/ai-chat/lib/rateLimiter/IRateLimiter.interface.ts` with checkLimit() and recordUsage() methods",
+        "Implement `packages/features/ai-chat/lib/rateLimiter/redisRateLimiter.ts` using packages/features/redis",
+        "Set default limit: 20 requests/minute per user with 60-second sliding window",
+        "Add AI_CHAT_RATE_LIMIT_REQUESTS_PER_MINUTE env variable for configuration",
+        "Create `packages/features/ai-chat/repositories/IAiChatInteractionRepository.interface.ts`",
+        "Implement repository with create() method using explicit select() - never include sensitive fields",
+        "Create in-memory rate limiter implementation for testing",
+        "Include retryAfter timestamp in rate limit exceeded errors"
       ],
-      "description": "Service layer for user registration, login, and token management",
-      "verification_criteria": "New users can register with valid email; Login succeeds with correct credentials; Login fails with incorrect credentials; Tokens can be refreshed; Duplicate emails are rejected",
+      "description": "Rate limiting infrastructure and metadata logging repository",
+      "verification_criteria": "Rate limiter blocks requests exceeding 20/minute; Repository logs metadata without storing message content; Redis integration works in distributed environment",
       "files": [
-        { "path": "src/services/auth.service.ts", "type": "create" },
-        { "path": "src/types/errors.ts", "type": "create" },
-        { "path": "src/services/__tests__/auth.service.test.ts", "type": "create" }
+        { "path": "packages/features/ai-chat/lib/rateLimiter/IRateLimiter.interface.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/lib/rateLimiter/redisRateLimiter.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/lib/rateLimiter/memoryRateLimiter.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/repositories/IAiChatInteractionRepository.interface.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/repositories/aiChatInteractionRepository.ts", "type": "create" }
       ],
       "context_handoff": {
-        "validation": "email format + length",
-        "error_handling": "Custom error classes",
-        "rate_limiting": "Ready for middleware"
+        "rate_limit": "20 requests/minute",
+        "window": "60 seconds sliding",
+        "storage": "Redis for production",
+        "security": "select() only, no include"
       },
-      "reasoning": "Service layer separates business logic from HTTP concerns, making code more testable and reusable. Custom errors provide better error handling downstream.",
-      "architecture": "flowchart TD\n    API[API Routes] --> Service[AuthService]\n    Service --> DB[(Database)]\n    Service --> HashUtil[Password Utils]\n    Service --> JWTUtil[JWT Utils]\n    Service --> Validator[Email Validator]"
+      "reasoning": "Redis-based rate limiting ensures consistent enforcement across multiple server instances. Repository pattern with strict select() prevents accidental PII exposure.",
+      "architecture": "flowchart TD\n    Service[\"AiChatService\"] --> RateLimit[\"Rate Limiter\"]\n    RateLimit --> Redis[(\"Redis<br/>User: Count, Expiry\")]\n    Service --> Repo[\"Repository\"]\n    Repo --> DB[(\"PostgreSQL<br/>Metadata Only\")]"
     },
     {
       "id": "item-4",
       "item_number": 4,
       "order": 3,
-      "title": "Create API Routes & Middleware",
-      "detailed_objective": "Implement REST API endpoints for authentication operations and create middleware for protecting routes that require authentication. Set up proper request validation and error handling.",
+      "title": "Create AI Chat Domain Service",
+      "detailed_objective": "Build the core domain service that orchestrates all AI chat operations: session validation, rate limiting, input validation, provider calls, and metadata logging. Include system prompt definition and security controls.",
       "implementation_steps": [
-        "Create `src/app/api/auth/register/route.ts` for POST /api/auth/register",
-        "Create `src/app/api/auth/login/route.ts` for POST /api/auth/login",
-        "Create `src/app/api/auth/refresh/route.ts` for POST /api/auth/refresh",
-        "Implement request body validation using zod",
-        "Create `src/middleware/auth.middleware.ts` for JWT verification",
-        "Add rate limiting middleware using express-rate-limit or custom implementation",
-        "Implement standardized error response format",
-        "Add CORS configuration for API routes"
+        "Create `packages/features/ai-chat/lib/AiChatService.ts` with sendMessage() method",
+        "Implement dependency injection for AIProvider, IRateLimiter, and IAiChatInteractionRepository",
+        "Add input validation: max 10 messages, max 4000 chars per message",
+        "Create `packages/features/ai-chat/lib/prompts/systemPrompt.ts` with Cal.com assistant persona",
+        "Define constraints: no data access, no resource modification, feature guidance only",
+        "Implement orchestration flow: validate → rate limit → sanitize → call provider → log metadata → return",
+        "Add security layer: sanitize inputs, reject API keys/secrets patterns, block SQL/XSS vectors",
+        "Create `packages/features/ai-chat/lib/security/aiChatSecurity.ts` for input sanitization",
+        "Use @calcom/lib/logger.server for structured logging without PII"
       ],
-      "description": "REST API endpoints and authentication middleware",
-      "verification_criteria": "POST /api/auth/register accepts valid user data; POST /api/auth/login returns JWT token; Protected routes reject requests without valid token; Rate limiting prevents brute force attacks",
+      "description": "Core domain service orchestrating AI chat with security and validation",
+      "verification_criteria": "Service validates all inputs before processing; Rate limits are enforced; Message content is never logged; Security patterns are blocked; Responses are returned correctly",
       "files": [
-        { "path": "src/app/api/auth/register/route.ts", "type": "create" },
-        { "path": "src/app/api/auth/login/route.ts", "type": "create" },
-        { "path": "src/app/api/auth/refresh/route.ts", "type": "create" },
-        { "path": "src/middleware/auth.middleware.ts", "type": "create" },
-        { "path": "src/middleware/rate-limit.middleware.ts", "type": "create" },
-        { "path": "src/lib/validation.ts", "type": "create" }
+        { "path": "packages/features/ai-chat/lib/AiChatService.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/lib/prompts/systemPrompt.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/lib/security/aiChatSecurity.ts", "type": "create" },
+        { "path": "packages/features/ai-chat/lib/logger/aiChatLogger.ts", "type": "create" }
       ],
       "context_handoff": {
-        "validation_library": "zod",
-        "rate_limit": "100 requests/15min",
-        "cors": "Configured for frontend origin"
+        "max_messages": 10,
+        "max_chars": 4000,
+        "persona": "Cal.com scheduling assistant",
+        "constraints": "No data access, no modifications"
       },
-      "reasoning": "Next.js API routes provide serverless-ready endpoints. Zod ensures type-safe validation. Rate limiting is critical for preventing abuse.",
-      "architecture": "flowchart TB\n    Client[Client Request] --> CORS[CORS Middleware]\n    CORS --> Rate[Rate Limiter]\n    Rate --> Val[Request Validator]\n    Val --> Auth[Auth Middleware]\n    Auth --> Route[API Route Handler]\n    Route --> Service[Auth Service]"
+      "reasoning": "Domain service centralizes business logic and security controls. Dependency injection enables easy testing and provider swapping.",
+      "architecture": "flowchart TD\n    tRPC[\"tRPC Router\"] --> Service[\"AiChatService\"]\n    Service --> Validate[\"Input Validation\"]\n    Validate --> Security[\"Security Sanitizer\"]\n    Security --> RateLimit[\"Rate Limiter\"]\n    RateLimit --> Provider[\"AI Provider\"]\n    Provider --> Logger[\"Metadata Logger\"]\n    Logger --> Repo[\"Repository\"]"
     },
     {
       "id": "item-5",
       "item_number": 5,
       "order": 4,
-      "title": "Build Frontend Authentication UI",
-      "detailed_objective": "Create React components for login and registration forms with proper form validation, error handling, and loading states. Integrate with authentication API endpoints and manage auth state globally.",
+      "title": "Build tRPC API & Event Types Tab UI",
+      "detailed_objective": "Create the tRPC router for AI chat with proper authentication and Zod validation. Build the chat interface component integrated into the existing Event Types AI tab, following Cal.com's UI patterns.",
       "implementation_steps": [
-        "Create `src/components/auth/LoginForm.tsx` with email and password fields",
-        "Create `src/components/auth/RegisterForm.tsx` with email, password, and confirm password",
-        "Implement form validation using react-hook-form and zod",
-        "Create `src/contexts/AuthContext.tsx` for global auth state management",
-        "Implement useAuth hook for easy auth access in components",
-        "Add loading states and error message display",
-        "Create protected route wrapper component",
-        "Implement automatic token refresh logic",
-        "Add password strength indicator in registration form",
-        "Style forms with Tailwind CSS for responsive design"
+        "Create `packages/features/ai-chat/zod/schemas.ts` with sendMessageInputSchema and responseSchema",
+        "Create `packages/trpc/server/routers/viewer/loggedInViewer/aiChat/_router.ts` with sendMessage mutation",
+        "Use protectedProcedure for NextAuth JWT validation",
+        "Pass userId, profileId, teamId, orgId from tRPC context to service",
+        "Map domain errors to TRPCError codes (RATE_LIMIT → TOO_MANY_REQUESTS, etc.)",
+        "Create `apps/web/modules/event-types/components/tabs/ai/AiChatPanel.tsx` chat component",
+        "Implement message list with user/assistant bubbles and loading states",
+        "Add input field with validation feedback and send button",
+        "Integrate with existing EventAITab component layout",
+        "Style with Cal.com design system (shadcn/ui components)"
       ],
-      "description": "Frontend authentication forms and state management",
-      "verification_criteria": "Forms validate input before submission; Loading states show during API calls; Error messages display for failed requests; Users stay logged in after page refresh; Protected routes redirect to login when not authenticated",
+      "description": "tRPC API endpoint and Event Types AI tab chat interface",
+      "verification_criteria": "API requires authentication; Zod validates all inputs; Errors return user-friendly messages; Chat UI displays messages correctly; Loading states work properly; Tab integrates with existing AI settings",
       "files": [
-        { "path": "src/components/auth/LoginForm.tsx", "type": "create" },
-        { "path": "src/components/auth/RegisterForm.tsx", "type": "create" },
-        { "path": "src/contexts/AuthContext.tsx", "type": "create" },
-        { "path": "src/hooks/useAuth.ts", "type": "create" },
-        { "path": "src/components/ProtectedRoute.tsx", "type": "create" },
-        { "path": "src/app/(auth)/login/page.tsx", "type": "create" },
-        { "path": "src/app/(auth)/register/page.tsx", "type": "create" }
+        { "path": "packages/features/ai-chat/zod/schemas.ts", "type": "create" },
+        { "path": "packages/trpc/server/routers/viewer/loggedInViewer/aiChat/_router.ts", "type": "create" },
+        { "path": "apps/web/modules/event-types/components/tabs/ai/AiChatPanel.tsx", "type": "create" },
+        { "path": "apps/web/modules/event-types/components/tabs/ai/EventAITab.tsx", "type": "modify" }
       ],
       "context_handoff": {
-        "form_library": "react-hook-form",
-        "state_management": "React Context API",
-        "validation": "zod schemas",
-        "styling": "Tailwind CSS"
+        "auth": "protectedProcedure (NextAuth)",
+        "validation": "Zod schemas",
+        "ui_location": "Event Types → AI Tab",
+        "styling": "Cal.com design system"
       },
-      "reasoning": "react-hook-form provides excellent performance and developer experience. Context API is sufficient for auth state without adding Redux complexity.",
-      "architecture": "flowchart TB\n    UI[Auth Forms] --> Hook[useAuth Hook]\n    Hook --> Context[AuthContext]\n    Context --> API[API Client]\n    API --> Backend[Backend API]\n    Context --> Storage[localStorage<br/>JWT Token]"
+      "reasoning": "Placing the chat in the Event Types AI tab matches the existing UI pattern and keeps AI features consolidated. tRPC provides type-safe API with built-in auth.",
+      "architecture": "flowchart TB\n    UI[\"AiChatPanel Component\"] -->|\"tRPC mutation\"| Router[\"aiChat._router\"]\n    Router -->|\"protectedProcedure\"| Auth[\"NextAuth\"]\n    Auth --> Service[\"AiChatService\"]\n    subgraph EventTypes[\"Event Types Page\"]\n        Tab[\"EventAITab\"] --> UI\n    end"
     }
   ]
 }

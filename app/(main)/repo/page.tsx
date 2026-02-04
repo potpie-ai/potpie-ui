@@ -32,7 +32,7 @@ import { Badge as UIBadge } from "@/components/ui/badge";
 import qaMockData from "@/lib/mock/qaMock.json";
 
 // Demo mode delay in milliseconds (35 seconds)
-const DEMO_MODE_DELAY = 35000;
+const DEMO_MODE_DELAY = 15000;
 
 // Criticality order for sorting (lower value = higher priority)
 const CRITICALITY_ORDER: Record<string, number> = {
@@ -111,7 +111,9 @@ export default function RepoPage() {
         label: opt.label,
         description: opt.description,
       }));
-      const recIdx = q.answer_recommendation?.idx ?? null;
+      // Use 'recommended' field if available, otherwise fall back to answer_recommendation.idx
+      const recommended = (q as any).recommended as number | undefined;
+      const recIdx = recommended ?? q.answer_recommendation?.idx ?? null;
       const assumedLabel =
         recIdx != null && recIdx >= 0 && recIdx < options.length
           ? options[recIdx].label
@@ -152,9 +154,15 @@ export default function RepoPage() {
       sectionsMap.get(q.section)!.push(q);
     });
 
-    // Initialize answers with AI recommendations
+    // Initialize answers with AI recommendations - only auto-select the first question and last 2 questions
     const initialAnswers = new Map<string, QuestionAnswer>();
-    mcqQuestions.forEach((q) => {
+    const totalQuestions = mcqQuestions.length;
+    mcqQuestions.forEach((q, index) => {
+      // Auto-select: first question (index 0) and last 2 questions
+      const isFirstQuestion = index === 0;
+      const isLastTwo = index >= totalQuestions - 2;
+      if (!isFirstQuestion && !isLastTwo) return;
+      
       const options = Array.isArray(q.options)
         ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
         : [];
@@ -162,10 +170,14 @@ export default function RepoPage() {
       if (recIdx != null && recIdx >= 0 && recIdx < options.length) {
         const opt = options[recIdx];
         const label = typeof opt === "string" ? opt : opt.label;
+        const isMultipleChoice = q.multipleChoice ?? false;
+        
         initialAnswers.set(q.id, {
           questionId: q.id,
           mcqAnswer: String.fromCharCode(65 + recIdx),
-          selectedOptionIdx: recIdx,
+          // Use selectedOptionIndices for multiple choice, selectedOptionIdx for single choice
+          selectedOptionIdx: isMultipleChoice ? undefined : recIdx,
+          selectedOptionIndices: isMultipleChoice ? [recIdx] : undefined,
           textAnswer: label,
           isOther: false,
           isUserModified: false,
@@ -368,8 +380,15 @@ export default function RepoPage() {
         });
         
         // Then, set AI recommendations for questions without localStorage answers
-        mcqQuestions.forEach((q) => {
+        // Only auto-select the first question and last 2 questions
+        const totalQs = mcqQuestions.length;
+        mcqQuestions.forEach((q, index) => {
           if (initialAnswers.has(q.id)) return; // Skip if already loaded from localStorage
+          
+          // Auto-select: first question (index 0) and last 2 questions
+          const isFirstQuestion = index === 0;
+          const isLastTwo = index >= totalQs - 2;
+          if (!isFirstQuestion && !isLastTwo) return;
           
           const options = Array.isArray(q.options)
             ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
@@ -732,8 +751,16 @@ export default function RepoPage() {
     });
 
     // Set AI assumptions as initial answers (answer_recommendation.idx or assumed)
-    questions.forEach((q: MCQQuestion) => {
+    // Only auto-select the first question and last 2 questions
+    const totalQuestionCount = questions.length;
+    questions.forEach((q: MCQQuestion, qIndex: number) => {
       if (answersMap.has(q.id)) return;
+      
+      // Auto-select: first question (index 0) and last 2 questions
+      const isFirstQuestion = qIndex === 0;
+      const isLastTwo = qIndex >= totalQuestionCount - 2;
+      if (!isFirstQuestion && !isLastTwo) return;
+      
       const options = Array.isArray(q.options)
         ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
         : [];

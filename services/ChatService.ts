@@ -1182,7 +1182,7 @@ export default class ChatService {
     formData.append("conversation_id", conversationId);
     formData.append("file_size", file.size.toString());
     formData.append("file_name", file.name);
-    formData.append("mime_type", file.type);
+    formData.append("mime_type", getEffectiveMimeType(file));
 
     try {
       const response = await axios.post(

@@ -85,7 +85,7 @@ export default function IdeaPage() {
   });
 
   // Demo mode check - detect cal.com repo, main branch, and ai/chat in prompt
-  const isDemoModeFromUrl = searchParams.get("demo") === "true";
+  const isDemoModeFromUrl = searchParams.get("showcase") === "1";
   
   // Check if demo mode should be activated based on repo selection and prompt
   const checkDemoMode = (repoName: string | null, branch: string | null, prompt: string): boolean => {
@@ -394,7 +394,7 @@ export default function IdeaPage() {
           // Check if demo mode should be activated
           const shouldActivateDemoMode = checkDemoMode(repoName, branchName, state.input);
           if (shouldActivateDemoMode) {
-            params.append("demo", "true");
+            params.append("showcase", "1");
           }
 
           console.log(
@@ -905,7 +905,7 @@ export default function IdeaPage() {
       // Check if demo mode should be activated
       const shouldActivateDemoMode = checkDemoMode(repoName, branchName, state.input);
       if (shouldActivateDemoMode) {
-        params.append("demo", "true");
+        params.append("showcase", "1");
       }
 
       console.log(

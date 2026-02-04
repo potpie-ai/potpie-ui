@@ -61,7 +61,7 @@ export default function RepoPage() {
   const recipeIdFromUrl = searchParams.get("recipeId");
   const repoNameFromUrl = searchParams.get("repoName");
   const featureIdeaFromUrl = searchParams.get("featureIdea");
-  const isDemoMode = searchParams.get("demo") === "true";
+  const isDemoMode = searchParams.get("showcase") === "1";
   const questionsEndRef = useRef<HTMLDivElement>(null);
   const questionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [demoDelayComplete, setDemoDelayComplete] = useState(!isDemoMode);
@@ -977,7 +977,7 @@ export default function RepoPage() {
         return;
       }
       const specUrl = isDemoMode 
-        ? `/task/${activeRecipeId}/spec?demo=true` 
+        ? `/task/${activeRecipeId}/spec?showcase=1` 
         : `/task/${activeRecipeId}/spec`;
       router.push(specUrl);
     },

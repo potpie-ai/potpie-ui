@@ -277,7 +277,7 @@ const SpecPage = () => {
   const dispatch = useDispatch<AppDispatch>();
   // Note: taskId in URL is actually recipeId now
   const recipeId = params?.taskId as string;
-  const isDemoMode = searchParams.get("demo") === "true";
+  const isDemoMode = searchParams.get("showcase") === "1";
   const [demoDelayComplete, setDemoDelayComplete] = useState(!isDemoMode);
   const repoBranchByTask = useSelector(
     (state: RootState) => state.RepoAndBranch.byTaskId
@@ -888,7 +888,7 @@ const SpecPage = () => {
                     if (isDemoMode) {
                       console.log("[Spec Page] Demo mode - skipping plan generation API call");
                       toast.success("Plan generation started successfully");
-                      router.push(`/task/${recipeId}/plan?planId=demo-plan-id&demo=true`);
+                      router.push(`/task/${recipeId}/plan?planId=demo-plan-id&showcase=1`);
                       return;
                     }
                     

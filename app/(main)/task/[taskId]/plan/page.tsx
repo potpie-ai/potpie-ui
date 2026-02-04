@@ -225,7 +225,7 @@ const PlanPage = () => {
   const recipeId = params?.taskId as string;
   const planIdFromUrl = searchParams.get("planId");
   const specIdFromUrl = searchParams.get("specId");
-  const isDemoMode = searchParams.get("demo") === "true";
+  const isDemoMode = searchParams.get("showcase") === "1";
 
   const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
   const [planStatus, setPlanStatus] = useState<PlanStatusResponse | null>(null);
@@ -862,7 +862,7 @@ const PlanPage = () => {
                 // In demo mode, skip API call and navigate directly
                 if (isDemoMode) {
                   console.log("[Plan Page] Demo mode - skipping task splitting API call");
-                  router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}&demo=true`);
+                  router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}&showcase=1`);
                   return;
                 }
                 

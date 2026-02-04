@@ -943,7 +943,7 @@ export default function VerticalTaskExecution() {
   const planIdFromUrl = searchParams.get("planId");
   const itemNumberFromUrl = searchParams.get("itemNumber");
   const taskSplittingIdFromUrl = searchParams.get("taskSplittingId");
-  const isDemoMode = searchParams.get("demo") === "true";
+  const isDemoMode = searchParams.get("showcase") === "1";
 
   // Demo mode delay state
   const [demoDelayComplete, setDemoDelayComplete] = useState(!isDemoMode);

@@ -32,6 +32,18 @@ export default function QuestionSection({
 }: QuestionSectionProps) {
   if (questions.length === 0) return null;
 
+  // Check if a question was auto-selected (has an answer that was NOT user-modified)
+  const isAutoSelected = (questionId: string): boolean => {
+    const answer = answers.get(questionId);
+    if (!answer) return false;
+    // If the answer exists and was NOT user-modified, it was auto-selected
+    return !answer.isUserModified && (
+      answer.selectedOptionIdx != null ||
+      (answer.selectedOptionIndices && answer.selectedOptionIndices.length > 0) ||
+      !!answer.textAnswer
+    );
+  };
+
   return (
     <>
       {questions.map((question) => (
@@ -50,6 +62,7 @@ export default function QuestionSection({
             isExpanded={expandedOptions.has(question.id)}
             isSkipped={skippedQuestions.has(question.id)}
             isUnanswered={unansweredQuestionIds?.has(question.id) ?? false}
+            isAutoSelected={isAutoSelected(question.id)}
             onHover={() => onHover(question.id)}
             onHoverLeave={() => onHover(null)}
             onAnswerChange={(answer) => onAnswerChange(question.id, answer)}

@@ -60,6 +60,7 @@ export default function RepoPage() {
   const projectId = searchParams.get("projectId");
   const recipeIdFromUrl = searchParams.get("recipeId");
   const repoNameFromUrl = searchParams.get("repoName");
+  const branchNameFromUrl = searchParams.get("branch");
   const featureIdeaFromUrl = searchParams.get("featureIdea");
   const isDemoMode = searchParams.get("showcase") === "1";
   const questionsEndRef = useRef<HTMLDivElement>(null);
@@ -154,14 +155,13 @@ export default function RepoPage() {
       sectionsMap.get(q.section)!.push(q);
     });
 
-    // Initialize answers with AI recommendations - only auto-select the first question and last 2 questions
+    // Initialize answers with AI recommendations - auto-select most questions
+    // Only leave 1-2 key business questions requiring user input (indices 3 and 7 after sorting)
+    const QUESTIONS_REQUIRING_INPUT = new Set([3, 7]); // "Does AI need access to private data?" and "Should AI perform actions?"
     const initialAnswers = new Map<string, QuestionAnswer>();
-    const totalQuestions = mcqQuestions.length;
     mcqQuestions.forEach((q, index) => {
-      // Auto-select: first question (index 0) and last 2 questions
-      const isFirstQuestion = index === 0;
-      const isLastTwo = index >= totalQuestions - 2;
-      if (!isFirstQuestion && !isLastTwo) return;
+      // Skip questions that require user input
+      if (QUESTIONS_REQUIRING_INPUT.has(index)) return;
       
       const options = Array.isArray(q.options)
         ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
@@ -380,15 +380,13 @@ export default function RepoPage() {
         });
         
         // Then, set AI recommendations for questions without localStorage answers
-        // Only auto-select the first question and last 2 questions
-        const totalQs = mcqQuestions.length;
+        // Auto-select most questions, only leave 1-2 key business questions requiring input
+        const QUESTIONS_REQUIRING_INPUT = new Set([3, 7]); // "Does AI need access to private data?" and "Should AI perform actions?"
         mcqQuestions.forEach((q, index) => {
           if (initialAnswers.has(q.id)) return; // Skip if already loaded from localStorage
           
-          // Auto-select: first question (index 0) and last 2 questions
-          const isFirstQuestion = index === 0;
-          const isLastTwo = index >= totalQs - 2;
-          if (!isFirstQuestion && !isLastTwo) return;
+          // Skip questions that require user input
+          if (QUESTIONS_REQUIRING_INPUT.has(index)) return;
           
           const options = Array.isArray(q.options)
             ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
@@ -498,7 +496,7 @@ export default function RepoPage() {
     repoNameFromUrl ||
     projectData?.repo_name ||
     "Unknown Repository";
-  let branchName = recipeBranchName || projectData?.branch_name || "";
+  let branchName = recipeBranchName || branchNameFromUrl || projectData?.branch_name || "";
 
   // Split repoName if it contains "/" (format: reponame/branchname) and no branch is set
   if (repoName.includes("/") && !branchName) {
@@ -751,15 +749,13 @@ export default function RepoPage() {
     });
 
     // Set AI assumptions as initial answers (answer_recommendation.idx or assumed)
-    // Only auto-select the first question and last 2 questions
-    const totalQuestionCount = questions.length;
+    // Auto-select most questions, only leave 1-2 key business questions requiring input
+    const QUESTIONS_REQUIRING_INPUT_SET = new Set([3, 7]); // "Does AI need access to private data?" and "Should AI perform actions?"
     questions.forEach((q: MCQQuestion, qIndex: number) => {
       if (answersMap.has(q.id)) return;
       
-      // Auto-select: first question (index 0) and last 2 questions
-      const isFirstQuestion = qIndex === 0;
-      const isLastTwo = qIndex >= totalQuestionCount - 2;
-      if (!isFirstQuestion && !isLastTwo) return;
+      // Skip questions that require user input
+      if (QUESTIONS_REQUIRING_INPUT_SET.has(qIndex)) return;
       
       const options = Array.isArray(q.options)
         ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))

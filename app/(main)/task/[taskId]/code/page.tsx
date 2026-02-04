@@ -153,7 +153,7 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
         // Handle diff-style headers (GENERATED:, CREATED:, CLASS IMPLEMENTED:, etc.)
         if (trimmedLine.match(/^(GENERATED|CREATED|MODIFIED|CLASS IMPLEMENTED|INTERFACE|TYPES|MIGRATION|ROUTER|CONTAINER|FACTORY|COMPONENT|SERVICE|REPOSITORY|E2E TESTS|UNIT TESTS|TRANSLATIONS|PAGE|DTOs|RATE LIMITER|SYSTEM PROMPT|SCHEMA|PRISMA|DATABASE|SEED|QUERY):/i)) {
           return (
-            <div key={i} className="text-blue-600 font-bold whitespace-pre bg-blue-50 -mx-4 px-4 py-0.5">
+            <div key={i} className="text-cyan-400 font-bold whitespace-pre bg-zinc-800 -mx-4 px-4 py-0.5">
               {line}
             </div>
           );
@@ -162,9 +162,9 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
         // Handle bullet points (-- items) - but not SQL comments
         if (trimmedLine.startsWith("-- ") && !trimmedLine.match(/^--\s+\w+/)) {
           return (
-            <div key={i} className="text-zinc-600 whitespace-pre pl-2">
-              <span className="text-zinc-400">--</span>
-              <span className="text-zinc-700">{line.slice(line.indexOf("--") + 2)}</span>
+            <div key={i} className="text-zinc-400 whitespace-pre pl-2">
+              <span className="text-zinc-500">--</span>
+              <span className="text-zinc-300">{line.slice(line.indexOf("--") + 2)}</span>
             </div>
           );
         }
@@ -172,7 +172,7 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
         // Handle SQL comments (-- comment style)
         if (trimmedLine.startsWith("--")) {
           return (
-            <div key={i} className="text-zinc-400 italic whitespace-pre">
+            <div key={i} className="text-zinc-500 italic whitespace-pre">
               {line}
             </div>
           );
@@ -181,7 +181,7 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
         // Handle comments (// and #)
         if (trimmedLine.startsWith("//") || trimmedLine.startsWith("#")) {
           return (
-            <div key={i} className="text-zinc-400 italic whitespace-pre">
+            <div key={i} className="text-zinc-500 italic whitespace-pre">
               {line}
             </div>
           );
@@ -197,11 +197,11 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
             const beforeKeyword = line.slice(0, line.indexOf(keyword));
             return (
               <div key={i} className="whitespace-pre">
-                <span className="text-zinc-700">{beforeKeyword}</span>
-                <span className="text-pink-600 font-semibold">{keyword}</span>
-                <span className="text-zinc-700"> </span>
-                <span className="text-amber-600 font-semibold">{name}</span>
-                <span className="text-zinc-700">{rest}</span>
+                <span className="text-zinc-300">{beforeKeyword}</span>
+                <span className="text-pink-400 font-semibold">{keyword}</span>
+                <span className="text-zinc-300"> </span>
+                <span className="text-amber-400 font-semibold">{name}</span>
+                <span className="text-zinc-300">{rest}</span>
               </div>
             );
           }
@@ -214,7 +214,7 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
             <div key={i} className="whitespace-pre">
               {tokens.map((token, j) => {
                 if (token.startsWith("@")) {
-                  return <span key={j} className="text-amber-500 font-medium">{token}</span>;
+                  return <span key={j} className="text-amber-400 font-medium">{token}</span>;
                 }
                 // Check for Prisma types in the token
                 const typeMatch = token.match(/\b(String|Int|BigInt|Float|Decimal|Boolean|DateTime|Json|Bytes)\b/g);
@@ -224,13 +224,13 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
                     <span key={j}>
                       {parts.map((part, k) => 
                         PRISMA_TYPES.has(part) 
-                          ? <span key={k} className="text-teal-600 font-medium">{part}</span>
-                          : <span key={k} className="text-zinc-700">{part}</span>
+                          ? <span key={k} className="text-teal-400 font-medium">{part}</span>
+                          : <span key={k} className="text-zinc-300">{part}</span>
                       )}
                     </span>
                   );
                 }
-                return <span key={j} className="text-zinc-700">{token}</span>;
+                return <span key={j} className="text-zinc-300">{token}</span>;
               })}
             </div>
           );
@@ -243,15 +243,15 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
             <div key={i} className="whitespace-pre">
               {tokens.map((token, j) => {
                 if (SQL_KEYWORDS.has(token.toUpperCase())) {
-                  return <span key={j} className="text-purple-600 font-semibold">{token}</span>;
+                  return <span key={j} className="text-purple-400 font-semibold">{token}</span>;
                 }
                 if (token.match(/^['"].*['"]$/)) {
-                  return <span key={j} className="text-emerald-600">{token}</span>;
+                  return <span key={j} className="text-emerald-400">{token}</span>;
                 }
                 if (/^\d+$/.test(token)) {
-                  return <span key={j} className="text-orange-500">{token}</span>;
+                  return <span key={j} className="text-orange-400">{token}</span>;
                 }
-                return <span key={j} className="text-zinc-700">{token}</span>;
+                return <span key={j} className="text-zinc-300">{token}</span>;
               })}
             </div>
           );
@@ -264,9 +264,9 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
             <div key={i} className="whitespace-pre">
               {tokens.map((token, j) => {
                 if (SQL_KEYWORDS.has(token.toUpperCase())) {
-                  return <span key={j} className="text-purple-600 font-semibold">{token}</span>;
+                  return <span key={j} className="text-purple-400 font-semibold">{token}</span>;
                 }
-                return <span key={j} className="text-zinc-700">{token}</span>;
+                return <span key={j} className="text-zinc-300">{token}</span>;
               })}
             </div>
           );
@@ -276,8 +276,8 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
         if (trimmedLine.startsWith("export") || trimmedLine.startsWith("import")) {
           return (
             <div key={i} className="whitespace-pre">
-              <span className="text-purple-600 font-semibold">{trimmedLine.split(" ")[0]}</span>
-              <span className="text-zinc-700">{line.slice(line.indexOf(" "))}</span>
+              <span className="text-purple-400 font-semibold">{trimmedLine.split(" ")[0]}</span>
+              <span className="text-zinc-300">{line.slice(line.indexOf(" "))}</span>
             </div>
           );
         }
@@ -292,11 +292,11 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
             const beforeKeyword = line.slice(0, line.indexOf(keyword));
             return (
               <div key={i} className="whitespace-pre">
-                <span className="text-zinc-700">{beforeKeyword}</span>
-                <span className="text-purple-600 font-semibold">{keyword}</span>
-                <span className="text-zinc-700"> </span>
-                <span className="text-blue-600 font-semibold">{name}</span>
-                <span className="text-zinc-700">{rest}</span>
+                <span className="text-zinc-300">{beforeKeyword}</span>
+                <span className="text-purple-400 font-semibold">{keyword}</span>
+                <span className="text-zinc-300"> </span>
+                <span className="text-sky-400 font-semibold">{name}</span>
+                <span className="text-zinc-300">{rest}</span>
               </div>
             );
           }
@@ -309,12 +309,12 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
             <div key={i} className="whitespace-pre">
               {tokens.map((token, j) => {
                 if (PRISMA_TYPES.has(token)) {
-                  return <span key={j} className="text-teal-600 font-medium">{token}</span>;
+                  return <span key={j} className="text-teal-400 font-medium">{token}</span>;
                 }
                 if (token.startsWith("@")) {
-                  return <span key={j} className="text-amber-500 font-medium">{token}</span>;
+                  return <span key={j} className="text-amber-400 font-medium">{token}</span>;
                 }
-                return <span key={j} className="text-zinc-700">{token}</span>;
+                return <span key={j} className="text-zinc-300">{token}</span>;
               })}
             </div>
           );
@@ -327,8 +327,8 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
           const value = line.slice(colonIndex);
           return (
             <div key={i} className="whitespace-pre">
-              <span className="text-cyan-600">{key}</span>
-              <span className="text-zinc-700">{value}</span>
+              <span className="text-cyan-400">{key}</span>
+              <span className="text-zinc-300">{value}</span>
             </div>
           );
         }
@@ -340,9 +340,9 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
             <div key={i} className="whitespace-pre">
               {tokens.map((token, j) => {
                 if (SQL_KEYWORDS.has(token.toUpperCase())) {
-                  return <span key={j} className="text-purple-600 font-semibold">{token}</span>;
+                  return <span key={j} className="text-purple-400 font-semibold">{token}</span>;
                 }
-                return <span key={j} className="text-zinc-700">{token}</span>;
+                return <span key={j} className="text-zinc-300">{token}</span>;
               })}
             </div>
           );
@@ -350,7 +350,7 @@ const DiffCodeBlock = ({ code }: { code: string }) => {
         
         // Default - regular line
         return (
-          <div key={i} className="text-zinc-700 whitespace-pre">
+          <div key={i} className="text-zinc-300 whitespace-pre">
             {line}
           </div>
         );
@@ -664,16 +664,16 @@ const MockTaskCard = React.forwardRef<HTMLDivElement, {
                   )}
                 </div>
               ) : (
-                <div className="bg-background rounded-lg border border-zinc-200 overflow-hidden">
-                  <div className="px-3 py-2 bg-zinc-50/80 border-b border-zinc-100 flex items-center justify-between">
+                <div className="bg-zinc-900 rounded-lg border border-zinc-700 overflow-hidden">
+                  <div className="px-3 py-2 bg-zinc-800 border-b border-zinc-700 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <FileText className="w-3 h-3 text-primary-color" />
-                      <span className="text-[10px] font-mono font-medium text-primary-color">
+                      <FileText className="w-3 h-3 text-zinc-400" />
+                      <span className="text-[10px] font-mono font-medium text-zinc-300">
                         {task.file}
                       </span>
                     </div>
                     {codeGenComplete && (
-                      <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
+                      <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" />
                         Complete
                       </span>
@@ -682,7 +682,7 @@ const MockTaskCard = React.forwardRef<HTMLDivElement, {
                   <div className="p-4 overflow-x-auto max-h-[300px] overflow-y-auto">
                     <DiffCodeBlock code={streamedCode || ""} />
                     {isGeneratingCode && (
-                      <span className="inline-block w-2 h-4 bg-primary-color animate-pulse ml-1" />
+                      <span className="inline-block w-2 h-4 bg-emerald-400 animate-pulse ml-1" />
                     )}
                   </div>
                 </div>

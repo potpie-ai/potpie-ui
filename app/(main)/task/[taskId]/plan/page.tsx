@@ -660,7 +660,7 @@ const PlanPage = () => {
           )}
 
           {isCompleted && planItems.length > 0 && (
-            <Accordion type="single" collapsible className="space-y-6">
+            <Accordion type="single" collapsible className="space-y-6" defaultValue="plan-step-0">
               {planItems.map((item) => {
                 const modules = groupFilesByModule(item.files);
                 // FIX: Use unique string based on item.order to prevent global expand
@@ -829,7 +829,7 @@ const PlanPage = () => {
 
           {/* Static Fallback (for demo/loading) */}
           {visibleCount > 0 && (
-            <Accordion type="single" collapsible className="space-y-6">
+            <Accordion type="single" collapsible className="space-y-6" defaultValue="static-slice-1">
               {FULL_PLAN.slice(0, visibleCount).map((slice, idx) => {
                 const itemValue = `static-slice-${slice.id}`;
                 return (

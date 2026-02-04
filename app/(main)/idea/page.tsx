@@ -87,7 +87,8 @@ export default function IdeaPage() {
   // Demo mode check - detect cal.com repo, main branch, and ai/chat in prompt
   const isDemoModeFromUrl = searchParams.get("showcase") === "1";
   
-  // Check if demo mode should be activated based on repo selection and prompt
+  // Check if demo mode should be activated based on repo selection
+  // Demo mode is enabled for any prompt if cal.com repo and main branch is selected
   const checkDemoMode = (repoName: string | null, branch: string | null, prompt: string): boolean => {
     if (!repoName || !branch) return false;
     
@@ -99,11 +100,8 @@ export default function IdeaPage() {
     // Check if branch is main
     const isMainBranch = branch.toLowerCase() === "main";
     
-    // Check if prompt contains "ai" or "chat" (case-insensitive)
-    const promptLower = prompt.toLowerCase();
-    const hasAiOrChat = promptLower.includes("ai") || promptLower.includes("chat");
-    
-    return isCalComRepo && isMainBranch && hasAiOrChat;
+    // Enable demo mode for any prompt if cal.com + main branch
+    return isCalComRepo && isMainBranch;
   };
   
   const isDemoMode = isDemoModeFromUrl;
@@ -385,6 +383,9 @@ export default function IdeaPage() {
           });
           if (repoName) {
             params.append("repoName", repoName);
+          }
+          if (branchName) {
+            params.append("branch", branchName);
           }
           if (state.input) {
             const cleanInput = getCleanInput(state.input);
@@ -896,6 +897,9 @@ export default function IdeaPage() {
       });
       if (repoName) {
         params.append("repoName", repoName);
+      }
+      if (branchName) {
+        params.append("branch", branchName);
       }
       if (state.input) {
         const cleanInput = getCleanInput(state.input);

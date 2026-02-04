@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Github,
   GitBranch,
@@ -24,6 +24,10 @@ import {
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
 import { toast } from "sonner";
+import specMockData from "@/lib/mock/specMock.json";
+
+// Demo mode delay in milliseconds (35 seconds)
+const DEMO_MODE_DELAY = 35000;
 import {
   SpecPlanStatusResponse,
   SpecStatusResponse,
@@ -269,9 +273,12 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
 const SpecPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useDispatch<AppDispatch>();
   // Note: taskId in URL is actually recipeId now
   const recipeId = params?.taskId as string;
+  const isDemoMode = searchParams.get("demo") === "true";
+  const [demoDelayComplete, setDemoDelayComplete] = useState(!isDemoMode);
   const repoBranchByTask = useSelector(
     (state: RootState) => state.RepoAndBranch.byTaskId
   );
@@ -307,6 +314,72 @@ const SpecPage = () => {
   const planContentRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedRef = useRef(false);
 
+  // Demo mode delay effect
+  useEffect(() => {
+    if (!isDemoMode) return;
+    
+    console.log("[Spec Page] Demo mode active - starting 35 second delay");
+    const timer = setTimeout(() => {
+      console.log("[Spec Page] Demo mode delay complete");
+      setDemoDelayComplete(true);
+    }, DEMO_MODE_DELAY);
+
+    return () => clearTimeout(timer);
+  }, [isDemoMode]);
+
+  // Load mock data in demo mode after delay
+  useEffect(() => {
+    if (!isDemoMode || !demoDelayComplete || !recipeId) return;
+
+    console.log("[Spec Page] Demo mode - loading mock data from specMock.json");
+    
+    // Mock recipe data for demo
+    setRecipeData({
+      recipe_id: recipeId,
+      project_id: "demo-project-id",
+      user_prompt: "Build an AI chat assistant that helps users with scheduling and booking management, integrated with the Cal.com platform.",
+    });
+
+    // Mock project data for demo
+    setProjectData({
+      repo: "cal.com",
+      branch: "main",
+      questions: [
+        { id: "q1", question: "What is the primary use case for the AI?" },
+        { id: "q2", question: "Where should the chat interface be located?" },
+        { id: "q3", question: "Which LLM provider should be the default?" },
+      ],
+    });
+
+    // Mock answers for demo
+    setAnswers({
+      q1: "Help users find a time to meet",
+      q2: "Specific tab in Event Types",
+      q3: "OpenAI",
+    });
+
+    // Use mock data from specMock.json with proper typing
+    const mockSpecProgress: SpecStatusResponse = {
+      recipe_id: specMockData.recipe_id,
+      spec_id: specMockData.spec_id,
+      spec_gen_status: specMockData.spec_gen_status as "COMPLETED" | "IN_PROGRESS" | "FAILED",
+      step_index: specMockData.step_index,
+      progress_percent: specMockData.progress_percent,
+      step_statuses: Object.fromEntries(
+        Object.entries(specMockData.step_statuses).map(([key, value]) => [
+          key,
+          { status: value.status as StepStatusValue, message: value.display_message }
+        ])
+      ),
+      spec_output: specMockData.spec_output as SpecOutput,
+    };
+
+    setSpecProgress(mockSpecProgress);
+    setIsLoading(false);
+    setIsPlanExpanded(false);
+    hasInitializedRef.current = true;
+  }, [isDemoMode, demoDelayComplete, recipeId]);
+
   // Update projectData when storedRepoContext changes (from Redux)
   useEffect(() => {
     if (!storedRepoContext) return;
@@ -331,7 +404,7 @@ const SpecPage = () => {
   // Fetch recipe details including repo and branch information
   useEffect(() => {
     const fetchRecipeDetails = async () => {
-      if (!recipeId) return;
+      if (!recipeId || isDemoMode) return;
       
       // Prevent multiple initializations
       if (hasInitializedRef.current) return;
@@ -402,11 +475,11 @@ const SpecPage = () => {
     
     fetchRecipeDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipeId]);
+  }, [recipeId, isDemoMode]);
 
   // Poll for spec progress
   useEffect(() => {
-    if (!recipeId) return;
+    if (!recipeId || isDemoMode) return;
     if (hasInitializedRef.current) return;
     
     hasInitializedRef.current = true;
@@ -524,7 +597,7 @@ const SpecPage = () => {
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [recipeId]);
+  }, [recipeId, isDemoMode]);
 
   // Calculate progress from API response (support both old and new response formats)
   const planProgress = specProgress 
@@ -564,11 +637,15 @@ const SpecPage = () => {
     }
   }, [status]);
 
-  if (isLoading && !specProgress) {
+  if ((isLoading && !specProgress) || (isDemoMode && !demoDelayComplete)) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
         <Loader2 className="w-6 h-6 animate-spin text-primary-color" />
-        <p className="ml-3 text-primary-color">Loading spec generation...</p>
+        <p className="ml-3 text-primary-color">
+          {isDemoMode && !demoDelayComplete 
+            ? "Generating plan specification..." 
+            : "Loading spec generation..."}
+        </p>
       </div>
     );
   }
@@ -806,6 +883,15 @@ const SpecPage = () => {
                     if (isSubmittingPlan) return;
                     
                     setIsSubmittingPlan(true);
+                    
+                    // In demo mode, skip API call and navigate directly
+                    if (isDemoMode) {
+                      console.log("[Spec Page] Demo mode - skipping plan generation API call");
+                      toast.success("Plan generation started successfully");
+                      router.push(`/task/${recipeId}/plan?planId=demo-plan-id&demo=true`);
+                      return;
+                    }
+                    
                     try {
                       // Get spec_id from localStorage or from specProgress
                       const storedSpecId = localStorage.getItem(`spec_${recipeId}`);

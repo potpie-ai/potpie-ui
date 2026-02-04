@@ -29,6 +29,17 @@ import type {
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { ParsingStatusEnum } from "@/lib/Constants";
 import { Badge as UIBadge } from "@/components/ui/badge";
+import qaMockData from "@/lib/mock/qaMock.json";
+
+// Demo mode delay in milliseconds (35 seconds)
+const DEMO_MODE_DELAY = 35000;
+
+// Criticality order for sorting (lower value = higher priority)
+const CRITICALITY_ORDER: Record<string, number> = {
+  BLOCKER: 0,
+  IMPORTANT: 1,
+  NICE_TO_HAVE: 2,
+};
 
 const Badge = ({
   children,
@@ -50,7 +61,10 @@ export default function RepoPage() {
   const recipeIdFromUrl = searchParams.get("recipeId");
   const repoNameFromUrl = searchParams.get("repoName");
   const featureIdeaFromUrl = searchParams.get("featureIdea");
+  const isDemoMode = searchParams.get("demo") === "true";
   const questionsEndRef = useRef<HTMLDivElement>(null);
+  const questionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [demoDelayComplete, setDemoDelayComplete] = useState(!isDemoMode);
 
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [questionsPolling, setQuestionsPolling] = useState(false);
@@ -71,10 +85,118 @@ export default function RepoPage() {
     isGenerating: false,
   });
 
+  // Demo mode delay effect
+  useEffect(() => {
+    if (!isDemoMode) return;
+    
+    console.log("[Repo Page] Demo mode active - starting 35 second delay");
+    const timer = setTimeout(() => {
+      console.log("[Repo Page] Demo mode delay complete");
+      setDemoDelayComplete(true);
+    }, DEMO_MODE_DELAY);
+
+    return () => clearTimeout(timer);
+  }, [isDemoMode]);
+
+  // Load mock questions in demo mode
+  useEffect(() => {
+    if (!isDemoMode || !demoDelayComplete) return;
+
+    console.log("[Repo Page] Demo mode - loading mock questions");
+    
+    // Convert mock data to MCQQuestion[] format
+    const mockQuestions = qaMockData.response;
+    const mcqQuestions: MCQQuestion[] = mockQuestions.map((q, index) => {
+      const options = q.options.map((opt) => ({
+        label: opt.label,
+        description: opt.description,
+      }));
+      const recIdx = q.answer_recommendation?.idx ?? null;
+      const assumedLabel =
+        recIdx != null && recIdx >= 0 && recIdx < options.length
+          ? options[recIdx].label
+          : undefined;
+      
+      // Parse criticality from mock data
+      const criticality = (q as any).criticality as "BLOCKER" | "IMPORTANT" | "NICE_TO_HAVE" | undefined;
+      
+      return {
+        id: `demo-q-${index}`,
+        section: "General",
+        question: q.question,
+        options,
+        needsInput: true,
+        multipleChoice: q.multiple_choice ?? false,
+        assumed: assumedLabel,
+        reasoning: q.answer_recommendation?.reasoning,
+        answerRecommendationIdx: recIdx,
+        expectedAnswerType: undefined,
+        contextRefs: q.context_refs ?? null,
+        criticality,
+      };
+    });
+
+    // Sort questions by criticality
+    mcqQuestions.sort((a, b) => {
+      const aOrder = CRITICALITY_ORDER[a.criticality || "NICE_TO_HAVE"] ?? 2;
+      const bOrder = CRITICALITY_ORDER[b.criticality || "NICE_TO_HAVE"] ?? 2;
+      return aOrder - bOrder;
+    });
+
+    // Group by section
+    const sectionsMap = new Map<string, MCQQuestion[]>();
+    mcqQuestions.forEach((q) => {
+      if (!sectionsMap.has(q.section)) {
+        sectionsMap.set(q.section, []);
+      }
+      sectionsMap.get(q.section)!.push(q);
+    });
+
+    // Initialize answers with AI recommendations
+    const initialAnswers = new Map<string, QuestionAnswer>();
+    mcqQuestions.forEach((q) => {
+      const options = Array.isArray(q.options)
+        ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
+        : [];
+      const recIdx = q.answerRecommendationIdx;
+      if (recIdx != null && recIdx >= 0 && recIdx < options.length) {
+        const opt = options[recIdx];
+        const label = typeof opt === "string" ? opt : opt.label;
+        initialAnswers.set(q.id, {
+          questionId: q.id,
+          mcqAnswer: String.fromCharCode(65 + recIdx),
+          selectedOptionIdx: recIdx,
+          textAnswer: label,
+          isOther: false,
+          isUserModified: false,
+        });
+      }
+    });
+
+    setState((prev) => ({
+      ...prev,
+      questions: mcqQuestions,
+      sections: sectionsMap,
+      answers: initialAnswers,
+      pageState: "questions",
+    }));
+
+    // Animate questions appearing
+    mcqQuestions.forEach((q, index) => {
+      setTimeout(() => {
+        setState((prev) => {
+          const newVisible = new Set(prev.visibleQuestions);
+          newVisible.add(q.id);
+          return { ...prev, visibleQuestions: newVisible };
+        });
+      }, index * 200);
+    });
+  }, [isDemoMode, demoDelayComplete]);
+
   // Fetch recipe details when recipeId is available
   useEffect(() => {
     const fetchRecipeDetails = async () => {
-      if (!recipeId) return;
+      if (!recipeId || isDemoMode) return;
 
       try {
         console.log("[Repo Page] Fetching recipe details for:", recipeId);
@@ -91,11 +213,11 @@ export default function RepoPage() {
     };
 
     fetchRecipeDetails();
-  }, [recipeId]);
+  }, [recipeId, isDemoMode]);
 
   // Fetch questions when recipeId is available (new recipe codegen flow)
   useEffect(() => {
-    if (!recipeId) return;
+    if (!recipeId || isDemoMode) return;
 
     const fetchQuestions = async () => {
       setQuestionsPolling(true);
@@ -173,6 +295,8 @@ export default function RepoPage() {
                 recIdx != null && recIdx >= 0 && recIdx < options.length
                   ? options[recIdx].label
                   : undefined;
+              // Parse criticality from API response
+              const criticality = (newQ as any).criticality as "BLOCKER" | "IMPORTANT" | "NICE_TO_HAVE" | undefined;
               return {
                 id: newQ.id ?? `q-${index}`,
                 section: "General",
@@ -185,6 +309,7 @@ export default function RepoPage() {
                 answerRecommendationIdx: recIdx ?? null,
                 expectedAnswerType: newQ.expected_answer_type,
                 contextRefs: newQ.context_refs ?? null,
+                criticality,
               };
             }
 
@@ -205,6 +330,13 @@ export default function RepoPage() {
             };
           }
         );
+
+        // Sort questions by criticality
+        mcqQuestions.sort((a, b) => {
+          const aOrder = CRITICALITY_ORDER[a.criticality || "NICE_TO_HAVE"] ?? 2;
+          const bOrder = CRITICALITY_ORDER[b.criticality || "NICE_TO_HAVE"] ?? 2;
+          return aOrder - bOrder;
+        });
 
         // Group by section and set state
         const sectionsMap = new Map<string, MCQQuestion[]>();
@@ -296,7 +428,7 @@ export default function RepoPage() {
     };
 
     fetchQuestions();
-  }, [recipeId]);
+  }, [recipeId, isDemoMode]);
 
   // Generate questions on page load (old flow - kept for backward compatibility)
   const {
@@ -680,6 +812,12 @@ export default function RepoPage() {
   // Generate plan mutation
   const generatePlanMutation = useMutation({
     mutationFn: async () => {
+      // In demo mode, skip validation and API call, return mock response
+      if (isDemoMode) {
+        console.log("[Repo Page] Demo mode - skipping spec generation API call");
+        return { spec_id: "demo-spec-id" } as SubmitSpecGenerationResponse;
+      }
+      
       // Validate: all questions must be answered (no NULL in payload)
       const unansweredIds: string[] = [];
       state.questions.forEach((q) => {
@@ -795,7 +933,8 @@ export default function RepoPage() {
             : [];
           const idx = answer.selectedOptionIdx ?? (answer.mcqAnswer?.charCodeAt(0) ?? 65) - 65;
           if (idx >= 0 && idx < options.length) {
-            answerStr = typeof options[idx] === "string" ? options[idx] : options[idx].label;
+            const opt = options[idx];
+            answerStr = typeof opt === "string" ? opt : opt.label;
           }
         }
 
@@ -837,7 +976,10 @@ export default function RepoPage() {
         toast.error("Navigation failed: Recipe ID missing");
         return;
       }
-      router.push(`/task/${activeRecipeId}/spec`);
+      const specUrl = isDemoMode 
+        ? `/task/${activeRecipeId}/spec?demo=true` 
+        : `/task/${activeRecipeId}/spec`;
+      router.push(specUrl);
     },
     onError: (error: Error) => {
       console.error("Error in generatePlanMutation:", error);
@@ -903,7 +1045,71 @@ export default function RepoPage() {
     });
   };
 
+  // Helper function to scroll to the first unanswered question
+  const scrollToFirstUnansweredQuestion = (unansweredIds: string[]) => {
+    if (unansweredIds.length === 0) return;
+    
+    // Find the first unanswered question (they're already sorted by criticality)
+    const firstUnansweredId = unansweredIds[0];
+    const questionRef = questionRefs.current.get(firstUnansweredId);
+    
+    if (questionRef) {
+      questionRef.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Add a brief highlight effect
+      questionRef.classList.add("ring-2", "ring-amber-400");
+      setTimeout(() => {
+        questionRef.classList.remove("ring-2", "ring-amber-400");
+      }, 2000);
+    }
+  };
+
   const handleGeneratePlan = () => {
+    // Check for unanswered questions before starting generation
+    const unansweredIds: string[] = [];
+    state.questions.forEach((q) => {
+      if (state.skippedQuestions.has(q.id)) return;
+      const answer = state.answers.get(q.id);
+      const options = Array.isArray(q.options)
+        ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
+        : [];
+      let hasAnswer = false;
+      const isMultipleChoice = q.multipleChoice ?? false;
+      if (answer?.isOther && answer.otherText?.trim()) {
+        hasAnswer = true;
+      } else if (isMultipleChoice) {
+        if (answer?.selectedOptionIndices && answer.selectedOptionIndices.length > 0) {
+          hasAnswer = answer.selectedOptionIndices.some(
+            idx => idx >= 0 && idx < options.length
+          );
+        } else if (answer?.textAnswer?.trim()) {
+          hasAnswer = true;
+        }
+      } else {
+        if (answer?.selectedOptionIdx != null && answer.selectedOptionIdx >= 0 && answer.selectedOptionIdx < options.length) {
+          hasAnswer = true;
+        } else if (answer?.textAnswer?.trim()) {
+          hasAnswer = true;
+        } else if (answer?.mcqAnswer && options.length > 0) {
+          const idx = (answer.mcqAnswer.charCodeAt(0) ?? 65) - 65;
+          if (idx >= 0 && idx < options.length) hasAnswer = true;
+        }
+      }
+      if (!hasAnswer) {
+        unansweredIds.push(q.id);
+      }
+    });
+
+    // If there are unanswered questions, scroll to the first one and show error
+    if (unansweredIds.length > 0) {
+      setState((prev) => ({
+        ...prev,
+        unansweredQuestionIds: new Set(unansweredIds),
+      }));
+      toast.error(`Please answer all questions. ${unansweredIds.length} question(s) need your input.`);
+      scrollToFirstUnansweredQuestion(unansweredIds);
+      return;
+    }
+
     setState((prev) => ({ ...prev, isGenerating: true }));
     generatePlanMutation.mutate();
   };
@@ -1002,12 +1208,15 @@ export default function RepoPage() {
             {state.pageState === "questions" && <AIAnalysisBanner />}
             {/* Loading State - Only show if we don't have questions yet */}
             {(questionsLoading ||
-              (questionsPolling && state.questions.length === 0)) && (
+              (questionsPolling && state.questions.length === 0) ||
+              (isDemoMode && !demoDelayComplete)) && (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
                   <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto mb-3" />
                   <p className="text-xs text-zinc-500">
-                    {questionsPolling
+                    {isDemoMode && !demoDelayComplete
+                      ? "Analyzing codebase..."
+                      : questionsPolling
                       ? "Loading questions..."
                       : "Generating questions..."}
                   </p>
@@ -1051,10 +1260,10 @@ export default function RepoPage() {
                       )}
                       answers={state.answers}
                       hoveredQuestion={state.hoveredQuestion}
+                      expandedOptions={state.expandedOptions}
                       skippedQuestions={state.skippedQuestions}
-                      unansweredQuestionIds={
-                        state.unansweredQuestionIds ?? new Set()
-                      }
+                      unansweredQuestionIds={state.unansweredQuestionIds}
+                      questionRefs={questionRefs}
                       onHover={(questionId) =>
                         setState((prev) => ({
                           ...prev,
@@ -1062,7 +1271,17 @@ export default function RepoPage() {
                         }))
                       }
                       onAnswerChange={handleAnswerChange}
-                      onToggleSkip={handleToggleSkip}
+                      onToggleOptions={(questionId) =>
+                        setState((prev) => {
+                          const newExpanded = new Set(prev.expandedOptions);
+                          if (newExpanded.has(questionId)) {
+                            newExpanded.delete(questionId);
+                          } else {
+                            newExpanded.add(questionId);
+                          }
+                          return { ...prev, expandedOptions: newExpanded };
+                        })
+                      }
                     />
                   );
                 });
@@ -1073,10 +1292,9 @@ export default function RepoPage() {
                 onContextChange={(context) =>
                   setState((prev) => ({ ...prev, additionalContext: context }))
                 }
-                onSaveAndSubmit={handleGeneratePlan}
+                onGeneratePlan={handleGeneratePlan}
                 isGenerating={state.isGenerating}
                 recipeId={recipeId}
-                unansweredCount={unansweredCount}
               />
             )}
              

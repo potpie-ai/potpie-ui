@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { MermaidDiagram } from "@/components/chat/MermaidDiagram";
 import {
   Check,
@@ -40,9 +40,12 @@ import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
 import TaskSplittingService from "@/services/TaskSplittingService";
 import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
-import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import codegenMockData from "@/lib/mock/codegenMock.json";
+
+// Demo mode delay in milliseconds (35 seconds)
+const DEMO_MODE_DELAY = 35000;
 
 /**
  * VERTICAL SLICE PLANNER (Auto-Generation Mode)
@@ -222,6 +225,7 @@ const PlanPage = () => {
   const recipeId = params?.taskId as string;
   const planIdFromUrl = searchParams.get("planId");
   const specIdFromUrl = searchParams.get("specId");
+  const isDemoMode = searchParams.get("demo") === "true";
 
   const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
   const [planStatus, setPlanStatus] = useState<PlanStatusResponse | null>(null);
@@ -230,68 +234,379 @@ const PlanPage = () => {
   const [visibleCount, setVisibleCount] = useState(0);
   const [repoName, setRepoName] = useState<string>("Repository");
   const [branchName, setBranchName] = useState<string>("Branch");
+  const [demoDelayComplete, setDemoDelayComplete] = useState(!isDemoMode);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const mockDataInitializedRef = useRef(false);
 
+  // Demo mode delay effect
   useEffect(() => {
-    const fetchRecipeDetails = async () => {
-      if (!recipeId) return;
-      try {
-        const recipeDetails = await SpecService.getRecipeDetails(recipeId);
-        setRepoName(recipeDetails.repo_name || "Unknown Repository");
-        setBranchName(recipeDetails.branch_name || "main");
-      } catch (error) {}
-    };
-    fetchRecipeDetails();
-  }, [recipeId]);
+    if (!isDemoMode) return;
+    
+    console.log("[Plan Page] Demo mode active - starting 35 second delay");
+    const timer = setTimeout(() => {
+      console.log("[Plan Page] Demo mode delay complete");
+      setDemoDelayComplete(true);
+    }, DEMO_MODE_DELAY);
 
+    return () => clearTimeout(timer);
+  }, [isDemoMode]);
+
+  // Load mock data from codegenMock.json in demo mode
+  useEffect(() => {
+    if (!isDemoMode || !demoDelayComplete) return;
+    if (mockDataInitializedRef.current) return;
+    
+    console.log("[Plan Page] Demo mode - loading mock data from codegenMock.json");
+    
+    // Set demo repo and branch
+    setRepoName("cal.com");
+    setBranchName("main");
+
+    // Set plan ID
+    if (!planId) {
+      setPlanId("demo-plan-id");
+    }
+
+    // Set plan status from mock data
+    const mockPlanStatus: PlanStatusResponse = {
+      plan_id: codegenMockData.plan_status.plan_id,
+      spec_id: codegenMockData.plan_status.spec_id,
+      recipe_id: recipeId || codegenMockData.plan_status.recipe_id,
+      plan_gen_status: codegenMockData.plan_status.plan_gen_status as "COMPLETED" | "IN_PROGRESS" | "FAILED" | "SUBMITTED",
+      current_step: codegenMockData.plan_status.current_step,
+      progress_percent: codegenMockData.plan_status.progress_percent,
+      total_items: codegenMockData.plan_status.total_items,
+      items_completed: codegenMockData.plan_status.items_completed,
+      status_message: codegenMockData.plan_status.status_message,
+      error_message: codegenMockData.plan_status.error_message,
+    };
+    setPlanStatus(mockPlanStatus);
+
+    // Set plan items from mock data
+    const mockPlanItems: PlanItem[] = codegenMockData.plan_items.map((item) => ({
+      id: item.id,
+      item_number: item.item_number,
+      order: item.order,
+      title: item.title,
+      detailed_objective: item.detailed_objective,
+      implementation_steps: item.implementation_steps,
+      description: item.description,
+      verification_criteria: item.verification_criteria,
+      files: item.files.map((f) => ({
+        path: f.path,
+        type: f.type as "create" | "modify" | "delete",
+      })),
+      context_handoff: item.context_handoff,
+      reasoning: item.reasoning,
+      architecture: item.architecture,
+    }));
+    setPlanItems(mockPlanItems);
+    setIsLoading(false);
+
+    mockDataInitializedRef.current = true;
+  }, [isDemoMode, demoDelayComplete, recipeId, planId]);
+
+  // Initialize with mock data (non-demo mode fallback)
+  useEffect(() => {
+    if (isDemoMode) return; // Skip if in demo mode
+    if (mockDataInitializedRef.current) return;
+    
+    // Set mock repo and branch
+    setRepoName("my-awesome-project");
+    setBranchName("main");
+
+    // Set mock plan ID
+    if (!planId) {
+      setPlanId("mock-plan-id-12345");
+    }
+
+    // Set mock plan status
+    const mockPlanStatus: PlanStatusResponse = {
+      plan_id: "mock-plan-id-12345",
+      spec_id: "mock-spec-id-12345",
+      recipe_id: recipeId || "mock-recipe-id",
+      plan_gen_status: "COMPLETED",
+      current_step: 5,
+      progress_percent: 100,
+      total_items: 5,
+      items_completed: 5,
+      status_message: "Plan generation completed successfully",
+      error_message: null,
+    };
+    setPlanStatus(mockPlanStatus);
+
+    // Set mock plan items
+    const mockPlanItems: PlanItem[] = [
+      {
+        id: "item-1",
+        item_number: 1,
+        order: 0,
+        title: "Set up Authentication Schema & Database",
+        detailed_objective: "Create the foundational database schema for user authentication, including user table with proper fields for email, password hash, and timestamps. Configure Prisma as the ORM and establish PostgreSQL connection with appropriate pooling settings.",
+        implementation_steps: [
+          "Create `prisma/schema.prisma` with User model including id (UUID), email (unique), passwordHash, createdAt, and updatedAt",
+          "Configure `DATABASE_URL` environment variable in `.env` file",
+          "Create `src/lib/db.ts` with PrismaClient singleton pattern to prevent connection exhaustion",
+          "Run `prisma generate` to generate TypeScript types",
+          "Execute `prisma migrate dev --name init-user-schema` to create initial migration",
+          "Test database connection with a simple query"
+        ],
+        description: "Initialize database schema for user authentication with Prisma ORM",
+        verification_criteria: "Database connection established; User table created successfully; Prisma Client can query database without errors",
+        files: [
+          { path: "prisma/schema.prisma", type: "create" },
+          { path: "src/lib/db.ts", type: "create" },
+          { path: ".env", type: "modify" },
+          { path: "package.json", type: "modify" }
+        ],
+        context_handoff: {
+          db_provider: "PostgreSQL",
+          orm: "Prisma",
+          user_id_type: "UUID v4",
+          email_constraint: "UNIQUE"
+        },
+        reasoning: "Starting with the database layer ensures we have a solid foundation before implementing business logic. UUID is chosen over auto-increment for better security and distributed system compatibility.",
+        architecture: `flowchart TB
+    subgraph DB["PostgreSQL Database"]
+        User[("User Table<br/>id: UUID PK<br/>email: VARCHAR UNIQUE<br/>passwordHash: VARCHAR<br/>createdAt: TIMESTAMP<br/>updatedAt: TIMESTAMP")]
+    end
+    subgraph App["Application Layer"]
+        Prisma["PrismaClient<br/>Singleton Pattern<br/>Connection Pool: 10"]
+    end
+    Prisma -->|"TCP/5432"| User`
+      },
+      {
+        id: "item-2",
+        item_number: 2,
+        order: 1,
+        title: "Implement Password Hashing & JWT Utilities",
+        detailed_objective: "Build core authentication utilities for secure password hashing using bcrypt and JWT token generation/verification. These utilities will be used across the application for user authentication flows.",
+        implementation_steps: [
+          "Install dependencies: `bcryptjs` and `jsonwebtoken`",
+          "Create `src/utils/password.ts` with hashPassword() and verifyPassword() functions",
+          "Set bcrypt salt rounds to 12 for optimal security/performance balance",
+          "Create `src/utils/jwt.ts` with generateToken() and verifyToken() functions",
+          "Configure JWT_SECRET and JWT_EXPIRES_IN environment variables",
+          "Add token payload type definitions with userId and email",
+          "Write unit tests for password hashing and JWT operations"
+        ],
+        description: "Core authentication utilities for password security and token management",
+        verification_criteria: "Password hashing produces different hashes for same input; Verification correctly validates passwords; JWT tokens can be generated and verified; Tokens expire correctly",
+        files: [
+          { path: "src/utils/password.ts", type: "create" },
+          { path: "src/utils/jwt.ts", type: "create" },
+          { path: "src/types/auth.ts", type: "create" },
+          { path: ".env", type: "modify" },
+          { path: "src/utils/__tests__/password.test.ts", type: "create" },
+          { path: "src/utils/__tests__/jwt.test.ts", type: "create" }
+        ],
+        context_handoff: {
+          hash_algorithm: "bcrypt",
+          salt_rounds: 12,
+          jwt_algorithm: "HS256",
+          token_expiry: "7d"
+        },
+        reasoning: "bcrypt is industry standard for password hashing with built-in salting. HS256 JWT provides good balance of security and performance for this use case.",
+        architecture: `flowchart LR
+    subgraph Utils["Authentication Utilities"]
+        Hash["hashPassword()<br/>bcrypt + salt"]
+        Verify["verifyPassword()<br/>compare hash"]
+        Gen["generateToken()<br/>JWT sign"]
+        Check["verifyToken()<br/>JWT verify"]
+    end
+    Hash --> Verify
+    Gen --> Check`
+      },
+      {
+        id: "item-3",
+        item_number: 3,
+        order: 2,
+        title: "Build Authentication Service Layer",
+        detailed_objective: "Create a service layer that handles all authentication business logic including user registration, login, and token refresh. This service will orchestrate database operations and utility functions.",
+        implementation_steps: [
+          "Create `src/services/auth.service.ts` with AuthService class",
+          "Implement registerUser() method: validate email, check existing user, hash password, create user record",
+          "Implement loginUser() method: find user, verify password, generate JWT token",
+          "Implement refreshToken() method: verify old token, generate new token",
+          "Implement getUserById() method for token validation",
+          "Add email validation using regex or validation library",
+          "Implement rate limiting considerations in service layer",
+          "Add comprehensive error handling with custom error types"
+        ],
+        description: "Service layer for user registration, login, and token management",
+        verification_criteria: "New users can register with valid email; Login succeeds with correct credentials; Login fails with incorrect credentials; Tokens can be refreshed; Duplicate emails are rejected",
+        files: [
+          { path: "src/services/auth.service.ts", type: "create" },
+          { path: "src/types/errors.ts", type: "create" },
+          { path: "src/services/__tests__/auth.service.test.ts", type: "create" }
+        ],
+        context_handoff: {
+          validation: "email format + length",
+          error_handling: "Custom error classes",
+          rate_limiting: "Ready for middleware"
+        },
+        reasoning: "Service layer separates business logic from HTTP concerns, making code more testable and reusable. Custom errors provide better error handling downstream.",
+        architecture: `flowchart TD
+    API[API Routes] --> Service[AuthService]
+    Service --> DB[(Database)]
+    Service --> HashUtil[Password Utils]
+    Service --> JWTUtil[JWT Utils]
+    Service --> Validator[Email Validator]`
+      },
+      {
+        id: "item-4",
+        item_number: 4,
+        order: 3,
+        title: "Create API Routes & Middleware",
+        detailed_objective: "Implement REST API endpoints for authentication operations and create middleware for protecting routes that require authentication. Set up proper request validation and error handling.",
+        implementation_steps: [
+          "Create `src/app/api/auth/register/route.ts` for POST /api/auth/register",
+          "Create `src/app/api/auth/login/route.ts` for POST /api/auth/login",
+          "Create `src/app/api/auth/refresh/route.ts` for POST /api/auth/refresh",
+          "Implement request body validation using zod",
+          "Create `src/middleware/auth.middleware.ts` for JWT verification",
+          "Add rate limiting middleware using express-rate-limit or custom implementation",
+          "Implement standardized error response format",
+          "Add CORS configuration for API routes"
+        ],
+        description: "REST API endpoints and authentication middleware",
+        verification_criteria: "POST /api/auth/register accepts valid user data; POST /api/auth/login returns JWT token; Protected routes reject requests without valid token; Rate limiting prevents brute force attacks",
+        files: [
+          { path: "src/app/api/auth/register/route.ts", type: "create" },
+          { path: "src/app/api/auth/login/route.ts", type: "create" },
+          { path: "src/app/api/auth/refresh/route.ts", type: "create" },
+          { path: "src/middleware/auth.middleware.ts", type: "create" },
+          { path: "src/middleware/rate-limit.middleware.ts", type: "create" },
+          { path: "src/lib/validation.ts", type: "create" }
+        ],
+        context_handoff: {
+          validation_library: "zod",
+          rate_limit: "100 requests/15min",
+          cors: "Configured for frontend origin"
+        },
+        reasoning: "Next.js API routes provide serverless-ready endpoints. Zod ensures type-safe validation. Rate limiting is critical for preventing abuse.",
+        architecture: `flowchart TB
+    Client[Client Request] --> CORS[CORS Middleware]
+    CORS --> Rate[Rate Limiter]
+    Rate --> Val[Request Validator]
+    Val --> Auth[Auth Middleware]
+    Auth --> Route[API Route Handler]
+    Route --> Service[Auth Service]`
+      },
+      {
+        id: "item-5",
+        item_number: 5,
+        order: 4,
+        title: "Build Frontend Authentication UI",
+        detailed_objective: "Create React components for login and registration forms with proper form validation, error handling, and loading states. Integrate with authentication API endpoints and manage auth state globally.",
+        implementation_steps: [
+          "Create `src/components/auth/LoginForm.tsx` with email and password fields",
+          "Create `src/components/auth/RegisterForm.tsx` with email, password, and confirm password",
+          "Implement form validation using react-hook-form and zod",
+          "Create `src/contexts/AuthContext.tsx` for global auth state management",
+          "Implement useAuth hook for easy auth access in components",
+          "Add loading states and error message display",
+          "Create protected route wrapper component",
+          "Implement automatic token refresh logic",
+          "Add password strength indicator in registration form",
+          "Style forms with Tailwind CSS for responsive design"
+        ],
+        description: "Frontend authentication forms and state management",
+        verification_criteria: "Forms validate input before submission; Loading states show during API calls; Error messages display for failed requests; Users stay logged in after page refresh; Protected routes redirect to login when not authenticated",
+        files: [
+          { path: "src/components/auth/LoginForm.tsx", type: "create" },
+          { path: "src/components/auth/RegisterForm.tsx", type: "create" },
+          { path: "src/contexts/AuthContext.tsx", type: "create" },
+          { path: "src/hooks/useAuth.ts", type: "create" },
+          { path: "src/components/ProtectedRoute.tsx", type: "create" },
+          { path: "src/app/(auth)/login/page.tsx", type: "create" },
+          { path: "src/app/(auth)/register/page.tsx", type: "create" }
+        ],
+        context_handoff: {
+          form_library: "react-hook-form",
+          state_management: "React Context API",
+          validation: "zod schemas",
+          styling: "Tailwind CSS"
+        },
+        reasoning: "react-hook-form provides excellent performance and developer experience. Context API is sufficient for auth state without adding Redux complexity.",
+        architecture: `flowchart TB
+    UI[Auth Forms] --> Hook[useAuth Hook]
+    Hook --> Context[AuthContext]
+    Context --> API[API Client]
+    API --> Backend[Backend API]
+    Context --> Storage[localStorage<br/>JWT Token]`
+      }
+    ];
+    setPlanItems(mockPlanItems);
+    setIsLoading(false);
+
+    mockDataInitializedRef.current = true;
+  }, [isDemoMode, recipeId, planId]);
+
+  // DISABLED FOR MOCK DATA VIEWING
+  // useEffect(() => {
+  //   const fetchRecipeDetails = async () => {
+  //     if (!recipeId) return;
+  //     try {
+  //       const recipeDetails = await SpecService.getRecipeDetails(recipeId);
+  //       setRepoName(recipeDetails.repo_name || "Unknown Repository");
+  //       setBranchName(recipeDetails.branch_name || "main");
+  //     } catch (error) {}
+  //   };
+  //   fetchRecipeDetails();
+  // }, [recipeId]);
+
+  // DISABLED FOR MOCK DATA VIEWING
   const { data: statusData, isLoading: isLoadingStatus } = useQuery({
     queryKey: ["plan-status", planId, recipeId, specIdFromUrl],
     queryFn: async () => {
-      if (planId) return await PlanService.getPlanStatus(planId);
-      if (specIdFromUrl) return await PlanService.getPlanStatusBySpecId(specIdFromUrl);
-      if (recipeId) return await PlanService.getPlanStatusByRecipeId(recipeId);
-      return null;
+      return null; // Skip API call - using mock data
     },
-    enabled: !!(planId || specIdFromUrl || recipeId),
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      return (data?.plan_gen_status === "IN_PROGRESS" || data?.plan_gen_status === "SUBMITTED") ? 2000 : false;
-    },
+    enabled: false, // Disabled for mock data
+    refetchInterval: false,
   });
 
-  useEffect(() => {
-    if (statusData) {
-      setPlanStatus(statusData);
-      setIsLoading(false);
-      if (statusData.plan_id && !planId) setPlanId(statusData.plan_id);
-    }
-  }, [statusData, planId]);
+  // DISABLED FOR MOCK DATA VIEWING
+  // useEffect(() => {
+  //   if (statusData) {
+  //     setPlanStatus(statusData);
+  //     setIsLoading(false);
+  //     if (statusData.plan_id && !planId) setPlanId(statusData.plan_id);
+  //   }
+  // }, [statusData, planId]);
 
-  useEffect(() => {
-    if ((recipeId || specIdFromUrl) && !planId && !isLoadingStatus && !statusData) {
-      PlanService.submitPlanGeneration({
-        recipe_id: recipeId || undefined,
-        spec_id: specIdFromUrl || undefined,
-      }).then((response) => {
-        setPlanId(response.plan_id);
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("planId", response.plan_id);
-        router.replace(`/task/${recipeId}/plan?${params.toString()}`);
-      });
-    }
-  }, [recipeId, specIdFromUrl, planId, isLoadingStatus, statusData]);
+  // useEffect(() => {
+  //   if ((recipeId || specIdFromUrl) && !planId && !isLoadingStatus && !statusData) {
+  //     PlanService.submitPlanGeneration({
+  //       recipe_id: recipeId || undefined,
+  //       spec_id: specIdFromUrl || undefined,
+  //     }).then((response) => {
+  //       setPlanId(response.plan_id);
+  //       const params = new URLSearchParams(searchParams.toString());
+  //       params.set("planId", response.plan_id);
+  //       router.replace(`/task/${recipeId}/plan?${params.toString()}`);
+  //     });
+  //   }
+  // }, [recipeId, specIdFromUrl, planId, isLoadingStatus, statusData]);
 
-  useEffect(() => {
-    if (planStatus?.plan_gen_status === "COMPLETED" && planId && planItems.length === 0) {
-      PlanService.getPlanItems(planId, 0, 50).then(res => setPlanItems(res.plan_items));
-    }
-  }, [planStatus?.plan_gen_status, planId]);
+  // useEffect(() => {
+  //   if (planStatus?.plan_gen_status === "COMPLETED" && planId && planItems.length === 0) {
+  //     PlanService.getPlanItems(planId, 0, 50).then(res => setPlanItems(res.plan_items));
+  //   }
+  // }, [planStatus?.plan_gen_status, planId]);
 
-  if (isLoading) {
+  if (isLoading || (isDemoMode && !demoDelayComplete)) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-color" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-color mx-auto mb-3" />
+          <p className="text-sm text-primary-color">
+            {isDemoMode && !demoDelayComplete 
+              ? "Generating detailed implementation plan..." 
+              : "Loading..."}
+          </p>
+        </div>
       </div>
     );
   }
@@ -543,6 +858,14 @@ const PlanPage = () => {
             <Button
               onClick={async () => {
                 const firstItem = planItems[0];
+                
+                // In demo mode, skip API call and navigate directly
+                if (isDemoMode) {
+                  console.log("[Plan Page] Demo mode - skipping task splitting API call");
+                  router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}&demo=true`);
+                  return;
+                }
+                
                 try {
                   await TaskSplittingService.submitTaskSplitting({ plan_item_id: firstItem.id });
                 } catch (error) {

@@ -1,0 +1,227 @@
+{
+    "recipe_id": "019c29ef-9f2f-74a2-bb1c-3c70af5b2b00",
+    "spec_id": "019c29f0-3395-788c-ad93-a17c1135f61c",
+    "spec_gen_status": "COMPLETED",
+    "step_index": 0,
+    "progress_percent": 100,
+    "step_statuses": {
+        "0": {
+            "status": "COMPLETED",
+            "display_message": "Demo: Step 1 completed"
+        },
+        "1": {
+            "status": "COMPLETED",
+            "display_message": "Demo: Step 2 completed"
+        },
+        "2": {
+            "status": "COMPLETED",
+            "display_message": "Demo: Step 3 completed"
+        },
+        "3": {
+            "status": "COMPLETED",
+            "display_message": "Demo: Step 4 completed"
+        },
+        "4": {
+            "status": "COMPLETED",
+            "display_message": "Demo: Step 5 completed"
+        }
+    },
+    "spec_output": {
+        "add": [
+            {
+                "id": "019c29f0-5eff-7187-8940-5212d23992c2",
+                "title": "Define database schema for AI chat metadata logging",
+                "files": [
+                    {
+                        "path": "packages/prisma/schema.prisma",
+                        "type": "Create"
+                    },
+                    {
+                        "path": "packages/prisma/migrations/",
+                        "type": "Create"
+                    }
+                ],
+                "dependencies": [
+                    "@prisma/client"
+                ],
+                "externalConnections": [],
+                "details": "### Prisma Model: `AiChatInteraction`\n\n**Stores metadata only - no message content**\n\n#### Fields\n- **Multi-tenancy**: `userId`, `profileId`, `teamId`, `orgId`\n- **Provider metadata**: `model`, `inputTokens`, `outputTokens`, `totalTokens`\n- **Metrics**: `latency`\n- **Status**: `SUCCESS`, `ERROR`, `RATE_LIMITED`, `TIMEOUT`\n- **Timestamp**: `createdAt`\n\n#### Indexes\n`userId`, `profileId`, `teamId`, `orgId`, `createdAt`\n\n#### Requirements\n- `NOT NULL` on required fields\n- Run `yarn prisma generate` after migration",
+                "context": "**Location**: `packages/prisma/`\n\n- Follows Cal.com multi-tenancy pattern\n- **No PII fields**\n- Used by `AiChatInteractionRepository`\n- Requires database migration execution"
+            },
+            {
+                "id": "019c29f0-5f0c-7517-9f16-4cbe90742f66",
+                "title": "Define AI provider abstraction interface",
+                "files": [
+                    {
+                        "path": "packages/features/ai-chat/lib/providers/AIProvider.interface.ts",
+                        "type": "Create"
+                    },
+                    {
+                        "path": "packages/features/ai-chat/lib/types.ts",
+                        "type": "Create"
+                    }
+                ],
+                "dependencies": [],
+                "externalConnections": [],
+                "details": "### Interface: `AIProvider`\n\n```typescript\ngenerateResponse(\n  messages: ChatMessage[],\n  systemPrompt?: string\n): AIProviderResponse\n```\n\n#### `AIProviderResponse`\n- `content`: string\n- `model`: string\n- `usage`: `{ inputTokens, outputTokens, totalTokens }`\n- `latency`: milliseconds\n\n#### `ChatMessage`\n- `role`: `'user' | 'assistant' | 'system'`\n- `content`: string\n- `timestamp`?: optional\n\n#### Error Mapping\n- `429` → rate limit\n- `5xx` → transient error\n\n**Enables provider swapping (OpenAI, Azure, Anthropic)**",
+                "context": "**Location**: `packages/features/ai-chat/lib/providers/`\n\n- Framework-agnostic, no Next.js/tRPC deps\n- Used by `AiChatService`\n- Implementations: `OpenAIProvider` (MVP), `NoOpProvider` (testing)\n- **Strict TypeScript, no `any` types**"
+            },
+            {
+                "id": "019c29f0-5f14-7de2-9d7c-b296d6151470",
+                "title": "Define rate limiting strategy requirements",
+                "files": [
+                    {
+                        "path": "packages/features/ai-chat/lib/rateLimiter/IRateLimiter.interface.ts",
+                        "type": "Create"
+                    },
+                    {
+                        "path": "packages/features/ai-chat/lib/types.ts",
+                        "type": "Modify"
+                    }
+                ],
+                "dependencies": [],
+                "externalConnections": [
+                    "Redis"
+                ],
+                "details": "### Strategy\n- Per-user limits (default: 20 requests/minute)\n- Redis for distributed locking\n- 60-second window with auto-expiration\n\n### Interface\n```typescript\ncheckLimit(userId): Promise<void>\nrecordUsage(userId): Promise<void>\n```\n\n### Configuration\n`AI_CHAT_RATE_LIMIT_REQUESTS_PER_MINUTE`\n\n### Error Response\nInclude `retryAfter` timestamp when limit exceeded\n\n### Scope\nAuthenticated users only",
+                "context": "**Location**: `packages/features/ai-chat/lib/rateLimiter/`\n\n- Integrates with `packages/features/redis`\n- Used by `AiChatService` before provider calls\n- Swappable: in-memory (testing) / Redis (production)\n- Environment-configurable"
+            },
+            {
+                "id": "019c29f0-5f19-73fe-a4b1-cc885c14797c",
+                "title": "Define repository interface for AI chat metadata logging",
+                "files": [
+                    {
+                        "path": "packages/features/ai-chat/repositories/IAiChatInteractionRepository.interface.ts",
+                        "type": "Create"
+                    }
+                ],
+                "dependencies": [
+                    "@calcom/prisma",
+                    "packages/prisma/schema.prisma"
+                ],
+                "externalConnections": [],
+                "details": "### Repository: `IAiChatInteractionRepository`\n\n```typescript\ncreate(log: AiChatInteractionLogDTO): Promise<void>\n```\n\n#### DTO Fields\n`userId`, `profileId`, `teamId`, `orgId`, `model`, `tokens`, `latency`, `status`\n\n#### Security\n**Must enforce explicit `select()` - never `include`** sensitive fields\n\n#### Requirements\n- Handle database errors\n- Return typed DTOs\n- Enables mocking for testing",
+                "context": "**Location**: `packages/features/ai-chat/repositories/`\n\n- Cal.com Repository+DTO pattern\n- Consumed by `AiChatService`\n- **Critical**: `select()` only, no `include` on sensitive fields\n- Handle Prisma connection pool errors"
+            },
+            {
+                "id": "019c29f0-5f23-70c8-88a0-64471f2f3e01",
+                "title": "Define AI Chat domain service orchestration requirements",
+                "files": [
+                    {
+                        "path": "packages/features/ai-chat/lib/AiChatService.ts",
+                        "type": "Create"
+                    },
+                    {
+                        "path": "packages/features/ai-chat/lib/prompts/systemPrompt.ts",
+                        "type": "Create"
+                    }
+                ],
+                "dependencies": [
+                    "packages/features/ai-chat/lib/providers/AIProvider.interface.ts",
+                    "packages/features/ai-chat/lib/rateLimiter/IRateLimiter.interface.ts",
+                    "packages/features/ai-chat/repositories/IAiChatInteractionRepository.interface.ts",
+                    "@calcom/lib/logger.server"
+                ],
+                "externalConnections": [],
+                "details": "### Service: `AiChatService`\n\n```typescript\nsendMessage(userId, profileId, teamId, orgId, conversationHistory): Promise<ChatResponse>\n```\n\n#### Orchestration\n1. Validate user session and tenant membership\n2. Check rate limits (via `IRateLimiter`)\n3. Validate conversation history (max 10 messages, 4000 chars each)\n4. Call `AIProvider.generateResponse()` with system prompt\n5. Log metadata only (no content)\n6. Return response\n\n#### System Prompt\n- Persona: Helpful Cal.com assistant\n- Capabilities: Feature setup, integrations, troubleshooting\n- Constraints: No data access, no resource modification\n\n#### Architecture\n- Dependency injection pattern for all dependencies\n- Framework-agnostic (no tRPC/Next.js)",
+                "context": "**Location**: `packages/features/ai-chat/lib/`\n\n- Receives context from tRPC layer: `userId`, `profileId`, `teamId`, `orgId`\n- Enforces tenant scoping in all operations\n- Uses `@calcom/lib/logger.server`\n- Consumed by tRPC router"
+            },
+            {
+                "id": "019c29f0-5f2a-7bbf-b6ab-560d895d80ca",
+                "title": "Define API contracts for AI chat endpoints",
+                "files": [
+                    {
+                        "path": "packages/trpc/server/routers/viewer/loggedInViewer/aiChat/_router.ts",
+                        "type": "Create"
+                    },
+                    {
+                        "path": "packages/features/ai-chat/zod/schemas.ts",
+                        "type": "Create"
+                    }
+                ],
+                "dependencies": [
+                    "@trpc/server",
+                    "zod",
+                    "packages/features/ai-chat/lib/AiChatService.ts"
+                ],
+                "externalConnections": [],
+                "details": "### tRPC Router: `sendMessage` mutation\n\n```typescript\nprotectedProcedure.input(sendMessageInputSchema).mutation(...)\n```\n\n#### Input Schema\n```typescript\nmessages: ChatMessage[]  // 1-10 items, max 4000 chars each\n```\n\n#### Output Schema\n```typescript\n{\n  content: string\n  metadata: { model, usage, latency }\n}\n```\n\n#### Error Responses\n- Rate limit exceeded: Include `retryAfter`\n- Validation: Field-level details\n- Provider: User-friendly message\n- Timeout: Clear timeout message\n\n#### Middleware\n- `protectedProcedure` (NextAuth auth)\n- Zod validation before service call\n\n#### Context Passed to Service\n`userId`, `profileId`, `teamId`, `orgId`\n\n**Merge into `loggedInViewer` parent router**",
+                "context": "**Location**: `packages/trpc/server/routers/viewer/loggedInViewer/aiChat/`\n\n- Uses Zod schemas from `ai-chat` package\n- Consumes `AiChatService` from DI container\n- Maps domain errors to `TRPCError` codes\n- **Critical**: Do not expose sensitive data (credentials, PII)"
+            },
+            {
+                "id": "019c29f0-5f32-73a5-b4ca-690f54ad24c8",
+                "title": "Define observability requirements for AI chat",
+                "files": [
+                    {
+                        "path": "packages/features/ai-chat/lib/logger/aiChatLogger.ts",
+                        "type": "Create"
+                    },
+                    {
+                        "path": "packages/features/ai-chat/lib/metrics/aiChatMetrics.ts",
+                        "type": "Create"
+                    }
+                ],
+                "dependencies": [
+                    "@calcom/lib/logger.server",
+                    "@calcom/lib/analytics"
+                ],
+                "externalConnections": [],
+                "details": "### Logging (structured JSON)\n\n#### Fields\n`requestId`, `userId` (hashed), `timestamp`, `model`, `token counts`, `latency`, `status`\n\n#### Events\n`request_started`, `rate_limit_check`, `provider_call`, `metadata_logged`, `request_completed`\n\n#### Sampling\n- ERROR/WARN: 100%\n- INFO: 10%\n\n**Do not log message content or PII**\n\n### Metrics\n\n- Total requests, requests by user/org\n- `p50/p95/p99` latency\n- Error rate by type\n- Token usage by model\n- Unique user count\n\n### Aggregation\nHourly/daily summaries\n\n### Alerting Thresholds\n| Condition | Threshold | Priority |\n|-----------|-----------|----------|\n| Error rate | >5% for 5 min | P2 |\n| Provider outage | >50% for 2 min | P1 |\n| High latency | p95 >12s for 10 min | P3 |\n| Abuse detection | >1000/hour per user | P2 |",
+                "context": "**Location**: `packages/features/ai-chat/lib/`\n\n- Integrates with `@calcom/lib/logger.server` and `@calcom/lib/analytics`\n- Configurable sampling via environment variable\n- Searchable by `requestId`\n- No PII in logs"
+            },
+            {
+                "id": "019c29f0-5f39-7b4b-a1f0-619a2fb159e9",
+                "title": "Define error handling and retry strategy",
+                "files": [
+                    {
+                        "path": "packages/features/ai-chat/lib/types.ts",
+                        "type": "Create"
+                    }
+                ],
+                "dependencies": [],
+                "externalConnections": [],
+                "details": "### Error Categories\n\n#### User Input Errors\n- Empty message, too long\n- Response: Field-level validation\n\n#### Rate Limit Errors\n- Include `retryAfter` timestamp\n\n#### Provider Errors\n| Error | Action |\n|-------|--------|\n| 429 | Retry after delay |\n| 4xx | User-friendly message |\n| 5xx | Retry 3x with backoff (1s, 2s, 4s) |\n| Timeout (>30s) | Show timeout message |\n\n#### Network Errors\n- Retry 3x with backoff\n\n### Error Codes\n`AI_RATE_LIMIT_EXCEEDED`, `AI_PROVIDER_ERROR`, `AI_TIMEOUT`, `AI_VALIDATION_ERROR`\n\n### Retry Logic\n- **Idempotent only** (safe to retry without side effects)\n- Apply to: 5xx, network\n- Do NOT apply to: 4xx, 429\n\n### UI Messages\nClear next steps: retry, contact support, wait",
+                "context": "**Location**: `packages/features/ai-chat/lib/types.ts`\n\n- Shared across all layers (domain, API, UI)\n- Non-tRPC: `ErrorWithCode` pattern\n- tRPC: `TRPCError`\n- Consistent across providers (OpenAI, Azure, Anthropic)"
+            },
+            {
+                "id": "019c29f0-5f40-7ab8-9454-e6a594bb99f6",
+                "title": "Define security requirements for AI chat feature",
+                "files": [
+                    {
+                        "path": "packages/features/ai-chat/lib/security/aiChatSecurity.ts",
+                        "type": "Create"
+                    }
+                ],
+                "dependencies": [],
+                "externalConnections": [],
+                "details": "## Purpose\n\nDefine security requirements for AI chat.\n\n## Authentication\n\n- All requests must use `protectedProcedure` with **NextAuth JWT validation**\n- **Suspended users** cannot access\n\n## Authorization\n\n- Validate user membership in **active team/org** before processing\n- Enforce **tenant scoping** for all logged metadata\n\n## Input Validation\n\n| Threat | Prevention |\n|--------|------------|\n| Prompt injection | Sanitize messages |\n| API keys/secrets | Reject patterns |\n| SQL/NoSQL injection | Reject patterns |\n| XSS vectors | Reject patterns |\n| Length validation | Validate 1-4000 chars |\n\n## Data Privacy\n\n**CRITICAL**:\n- **Never store** message content or transcripts in database\n- **Redact PII** (emails, phone numbers) from logs\n- **Never send** user data (event types, bookings, attendees) to LLM provider\n- Use request IDs for correlation **without exposing** user context\n\n## Rate Limiting\n\n- Enforce per-user limits **server-side**\n- Track violations for alerting\n\n## Compliance\n\n- Ensure LLM provider terms align with data processing requirements\n- Support **data export** (metadata only)\n- Support **deletion requests**\n\n## System Prompts\n\nMust be **hardened against jailbreak attempts**\n\n## Error Handling\n\nAll errors must **not expose**:\n- Internal details\n- PII",
+                "context": "## Scope\n\nApplies to **all layers** (domain, API, UI).\n\n## Authentication Enforcement\n\nMust enforce NextAuth authentication via `protectedProcedure` in tRPC layer.\n\n## Membership Validation\n\nMust implement membership checks in domain service using:\n- `getTeamIdFromEventType`\n- `getOrgIdFromMemberOrTeamId` patterns\n\n## Input Sanitization\n\nMust occur **before any processing**.\n\n## PII Redaction\n\nMust use Cal.com's existing PII redaction utilities for logging.\n\n## Data Storage\n\n**Must NOT store sensitive data in any layer**.\n\n## Rate Limiting\n\nMust prevent abuse **but not impact** legitimate users.\n\n## Security Logging\n\nAll security violations must be logged for monitoring."
+            },
+            {
+                "id": "019c29f0-5f48-7fc5-a4cb-0097731738d3",
+                "title": "Define OpenAI provider configuration requirements",
+                "files": [
+                    {
+                        "path": "packages/features/ai-chat/lib/providers/openai.ts",
+                        "type": "Create"
+                    },
+                    {
+                        "path": "packages/features/ai-chat/package.json",
+                        "type": "Modify"
+                    }
+                ],
+                "dependencies": [
+                    "@openai/openai",
+                    "packages/features/ai-chat/lib/providers/AIProvider.interface.ts"
+                ],
+                "externalConnections": [
+                    "OpenAI API"
+                ],
+                "details": "### Configuration (env vars)\n| Variable | Default | Description |\n|----------|---------|-------------|\n| `OPENAI_API_KEY` | required | API key |\n| `OPENAI_MODEL` | `gpt-4o-mini` | Model |\n| `OPENAI_MAX_TOKENS` | `2000` | Max tokens |\n| `OPENAI_TEMPERATURE` | `0.7` | Variability |\n\n### Behavior\n- Call `chat.completions` API with system + conversation messages\n- Enforce `max_tokens` limit\n\n### Error Mapping\n| OpenAI | Application |\n|--------|-------------|\n| 429 | Rate limit |\n| 401 | Invalid key |\n| 5xx | Transient |\n\n### Retry Strategy\n- 5xx: Retry 3x with backoff (1s, 2s, 4s)\n- 4xx, 429: Do not retry\n\n### Metrics\n- Latency: request start to response (subtract network overhead)\n- Token usage: `prompt_tokens`, `completion_tokens`, `total_tokens`\n\n**Add `@openai/openai` dependency to package.json**",
+                "context": "**Location**: `packages/features/ai-chat/lib/providers/`\n\n- Implements `AIProvider` interface\n- **OPENAI_API_KEY must be set in production**\n- No hardcoded credentials\n- Proper timeout handling (>30s)\n- Consumed by `AiChatService`"
+            }
+        ],
+        "modify": [],
+        "fix": []
+    }
+}

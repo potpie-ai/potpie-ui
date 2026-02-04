@@ -155,6 +155,24 @@ export default function QuestionCard({
                 {question.question}
               </p>
               <div className="flex items-center gap-1.5 flex-shrink-0">
+                {/* Criticality Label */}
+                {!isSkipped && question.criticality && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      question.criticality === "BLOCKER"
+                        ? "bg-red-100 border border-red-200 text-red-700"
+                        : question.criticality === "IMPORTANT"
+                        ? "bg-amber-100 border border-amber-200 text-amber-700"
+                        : "bg-blue-100 border border-blue-200 text-blue-600"
+                    }`}
+                  >
+                    {question.criticality === "BLOCKER"
+                      ? "Required"
+                      : question.criticality === "IMPORTANT"
+                      ? "Important"
+                      : "Optional"}
+                  </span>
+                )}
                 {isSkipped && (
                   <span className="px-1.5 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                     Skipped

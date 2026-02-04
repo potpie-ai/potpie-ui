@@ -1,0 +1,237 @@
+{
+  "response": [
+    {
+      "context_refs": [
+        {
+          "source": "file",
+          "reference": "apps/web",
+          "description": "Main application context for defining functional scope."
+        }
+      ],
+      "criticality": "BLOCKER",
+      "question": "What is the primary use case for the AI?",
+      "options": [
+        {
+          "label": "Help users find a time to meet",
+          "description": "Focus on the core scheduling functionality of the platform."
+        },
+        {
+          "label": "Answer questions about platform features",
+          "description": "Focus on user education and support."
+        },
+        {
+          "description": "Focus on post-meeting automation.",
+          "label": "Draft follow-up emails"
+        }
+      ],
+      "multiple_choice": true,
+      "answer_recommendation": {
+        "idx": 0,
+        "reasoning": "Helping users find a time to meet aligns with the core value proposition of Cal.com and leverages existing scheduling logic."
+      }
+    },
+    {
+      "criticality": "BLOCKER",
+      "answer_recommendation": {
+        "reasoning": "Placing the chat in a specific tab matches the existing AI UI pattern found in the EventAITab component.",
+        "idx": 2
+      },
+      "question": "Where should the chat interface be located in the UI?",
+      "context_refs": [
+        {
+          "source": "file",
+          "reference": "apps/web/modules/event-types/components/tabs/ai/EventAITab.tsx",
+          "description": "Existing AI UI implementation to ensure design consistency."
+        }
+      ],
+      "multiple_choice": true,
+      "options": [
+        {
+          "description": "A global overlay accessible from any page.",
+          "label": "Floating button on all pages"
+        },
+        {
+          "label": "Sidebar in the Dashboard",
+          "description": "A persistent side panel within the user dashboard."
+        },
+        {
+          "label": "Specific tab in Event Types",
+          "description": "Integrated into the existing Event Type configuration flow."
+        }
+      ]
+    },
+    {
+      "context_refs": [
+        {
+          "description": "Dependency file showing available LLM SDKs (OpenAI, Anthropic).",
+          "source": "file",
+          "reference": "yarn.lock"
+        },
+        {
+          "description": "Existing AI feature implementation for provider patterns.",
+          "reference": "packages/features/calAIPhone",
+          "source": "file"
+        }
+      ],
+      "answer_recommendation": {
+        "idx": 0,
+        "reasoning": "OpenAI is already present in the yarn.lock and is the standard default for Vercel AI SDK integrations."
+      },
+      "criticality": "BLOCKER",
+      "question": "Which LLM provider should be the default?",
+      "options": [
+        {
+          "description": "Use the existing OpenAI integration.",
+          "label": "OpenAI"
+        },
+        {
+          "label": "Anthropic",
+          "description": "Use the existing Anthropic integration."
+        },
+        {
+          "label": "Mistral",
+          "description": "Use the existing Mistral integration."
+        },
+        {
+          "description": "Allow users to provide their own API keys.",
+          "label": "User-configured keys"
+        }
+      ],
+      "multiple_choice": true
+    },
+    {
+      "criticality": "IMPORTANT",
+      "context_refs": [
+        {
+          "source": "file",
+          "reference": "packages/prisma/schema.prisma",
+          "description": "Database schema defining available user and booking data."
+        }
+      ],
+      "options": [
+        {
+          "description": "Grant the AI read access to user calendar and event data.",
+          "label": "Yes"
+        },
+        {
+          "description": "Keep the AI restricted to general platform knowledge.",
+          "label": "No"
+        }
+      ],
+      "question": "Does the AI need access to private user data?",
+      "multiple_choice": true,
+      "answer_recommendation": {
+        "reasoning": "Access to availability and bookings is necessary for the AI to provide meaningful scheduling assistance.",
+        "idx": 0
+      }
+    },
+    {
+      "multiple_choice": true,
+      "criticality": "IMPORTANT",
+      "answer_recommendation": {
+        "idx": 1,
+        "reasoning": "Starting with ephemeral state reduces initial database complexity and avoids immediate migrations."
+      },
+      "options": [
+        {
+          "label": "Yes (Database)",
+          "description": "Store messages in the database using new Prisma models."
+        },
+        {
+          "description": "Keep chat history in client-side state only.",
+          "label": "No (Ephemeral)"
+        }
+      ],
+      "question": "Should chat history be persistent?",
+      "context_refs": [
+        {
+          "source": "file",
+          "reference": "packages/prisma/schema.prisma",
+          "description": "Database schema for evaluating persistence requirements."
+        }
+      ]
+    },
+    {
+      "question": "Is streaming required?",
+      "options": [
+        {
+          "description": "Leverage the latest tRPC streaming capabilities.",
+          "label": "tRPC v11 streaming"
+        },
+        {
+          "label": "Next.js Route Handler (/api/chat)",
+          "description": "Use a standard Next.js API route for the chat endpoint."
+        }
+      ],
+      "answer_recommendation": {
+        "reasoning": "Using tRPC v11 streaming maintains architectural consistency with the existing API layer.",
+        "idx": 0
+      },
+      "multiple_choice": true,
+      "criticality": "IMPORTANT",
+      "context_refs": [
+        {
+          "description": "API layer for determining streaming implementation strategy.",
+          "source": "file",
+          "reference": "packages/trpc"
+        }
+      ]
+    },
+    {
+      "multiple_choice": true,
+      "question": "Are there specific 'Must NOT Have' features for V1?",
+      "options": [
+        {
+          "description": "Exclude document and image processing.",
+          "label": "No file uploads"
+        },
+        {
+          "label": "No voice-to-text",
+          "description": "Exclude audio processing."
+        },
+        {
+          "description": "Restrict chat to 1-on-1 interactions.",
+          "label": "No group chats"
+        }
+      ],
+      "criticality": "NICE_TO_HAVE",
+      "answer_recommendation": {
+        "idx": 0,
+        "reasoning": "Excluding complex features like file uploads reduces security and storage overhead for the V1 release."
+      },
+      "context_refs": [
+        {
+          "description": "General application scope for V1 feature exclusion.",
+          "source": "file",
+          "reference": "apps/web"
+        }
+      ]
+    },
+    {
+      "criticality": "NICE_TO_HAVE",
+      "multiple_choice": true,
+      "answer_recommendation": {
+        "idx": 1,
+        "reasoning": "Focusing on a chat-only interface first avoids the complexity of defining and securing LLM tools."
+      },
+      "question": "Should the AI be able to perform actions?",
+      "options": [
+        {
+          "label": "Yes (Tool calling)",
+          "description": "Allow the AI to create or modify bookings and event types."
+        },
+        {
+          "label": "No (Chat only)",
+          "description": "Restrict the AI to answering questions and providing information."
+        }
+      ],
+      "context_refs": [
+        {
+          "description": "Existing AI feature logic for evaluating action/tool capabilities.",
+          "reference": "packages/features/calAIPhone",
+          "source": "file"
+        }
+      ]
+    }
+  ]
+}

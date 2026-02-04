@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Play,
@@ -40,7 +40,6 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import TaskSplittingService from "@/services/TaskSplittingService";
 import PlanService from "@/services/PlanService";
-import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   TaskSplittingStatusResponse,
@@ -48,6 +47,9 @@ import {
   TaskLayer,
   PlanItem,
 } from "@/lib/types/spec";
+
+// Demo mode delay in milliseconds (35 seconds)
+const DEMO_MODE_DELAY = 35000;
 
 /**
  * VERTICAL TASK EXECUTION ENGINE
@@ -80,1682 +82,11 @@ interface MockPlanData {
   [key: string]: MockPlanItemPhase[];
 }
 
-// Mock Data from the provided JSON
-const MOCK_PLAN_DATA: MockPlanData = {
-  plan_item_0: [
-    {
-      title: "Phase 1: Foundation - Database Schema & Core Types",
-      order: 0,
-      tasks: [
-        {
-          title:
-            "Add AiChatInteractionStatus enum (SUCCESS, ERROR, RATE_LIMITED, TIMEOUT)",
-          file: "packages/prisma/schema.prisma",
-          test_code:
-            "function test_plan_item_0_0() {\n  const fs = require('fs');\n  const schema = fs.readFileSync('packages/prisma/schema.prisma', 'utf8');\n  const hasEnum = schema.includes('enum AiChatInteractionStatus');\n  const hasSuccess = schema.includes('SUCCESS');\n  const hasError = schema.includes('ERROR');\n  const hasRateLimited = schema.includes('RATE_LIMITED');\n  const hasTimeout = schema.includes('TIMEOUT');\n  \n  if (hasEnum && hasSuccess && hasError && hasRateLimited && hasTimeout) {\n    console.log('✅ AiChatInteractionStatus enum added with all required values');\n    return true;\n  }\n  console.log('❌ AiChatInteractionStatus enum not found or incomplete');\n  return false;\n}",
-          test_diff:
-            '+enum AiChatInteractionStatus {\n+  SUCCESS     @map("success")\n+  ERROR       @map("error")\n+  RATE_LIMITED @map("rate_limited")\n+  TIMEOUT     @map("timeout")\n+}',
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Add AiChatInteraction model to packages/prisma/schema.prisma with fields for metadata (userId, profileId, teamId, orgId, model, tokens, latency, status, createdAt)",
-          file: "packages/prisma/schema.prisma",
-          test_code:
-            "function test_plan_item_0_1() {\n  const fs = require('fs');\n  const schema = fs.readFileSync('packages/prisma/schema.prisma', 'utf8');\n  const hasModel = schema.includes('model AiChatInteraction');\n  const hasUserId = schema.includes('userId');\n  const hasProfileId = schema.includes('profileId');\n  const hasTeamId = schema.includes('teamId');\n  const hasOrgId = schema.includes('orgId');\n  const hasModelField = schema.includes('model');\n  const hasInputTokens = schema.includes('inputTokens');\n  const hasOutputTokens = schema.includes('outputTokens');\n  const hasTotalTokens = schema.includes('totalTokens');\n  const hasLatency = schema.includes('latency');\n  const hasStatus = schema.includes('status');\n  const hasCreatedAt = schema.includes('createdAt');\n  \n  if (hasModel && hasUserId && hasProfileId && hasTeamId && hasOrgId &&\n      hasModelField && hasInputTokens && hasOutputTokens && hasTotalTokens &&\n      hasLatency && hasStatus && hasCreatedAt) {\n    console.log('✅ AiChatInteraction model added with all required fields');\n    return true;\n  }\n  console.log('❌ AiChatInteraction model not found or incomplete');\n  return false;\n}",
-          test_diff:
-            "+model AiChatInteraction {\n+  id              Int                          @id @default(autoincrement())\n+  userId          Int?\n+  profileId       Int?\n+  teamId          Int?\n+  orgId           Int?\n+  model           String\n+  inputTokens     Int\n+  outputTokens    Int\n+  totalTokens     Int\n+  latency         Int                          @default(0)\n+  status          AiChatInteractionStatus      @default(SUCCESS)\n+  createdAt       DateTime                    @default(now())\n+",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Add indexes for efficient querying: [userId], [profileId], [teamId], [orgId], [createdAt]",
-          file: "packages/prisma/schema.prisma",
-          test_code:
-            "function test_plan_item_0_2() {\n  const fs = require('fs');\n  const schema = fs.readFileSync('packages/prisma/schema.prisma', 'utf8');\n  const hasUserIdIndex = schema.includes('@@index([userId])');\n  const hasProfileIdIndex = schema.includes('@@index([profileId])');\n  const hasTeamIdIndex = schema.includes('@@index([teamId])');\n  const hasOrgIdIndex = schema.includes('@@index([orgId])');\n  const hasCreatedAtIndex = schema.includes('@@index([createdAt])');\n  \n  if (hasUserIdIndex && hasProfileIdIndex && hasTeamIdIndex &&\n      hasOrgIdIndex && hasCreatedAtIndex) {\n    console.log('✅ All indexes added for efficient querying');\n    return true;\n  }\n  console.log('❌ Some indexes missing');\n  return false;\n}",
-          test_diff:
-            "  @@index([userId])\n+  @@index([profileId])\n+  @@index([teamId])\n+  @@index([orgId])\n+  @@index([createdAt])\n+}",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Run migration: yarn workspace @calcom/prisma db-migrate",
-          file: "packages/prisma/migrations/",
-          test_code:
-            "function test_plan_item_0_3() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const migrationsDir = 'packages/prisma/migrations';\n  if (!fs.existsSync(migrationsDir)) {\n    console.log('❌ Migrations directory does not exist yet');\n    return false;\n  }\n  \n  const files = fs.readdirSync(migrationsDir);\n  const aiChatMigrations = files.filter(f => f.includes('ai_chat_interaction') || f.includes('AiChatInteraction'));\n  \n  if (aiChatMigrations.length > 0) {\n    console.log(`✅ Found ${aiChatMigrations.length} AI chat migration(s)`);\n    return true;\n  }\n  console.log('⏳ Migration not yet run - needs user execution');\n  return false;\n}",
-          test_diff: "",
-          codegen_diff:
-            "CREATED: packages/prisma/migrations/[timestamp]_create_ai_chat_interaction.sql\n  -- Execute CREATE TYPE and CREATE TABLE statements for AiChatInteraction model",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Generate Prisma types: yarn prisma generate",
-          file: "packages/prisma/generated/prisma/client/",
-          test_code:
-            "function test_plan_item_0_4() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const generatedPath = 'packages/prisma/generated/prisma/client';\n  if (!fs.existsSync(generatedPath)) {\n    console.log('⏳ Generated Prisma client not yet created - needs user execution');\n    return false;\n  }\n  \n  const indexFile = fs.readFileSync(path.join(generatedPath, 'index.js'), 'utf8');\n  const hasAiChatInteraction = indexFile.includes('AiChatInteraction');\n  const hasAiChatInteractionStatus = indexFile.includes('AiChatInteractionStatus');\n  \n  if (hasAiChatInteraction && hasAiChatInteractionStatus) {\n    console.log('✅ Prisma types generated for AiChatInteraction model');\n    return true;\n  }\n  console.log('⏳ Types not yet generated or incomplete - needs user execution');\n  return false;\n}",
-          test_diff:
-            "CREATED: packages/prisma/generated/prisma/client/index.d.ts\n  -- Generated TypeScript types for AiChatInteraction model and AiChatInteractionStatus enum\n  -- Exported types can be imported as: import type { AiChatInteraction, AiChatInteractionStatus } from '@calcom/prisma/client'",
-          codegen_diff:
-            "GENERATED:\n  export type AiChatInteraction = {\n    id: number;\n    userId: number | null;\n    profileId: number | null;\n    teamId: number | null;\n    orgId: number | null;\n    model: string;\n    inputTokens: number;\n    outputTokens: number;\n    totalTokens: number;\n    latency: number;\n    status: AiChatInteractionStatus;\n    createdAt: Date;\n  }\n  \n  export enum AiChatInteractionStatus {\n    SUCCESS = 'success'\n    ERROR = 'error'\n    RATE_LIMITED = 'rate_limited'\n    TIMEOUT = 'timeout'\n  }",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/lib/types.ts with shared types",
-          file: "packages/features/ai-chat/lib/types.ts",
-          test_code:
-            "function test_plan_item_0_5() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const typesFile = 'packages/features/ai-chat/lib/types.ts';\n  if (!fs.existsSync(typesFile)) {\n    console.log('❌ types.ts does not exist');\n    return false;\n  }\n  \n  const content = fs.readFileSync(typesFile, 'utf8');\n  \n  const hasChatMessageRole = content.includes('export type ChatMessageRole');\n  const hasChatMessage = content.includes('export interface ChatMessage');\n  const hasTokenUsage = content.includes('export interface TokenUsage');\n  const hasAIProviderResponse = content.includes('export interface AIProviderResponse');\n  const hasAiChatContext = content.includes('export interface AiChatContext');\n  \n  if (hasChatMessageRole && hasChatMessage && hasTokenUsage &&\n      hasAIProviderResponse && hasAiChatContext) {\n    console.log('✅ All core types defined correctly');\n    return true;\n  }\n  console.log('❌ Some types missing from types.ts');\n  return false;\n}",
-          test_diff:
-            'CREATED: packages/features/ai-chat/lib/types.ts\n\nexport type ChatMessageRole = "user" | "assistant" | "system";\n\nexport interface ChatMessage {\n  role: ChatMessageRole;\n  content: string;\n  timestamp?: Date;\n}\n\nexport interface TokenUsage {\n  inputTokens: number;\n  outputTokens: number;\n  totalTokens: number;\n}\n\nexport interface AIProviderResponse {\n  content: string;\n  model: string;\n  usage: TokenUsage;\n  latency: number;\n}\n\nexport interface AiChatContext {\n  userId?: number | null;\n  profileId?: number | null;\n  teamId?: number | null;\n  orgId?: number | null;\n}',
-          codegen_diff:
-            "GENERATED:\n  -- Core TypeScript types for AI chat feature\n  -- Framework-agnostic, no Next.js/tRPC dependencies\n  -- Type-safe interfaces for messages, tokens, responses, and multi-tenancy context",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/lib/dto/ChatMessage.dto.ts, ChatResponse.dto.ts, AiChatInteractionLogDTO.ts",
-          file: "packages/features/ai-chat/lib/dto/",
-          test_code:
-            "function test_plan_item_0_6() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const dtoDir = 'packages/features/ai-chat/lib/dto';\n  if (!fs.existsSync(dtoDir)) {\n    console.log('❌ DTO directory does not exist');\n    return false;\n  }\n  \n  const dtoFiles = fs.readdirSync(dtoDir);\n  const hasChatMessageDTO = dtoFiles.includes('ChatMessage.dto.ts');\n  const hasChatResponseDTO = dtoFiles.includes('ChatResponse.dto.ts');\n  const hasAiChatInteractionLogDTO = dtoFiles.includes('AiChatInteractionLogDTO.ts');\n  const hasIndex = dtoFiles.includes('index.ts');\n  \n  const chatMessageContent = fs.readFileSync(path.join(dtoDir, 'ChatMessage.dto.ts'), 'utf8');\n  const hasChatMessageImport = chatMessageContent.includes('import type { ChatMessage }');\n  \n  const chatResponseContent = fs.readFileSync(path.join(dtoDir, 'ChatResponse.dto.ts'), 'utf8');\n  const hasTokenUsageExport = chatResponseContent.includes('export interface TokenUsage');\n  \n  const aiChatLogContent = fs.readFileSync(path.join(dtoDir, 'AiChatInteractionLogDTO.ts'), 'utf8');\n  const hasAiChatInteractionStatusImport = aiChatLogContent.includes('import type { AiChatInteractionStatus }');\n  \n  const indexContent = fs.readFileSync(path.join(dtoDir, 'index.ts'), 'utf8');\n  const hasAllExports = indexContent.includes('export * from \"./AiChatInteractionLogDTO\"') &&\n                      indexContent.includes('export * from \"./ChatMessage.dto\"') &&\n                      indexContent.includes('export * from \"./ChatResponse.dto\"');\n  \n  if (hasChatMessageDTO && hasChatResponseDTO && hasAiChatInteractionLogDTO &&\n      hasIndex && hasAllExports && hasChatMessageImport &&\n      hasTokenUsageExport && hasAiChatInteractionStatusImport) {\n    console.log('✅ All DTOs created with proper exports');\n    return true;\n  }\n  console.log('❌ Some DTOs missing or incomplete');\n  return false;\n}",
-          test_diff:
-            'CREATED: packages/features/ai-chat/lib/dto/ChatMessage.dto.ts\n+import type { ChatMessage } from "../types";\n+\n+export interface ChatMessageDTO {\n+  role: ChatMessage["role"];\n+  content: ChatMessage["content"];\n+}\n\nCREATED: packages/features/ai-chat/lib/dto/ChatResponse.dto.ts\n+import type { TokenUsage } from "../types";\n+\n+export interface ChatResponseDTO {\n+  success: boolean;\n+  data?: {\n+    content: string;\n+    model: string;\n+    usage: TokenUsage;\n+    latency: number;\n+  };\n+  error?: {\n+    code: string;\n+    message: string;\n+  };\n+}\n\nCREATED: packages/features/ai-chat/lib/dto/AiChatInteractionLogDTO.ts\n+import type { AiChatInteractionStatus } from "@calcom/prisma/client";\n+\n+export interface AiChatInteractionLogDTO {\n+  id: number;\n+  userId: number | null;\n+  profileId: number | null;\n+  teamId: number | null;\n+  orgId: number | null;\n+  model: string;\n+  inputTokens: number;\n+  outputTokens: number;\n+  totalTokens: number;\n+  latency: number;\n+  status: AiChatInteractionStatus;\n+  createdAt: Date;\n+}\n\nCREATED: packages/features/ai-chat/lib/dto/index.ts\n+export * from "./AiChatInteractionLogDTO";\n+export * from "./ChatMessage.dto";\n+export * from "./ChatResponse.dto";\n+',
-          codegen_diff:
-            "GENERATED:\n  -- Data Transfer Objects for API layer\n  -- ChatMessageDTO: Request/response message format\n  -- ChatResponseDTO: API response with success/error handling\n  -- AiChatInteractionLogDTO: Log DTO matching database schema\n  -- All DTOs follow Cal.com patterns",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/lib/providers/AIProvider.interface.ts defining to provider contract",
-          file: "packages/features/ai-chat/lib/providers/AIProvider.interface.ts",
-          test_code:
-            "function test_plan_item_0_7() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const providerFile = 'packages/features/ai-chat/lib/providers/AIProvider.interface.ts';\n  if (!fs.existsSync(providerFile)) {\n    console.log('❌ AIProvider.interface.ts does not exist');\n    return false;\n  }\n  \n  const content = fs.readFileSync(providerFile, 'utf8');\n  \n  const hasGenerateResponse = content.includes('generateResponse(');\n  const hasChatMessageParam = content.includes('messages: ChatMessage[]');\n  const hasSystemPromptParam = content.includes('systemPrompt?: string');\n  const hasAIProviderResponse = content.includes('Promise<AIProviderResponse>');\n  const hasInterfaceKeyword = content.includes('export interface AIProvider');\n  \n  if (hasInterfaceKeyword && hasGenerateResponse && hasChatMessageParam &&\n      hasSystemPromptParam && hasAIProviderResponse) {\n    console.log('✅ AIProvider interface defined correctly');\n    return true;\n  }\n  console.log('❌ AIProvider.interface.ts incomplete');\n  return false;\n}",
-          test_diff:
-            'CREATED: packages/features/ai-chat/lib/providers/AIProvider.interface.ts\n+import type { AIProviderResponse, ChatMessage } from "../types";\n+\n+export interface AIProvider {\n+  generateResponse(messages: ChatMessage[], systemPrompt?: string): Promise<AIProviderResponse>;\n+}\n\nCREATED: packages/features/ai-chat/lib/index.ts\n+export * from "./dto";\n+export * from "./types";\n+',
-          codegen_diff:
-            "GENERATED:\n  -- Provider abstraction interface for AI implementations\n  -- Framework-agnostic, no Next.js/tRPC dependencies\n  -- Enables provider swapping (OpenAI, Anthropic, custom)\n  -- Single method contract: generateResponse(messages, systemPrompt?)",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-      ],
-    },
-  ],
-  plan_item_1: [
-    {
-      title: "Phase 2: Provider Infrastructure",
-      order: 1,
-      tasks: [
-        {
-          title:
-            "Implement OpenAI provider in packages/features/ai-chat/lib/providers/openai.ts with generateResponse() method",
-          file: "packages/features/ai-chat/lib/providers/openai.ts",
-          test_code: "test_plan_item_1_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Handle OpenAI-specific errors: rate limits (429), provider errors (5xx), timeouts",
-          file: "packages/features/ai-chat/lib/providers/NoOpProvider.ts",
-          test_code: "test_plan_item_1_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Calculate and return latency metrics in response",
-          file: "packages/features/ai-chat/lib/prompts/systemPrompt.ts",
-          test_code: "test_plan_item_1_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Implement NoOp provider in packages/features/ai-chat/lib/providers/NoOpProvider.ts with configurable mock responses",
-          file: "packages/features/ai-chat/lib/providers/index.ts",
-          test_code: "test_plan_item_1_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Support throwing configurable errors for testing edge cases",
-          file: ".env.example",
-          test_code: "test_plan_item_1_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Create system prompt template in packages/features/ai-chat/lib/prompts/systemPrompt.ts",
-          file: "TBD",
-          test_code: "test_plan_item_1_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Define assistant role, capabilities (setup, integrations, features), constraints (no data access, no resource modification), and safety guidelines",
-          file: "TBD",
-          test_code: "test_plan_item_1_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Export providers and prompt as getAiChatProvider() factory function (environment-based selection)",
-          file: "TBD",
-          test_code: "test_plan_item_1_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-      ],
-    },
-  ],
-  plan_item_2: [
-    {
-      title: "Phase 3: Data Access & Rate Limiting",
-      order: 2,
-      tasks: [
-        {
-          title:
-            "Create packages/features/ai-chat/repositories/IAiChatInteractionRepository.ts interface",
-          file: "packages/features/ai-chat/repositories/IAiChatInteractionRepository.ts",
-          test_code: "test_plan_item_2_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Implement PrismaAiChatInteractionRepository with logInteraction(), getUsageByUser(), getUsageByTeam(), getUsageByOrg()",
-          file: "packages/features/ai-chat/repositories/PrismaAiChatInteractionRepository.ts",
-          test_code: "test_plan_item_2_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Use Prisma select statements (never include) for all queries",
-          file: "packages/features/ai-chat/lib/rateLimiter/IRateLimiter.ts",
-          test_code: "test_plan_item_2_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Export DTOs from repository methods",
-          file: "packages/features/ai-chat/lib/rateLimiter/PerUserRateLimiter.ts",
-          test_code: "test_plan_item_2_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Handle database errors with ErrorWithCode",
-          file: ".env.example",
-          test_code: "test_plan_item_2_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/lib/rateLimiter/IRateLimiter.ts interface",
-          file: "TBD",
-          test_code: "test_plan_item_2_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title: "Implement PerUserRateLimiter with Redis counters",
-          file: "TBD",
-          test_code: "test_plan_item_2_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title: "Implement checkLimit() to throw error when exceeded",
-          file: "TBD",
-          test_code: "test_plan_item_2_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Implement recordUsage() to increment counter and set expiry",
-          file: "TBD",
-          test_code: "test_plan_item_2_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Handle Redis failures gracefully (fail-open to not block users)",
-          file: "TBD",
-          test_code: "test_plan_item_2_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title: "Support configurable limits via environment variables",
-          file: "TBD",
-          test_code: "test_plan_item_2_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-      ],
-    },
-  ],
-  plan_item_3: [
-    {
-      title: "Phase 4: Domain Service Orchestration",
-      order: 3,
-      tasks: [
-        {
-          title:
-            "Create packages/features/ai-chat/lib/AiChatService.ts implementing IAiChatService",
-          file: "packages/features/ai-chat/lib/AiChatService.ts",
-          test_code: "test_plan_item_3_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Define sendMessage() method taking userId, profileId, teamId, orgId, and conversation history",
-          file: "packages/features/ai-chat/lib/IAiChatService.ts",
-          test_code: "test_plan_item_3_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Implement orchestration: rateLimiter.checkLimit() → validateMessages() → prepare conversation with system prompt → provider.generateResponse() → repository.logInteraction()",
-          file: "packages/features/ai-chat/di/AiChatService.container.ts",
-          test_code: "test_plan_item_3_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Add retry logic with exponential backoff for transient failures (max 3 attempts)",
-          file: "packages/features/ai-chat/lib/zod/schemas.ts",
-          test_code: "test_plan_item_3_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Add timeout handling (30 seconds default)",
-          file: "TBD",
-          test_code: "test_plan_item_3_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title: "Convert all errors to ErrorWithCode with appropriate codes",
-          file: "TBD",
-          test_code: "test_plan_item_3_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Add comprehensive logging for request start, success, failures, latency, and token usage",
-          file: "TBD",
-          test_code: "test_plan_item_3_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/di/AiChatService.container.ts factory function",
-          file: "TBD",
-          test_code: "test_plan_item_3_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Resolve provider based on environment (OpenAI or NoOp)",
-          file: "TBD",
-          test_code: "test_plan_item_3_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title: "Resolve rate limiter and repository instances",
-          file: "TBD",
-          test_code: "test_plan_item_3_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title: "Handle missing environment variables with clear errors",
-          file: "TBD",
-          test_code: "test_plan_item_3_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-      ],
-    },
-  ],
-  plan_item_4: [
-    {
-      title: "Phase 5: API Layer with tRPC",
-      order: 4,
-      tasks: [
-        {
-          title:
-            "Create packages/trpc/server/routers/viewer/loggedInViewer/aiChat/_router.ts",
-          file: "packages/trpc/server/routers/viewer/loggedInViewer/aiChat/_router.ts",
-          test_code: "test_plan_item_4_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title: "Import router, protectedProcedure from @calcom/trpc/server",
-          file: "packages/trpc/server/routers/viewer/loggedInViewer/_router.ts",
-          test_code: "test_plan_item_4_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Import getAiChatService() from @calcom/features/ai-chat",
-          file: "TBD",
-          test_code: "test_plan_item_4_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Import sendMessageInputSchema and chatResponseSchema from Zod",
-          file: "TBD",
-          test_code: "test_plan_item_4_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Define aiChatRouter with sendMessage mutation",
-          file: "TBD",
-          test_code: "test_plan_item_4_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "In mutation handler: extract userId from ctx.user, get profileId/teamId/orgId from user context (nullable), call aiChatService.sendMessage()",
-          file: "TBD",
-          test_code: "test_plan_item_4_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title: "Wrap service call in try/catch to handle all error types",
-          file: "TBD",
-          test_code: "test_plan_item_4_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Convert ErrorWithCode to TRPCError with matching codes and messages",
-          file: "TBD",
-          test_code: "test_plan_item_4_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Return ChatResponseDTO with success flag and data structure",
-          file: "TBD",
-          test_code: "test_plan_item_4_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Integrate aiChatRouter into viewer.loggedInViewer parent router",
-          file: "TBD",
-          test_code: "test_plan_item_4_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-      ],
-    },
-  ],
-  plan_item_5: [
-    {
-      title: "Phase 6: UI Components - Message, Input, Welcome",
-      order: 5,
-      tasks: [
-        {
-          title:
-            "Create apps/web/app/(use-page-wrapper)/ai-chat/components/ChatMessage.tsx",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/ChatMessage.tsx",
-          test_code: "test_plan_item_5_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Implement role-based styling (user: blue background right-aligned, assistant: gray background left-aligned)",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/ChatInput.tsx",
-          test_code: "test_plan_item_5_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Integrate react-markdown for assistant content rendering",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/WelcomeMessage.tsx",
-          test_code: "test_plan_item_5_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Add syntax highlighting for code blocks",
-          file: "apps/web/public/static/locales/en/common.json",
-          test_code: "test_plan_item_5_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Add copy button for code snippets",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/*.test.tsx",
-          test_code: "test_plan_item_5_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Create apps/web/app/(use-page-wrapper)/ai-chat/components/ChatInput.tsx",
-          file: "TBD",
-          test_code: "test_plan_item_5_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Implement auto-resize textarea with character counter (X/4000)",
-          file: "TBD",
-          test_code: "test_plan_item_5_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title: "Add send button (Enter submits, Shift+Enter for newline)",
-          file: "TBD",
-          test_code: "test_plan_item_5_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Add rate limit indicator showing current usage/limit",
-          file: "TBD",
-          test_code: "test_plan_item_5_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title: "Handle disabled state and countdown timer",
-          file: "TBD",
-          test_code: "test_plan_item_5_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title:
-            "Create apps/web/app/(use-page-wrapper)/ai-chat/components/WelcomeMessage.tsx",
-          file: "TBD",
-          test_code: "test_plan_item_5_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title: "Display welcome header with capabilities list",
-          file: "TBD",
-          test_code: "test_plan_item_5_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-        {
-          title:
-            "Add clickable example questions that trigger onExampleClick callback",
-          file: "TBD",
-          test_code: "test_plan_item_5_12()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 12,
-        },
-        {
-          title: "Add privacy notice about data access limitations",
-          file: "TBD",
-          test_code: "test_plan_item_5_13()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 13,
-        },
-        {
-          title:
-            "Add all i18n strings to apps/web/public/static/locales/en/common.json under ai_chat namespace",
-          file: "TBD",
-          test_code: "test_plan_item_5_14()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 14,
-        },
-        {
-          title:
-            "Write unit tests for each component using React Testing Library",
-          file: "TBD",
-          test_code: "test_plan_item_5_15()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 15,
-        },
-      ],
-    },
-  ],
-  plan_item_6: [
-    {
-      title: "Phase 7: Chat Container & Page Integration",
-      order: 6,
-      tasks: [
-        {
-          title:
-            "Create apps/web/app/(use-page-wrapper)/ai-chat/components/ChatContainer.tsx",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/ChatContainer.tsx",
-          test_code: "test_plan_item_6_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Implement React state: messages array, isLoading boolean, error string|null, rateLimit object",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/ChatContainer.test.tsx",
-          test_code: "test_plan_item_6_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Integrate trpc.viewer.loggedInViewer.aiChat.sendMessage.useMutation()",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/page.tsx",
-          test_code: "test_plan_item_6_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Render WelcomeMessage when messages.length === 0",
-          file: "apps/web/app/(use-page-wrapper)/components/Sidebar.tsx or equivalent",
-          test_code: "test_plan_item_6_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Render messages array mapping each to ChatMessage component",
-          file: "TBD",
-          test_code: "test_plan_item_6_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title: "Integrate ChatInput at bottom with onSubmit handler",
-          file: "TBD",
-          test_code: "test_plan_item_6_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Implement handleSendMessage() with validation, state updates, API call, and error handling",
-          file: "TBD",
-          test_code: "test_plan_item_6_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title: "Add auto-scroll to bottom on new messages",
-          file: "TBD",
-          test_code: "test_plan_item_6_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Show loading indicator and error banner as appropriate",
-          file: "TBD",
-          test_code: "test_plan_item_6_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Handle rate limit state by disabling input and showing countdown",
-          file: "TBD",
-          test_code: "test_plan_item_6_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title: "Create apps/web/app/(use-page-wrapper)/ai-chat/page.tsx",
-          file: "TBD",
-          test_code: "test_plan_item_6_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title: "Set page metadata (title, description, OpenGraph tags)",
-          file: "TBD",
-          test_code: "test_plan_item_6_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-        {
-          title:
-            "Use dashboard layout wrapper (existing (use-page-wrapper) layout)",
-          file: "TBD",
-          test_code: "test_plan_item_6_12()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 12,
-        },
-        {
-          title: "Render ChatContainer as main content",
-          file: "TBD",
-          test_code: "test_plan_item_6_13()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 13,
-        },
-        {
-          title: "Import and use useTranslations hook from next-intl",
-          file: "TBD",
-          test_code: "test_plan_item_6_14()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 14,
-        },
-        {
-          title: "Add page header with title",
-          file: "TBD",
-          test_code: "test_plan_item_6_15()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 15,
-        },
-        {
-          title:
-            "Locate sidebar/navigation component and add 'AI Assistant' link under Help & Support section",
-          file: "TBD",
-          test_code: "test_plan_item_6_16()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 16,
-        },
-        {
-          title: "Test navigation from sidebar to chat page works",
-          file: "TBD",
-          test_code: "test_plan_item_6_17()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 17,
-        },
-      ],
-    },
-  ],
-  plan_item_7: [
-    {
-      title: "Phase 8: Unit & Integration Testing",
-      order: 7,
-      tasks: [
-        {
-          title:
-            "Write unit tests for AiChatService covering: happy path, rate limit, invalid input, provider errors (all types), retry logic, and metadata logging",
-          file: "packages/features/ai-chat/**/*.test.ts",
-          test_code: "test_plan_item_7_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Write unit tests for PrismaAiChatInteractionRepository covering: logInteraction(), usage queries, and error handling",
-          file: "packages/features/ai-chat/**/*.integration-test.ts",
-          test_code: "test_plan_item_7_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Write unit tests for PerUserRateLimiter covering: checkLimit(), recordUsage(), counter expiry, and Redis failures",
-          file: "TBD",
-          test_code: "test_plan_item_7_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Write unit tests for OpenAIProvider covering: generateResponse(), error handling, and latency calculation",
-          file: "TBD",
-          test_code: "test_plan_item_7_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title:
-            "Write unit tests for NoOpProvider covering: mock responses and error throwing",
-          file: "TBD",
-          test_code: "test_plan_item_7_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Write unit tests for ChatMessage covering: user/assistant rendering, markdown, copy button, and accessibility",
-          file: "TBD",
-          test_code: "test_plan_item_7_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Write unit tests for ChatInput covering: input validation, character counting, send behavior, and rate limit display",
-          file: "TBD",
-          test_code: "test_plan_item_7_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Write unit tests for WelcomeMessage covering: rendering and example clicking",
-          file: "TBD",
-          test_code: "test_plan_item_7_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title:
-            "Write integration tests for AiChatService with test database and test Redis",
-          file: "TBD",
-          test_code: "test_plan_item_7_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Run vitest with coverage: yarn vitest run packages/features/ai-chat --coverage",
-          file: "TBD",
-          test_code: "test_plan_item_7_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title: "Review coverage report and add tests for uncovered code",
-          file: "TBD",
-          test_code: "test_plan_item_7_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-      ],
-    },
-  ],
-  plan_item_8: [
-    {
-      title: "Phase 9: E2E Testing with Playwright",
-      order: 8,
-      tasks: [
-        {
-          title: "Create apps/web/e2e/ai-chat.e2e.ts",
-          file: "apps/web/e2e/ai-chat.e2e.ts",
-          test_code: "test_plan_item_8_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title: "Setup test fixture with authenticated user login",
-          file: "TBD",
-          test_code: "test_plan_item_8_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Write test: 'user navigates to AI chat page and sees welcome message'",
-          file: "TBD",
-          test_code: "test_plan_item_8_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Write test: 'user clicks example question and it populates input'",
-          file: "TBD",
-          test_code: "test_plan_item_8_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title:
-            "Write test: 'user sends message and receives assistant response'",
-          file: "TBD",
-          test_code: "test_plan_item_8_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Write test: 'user sees loading state while waiting for response'",
-          file: "TBD",
-          test_code: "test_plan_item_8_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Write test: 'user sees error message when provider fails and can retry'",
-          file: "TBD",
-          test_code: "test_plan_item_8_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Write test: 'user is rate limited after sending too many messages'",
-          file: "TBD",
-          test_code: "test_plan_item_8_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title:
-            "Write test: 'user can send another message after rate limit expires'",
-          file: "TBD",
-          test_code: "test_plan_item_8_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Write test: 'accessibility - keyboard navigation works for all interactions'",
-          file: "TBD",
-          test_code: "test_plan_item_8_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title:
-            "Write test: 'accessibility - screen reader announces new messages'",
-          file: "TBD",
-          test_code: "test_plan_item_8_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title: "Add test.describe() to group related tests",
-          file: "TBD",
-          test_code: "test_plan_item_8_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-        {
-          title: "Use data-testid attributes for stable selectors",
-          file: "TBD",
-          test_code: "test_plan_item_8_12()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 12,
-        },
-        {
-          title: "Add cleanup in afterEach() if needed",
-          file: "TBD",
-          test_code: "test_plan_item_8_13()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 13,
-        },
-        {
-          title: "Configure test to run with PLAYWRIGHT_HEADLESS=1",
-          file: "TBD",
-          test_code: "test_plan_item_8_14()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 14,
-        },
-      ],
-    },
-  ],
-  plan_item_9: [
-    {
-      title: "Phase 10: Infrastructure, Monitoring & Documentation",
-      order: 9,
-      tasks: [
-        {
-          title: "Add logging statements in AiChatService using criticalLogger",
-          file: "packages/features/ai-chat/lib/AiChatService.ts",
-          test_code: "test_plan_item_9_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Log structured JSON: {timestamp, level, service, requestId, userId (hashed), event, data: {...}}",
-          file: ".env.example",
-          test_code: "test_plan_item_9_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Ensure all message content is redacted from logs",
-          file: "turbo.json",
-          test_code: "test_plan_item_9_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Emit metrics for: token usage (input, output, total) and latency on every response",
-          file: "packages/features/ai-chat/README.md",
-          test_code: "test_plan_item_9_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title:
-            "Configure alert rules: error rate >5% (5 min), p95 latency >12s (10 min), provider outage >50% error rate (2 min), and unusual usage spikes",
-          file: "agents/ai-chat-architecture.md",
-          test_code: "test_plan_item_9_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Update .env.example with all AI_CHAT_* and OPENAI_* variables with descriptions",
-          file: "agents/ai-chat-development.md",
-          test_code: "test_plan_item_9_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Update turbo.json globalEnv array with new environment variables",
-          file: "agents/ai-chat-operations.md",
-          test_code: "test_plan_item_9_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/README.md with: architecture, file structure, usage guide, environment variables, testing, and troubleshooting",
-          file: "agents/AGENTS.md",
-          test_code: "test_plan_item_9_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title:
-            "Create agents/ai-chat-architecture.md with diagrams and data flow",
-          file: "TBD",
-          test_code: "test_plan_item_9_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title: "Create agents/ai-chat-development.md with extension guides",
-          file: "TBD",
-          test_code: "test_plan_item_9_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title:
-            "Create agents/ai-chat-operations.md with runbooks and alerting procedures",
-          file: "TBD",
-          test_code: "test_plan_item_9_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title: "Update AGENTS.md to reference new AI chat documentation",
-          file: "TBD",
-          test_code: "test_plan_item_9_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-      ],
-    },
-  ],
-  plan_item_10: [
-    {
-      title: "Phase 11: Validation & Launch Preparation",
-      order: 10,
-      tasks: [
-        {
-          title:
-            "Run type checking: yarn type-check:ci --force packages/features/ai-chat",
-          file: "packages/features/ai-chat/**/*",
-          test_code: "test_plan_item_10_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title: "Run type checking: yarn type-check:ci --force packages/trpc",
-          file: "packages/trpc/**/*",
-          test_code: "test_plan_item_10_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Run type checking: yarn type-check:ci --force apps/web",
-          file: "apps/web/**/*",
-          test_code: "test_plan_item_10_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Fix all type errors before proceeding",
-          file: "TBD",
-          test_code: "test_plan_item_10_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title:
-            "Run linting: yarn biome check --write packages/features/ai-chat",
-          file: "TBD",
-          test_code: "test_plan_item_10_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Run linting: yarn biome check --write apps/web/app/(use-page-wrapper)/ai-chat",
-          file: "TBD",
-          test_code: "test_plan_item_10_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title: "Fix all linting warnings and errors",
-          file: "TBD",
-          test_code: "test_plan_item_10_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title: "Verify Biome formatting applied correctly",
-          file: "TBD",
-          test_code: "test_plan_item_10_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title:
-            "Run full unit test suite: yarn vitest run packages/features/ai-chat --coverage",
-          file: "TBD",
-          test_code: "test_plan_item_10_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Run full integration test suite: yarn test packages/features/ai-chat -- --integrationTestsOnly",
-          file: "TBD",
-          test_code: "test_plan_item_10_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title:
-            "Run full E2E test suite: PLAYWRIGHT_HEADLESS=1 yarn e2e ai-chat.e2e.ts",
-          file: "TBD",
-          test_code: "test_plan_item_10_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title:
-            "Validate against success criteria: 10% MAU adoption (can't verify yet), median response <3s (can't verify yet), error rate <1% (can't verify yet), tests pass, code quality gates pass",
-          file: "TBD",
-          test_code: "test_plan_item_10_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-        {
-          title: "Document any known issues or limitations in README",
-          file: "TBD",
-          test_code: "test_plan_item_10_12()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 12,
-        },
-        {
-          title: "Prepare deployment notes and rollback plan if needed",
-          file: "TBD",
-          test_code: "test_plan_item_10_13()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 13,
-        },
-        {
-          title:
-            "Confirm all environment variables are set for production environment",
-          file: "TBD",
-          test_code: "test_plan_item_10_14()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 14,
-        },
-      ],
-    },
-  ],
-};
+// Import mock data from JSON file
+import MOCK_PLAN_DATA_JSON from "@/lib/mock/planMock.json";
+const MOCK_PLAN_DATA: MockPlanData = MOCK_PLAN_DATA_JSON as MockPlanData;
 
 // --- Sub-components ---
-
 const StatusBadge = ({ status, tests }: { status: string; tests: any }) => {
   if (status === "completed") {
     return (
@@ -1894,63 +225,98 @@ const mapApiStatusToUI = (apiStatus: string): string => {
 };
 
 // New MockTaskCard component handling inline expansion with test_diff and codegen_diff
-const MockTaskCard = ({
-  task,
-  isExpanded,
-  onToggle,
-  taskIndex,
-  phaseIndex,
-}: {
+const MockTaskCard = React.forwardRef<HTMLDivElement, {
   task: MockTask;
   isExpanded: boolean;
   onToggle: () => void;
   taskIndex: number;
   phaseIndex: number;
-}) => {
+  isGeneratingCode?: boolean;
+  onCodeGenComplete?: () => void;
+}>(({
+  task,
+  isExpanded,
+  onToggle,
+  taskIndex,
+  phaseIndex,
+  isGeneratingCode: externalIsGenerating,
+  onCodeGenComplete,
+}, ref) => {
   const [activeTab, setActiveTab] = React.useState<
     "test_diff" | "codegen" | "test_code"
   >("test_diff");
   const [isGeneratingCode, setIsGeneratingCode] = React.useState(false);
   const [streamedCode, setStreamedCode] = React.useState("");
   const [codeGenComplete, setCodeGenComplete] = React.useState(false);
+  
+  // Ref to track if streaming has started for current external trigger
+  const streamingStartedRef = React.useRef(false);
+  const intervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const hasTestDiff = task.test_diff && task.test_diff.length > 0;
-  const hasCodegenDiff = task.codegen_diff && task.codegen_diff.length > 0;
+  const hasTestCode = task.test_code && task.test_code.length > 0;
+  
+  // Use external isGeneratingCode if provided, otherwise use internal state
+  const actualIsGeneratingCode = externalIsGenerating !== undefined ? externalIsGenerating : isGeneratingCode;
 
-  // Streaming code generation simulation
-  const handleCodeGen = useCallback(() => {
-    if (!hasTestDiff || isGeneratingCode) return;
+  // Reset streaming state when external trigger turns off
+  React.useEffect(() => {
+    if (!externalIsGenerating) {
+      streamingStartedRef.current = false;
+    }
+  }, [externalIsGenerating]);
 
-    setIsGeneratingCode(true);
-    setStreamedCode("");
-    setActiveTab("codegen");
+  // Effect to handle external code generation trigger - now streams test_code
+  React.useEffect(() => {
+    if (externalIsGenerating && !streamingStartedRef.current && !codeGenComplete && hasTestCode) {
+      streamingStartedRef.current = true;
+      setIsGeneratingCode(true);
+      setStreamedCode("");
+      setActiveTab("codegen");
 
-    // Use codegen_diff if available, otherwise generate placeholder based on test_diff
-    const codeToStream = hasCodegenDiff 
-      ? task.codegen_diff 
-      : `// Generated implementation for:\n// ${task.title}\n// File: ${task.file}\n\n// Implementation based on test requirements:\n${task.test_diff}`;
-    
-    let currentIndex = 0;
-    const charsPerTick = 3; // Characters to add per tick
-    const tickInterval = 20; // Milliseconds between ticks
+      // Stream test_code instead of codegen_diff
+      const codeToStream = task.test_code;
+      
+      let currentIndex = 0;
+      // Slower, more realistic streaming speed that feels like an agent is writing code
+      // ~50 chars/sec means a 500 char function takes ~10 seconds
+      const charsPerTick = 3; // Characters to add per tick
+      const tickInterval = 60; // Milliseconds between ticks
 
-    const streamInterval = setInterval(() => {
-      if (currentIndex < codeToStream.length) {
-        const nextChunk = codeToStream.slice(
-          currentIndex,
-          currentIndex + charsPerTick
-        );
-        setStreamedCode((prev) => prev + nextChunk);
-        currentIndex += charsPerTick;
-      } else {
-        clearInterval(streamInterval);
-        setIsGeneratingCode(false);
-        setCodeGenComplete(true);
+      // Clear any existing interval
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
       }
-    }, tickInterval);
 
-    return () => clearInterval(streamInterval);
-  }, [hasTestDiff, hasCodegenDiff, isGeneratingCode, task.codegen_diff, task.test_diff, task.title, task.file]);
+      intervalRef.current = setInterval(() => {
+        if (currentIndex < codeToStream.length) {
+          const nextChunk = codeToStream.slice(
+            currentIndex,
+            currentIndex + charsPerTick
+          );
+          setStreamedCode((prev) => prev + nextChunk);
+          currentIndex += charsPerTick;
+        } else {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+          setIsGeneratingCode(false);
+          setCodeGenComplete(true);
+          if (onCodeGenComplete) {
+            onCodeGenComplete();
+          }
+        }
+      }, tickInterval);
+    }
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [externalIsGenerating, codeGenComplete, hasTestCode, task.test_code, onCodeGenComplete]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -1959,6 +325,7 @@ const MockTaskCard = ({
 
   return (
     <div
+      ref={ref}
       className={`
       bg-background border rounded-xl transition-all duration-300 overflow-hidden
       ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-md" : "border-zinc-200 hover:border-zinc-300"}
@@ -1991,7 +358,7 @@ const MockTaskCard = ({
               className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold border ${
                 codeGenComplete
                   ? "bg-emerald-100 text-emerald-700 border-emerald-100"
-                  : isGeneratingCode
+                  : actualIsGeneratingCode
                     ? "bg-blue-100 text-blue-700 border-blue-100"
                     : "bg-zinc-50 text-primary-color border-zinc-100"
               }`}
@@ -2001,7 +368,7 @@ const MockTaskCard = ({
                   <CheckCircle2 className="w-3 h-3" />
                   <span>COMPLETE</span>
                 </>
-              ) : isGeneratingCode ? (
+              ) : actualIsGeneratingCode ? (
                 <>
                   <Loader2 className="w-3 h-3 animate-spin" />
                   <span>GENERATING</span>
@@ -2022,12 +389,12 @@ const MockTaskCard = ({
         </div>
 
         {/* Progress bar when generating */}
-        {isGeneratingCode && (
+        {actualIsGeneratingCode && (
           <div className="w-full h-1 bg-zinc-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 transition-all duration-300 ease-out"
               style={{
-                width: `${(streamedCode.length / (task.codegen_diff?.length || 1)) * 100}%`,
+                width: `${(streamedCode.length / (task.test_code?.length || 1)) * 100}%`,
               }}
             />
           </div>
@@ -2076,34 +443,6 @@ const MockTaskCard = ({
                 )}
               </button>
             </div>
-
-            {/* Code Gen Button */}
-            {activeTab === "codegen" && !codeGenComplete && hasTestDiff && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCodeGen();
-                }}
-                disabled={isGeneratingCode}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${
-                  isGeneratingCode
-                    ? "bg-blue-100 text-blue-700 cursor-not-allowed"
-                    : "bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color"
-                }`}
-              >
-                {isGeneratingCode ? (
-                  <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3 h-3" />
-                    Generate Code
-                  </>
-                )}
-              </button>
-            )}
           </div>
 
           {/* Tab Views */}
@@ -2222,7 +561,7 @@ const MockTaskCard = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        copyToClipboard(task.codegen_diff);
+                        copyToClipboard(task.test_code);
                       }}
                       className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-primary-color hover:bg-zinc-100 rounded transition-colors"
                     >
@@ -2235,10 +574,10 @@ const MockTaskCard = ({
                 {!streamedCode && !isGeneratingCode && !codeGenComplete ? (
                   <div className="h-40 flex flex-col items-center justify-center text-primary-color border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
                     <Sparkles className="w-8 h-8 mb-3 opacity-50 text-primary-color" />
-                    {hasTestDiff ? (
+                    {hasTestCode ? (
                       <>
                         <p className="text-xs font-bold text-primary-color">
-                          Ready to generate code
+                          Ready to generate test code
                         </p>
                         <p className="text-[10px] text-primary-color mt-1">
                           Click &quot;Generate Code&quot; button to start
@@ -2250,7 +589,7 @@ const MockTaskCard = ({
                           No code generation available
                         </p>
                         <p className="text-[10px] text-primary-color mt-1">
-                          This task doesn&apos;t have test diff defined
+                          This task doesn&apos;t have test code defined
                         </p>
                       </>
                     )}
@@ -2295,7 +634,9 @@ const MockTaskCard = ({
       )}
     </div>
   );
-};
+});
+
+MockTaskCard.displayName = "MockTaskCard";
 
 // Legacy TaskCard component for API data (kept for backward compatibility)
 const TaskCard = ({
@@ -2602,8 +943,12 @@ export default function VerticalTaskExecution() {
   const planIdFromUrl = searchParams.get("planId");
   const itemNumberFromUrl = searchParams.get("itemNumber");
   const taskSplittingIdFromUrl = searchParams.get("taskSplittingId");
+  const isDemoMode = searchParams.get("demo") === "true";
 
-  // Use mock data mode - set to true to use mock data
+  // Demo mode delay state
+  const [demoDelayComplete, setDemoDelayComplete] = useState(!isDemoMode);
+
+  // Use mock data mode - set to true to use mock data (or enable in demo mode)
   const [useMockData, setUseMockData] = useState(true);
   const [activePlanItemKey, setActivePlanItemKey] = useState("plan_item_0");
   const [expandedMockTaskKey, setExpandedMockTaskKey] = useState<string | null>(
@@ -2637,9 +982,29 @@ export default function VerticalTaskExecution() {
   const [globalLogs, setGlobalLogs] = useState<string[]>([]);
   const [showGlobalLogs, setShowGlobalLogs] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  
+  // Code generation state for mock tasks
+  const [generatingTaskIndex, setGeneratingTaskIndex] = useState<number | null>(null);
+  const [completedCodeGenTasks, setCompletedCodeGenTasks] = useState<Set<number>>(new Set());
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  const [completedPhases, setCompletedPhases] = useState<Set<string>>(new Set());
 
   const terminalRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const taskCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Demo mode delay effect
+  useEffect(() => {
+    if (!isDemoMode) return;
+    
+    console.log("[Code Page] Demo mode active - starting 35 second delay");
+    const timer = setTimeout(() => {
+      console.log("[Code Page] Demo mode delay complete");
+      setDemoDelayComplete(true);
+    }, DEMO_MODE_DELAY);
+
+    return () => clearTimeout(timer);
+  }, [isDemoMode]);
 
   // Get mock plan items for sidebar
   const mockPlanItemKeys = Object.keys(MOCK_PLAN_DATA).sort((a, b) => {
@@ -2649,6 +1014,124 @@ export default function VerticalTaskExecution() {
   });
 
   const activeMockPhase = MOCK_PLAN_DATA[activePlanItemKey]?.[0];
+
+  // Helper function to scroll to a task card
+  const scrollToTaskCard = useCallback((taskKey: string) => {
+    const taskCard = taskCardRefs.current.get(taskKey);
+    if (taskCard) {
+      taskCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, []);
+
+  // Function to start code generation animation
+  const startCodeGeneration = useCallback(() => {
+    if (!activeMockPhase || isAutoGenerating) return;
+    
+    setIsAutoGenerating(true);
+    setCompletedCodeGenTasks(new Set());
+    
+    // Find first task with test_code
+    const tasksWithTestCode = activeMockPhase.tasks
+      .map((task, idx) => ({ task, idx }))
+      .filter(({ task }) => task.test_code && task.test_code.length > 0);
+    
+    if (tasksWithTestCode.length === 0) {
+      setIsAutoGenerating(false);
+      return;
+    }
+    
+    const firstTaskIndex = tasksWithTestCode[0].idx;
+    const taskKey = `${activePlanItemKey}_task_${firstTaskIndex}`;
+    
+    // Expand the first task and start generating
+    setExpandedMockTaskKey(taskKey);
+    setGeneratingTaskIndex(firstTaskIndex);
+    
+    // Scroll to the task card after a short delay to allow expansion
+    setTimeout(() => scrollToTaskCard(taskKey), 100);
+  }, [activeMockPhase, activePlanItemKey, isAutoGenerating, scrollToTaskCard]);
+
+  // Handle code generation completion for a task
+  const handleCodeGenComplete = useCallback((taskIdx: number) => {
+    setCompletedCodeGenTasks(prev => {
+      const updated = new Set([...prev, taskIdx]);
+      return updated;
+    });
+    setGeneratingTaskIndex(null);
+    
+    // Find next task with test_code
+    setTimeout(() => {
+      if (!activeMockPhase) return;
+      
+      const tasksWithTestCode = activeMockPhase.tasks
+        .map((t, idx) => ({ task: t, idx }))
+        .filter(({ task }) => task.test_code && task.test_code.length > 0);
+      
+      // Get updated completed tasks including the current one
+      const currentCompleted = new Set([...completedCodeGenTasks, taskIdx]);
+      
+      const nextTask = tasksWithTestCode.find(
+        ({ idx }) => !currentCompleted.has(idx)
+      );
+      
+      if (nextTask) {
+        // Move to next task
+        const nextTaskKey = `${activePlanItemKey}_task_${nextTask.idx}`;
+        setExpandedMockTaskKey(nextTaskKey);
+        setGeneratingTaskIndex(nextTask.idx);
+        
+        // Scroll to the next task card
+        setTimeout(() => scrollToTaskCard(nextTaskKey), 100);
+      } else {
+        // All tasks in this phase are complete, mark phase as done
+        setCompletedPhases(prev => new Set([...prev, activePlanItemKey]));
+        
+        // Find next phase with tasks that have test_code
+        const currentPhaseIndex = mockPlanItemKeys.indexOf(activePlanItemKey);
+        let nextPhaseKey: string | null = null;
+        
+        for (let i = currentPhaseIndex + 1; i < mockPlanItemKeys.length; i++) {
+          const phaseKey = mockPlanItemKeys[i];
+          const phase = MOCK_PLAN_DATA[phaseKey]?.[0];
+          const hasTasksWithTestCode = phase?.tasks.some(
+            task => task.test_code && task.test_code.length > 0
+          );
+          if (hasTasksWithTestCode) {
+            nextPhaseKey = phaseKey;
+            break;
+          }
+        }
+        
+        if (nextPhaseKey) {
+          // Move to next phase
+          setTimeout(() => {
+            setActivePlanItemKey(nextPhaseKey!);
+            setCompletedCodeGenTasks(new Set());
+            setExpandedMockTaskKey(null);
+            
+            // Auto-start generation on next phase after a delay
+            setTimeout(() => {
+              const nextPhase = MOCK_PLAN_DATA[nextPhaseKey!]?.[0];
+              const firstTask = nextPhase?.tasks
+                .map((t, idx) => ({ task: t, idx }))
+                .find(({ task }) => task.test_code && task.test_code.length > 0);
+              
+              if (firstTask) {
+                const taskKey = `${nextPhaseKey}_task_${firstTask.idx}`;
+                setExpandedMockTaskKey(taskKey);
+                setGeneratingTaskIndex(firstTask.idx);
+                setTimeout(() => scrollToTaskCard(taskKey), 100);
+              }
+            }, 500);
+          }, 800);
+        } else {
+          // All phases complete
+          setIsAutoGenerating(false);
+          toast.success("Code generation complete for all phases!");
+        }
+      }
+    }, 500);
+  }, [activeMockPhase, activePlanItemKey, completedCodeGenTasks, mockPlanItemKeys, scrollToTaskCard]);
 
   // Get plan_id from URL or try to get latest plan for recipe
   useEffect(() => {
@@ -3085,6 +1568,18 @@ export default function VerticalTaskExecution() {
     router.replace(`/task/${recipeId}/code?${params.toString()}`);
   };
 
+  // Show loading for demo mode delay
+  if (isDemoMode && !demoDelayComplete) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
+          <p className="text-primary-color">Generating code implementation...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Show loading if we don't have planId or recipeId
   if (!planId && !recipeId) {
     return (
@@ -3144,9 +1639,9 @@ export default function VerticalTaskExecution() {
   // Render Mock Data View
   if (useMockData) {
     return (
-      <div className="h-screen bg-[#FFF9F5] text-primary-color font-sans flex flex-col md:flex-row overflow-hidden relative">
+      <div className="h-screen bg-[#FAF8F7] text-primary-color font-sans flex flex-col md:flex-row overflow-hidden relative">
         {/* --- SIDEBAR: Plan Items Timeline --- */}
-        <aside className="w-80 bg-[#FFF9F5] border-r border-zinc-200 flex flex-col z-20 shrink-0">
+        <aside className="w-80 bg-[#FAF8F7] border-r border-zinc-200 flex flex-col z-20 shrink-0">
           <div className="h-16 flex items-center justify-between px-6 border-b border-zinc-100 bg-zinc-50/80 backdrop-blur-sm sticky top-0">
             <h2 className="text-base font-bold text-primary-color">
               Plan Phases
@@ -3169,23 +1664,29 @@ export default function VerticalTaskExecution() {
                   <div
                     key={planItemKey}
                     data-active={isActive}
-                    className="group flex gap-4 cursor-pointer"
-                    onClick={() => setActivePlanItemKey(planItemKey)}
+                    className={`group flex gap-4 ${isAutoGenerating && !isActive ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                    onClick={() => !isAutoGenerating && setActivePlanItemKey(planItemKey)}
                   >
                     {/* Timeline Node */}
                     <div
                       className={`
                         w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 bg-background relative z-10
                         ${
-                          isActive
-                            ? "border-primary-color text-primary-color scale-110 shadow-sm"
-                            : "border-zinc-200 text-primary-color"
+                          completedPhases.has(planItemKey)
+                            ? "border-emerald-500 text-emerald-500 bg-emerald-50"
+                            : isActive
+                              ? "border-primary-color text-primary-color scale-110 shadow-sm"
+                              : "border-zinc-200 text-primary-color"
                         }
                       `}
                     >
-                      <span className="text-[10px] font-bold">
-                        {phase.order + 1}
-                      </span>
+                      {completedPhases.has(planItemKey) ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <span className="text-[10px] font-bold">
+                          {phase.order + 1}
+                        </span>
+                      )}
                     </div>
 
                     {/* Text Content */}
@@ -3223,6 +1724,41 @@ export default function VerticalTaskExecution() {
 
             <div className="flex items-center gap-3">
               <button
+                onClick={startCodeGeneration}
+                disabled={!activeMockPhase || isAutoGenerating || 
+                  activeMockPhase.tasks.every((task, idx) => 
+                    !task.test_code || task.test_code.length === 0 || completedCodeGenTasks.has(idx)
+                  )}
+                className={`
+                  flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border
+                  ${
+                    isAutoGenerating || !activeMockPhase ||
+                    activeMockPhase.tasks.every((task, idx) => 
+                      !task.test_code || task.test_code.length === 0 || completedCodeGenTasks.has(idx)
+                    )
+                      ? "bg-zinc-100 border-zinc-200 text-primary-color cursor-not-allowed opacity-50"
+                      : "bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color"
+                  }
+                `}
+              >
+                {isAutoGenerating ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Generating...
+                  </>
+                ) : completedPhases.has(activePlanItemKey) ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    Complete
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Generate Code
+                  </>
+                )}
+              </button>
+              <button
                 onClick={() => setShowGlobalLogs(!showGlobalLogs)}
                 className={`
                   flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border
@@ -3250,15 +1786,26 @@ export default function VerticalTaskExecution() {
                     return (
                       <MockTaskCard
                         key={taskKey}
+                        ref={(el) => {
+                          if (el) {
+                            taskCardRefs.current.set(taskKey, el);
+                          } else {
+                            taskCardRefs.current.delete(taskKey);
+                          }
+                        }}
                         task={task}
                         isExpanded={expandedMockTaskKey === taskKey}
-                        onToggle={() =>
-                          setExpandedMockTaskKey(
-                            expandedMockTaskKey === taskKey ? null : taskKey
-                          )
-                        }
+                        onToggle={() => {
+                          if (!isAutoGenerating) {
+                            setExpandedMockTaskKey(
+                              expandedMockTaskKey === taskKey ? null : taskKey
+                            );
+                          }
+                        }}
                         taskIndex={taskIdx}
                         phaseIndex={activeMockPhase.order}
+                        isGeneratingCode={generatingTaskIndex === taskIdx}
+                        onCodeGenComplete={() => handleCodeGenComplete(taskIdx)}
                       />
                     );
                   })}
@@ -3301,6 +1848,24 @@ export default function VerticalTaskExecution() {
                     <span className="text-zinc-400 select-none">{">"}</span>{" "}
                     Tasks loaded: {activeMockPhase?.tasks.length || 0}
                   </div>
+                  {isAutoGenerating && (
+                    <div className="text-blue-600 animate-pulse">
+                      <span className="text-zinc-400 select-none">{">"}</span>{" "}
+                      Generating code... Task {generatingTaskIndex !== null ? generatingTaskIndex + 1 : 0}/{activeMockPhase?.tasks.filter(t => t.test_code && t.test_code.length > 0).length || 0}
+                    </div>
+                  )}
+                  {completedCodeGenTasks.size > 0 && (
+                    <div className="text-emerald-600">
+                      <span className="text-zinc-400 select-none">{">"}</span>{" "}
+                      Completed: {completedCodeGenTasks.size} task{completedCodeGenTasks.size !== 1 ? "s" : ""}
+                    </div>
+                  )}
+                  {completedPhases.size > 0 && (
+                    <div className="text-emerald-600 font-bold">
+                      <span className="text-zinc-400 select-none">{">"}</span>{" "}
+                      Phases complete: {completedPhases.size}/{mockPlanItemKeys.length}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3312,9 +1877,9 @@ export default function VerticalTaskExecution() {
 
   // Original API-based view
   return (
-    <div className="h-screen bg-[#FFF9F5] text-primary-color font-sans flex flex-col md:flex-row overflow-hidden relative">
+    <div className="h-screen bg-[#FAF8F7] text-primary-color font-sans flex flex-col md:flex-row overflow-hidden relative">
       {/* --- SIDEBAR: Timeline --- */}
-      <aside className="w-80 bg-[#FFF9F5] border-r border-zinc-200 flex flex-col z-20 shrink-0">
+      <aside className="w-80 bg-[#FAF8F7] border-r border-zinc-200 flex flex-col z-20 shrink-0">
         <div className="h-16 flex items-center px-6 border-b border-zinc-100 bg-zinc-50/80 backdrop-blur-sm sticky top-0">
           <h2 className="text-base font-bold text-primary-color">Slices</h2>
         </div>

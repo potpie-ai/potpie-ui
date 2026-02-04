@@ -84,8 +84,29 @@ export default function IdeaPage() {
     parsingStatus: "",
   });
 
-  // Demo mode check
-  const isDemoMode = searchParams.get("demo") === "true";
+  // Demo mode check - detect cal.com repo, main branch, and ai/chat in prompt
+  const isDemoModeFromUrl = searchParams.get("demo") === "true";
+  
+  // Check if demo mode should be activated based on repo selection and prompt
+  const checkDemoMode = (repoName: string | null, branch: string | null, prompt: string): boolean => {
+    if (!repoName || !branch) return false;
+    
+    // Check if repo is cal.com (case-insensitive)
+    const isCalComRepo = repoName.toLowerCase().includes("calcom") || 
+                         repoName.toLowerCase().includes("cal.com") ||
+                         repoName.toLowerCase() === "cal";
+    
+    // Check if branch is main
+    const isMainBranch = branch.toLowerCase() === "main";
+    
+    // Check if prompt contains "ai" or "chat" (case-insensitive)
+    const promptLower = prompt.toLowerCase();
+    const hasAiOrChat = promptLower.includes("ai") || promptLower.includes("chat");
+    
+    return isCalComRepo && isMainBranch && hasAiOrChat;
+  };
+  
+  const isDemoMode = isDemoModeFromUrl;
 
   // Fetch all repositories
   const {
@@ -369,12 +390,20 @@ export default function IdeaPage() {
             const cleanInput = getCleanInput(state.input);
             params.append("featureIdea", cleanInput);
           }
+          
+          // Check if demo mode should be activated
+          const shouldActivateDemoMode = checkDemoMode(repoName, branchName, state.input);
+          if (shouldActivateDemoMode) {
+            params.append("demo", "true");
+          }
 
           console.log(
             "[Idea Page] Navigating to repo page with recipeId:",
             data.recipe_id,
             "and projectId:",
-            projectId
+            projectId,
+            "demo mode:",
+            shouldActivateDemoMode
           );
           router.push(`/repo?${params.toString()}`);
         } else {
@@ -872,10 +901,18 @@ export default function IdeaPage() {
         const cleanInput = getCleanInput(state.input);
         params.append("featureIdea", cleanInput);
       }
+      
+      // Check if demo mode should be activated
+      const shouldActivateDemoMode = checkDemoMode(repoName, branchName, state.input);
+      if (shouldActivateDemoMode) {
+        params.append("demo", "true");
+      }
 
       console.log(
         "[Idea Page] Navigating to repo page with recipeId:",
-        state.recipeId
+        state.recipeId,
+        "demo mode:",
+        shouldActivateDemoMode
       );
       router.push(`/repo?${params.toString()}`);
       return;

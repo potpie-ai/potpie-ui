@@ -27,6 +27,8 @@ export interface MCQQuestion {
   expectedAnswerType?: string;
   /** New API: optional context references */
   contextRefs?: Array<{ path?: string; type?: string; [key: string]: unknown }> | null;
+  /** Criticality level of the question: BLOCKER > IMPORTANT > NICE_TO_HAVE */
+  criticality?: "BLOCKER" | "IMPORTANT" | "NICE_TO_HAVE";
 }
 
 export interface QuestionAnswer {

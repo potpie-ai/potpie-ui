@@ -3,6 +3,7 @@ import getHeaders from "@/app/utils/headers.util";
 import { Visibility } from "@/lib/Constants";
 import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
+import { getEffectiveMimeType } from "@/lib/utils/fileTypes";
 import { ValidationResponse, AttachmentUploadResponse, AttachmentInfo, ContextUsageResponse } from "@/lib/types/attachment";
 
 export default class ChatService {
@@ -949,7 +950,7 @@ export default class ChatService {
     formData.append('conversation_id', conversationId);
     formData.append('file_size', file.size.toString());
     formData.append('file_name', file.name);
-    formData.append('mime_type', file.type);
+    formData.append('mime_type', getEffectiveMimeType(file));
 
     try {
       const response = await axios.post(
@@ -976,7 +977,14 @@ export default class ChatService {
     const headers = await getHeaders();
     const formData = new FormData();
 
-    formData.append('file', file);
+    // Browsers may not detect MIME types for certain extensions (e.g. .md).
+    // Re-wrap the File with the resolved MIME type so the multipart header is correct.
+    const effectiveType = getEffectiveMimeType(file);
+    const uploadFile = effectiveType !== file.type
+      ? new File([file], file.name, { type: effectiveType })
+      : file;
+
+    formData.append('file', uploadFile);
     if (messageId) {
       formData.append('message_id', messageId);
     }

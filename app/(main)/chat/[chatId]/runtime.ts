@@ -711,7 +711,9 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
     async add({ file }: { file: File }): Promise<PendingAttachment> {
       // Create object URL for preview
       const objectUrl = URL.createObjectURL(file);
-      const attachmentId = crypto.randomUUID();
+      const attachmentId = typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       // Store the URL so we can revoke it later
       objectUrls.set(attachmentId, objectUrl);

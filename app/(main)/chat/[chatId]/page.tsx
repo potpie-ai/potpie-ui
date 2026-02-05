@@ -274,10 +274,19 @@ const ChatV2 = () => {
     if (infoLoadedForChat === currentConversationId) return;
     setParsingStatus("loading");
 
+    console.log("[Chat Page] Loading conversation info for:", currentConversationId);
+
     try {
-      const info = await ChatService.loadConversationInfo(
-        currentConversationId
+      // Add timeout to prevent hanging indefinitely
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Request timeout")), 30000)
       );
+      
+      const infoPromise = ChatService.loadConversationInfo(currentConversationId);
+      const info = await Promise.race([infoPromise, timeoutPromise]) as any;
+      
+      console.log("[Chat Page] Conversation info loaded:", info?.type || "success");
+
       if (info.type === "error") {
         if (info.status === 404) {
           toast.info(info.message);
@@ -340,9 +349,26 @@ const ChatV2 = () => {
       
       // Mark preprocessing as complete after all info is loaded
       setIsPreprocessingComplete(true);
-    } catch (error) {
-      console.error("Error loading conversation info:", error);
-      toast.error("Failed to load conversation info");
+      console.log("[Chat Page] Preprocessing complete, chat ready");
+    } catch (error: any) {
+      console.error("[Chat Page] Error loading conversation info:", error);
+      
+      // Handle timeout specifically
+      if (error.message === "Request timeout") {
+        toast.error("Loading took too long. Please refresh the page.");
+        setErrorState({
+          isError: true,
+          message: "Timeout",
+          description: "Failed to load conversation. Please try refreshing the page.",
+        });
+      } else {
+        toast.error("Failed to load conversation info");
+        setErrorState({
+          isError: true,
+          message: "Error",
+          description: error.message || "Failed to load conversation. Please try again.",
+        });
+      }
     }
   };
 
@@ -415,6 +441,24 @@ const ChatV2 = () => {
           </DialogHeader>
         </DialogContent>
       </Dialog>
+    );
+  }
+
+  // Show loading state while chat info is being fetched
+  if (chatAccess === "loading" || !infoLoadedForChat) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          {/* Rotating Potpie Green Logo */}
+          <img 
+            src="/images/Green Icon.svg" 
+            alt="Potpie" 
+            className="w-12 h-12 animate-spin"
+            style={{ animationDuration: '2s' }}
+          />
+          <p className="text-muted-foreground text-sm">Loading...</p>
+        </div>
+      </div>
     );
   }
 

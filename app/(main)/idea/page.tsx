@@ -537,7 +537,17 @@ export default function IdeaPage() {
             state.selectedAgent,
             "agent"
           );
-          await createConversationAndNavigate(projectId);
+          // Show loading state while creating conversation
+          setState((prev) => ({ ...prev, loading: true }));
+          try {
+            const success = await createConversationAndNavigate(projectId);
+            if (!success) {
+              setState((prev) => ({ ...prev, loading: false }));
+            }
+          } catch (error) {
+            console.error("[Idea Page] Error creating conversation after parsing:", error);
+            setState((prev) => ({ ...prev, loading: false }));
+          }
         }
         return;
       }
@@ -669,11 +679,21 @@ export default function IdeaPage() {
             projectId
           ) {
             console.log(
-              "[Idea Page] Parsing complete, creating conversation for",
+              "[Idea Page] Parsing complete (after polling), creating conversation for",
               state.selectedAgent,
               "agent"
             );
-            await createConversationAndNavigate(projectId);
+            // Show loading state while creating conversation
+            setState((prev) => ({ ...prev, loading: true }));
+            try {
+              const success = await createConversationAndNavigate(projectId);
+              if (!success) {
+                setState((prev) => ({ ...prev, loading: false }));
+              }
+            } catch (error) {
+              console.error("[Idea Page] Error creating conversation after polling:", error);
+              setState((prev) => ({ ...prev, loading: false }));
+            }
           }
         }
       };
@@ -714,17 +734,19 @@ export default function IdeaPage() {
   };
 
   // Helper function to create conversation and navigate (for ask/debug agents)
-  const createConversationAndNavigate = async (projectId: string) => {
+  const createConversationAndNavigate = async (projectId: string): Promise<boolean> => {
     if (
       !state.selectedAgent ||
       (state.selectedAgent !== "ask" && state.selectedAgent !== "debug")
     ) {
-      return;
+      console.error("[Idea Page] Invalid agent for conversation:", state.selectedAgent);
+      return false;
     }
 
     if (!user?.uid) {
+      console.error("[Idea Page] No user UID found");
       toast.error("Please sign in to continue");
-      return;
+      return false;
     }
 
     try {
@@ -736,8 +758,9 @@ export default function IdeaPage() {
 
       const agentId = agentIdMap[state.selectedAgent];
       if (!agentId) {
+        console.error("[Idea Page] Invalid agent ID mapping for:", state.selectedAgent);
         toast.error("Invalid agent selection");
-        return;
+        return false;
       }
 
       const title =
@@ -747,7 +770,9 @@ export default function IdeaPage() {
         "[Idea Page] Creating conversation for agent:",
         state.selectedAgent,
         "with projectId:",
-        projectId
+        projectId,
+        "userId:",
+        user.uid
       );
 
       // Create conversation (same signature as newchat/step2.tsx)
@@ -759,9 +784,15 @@ export default function IdeaPage() {
       );
 
       console.log(
-        "[Idea Page] Conversation created:",
-        conversationResponse.conversation_id
+        "[Idea Page] Conversation created successfully:",
+        conversationResponse
       );
+
+      if (!conversationResponse?.conversation_id) {
+        console.error("[Idea Page] No conversation_id in response:", conversationResponse);
+        toast.error("Failed to create conversation. Invalid response from server.");
+        return false;
+      }
 
       // Set up chat context in Redux - same as newchat/step2.tsx
       dispatch(setChat({ agentId }));
@@ -770,15 +801,25 @@ export default function IdeaPage() {
       if (state.input.trim()) {
         const cleanInput = getCleanInput(state.input);
         dispatch(setPendingMessage(cleanInput));
+        console.log("[Idea Page] Stored pending message for chat");
       }
 
       // Navigate to chat - the chat page will handle sending the pending message
-      router.push(`/chat/${conversationResponse.conversation_id}`);
+      const chatUrl = `/chat/${conversationResponse.conversation_id}`;
+      console.log("[Idea Page] Navigating to chat:", chatUrl);
+      router.push(chatUrl);
+      return true;
     } catch (error: any) {
       console.error("[Idea Page] Failed to create conversation:", error);
+      console.error("[Idea Page] Error details:", {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status,
+      });
       toast.error(
         error.message || "Failed to create conversation. Please try again."
       );
+      return false;
     }
   };
 
@@ -861,7 +902,16 @@ export default function IdeaPage() {
         return;
       }
 
-      await createConversationAndNavigate(state.projectId);
+      setState((prev) => ({ ...prev, loading: true }));
+      try {
+        const success = await createConversationAndNavigate(state.projectId);
+        if (!success) {
+          setState((prev) => ({ ...prev, loading: false }));
+        }
+      } catch (error) {
+        console.error("[Idea Page] Error in handleContinue:", error);
+        setState((prev) => ({ ...prev, loading: false }));
+      }
       return;
     }
 
@@ -1081,11 +1131,17 @@ export default function IdeaPage() {
 
       if (projectId) {
         // Repo is ready, create conversation immediately
+        // Keep loading: true during conversation creation for visual feedback
         console.log(
           "[Idea Page] Repo is ready, creating conversation immediately"
         );
-        setState((prev) => ({ ...prev, loading: false, projectId }));
-        await createConversationAndNavigate(projectId);
+        setState((prev) => ({ ...prev, projectId }));
+        try {
+          await createConversationAndNavigate(projectId);
+        } finally {
+          // Only set loading to false if navigation didn't happen (error case)
+          setState((prev) => ({ ...prev, loading: false }));
+        }
         return;
       }
 

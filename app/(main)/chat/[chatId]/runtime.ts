@@ -70,7 +70,7 @@ export interface ChatRuntimeResult {
 // Create the adapter that bridges our Redis backend to assistant-ui
 const createChatAdapter = (
   chatId: string,
-  isBackgroundTaskActiveRef: React.MutableRefObject<boolean>
+  isBackgroundTaskActiveRef: React.MutableRefObject<boolean>,
 ): ChatModelAdapter => {
   return {
     async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
@@ -377,7 +377,7 @@ const createChatAdapter = (
                   const existingIndex = contentParts.findIndex(
                     (cp) =>
                       cp.type === "tool-call" &&
-                      (cp.part as any).toolCallId === call_id
+                      (cp.part as any).toolCallId === call_id,
                   );
                   if (existingIndex !== -1) {
                     contentParts[existingIndex] = {
@@ -404,7 +404,7 @@ const createChatAdapter = (
             }
           },
           undefined,
-          abortSignal ?? undefined
+          abortSignal ?? undefined,
         ).catch((error) => {
           if (!aborted && rejectStream) {
             rejectStream(error);
@@ -435,7 +435,7 @@ const createChatAdapter = (
 
               // Sort content parts by timestamp to maintain chronological order
               const sortedParts = [...contentParts].sort(
-                (a, b) => a.timestamp - b.timestamp
+                (a, b) => a.timestamp - b.timestamp,
               );
 
               // Build final content array from sorted parts
@@ -497,7 +497,7 @@ const createChatAdapter = (
           if (!aborted) {
             // Sort content parts by timestamp
             const sortedParts = [...contentParts].sort(
-              (a, b) => a.timestamp - b.timestamp
+              (a, b) => a.timestamp - b.timestamp,
             );
 
             // Build final content array
@@ -592,7 +592,7 @@ const convertToThreadMessage = (msg: BackendMessage): ThreadMessage => {
   ) {
     const imageAttachments = msg.attachments.filter(
       (attachment) =>
-        attachment.attachment_type === "image" && attachment.download_url
+        attachment.attachment_type === "image" && attachment.download_url,
     );
 
     imageAttachments.forEach((attachment, index) => {
@@ -673,7 +673,7 @@ const createHistoryAdapter = (chatId: string): ThreadHistoryAdapter => {
             (message: ThreadMessage, index: number) => ({
               message,
               parentId: index === 0 ? null : convertedMessages[index - 1].id,
-            })
+            }),
           ),
         };
       } catch (error) {
@@ -759,7 +759,7 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
 // Hook to create and manage the runtime
 // Returns runtime along with session states for components to use
 export function useChatRuntime(
-  chatId: string | null | undefined
+  chatId: string | null | undefined,
 ): ChatRuntimeResult {
   // Local state for session management (no Redux)
   const [isSessionResuming, setIsSessionResuming] = useState(false);
@@ -851,7 +851,7 @@ export function useChatRuntime(
           } catch (error) {
             console.warn(
               "Error checking for message updates during resume:",
-              error
+              error,
             );
           }
         }, 1500); // Check every 1.5 seconds to avoid too frequent reloads
@@ -865,7 +865,7 @@ export function useChatRuntime(
             // into the runtime. Instead, we rely on the backend saving messages incrementally
             // and the periodic check above to reload and display them.
             // This ensures the UI stays in sync with the backend state.
-          }
+          },
         );
 
         // Clear the update interval
@@ -885,7 +885,7 @@ export function useChatRuntime(
         setIsSessionResuming(false);
       }
     },
-    [chatId]
+    [chatId],
   );
 
   // Handle active session detection on mount

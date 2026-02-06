@@ -97,6 +97,8 @@ export interface CreateRecipeCodegenRequest {
   user_prompt: string;
   project_id: string;
   additional_links?: string[];
+  /** Attachment IDs from media upload (e.g. newchat page document/image) */
+  attachment_ids?: string[];
 }
 
 export interface CreateRecipeCodegenResponse {

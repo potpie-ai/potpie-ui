@@ -23,7 +23,7 @@ export default function SlackSuccessPage() {
   const router = useRouter();
 
   const handleBackToApp = () => {
-    router.push("/idea");
+    router.push("/newchat");
   };
 
   const handleBackToIntegrations = () => {

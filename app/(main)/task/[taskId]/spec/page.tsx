@@ -582,7 +582,7 @@ const SpecPage = () => {
             The recipe ID was not found. Please start a new project.
           </p>
           <button
-            onClick={() => router.push("/idea")}
+            onClick={() => router.push("/newchat")}
             className="px-4 py-2 bg-primary-color text-accent-color rounded hover:opacity-90"
           >
             Create New Project

@@ -941,7 +941,7 @@ export function useChatRuntime(
   };
 }
 
-// Hook for handling pending messages from idea page
+// Hook for handling pending messages from newchat page
 export function usePendingMessageHandler(
   runtime: ReturnType<typeof useLocalRuntime>,
   chatId: string | null | undefined

@@ -130,6 +130,7 @@ export default class SpecService {
         user_prompt: request.user_prompt,
         project_id: request.project_id,
         additional_links: request.additional_links,
+        attachment_ids: request.attachment_ids,
       });
 
       if (!request.project_id || request.project_id.trim() === "") {

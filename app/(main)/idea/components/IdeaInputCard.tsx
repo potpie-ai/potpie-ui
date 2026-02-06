@@ -1,8 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+/* Figma tokens from Fancy Potpie (pDxJkcflbgI2ssLH6Fl9Mv) */
+const FIGMA = {
+  cardBg: "#FFFFFF",
+  cardBorder: "#E4E4E4",
+  cardRadius: "15px",
+  inputBg: "#FBFAF9",
+  inputBorder: "#E4E4E7",
+  inputRadius: "5px",
+  textPrimary: "#696D6D",
+  textDark: "#000000",
+  textMuted: "#A6A6AF",
+  terminalHeaderBg: "#FAFAFA",
+  terminalContentBg: "#FDFDFD",
+  chooseAgentBg: "#FBFAF9",
+  claudeDropdownBg: "#EEEEEE",
+  claudeDropdownOpacity: 0.63,
+  modelDropdownText: "#00291C",
+} as const;
+
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Paperclip, Mic, Loader2, ChevronDown, Plus, Link2, Check, FolderOpen, Github, GitBranch, Minus, Square, X } from "lucide-react";
+import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,6 +31,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useAuthContext } from "@/contexts/AuthContext";
+import MinorService from "@/services/minorService";
+import ModelService from "@/services/ModelService";
+import { planTypesEnum } from "@/lib/Constants";
 import { useGithubAppPopup } from "../hooks/useGithubAppPopup";
 
 interface IdeaInputCardProps {
@@ -31,6 +61,12 @@ interface IdeaInputCardProps {
   selectedAgent: string | null;
   onAgentSelect: (agent: string) => void;
   onParseRepo?: () => void;
+  /** Current list of attached files (controlled). If undefined, internal state is used. */
+  attachedFiles?: File[];
+  /** Called when the list changes. removedIndex is set when user removes the file at that index. */
+  onAttachmentChange?: (files: File[], removedIndex?: number) => void;
+  /** True when any file in the list is being uploaded. */
+  attachmentUploading?: boolean;
 }
 
 export default function IdeaInputCard({
@@ -51,12 +87,110 @@ export default function IdeaInputCard({
   selectedAgent,
   onAgentSelect,
   onParseRepo,
+  attachedFiles: controlledFiles,
+  onAttachmentChange,
+  attachmentUploading = false,
 }: IdeaInputCardProps) {
   const router = useRouter();
+  const { user } = useAuthContext();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localFiles, setLocalFiles] = useState<File[]>([]);
   const { openGithubPopup } = useGithubAppPopup();
+
+  const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
+    queryKey: ["userSubscription", user?.uid],
+    queryFn: () => MinorService.fetchUserSubscription(user?.uid as string),
+    enabled: !!user?.uid,
+    retry: false,
+  });
+  // Treat as free while subscription is loading (show locked) to avoid flashing dropdown with empty list
+  const isFreeUser =
+    subscriptionLoading ||
+    !userSubscription ||
+    userSubscription.plan_type === planTypesEnum.FREE;
+
+  const [currentModel, setCurrentModel] = useState<{
+    id: string;
+    name: string;
+    provider: string;
+  } | null>({ id: "", name: "zlm 4.7", provider: "zai" });
+  const [modelList, setModelList] = useState<{ id: string; name: string; provider: string }[]>([]);
+  const loadCurrentModel = useCallback(async () => {
+    try {
+      const res = await ModelService.getCurrentModel();
+      if (res?.chat_model) {
+        setCurrentModel({
+          id: res.chat_model.id,
+          name: res.chat_model.name,
+          provider: res.chat_model.provider,
+        });
+      }
+    } catch {
+      setCurrentModel({ id: "", name: "ZLM 4.7", provider: "zai" });
+    }
+  }, []);
+  const loadModelList = useCallback(async () => {
+    try {
+      const res = await ModelService.listModels();
+      const list = (res.models ?? []).map((m) => ({
+        id: m.id,
+        name: m.name,
+        provider: m.provider,
+      }));
+      setModelList(list);
+    } catch {
+      setModelList([]);
+    }
+  }, []);
+  // Don't load current model on mount so we keep ZLM 4.7 as default; user can change via dropdown
+  useEffect(() => {
+    if (!isFreeUser) loadModelList();
+  }, [isFreeUser, loadModelList]);
+
+  const attachedFiles =
+    controlledFiles !== undefined ? controlledFiles : localFiles;
+
+  const setAttachedFiles = (files: File[], removedIndex?: number) => {
+    setLocalFiles(files);
+    onAttachmentChange?.(files, removedIndex);
+  };
+
+  // Object URLs for image previews; revoke when files change or unmount
+  const [previewUrls, setPreviewUrls] = useState<Record<number, string>>({});
+  useEffect(() => {
+    const urls: Record<number, string> = {};
+    attachedFiles.forEach((file, i) => {
+      if (file.type.startsWith("image/")) {
+        urls[i] = URL.createObjectURL(file);
+      }
+    });
+    setPreviewUrls((prev) => {
+      Object.values(prev).forEach(URL.revokeObjectURL);
+      return urls;
+    });
+    return () => {
+      Object.values(urls).forEach(URL.revokeObjectURL);
+    };
+  }, [attachedFiles]);
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const getFileTypeLabel = (file: File) => {
+    const ext = file.name.split(".").pop()?.toUpperCase() ?? "";
+    if (ext) return ext;
+    if (file.type) {
+      const part = file.type.split("/").pop()?.toUpperCase() ?? "";
+      return part || "FILE";
+    }
+    return "FILE";
+  };
 
   // Reset submitting state when loading completes
   useEffect(() => {
@@ -87,104 +221,71 @@ export default function IdeaInputCard({
     onInputChange(e.target.value);
   };
 
+  const agentOptions = [
+    { value: "ask", label: "Ask a question" },
+    { value: "build", label: "Build a feature" },
+    { value: "debug", label: "Debug an issue" },
+  ];
+  const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+
+  const displayModelName = currentModel?.name ?? "ZLM 4.7";
+
   return (
-    <div className={`relative bg-background border border-zinc-300 rounded-lg shadow-lg overflow-hidden transition-opacity duration-200 ${
-      (loading || isSubmitting) ? "opacity-90 pointer-events-none" : ""
-    }`}>
-      {/* Terminal Header Bar */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-zinc-50 border-b border-zinc-200">
-        <div className="flex items-center gap-1.5">
-          {/* Window Controls */}
-          <div className="flex items-center gap-1">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-400/80 hover:bg-red-500 transition-colors cursor-pointer" />
-            <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/80 hover:bg-yellow-500 transition-colors cursor-pointer" />
-            <div className="w-2.5 h-2.5 rounded-full bg-green-400/80 hover:bg-green-500 transition-colors cursor-pointer" />
-          </div>
-          <div className="ml-3 text-xs font-mono text-zinc-500 flex items-center gap-2">
-            <span>potpie-terminal</span>
-            {(loading || isSubmitting) && (
-              <span className="flex items-center gap-1.5 text-zinc-600">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span className="animate-pulse">Processing...</span>
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="text-[10px] font-mono text-zinc-400">
-          ~/idea
-        </div>
-      </div>
+    <div className={`relative space-y-4 transition-opacity duration-200 ${(loading || isSubmitting) ? "opacity-90 pointer-events-none" : ""}`}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        multiple
+        onChange={(e) => {
+          const added = Array.from(e.target.files ?? []);
+          if (added.length) {
+            setAttachedFiles([...attachedFiles, ...added]);
+          }
+          e.target.value = "";
+        }}
+      />
 
-      {/* Terminal Content */}
-      <div className="relative z-10 flex flex-col h-full bg-[#FFFDFC]">
-        
-        {/* Terminal Prompt and Textarea */}
-        <div className="flex items-start gap-1.5 px-3.5 pt-3 pb-1.5">
-          <span className="text-lg font-mono text-zinc-600 select-none text-[#022D2C]">$</span>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={onKeyDown}
-            placeholder="Describe your feature idea... (e.g., Integrate payment with stripe.)"
-            className={`w-full min-h-[100px] max-h-[280px] bg-transparent text-xl font-mono text-foreground placeholder:text-zinc-400 resize-none focus:outline-none flex-1 leading-relaxed ${
-              (loading || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-            disabled={loading || isSubmitting}
-          />
-        </div>
-
-        {/* Terminal Bottom Controls */}
-        <div className="flex items-center justify-between px-3.5 py-2.5 border-t border-zinc-200 bg-zinc-50/50">
-          <div className="flex items-center gap-1.5">
-
-            {/* Repository Selector Dropdown */}
+      {/* Card 1: Repository and Branch - Figma fill_7ZZDT9, stroke_KF82IR, 15px radius */}
+      <div
+        className="overflow-hidden shadow-sm"
+        style={{
+          backgroundColor: FIGMA.cardBg,
+          border: `1px solid ${FIGMA.cardBorder}`,
+          borderRadius: FIGMA.cardRadius,
+        }}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5">
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-sm font-medium" style={{ color: FIGMA.textPrimary }}>
+              <Globe className="h-4 w-4" style={{ color: FIGMA.textPrimary }} />
+              Repository URL
+            </label>
             <DropdownMenu open={repoDropdownOpen} onOpenChange={setRepoDropdownOpen}>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`h-8 justify-between gap-1.5 min-w-[120px] ${
-                    selectedRepo 
-                      ? "hover:opacity-90" 
-                      : "border-zinc-200 hover:bg-zinc-50"
-                  }`}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300 disabled:opacity-50"
                   style={{
-                    backgroundColor: selectedRepo ? "var(--foreground-color)" : undefined,
-                    color: selectedRepo ? "var(--accent-color)" : "var(--muted-text)",
-                    ...(selectedRepo && { borderColor: "var(--foreground-color)" }),
+                    backgroundColor: FIGMA.inputBg,
+                    border: `1px solid ${FIGMA.inputBorder}`,
+                    borderRadius: FIGMA.inputRadius,
+                    color: FIGMA.textPrimary,
                   }}
                   disabled={loading || isSubmitting}
                 >
-                  {selectedRepoData && isLocalRepoPath ? (
-                    <FolderOpen 
-                      className="h-3 w-3 flex-shrink-0" 
-                      style={{ 
-                        color: selectedRepo ? "var(--accent-color)" : "var(--muted-text)" 
-                      }} 
-                    />
-                  ) : (
-                    <Github 
-                      className="h-3 w-3 flex-shrink-0" 
-                      style={{ 
-                        color: selectedRepo ? "var(--accent-color)" : "var(--muted-text)" 
-                      }} 
-                    />
-                  )}
-                  <span className="text-[10px] font-medium truncate max-w-[170px]">
+                  <Search className="h-4 w-4 shrink-0 text-zinc-500" />
+                  <span className="flex-1 truncate">
                     {selectedRepoData
                       ? selectedRepoData.full_name || selectedRepoData.name
-                      : "Select repo"}
+                      : "Enter a GitHub Repository URL"}
                   </span>
-                  <ChevronDown 
-                    className="h-3 w-3 flex-shrink-0" 
-                    style={{
-                      color: selectedRepo ? "var(--accent-color)" : "var(--muted-text)"
-                    }}
-                  />
-                </Button>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" />
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[380px] max-h-[400px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
+            <DropdownMenuContent className="w-[380px] max-h-[280px] flex flex-col overflow-hidden p-0 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
+              <div className="flex-1 overflow-y-auto min-h-0 p-2">
                 {reposLoading ? (
                   <div className="p-7 text-center">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
@@ -201,8 +302,7 @@ export default function IdeaInputCard({
                     {repositories.map((repo) => {
                       const isSelected = repo.id?.toString() === selectedRepo;
                       const repoName = repo.full_name || repo.name;
-                      const isLocalPath = repoName.startsWith('/') || repoName.includes('\\');
-                      
+                      const isLocalPath = repoName.startsWith("/") || repoName.includes("\\");
                       return (
                         <DropdownMenuItem
                           key={repo.id}
@@ -210,35 +310,22 @@ export default function IdeaInputCard({
                             onRepoSelect(repo.id?.toString() || "");
                             setRepoDropdownOpen(false);
                           }}
-                          className={`
-                            flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg
-                            transition-colors
-                            ${isSelected 
-                              ? 'bg-zinc-50 border border-zinc-200 text-foreground' 
-                              : 'hover:bg-zinc-50 text-foreground'
-                            }
-                          `}
+                          className={`flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg transition-colors ${isSelected ? "bg-zinc-50 border border-zinc-200 text-foreground" : "hover:bg-zinc-50 text-foreground"}`}
                         >
                           <div className="flex-shrink-0">
                             {isLocalPath ? (
-                              <FolderOpen className={`h-3.5 w-3.5 ${isSelected ? 'text-foreground' : 'text-zinc-400'}`} />
+                              <FolderOpen className={`h-3.5 w-3.5 ${isSelected ? "text-foreground" : "text-zinc-400"}`} />
                             ) : (
-                              <Github className={`h-3.5 w-3.5 ${isSelected ? 'text-foreground' : 'text-zinc-400'}`} />
+                              <Github className={`h-3.5 w-3.5 ${isSelected ? "text-foreground" : "text-zinc-400"}`} />
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className={`text-[10px] font-medium truncate ${isSelected ? 'text-foreground' : 'text-foreground'}`}>
-                                {repoName}
-                              </span>
-                              {isSelected && (
-                                <Check className="h-3 w-3 text-foreground flex-shrink-0" />
-                              )}
+                              <span className={`text-[10px] font-medium truncate ${isSelected ? "text-foreground" : "text-foreground"}`}>{repoName}</span>
+                              {isSelected && <Check className="h-3 w-3 text-foreground flex-shrink-0" />}
                             </div>
                             {repo.description && (
-                              <p className="text-[9px] text-zinc-400 mt-0.5 truncate">
-                                {repo.description}
-                              </p>
+                              <p className="text-[9px] text-zinc-400 mt-0.5 truncate">{repo.description}</p>
                             )}
                           </div>
                         </DropdownMenuItem>
@@ -246,212 +333,365 @@ export default function IdeaInputCard({
                     })}
                   </div>
                 )}
-                {(repositories.length > 0 || reposLoading) && (
-                  <>
-                    <DropdownMenuSeparator className="my-1.5 bg-zinc-100" />
-                    {!isLocalhost && (
-                      <DropdownMenuItem
-                        onClick={handleOpenGithubPopup}
-                        className="flex items-center gap-2 px-2.5 py-2 cursor-pointer rounded-lg hover:bg-zinc-50 text-foreground"
-                      >
-                        <Link2 className="h-3.5 w-3.5 text-zinc-400" />
-                        <span className="text-[10px] font-medium">Connect New Repository</span>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setRepoDropdownOpen(false);
-                        if (onParseRepo) {
-                          onParseRepo();
-                        } else {
-                          router.push("/idea");
-                        }
-                      }}
-                      className="flex items-center gap-2 px-2.5 py-2 cursor-pointer rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white mt-1"
-                    >
-                      <Plus className="h-3.5 w-3.5 font-semibold" />
-                      <span className="text-[10px] font-semibold">Parse New Repository</span>
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Branch Selector Dropdown */}
+              </div>
+              {(repositories.length > 0 || reposLoading) && (
+                <div className="sticky bottom-0 border-t border-zinc-100 bg-white p-2 pt-2.5">
+                  <DropdownMenuSeparator className="mb-2 bg-zinc-100" />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setRepoDropdownOpen(false);
+                      onParseRepo?.();
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-2.5 cursor-pointer rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Plus className="h-3.5 w-3.5 font-semibold" />
+                    <span className="text-[10px] font-semibold">Parse New Repository</span>
+                  </DropdownMenuItem>
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-[#333333]">
+              <GitBranch className="h-4 w-4 text-[#333333]" />
+              Branch
+            </label>
             <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`h-8 justify-between gap-1.5 min-w-[120px] ${
-                    selectedBranch 
-                      ? "hover:opacity-90" 
-                      : "border-zinc-200 hover:bg-zinc-50"
-                  }`}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300 disabled:opacity-50 disabled:pointer-events-none"
                   style={{
-                    backgroundColor: selectedBranch ? "var(--foreground-color)" : undefined,
-                    color: selectedBranch ? "var(--accent-color)" : "var(--muted-text)",
-                    ...(selectedBranch && { borderColor: "var(--foreground-color)" }),
+                    backgroundColor: FIGMA.inputBg,
+                    border: `1px solid ${FIGMA.inputBorder}`,
+                    borderRadius: FIGMA.inputRadius,
+                    color: FIGMA.textPrimary,
                   }}
-                  disabled={loading || isSubmitting || !selectedRepo}
+                  disabled={loading || isSubmitting || !selectedRepo || branchesLoading}
                 >
-                  <GitBranch 
-                    className="h-3 w-3 flex-shrink-0" 
-                    style={{
-                      color: selectedBranch ? "var(--accent-color)" : "var(--muted-text)"
-                    }}
-                  />
-                  <span className="text-[10px] font-medium truncate max-w-[170px]">
-                    {selectedBranch || "Select branch"}
-                  </span>
-                  <ChevronDown 
-                    className="h-3 w-3 flex-shrink-0" 
-                    style={{
-                      color: selectedBranch ? "var(--accent-color)" : "var(--muted-text)"
-                    }}
-                  />
-                </Button>
+                  {branchesLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: FIGMA.textMuted }} />
+                      <span className="flex-1 truncate italic">Fetching branches..</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 truncate">{selectedBranch || "Select branch"}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0" style={{ color: FIGMA.textPrimary }} />
+                    </>
+                  )}
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[280px] max-h-[300px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
-                {!selectedRepo ? (
-                  <div className="p-5 text-center">
-                    <p className="text-[10px] text-zinc-500">Please select a repository first</p>
-                  </div>
-                ) : branchesLoading ? (
-                  <div className="p-7 text-center">
-                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
-                    <p className="text-[10px] text-zinc-500">Loading branches...</p>
-                  </div>
-                ) : branches.length === 0 ? (
-                  <div className="p-7 text-center">
-                    <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
-                    <p className="text-[10px] font-medium text-foreground mb-1">No branches found</p>
-                    <p className="text-[9px] text-zinc-400">Unable to load branches for this repository</p>
-                  </div>
-                ) : (
-                  <div className="space-y-0.5">
-                    {branches.map((branch) => {
-                      const isSelected = branch === selectedBranch;
-                      return (
-                        <DropdownMenuItem
-                          key={branch}
-                          onClick={() => {
-                            onBranchSelect(branch);
-                            setBranchDropdownOpen(false);
-                          }}
-                          className={`
-                            flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg
-                            transition-colors
-                            ${isSelected 
-                              ? 'bg-zinc-50 border border-zinc-200 text-foreground' 
-                              : 'hover:bg-zinc-50 text-foreground'
-                            }
-                          `}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[10px] font-medium truncate ${isSelected ? 'text-foreground' : 'text-foreground'}`}>
-                                {branch}
-                              </span>
-                              {isSelected && (
-                                <Check className="h-3 w-3 text-foreground flex-shrink-0" />
-                              )}
-                            </div>
+            <DropdownMenuContent className="w-[280px] max-h-[300px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
+              {!selectedRepo ? (
+                <div className="p-5 text-center">
+                  <p className="text-[10px] text-zinc-500">Please select a repository first</p>
+                </div>
+              ) : branchesLoading ? (
+                <div className="p-7 text-center">
+                  <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
+                  <p className="text-[10px] text-zinc-500">Loading branches...</p>
+                </div>
+              ) : branches.length === 0 ? (
+                <div className="p-7 text-center">
+                  <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
+                  <p className="text-[10px] font-medium text-foreground mb-1">No branches found</p>
+                  <p className="text-[9px] text-zinc-400">Unable to load branches for this repository</p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {branches.map((branch) => {
+                    const isSelected = branch === selectedBranch;
+                    return (
+                      <DropdownMenuItem
+                        key={branch}
+                        onClick={() => {
+                          onBranchSelect(branch);
+                          setBranchDropdownOpen(false);
+                        }}
+                        className={`flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg transition-colors ${isSelected ? "bg-zinc-50 border border-zinc-200 text-foreground" : "hover:bg-zinc-50 text-foreground"}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[10px] font-medium truncate ${isSelected ? "text-foreground" : "text-foreground"}`}>{branch}</span>
+                            {isSelected && <Check className="h-3 w-3 text-foreground flex-shrink-0" />}
                           </div>
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </div>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Plus Button */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              disabled={loading || isSubmitting}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-
-            {/* Attach Button */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-9 gap-2"
-              disabled={loading || isSubmitting}
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-              <span className="text-xs">Attach</span>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {/* Show Mic button when input is empty, Send button when user has typed */}
-            {!input.trim() ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-11 w-11 rounded-full"
-                disabled={loading || isSubmitting}
-              >
-                <Mic className="h-[18px] w-[18px]" />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => {
-                  if (loading || isSubmitting) return;
-                  setIsSubmitting(true);
-                  onSubmit();
-                }}
-                disabled={loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent}
-                className={`h-11 w-11 rounded-full shadow-sm transition-all duration-200 ${
-                  loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
-                    ? "cursor-not-allowed opacity-70"
-                    : "hover:scale-105"
-                }`}
-                style={{
-                  backgroundColor: loading || isSubmitting
-                    ? "var(--foreground-color)"
-                    : (!input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
-                      ? undefined
-                      : "var(--foreground-color)"),
-                  color: loading || isSubmitting
-                    ? "var(--accent-color)"
-                    : (!input.trim() || !selectedRepo || !selectedBranch || !selectedAgent
-                      ? "var(--muted-text)"
-                      : "var(--accent-color)")
-                }}
-                title={
-                  loading || isSubmitting
-                    ? "Processing..."
-                    : !selectedRepo
-                      ? "Please select a repository first"
-                      : !selectedBranch
-                        ? "Please select a branch"
-                        : !selectedAgent
-                          ? "Please select an agent (Ask, Build, or Debug)"
-                          : !input.trim()
-                            ? "Please enter a feature idea"
-                            : "Start analysis"
-                }
-              >
-                {loading || isSubmitting ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Send style={{ width: '22px', height: '22px' }} />
-                )}
-              </Button>
-            )}
+                        </div>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           </div>
         </div>
       </div>
+
+      {/* Card 2: Potpie Terminal - greyed out when no repo/branch selected */}
+      {(() => {
+        const terminalDisabled = !selectedRepo || !selectedBranch;
+        const dotColor = terminalDisabled ? "#9CA3AF" : undefined;
+        return (
+      <div
+        className={`overflow-hidden shadow-sm transition-opacity duration-200 ${terminalDisabled ? "pointer-events-none select-none" : ""}`}
+        style={{
+          backgroundColor: FIGMA.terminalContentBg,
+          border: `1px solid ${FIGMA.cardBorder}`,
+          borderRadius: FIGMA.cardRadius,
+          opacity: terminalDisabled ? 0.6 : 1,
+          filter: terminalDisabled ? "grayscale(1)" : "none",
+        }}
+      >
+        {/* Terminal title bar: grey dots when disabled, else red/yellow/green */}
+        <div
+          className="flex items-center justify-between px-3.5 py-2"
+          style={{
+            borderBottom: `1px solid ${FIGMA.inputBorder}`,
+            backgroundColor: FIGMA.terminalHeaderBg,
+            borderTopLeftRadius: FIGMA.cardRadius,
+            borderTopRightRadius: FIGMA.cardRadius,
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: dotColor ?? "#FF5F57" }}
+              />
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: dotColor ?? "#FEBC2E" }}
+              />
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: dotColor ?? "#28C840" }}
+              />
+            </div>
+            <span
+              className="ml-2 text-xs font-medium"
+              style={{
+                color: terminalDisabled ? FIGMA.textMuted : FIGMA.textDark,
+                fontWeight: terminalDisabled ? 400 : 700,
+              }}
+            >
+              potpie-terminal
+            </span>
+          </div>
+          <span className="text-xs font-mono" style={{ color: FIGMA.textMuted }}>~ /newchat</span>
+        </div>
+        {/* Main input area: $ prompt + textarea; show "Please select a repository to start..." when no repo */}
+        <div
+          className="flex items-start gap-1.5 px-4 py-4 min-h-[160px]"
+          style={{ backgroundColor: FIGMA.terminalContentBg }}
+        >
+          <span className="text-base font-mono select-none pt-0.5" style={{ color: FIGMA.textDark }}>$</span>
+          {!selectedRepo ? (
+            <p className="text-base font-mono flex-1 pt-0.5" style={{ color: FIGMA.textMuted }}>
+              Please select a repository to start...
+            </p>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={onKeyDown}
+              placeholder="Describe your feature idea.... (e.g., Integrate payment with stripe.)"
+              className={`w-full min-h-[120px] max-h-[280px] bg-transparent text-base resize-none focus:outline-none flex-1 leading-relaxed font-mono ${
+                (loading || isSubmitting || !selectedBranch) ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              style={{ color: FIGMA.textDark }}
+              disabled={loading || isSubmitting || !selectedBranch}
+            />
+          )}
+        </div>
+
+        {/* Attachments row - short transition so add/remove feels immediate */}
+        <div
+          className="overflow-hidden transition-[max-height] duration-200 ease-out"
+          style={{
+            maxHeight: attachedFiles.length > 0 ? 88 : 0,
+          }}
+          aria-hidden={attachedFiles.length === 0}
+        >
+          <div className="mx-4 mb-3 flex flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden py-1">
+            {attachedFiles.map((file, index) => (
+              <div
+                key={`${file.name}-${file.size}-${index}`}
+                className="relative flex flex-shrink-0 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2 pr-8"
+              >
+                {previewUrls[index] ? (
+                  <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">
+                    <img src={previewUrls[index]} alt={file.name} className="h-full w-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-100">
+                    <FileText className="h-6 w-6 text-zinc-500" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-[#333333]">{file.name}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-zinc-500">{getFileTypeLabel(file)}{attachmentUploading && " · Uploading..."}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttachedFiles(attachedFiles.filter((_, i) => i !== index), index)}
+                  disabled={loading || isSubmitting}
+                  className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-zinc-600 hover:bg-zinc-300"
+                  aria-label="Remove attachment"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom bar: Figma fill_IYILFQ (Choose Agent), fill_535OH1 (Claude), stroke_LK648Y */}
+        <div
+          className="flex items-center justify-between px-4 py-2.5"
+          style={{ borderTop: `1px solid ${FIGMA.inputBorder}`, backgroundColor: FIGMA.terminalHeaderBg }}
+        >
+          <div className="flex items-center gap-3">
+            <DropdownMenu open={agentDropdownOpen} onOpenChange={setAgentDropdownOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium focus:outline-none disabled:opacity-50 rounded-[5px] min-w-[10.5rem] ${terminalDisabled ? "" : "bg-primary text-primary-foreground hover:bg-primary/90 border-transparent"}`}
+                  style={{
+                    ...(terminalDisabled && { backgroundColor: FIGMA.chooseAgentBg, border: `1px solid ${FIGMA.inputBorder}`, color: FIGMA.textPrimary }),
+                    ...(!terminalDisabled && { border: "none" }),
+                    borderRadius: FIGMA.inputRadius,
+                  }}
+                  disabled={loading || isSubmitting}
+                >
+                  <Bot className={`h-4 w-4 shrink-0 ${terminalDisabled ? "" : "text-primary-foreground"}`} style={terminalDisabled ? { color: FIGMA.textPrimary } : undefined} />
+                  <span className="min-w-[7rem] w-[7rem] truncate block text-left">{agentOptions.find((o) => o.value === selectedAgent)?.label ?? "Choose Agent"}</span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 ${terminalDisabled ? "" : "text-primary-foreground"}`} style={terminalDisabled ? { color: FIGMA.textPrimary } : undefined} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[10.5rem] min-w-[10.5rem] rounded-lg border border-zinc-200 bg-white shadow-lg">
+                {agentOptions.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt.value}
+                    onClick={() => {
+                      onAgentSelect(opt.value);
+                      setAgentDropdownOpen(false);
+                    }}
+                    className={`cursor-pointer truncate ${selectedAgent === opt.value ? "bg-zinc-100 font-medium" : ""}`}
+                  >
+                    {opt.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 text-sm font-medium hover:opacity-80 focus:outline-none disabled:opacity-50"
+              style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.textDark }}
+              disabled={loading || isSubmitting}
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Attach file"
+            >
+              <Paperclip className="h-4 w-4" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.textDark }} />
+              Attach
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              {isFreeUser ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/user-subscription")}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity"
+                      style={{
+                        backgroundColor: FIGMA.claudeDropdownBg,
+                        border: `1px solid ${FIGMA.inputBorder}`,
+                        borderRadius: FIGMA.inputRadius,
+                        color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
+                        opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
+                      }}
+                      aria-label="Upgrade to change model"
+                    >
+                      <span className="flex h-6 w-6 items-center justify-center shrink-0 -ml-0.5" aria-hidden>
+                        <Lock className="h-4 w-4" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.modelDropdownText }} />
+                      </span>
+                      <span className="shrink-0">{displayModelName}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 opacity-50" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.modelDropdownText }} aria-hidden />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    Upgrade to change model
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <div
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none"
+                      style={{
+                        backgroundColor: FIGMA.claudeDropdownBg,
+                        border: `1px solid ${FIGMA.inputBorder}`,
+                        borderRadius: FIGMA.inputRadius,
+                        color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
+                        opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
+                      }}
+                    >
+                      <span className="flex h-6 w-6 items-center justify-center shrink-0 -ml-0.5" aria-hidden>
+                        <Lock className="h-4 w-4" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.modelDropdownText }} />
+                      </span>
+                      <span className="shrink-0">{displayModelName}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.modelDropdownText }} />
+                    </div>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[180px] max-h-[280px] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg" style={{ color: FIGMA.modelDropdownText }}>
+                    {modelList.map((model) => (
+                      <DropdownMenuItem
+                        key={model.id}
+                        onClick={async () => {
+                          try {
+                            await ModelService.setCurrentModel(model.id);
+                            await loadCurrentModel();
+                          } catch {
+                            // keep current selection on error
+                          }
+                          setModelDropdownOpen(false);
+                        }}
+                        className={`cursor-pointer ${currentModel?.id === model.id ? "bg-zinc-100 font-medium" : ""}`}
+                        style={{ color: FIGMA.modelDropdownText }}
+                      >
+                        {model.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </TooltipProvider>
+            <button
+              type="button"
+              onClick={() => {
+                if (loading || isSubmitting) return;
+                setIsSubmitting(true);
+                onSubmit();
+              }}
+              disabled={loading || isSubmitting || !input.trim() || !selectedRepo || !selectedBranch || !selectedAgent}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none disabled:opacity-70 disabled:cursor-not-allowed"
+              title={!selectedRepo ? "Please select a repository first" : !selectedBranch ? "Please select a branch" : !selectedAgent ? "Please select an agent" : !input.trim() ? "Please enter a feature idea" : "Start analysis"}
+            >
+              {loading || isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <SendHorizonal className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+        );
+      })()}
     </div>
   );
 }

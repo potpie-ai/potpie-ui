@@ -381,7 +381,7 @@ export default function RepoPage() {
     }
   }, [questionsError]);
 
-  // Recover recipeId from URL (created in idea page)
+  // Recover recipeId from URL (created in newchat page)
   useEffect(() => {
     if (recipeIdFromUrl) {
       // Validate it's a UUID format
@@ -401,7 +401,7 @@ export default function RepoPage() {
       }
     } else {
       console.warn(
-        "[Repo Page] No recipeId in URL - recipe should have been created in idea page"
+        "[Repo Page] No recipeId in URL - recipe should have been created in newchat page"
       );
     }
   }, [recipeIdFromUrl]);

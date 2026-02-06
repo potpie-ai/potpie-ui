@@ -21,6 +21,11 @@ export interface QuestionOption {
 }
 
 /**
+ * Alias for QuestionOption for backward compatibility
+ */
+export type MCQOption = QuestionOption;
+
+/**
  * Context reference for question context
  */
 export interface QuestionContextRef {

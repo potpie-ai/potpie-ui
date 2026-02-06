@@ -1201,10 +1201,12 @@ export default function VerticalTaskExecution() {
       // Try to get latest plan for this recipe
       PlanService.getPlanStatusByRecipeId(recipeId)
         .then((status) => {
-          if (status.plan_id) {
-            setPlanId(status.plan_id);
+          // New API: Check if plan generation is completed
+          if (status.generation_status === 'completed' && status.plan) {
+            // Use recipe_id as plan_id for compatibility
+            setPlanId(recipeId);
             const params = new URLSearchParams(searchParams.toString());
-            params.set("planId", status.plan_id);
+            params.set("planId", recipeId);
             // Default to item 1 if no itemNumber specified
             if (!params.get("itemNumber")) {
               params.set("itemNumber", "1");

@@ -5,7 +5,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import type { MCQQuestion, QuestionAnswer } from "@/types/question";
-import type { MCQOption } from "@/services/QuestionService";
+import type { MCQOption } from "@/lib/types/questions";
 
 interface QuestionCardProps {
   question: MCQQuestion;

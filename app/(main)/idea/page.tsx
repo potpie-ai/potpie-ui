@@ -272,21 +272,32 @@ export default function IdeaPage() {
       projectId: string;
       additionalLinks?: string[];
     }): Promise<CreateRecipeCodegenResponse> => {
-      return await SpecService.createRecipeCodegen({
+      // Step 1: Create recipe
+      const recipeResponse = await SpecService.createRecipeCodegen({
         user_prompt: data.userPrompt,
         project_id: data.projectId,
         additional_links: data.additionalLinks,
       });
+
+      // Step 2: Trigger question generation
+      const recipeId = recipeResponse.recipe.id;
+      console.log("[Idea Page] Recipe created, triggering question generation for:", recipeId);
+      await SpecService.triggerQuestionGeneration(recipeId, {
+        user_prompt: data.userPrompt,
+        additional_links: data.additionalLinks,
+      });
+
+      return recipeResponse;
     },
     onSuccess: (data: CreateRecipeCodegenResponse) => {
       console.log("[Idea Page] Recipe created successfully:", data);
 
-      // project_id is no longer in the response; use state.projectId (set during parsing)
+      const recipeId = data.recipe.id;
       const projectId = state.projectId;
 
       setState((prev) => ({
         ...prev,
-        recipeId: data.recipe_id,
+        recipeId: recipeId,
         projectId: projectId || null,
         loading: false,
       }));
@@ -304,9 +315,9 @@ export default function IdeaPage() {
 
           // Store recipe data in localStorage for spec page
           localStorage.setItem(
-            `recipe_${data.recipe_id}`,
+            `recipe_${recipeId}`,
             JSON.stringify({
-              recipe_id: data.recipe_id,
+              recipe_id: recipeId,
               project_id: projectId || null,
               repo_name: repoName,
               branch_name: branchName,
@@ -316,7 +327,7 @@ export default function IdeaPage() {
           // Dispatch to Redux store with recipeId and projectId
           dispatch(
             setRepoAndBranchForTask({
-              taskId: data.recipe_id, // Use recipeId as taskId
+              taskId: recipeId,
               repoName: repoName || "",
               branchName,
               projectId: projectId || undefined,
@@ -325,7 +336,7 @@ export default function IdeaPage() {
 
           // Navigate to repo page with recipeId
           const params = new URLSearchParams({
-            recipeId: data.recipe_id,
+            recipeId: recipeId,
           });
           if (repoName) {
             params.append("repoName", repoName);
@@ -340,7 +351,7 @@ export default function IdeaPage() {
 
           console.log(
             "[Idea Page] Navigating to repo page with recipeId:",
-            data.recipe_id,
+            recipeId,
             "and projectId:",
             projectId
           );
@@ -431,7 +442,8 @@ export default function IdeaPage() {
         setState((prev) => ({ ...prev, projectId }));
       }
 
-      if (initialStatus === ParsingStatusEnum.READY) {
+      // For build agent: Skip polling and proceed immediately with projectId
+      if (state.selectedAgent === "build" && projectId) {
         setState((prev) => ({
           ...prev,
           parsingStatus: ParsingStatusEnum.READY,
@@ -439,8 +451,7 @@ export default function IdeaPage() {
           parsingProgress: 100,
         }));
 
-        // If build agent, automatically create recipe after parsing completes
-        if (state.selectedAgent === "build" && state.input.trim() && projectId) {
+        if (state.input.trim()) {
           const repoSlug = repoName;
           const finalBranchName = branchName || "main";
           const cleanInput = getCleanInput(state.input);
@@ -456,7 +467,7 @@ export default function IdeaPage() {
           );
 
           console.log(
-            "[Idea Page] Parsing complete, creating recipe for build agent with projectId:",
+            "[Idea Page] [TEST MODE] Skipping polling, creating recipe for build agent with projectId:",
             projectId
           );
           createRecipeMutation.mutate({
@@ -465,8 +476,20 @@ export default function IdeaPage() {
             additionalLinks: undefined,
           });
         }
+        return;
+      }
+
+      // For ask/debug agents: Keep original flow with polling
+      if (initialStatus === ParsingStatusEnum.READY) {
+        setState((prev) => ({
+          ...prev,
+          parsingStatus: ParsingStatusEnum.READY,
+          parsing: false,
+          parsingProgress: 100,
+        }));
+
         // If ask/debug agent, automatically create conversation after parsing completes
-        else if (
+        if (
           (state.selectedAgent === "ask" || state.selectedAgent === "debug") &&
           projectId
         ) {
@@ -490,132 +513,103 @@ export default function IdeaPage() {
         return;
       }
 
-      // Poll for parsing status updates
-      const pollStatus = async () => {
-        const pollInterval = 5000; // 5 seconds
-        const maxDuration = 45 * 60 * 1000; // 45 minutes
-        const startTime = Date.now();
-        let parsingStatus = initialStatus;
+      // Poll for parsing status updates (only for ask/debug agents)
+      // COMMENTED OUT FOR BUILD MODE TESTING - Build agent skips polling above
+      // Only poll for ask/debug agents
+      if (state.selectedAgent === "ask" || state.selectedAgent === "debug") {
+        const pollStatus = async () => {
+          const pollInterval = 5000; // 5 seconds
+          const maxDuration = 45 * 60 * 1000; // 45 minutes
+          const startTime = Date.now();
+          let parsingStatus = initialStatus;
 
-        const updateStatusAndProgress = (status: string) => {
-          let progress = 0;
-          let steps: string[] = [];
+          const updateStatusAndProgress = (status: string) => {
+            let progress = 0;
+            let steps: string[] = [];
 
-          if (status === ParsingStatusEnum.SUBMITTED) {
-            progress = 10;
-            steps = ["Cloning repository..."];
-          } else if (status === ParsingStatusEnum.CLONED) {
-            progress = 30;
-            steps = [
-              "Cloning repository...",
-              "Analyzing directory structure...",
-            ];
-          } else if (status === ParsingStatusEnum.PARSED) {
-            progress = 60;
-            steps = [
-              "Cloning repository...",
-              "Analyzing directory structure...",
-              "Detecting tech stack...",
-              "Parsing routing files...",
-            ];
-          } else if (status === ParsingStatusEnum.PROCESSING) {
-            progress = 80;
-            steps = [
-              "Cloning repository...",
-              "Analyzing directory structure...",
-              "Detecting tech stack...",
-              "Parsing routing files...",
-              "Extracting API endpoints...",
-              "Analyzing database schema...",
-            ];
-          } else if (status === ParsingStatusEnum.READY) {
-            progress = 100;
-            steps = PARSING_STEPS;
+            if (status === ParsingStatusEnum.SUBMITTED) {
+              progress = 10;
+              steps = ["Cloning repository..."];
+            } else if (status === ParsingStatusEnum.CLONED) {
+              progress = 30;
+              steps = [
+                "Cloning repository...",
+                "Analyzing directory structure...",
+              ];
+            } else if (status === ParsingStatusEnum.PARSED) {
+              progress = 60;
+              steps = [
+                "Cloning repository...",
+                "Analyzing directory structure...",
+                "Detecting tech stack...",
+                "Parsing routing files...",
+              ];
+            } else if (status === ParsingStatusEnum.PROCESSING) {
+              progress = 80;
+              steps = [
+                "Cloning repository...",
+                "Analyzing directory structure...",
+                "Detecting tech stack...",
+                "Parsing routing files...",
+                "Extracting API endpoints...",
+                "Analyzing database schema...",
+              ];
+            } else if (status === ParsingStatusEnum.READY) {
+              progress = 100;
+              steps = PARSING_STEPS;
+            }
+
+            setState((prev) => ({
+              ...prev,
+              parsingStatus: status,
+              parsingProgress: progress,
+              parsingSteps: steps,
+              parsing:
+                status !== ParsingStatusEnum.READY &&
+                status !== ParsingStatusEnum.ERROR,
+            }));
+          };
+
+          // Initial status update
+          updateStatusAndProgress(parsingStatus);
+
+          // Poll until ready or error or timeout
+          while (
+            parsingStatus !== ParsingStatusEnum.READY &&
+            parsingStatus !== ParsingStatusEnum.ERROR &&
+            Date.now() - startTime < maxDuration
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+            try {
+              parsingStatus =
+                await BranchAndRepositoryService.getParsingStatus(projectId);
+              updateStatusAndProgress(parsingStatus);
+            } catch (error) {
+              console.error("Error polling parsing status:", error);
+              setState((prev) => ({
+                ...prev,
+                parsingStatus: ParsingStatusEnum.ERROR,
+                parsing: false,
+              }));
+              return;
+            }
           }
 
-          setState((prev) => ({
-            ...prev,
-            parsingStatus: status,
-            parsingProgress: progress,
-            parsingSteps: steps,
-            parsing:
-              status !== ParsingStatusEnum.READY &&
-              status !== ParsingStatusEnum.ERROR,
-          }));
-        };
-
-        // Initial status update
-        updateStatusAndProgress(parsingStatus);
-
-        // Poll until ready or error or timeout
-        while (
-          parsingStatus !== ParsingStatusEnum.READY &&
-          parsingStatus !== ParsingStatusEnum.ERROR &&
-          Date.now() - startTime < maxDuration
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, pollInterval));
-
-          try {
-            parsingStatus =
-              await BranchAndRepositoryService.getParsingStatus(projectId);
-            updateStatusAndProgress(parsingStatus);
-          } catch (error) {
-            console.error("Error polling parsing status:", error);
+          // Handle timeout
+          if (
+            Date.now() - startTime >= maxDuration &&
+            parsingStatus !== ParsingStatusEnum.READY
+          ) {
             setState((prev) => ({
               ...prev,
               parsingStatus: ParsingStatusEnum.ERROR,
               parsing: false,
             }));
-            return;
           }
-        }
 
-        // Handle timeout
-        if (
-          Date.now() - startTime >= maxDuration &&
-          parsingStatus !== ParsingStatusEnum.READY
-        ) {
-          setState((prev) => ({
-            ...prev,
-            parsingStatus: ParsingStatusEnum.ERROR,
-            parsing: false,
-          }));
-        }
-
-        // If parsing completed successfully
-        if (parsingStatus === ParsingStatusEnum.READY) {
-          // For build agent, create recipe
-          if (state.selectedAgent === "build" && state.input.trim() && projectId) {
-            const repoSlug = repoName;
-            const finalBranchName = branchName || "main";
-            const cleanInput = getCleanInput(state.input);
-
-            // Dispatch projectId to Redux store
-            dispatch(
-              setRepoAndBranchForTask({
-                taskId: projectId, // Use projectId as temporary taskId until we have recipeId
-                repoName: repoSlug.trim(),
-                branchName: finalBranchName,
-                projectId,
-              })
-            );
-
-            console.log(
-              "[Idea Page] Parsing complete, creating recipe for build agent with projectId:",
-              projectId
-            );
-            createRecipeMutation.mutate({
-              userPrompt: cleanInput,
-              projectId,
-              additionalLinks: undefined,
-            });
-          }
-          // For ask/debug agents, create conversation
-          else if (
-            (state.selectedAgent === "ask" ||
-              state.selectedAgent === "debug") &&
-            projectId
-          ) {
+          // If parsing completed successfully
+          if (parsingStatus === ParsingStatusEnum.READY && projectId) {
             console.log(
               "[Idea Page] Parsing complete (after polling), creating conversation for",
               state.selectedAgent,
@@ -633,10 +627,10 @@ export default function IdeaPage() {
               setState((prev) => ({ ...prev, loading: false }));
             }
           }
-        }
-      };
+        };
 
-      await pollStatus();
+        await pollStatus();
+      }
     } catch (err) {
       console.error("Error during parsing:", err);
       setState((prev) => ({

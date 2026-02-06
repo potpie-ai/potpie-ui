@@ -8,15 +8,24 @@ import {
   Check,
   Loader2,
   ChevronDown,
+  ChevronRight,
   X,
   Zap,
   FileText,
+  Database,
+  Shield,
+  Layers,
+  ExternalLink,
+  BookOpen,
+  Target,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
 import { toast } from "sonner";
 import {
   SpecStatusResponse,
+  SpecificationOutput,
+  PlanStatusResponse,
 } from "@/lib/types/spec";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
@@ -29,6 +38,170 @@ const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: Rea
     {children}
   </div>
 );
+
+/** Collapsible section for spec content */
+const SpecSection = ({ 
+  title, 
+  icon: Icon, 
+  children, 
+  defaultOpen = true 
+}: { 
+  title: string; 
+  icon?: React.ComponentType<{ className?: string }>; 
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  
+  return (
+    <div className="border border-[#D3E5E5] rounded-xl overflow-hidden mb-4">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-4 hover:bg-zinc-50/50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          {Icon && <Icon className="w-4 h-4 text-primary-color" />}
+          <h3 className="text-sm font-semibold text-primary-color">{title}</h3>
+        </div>
+        {isOpen ? (
+          <ChevronDown className="w-4 h-4 text-primary-color" />
+        ) : (
+          <ChevronRight className="w-4 h-4 text-primary-color" />
+        )}
+      </button>
+      {isOpen && (
+        <div className="px-4 pb-4 border-t border-[#D3E5E5]">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** Render any value - handles strings, arrays, objects gracefully */
+const RenderValue = ({ value, depth = 0 }: { value: any; depth?: number }) => {
+  if (value === null || value === undefined) return null;
+  
+  if (typeof value === "string") {
+    // Check if it looks like markdown
+    if (value.includes("\n") || value.includes("#") || value.includes("```") || value.includes("- ")) {
+      return (
+        <div className="prose prose-sm max-w-none text-primary-color [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_p]:text-sm [&_p]:leading-relaxed [&_li]:text-sm [&_code]:text-xs [&_code]:bg-zinc-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_pre]:bg-zinc-50 [&_pre]:border [&_pre]:border-[#D3E5E5] [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-xs">
+          <SharedMarkdown content={value} />
+        </div>
+      );
+    }
+    return <p className="text-sm text-primary-color leading-relaxed">{value}</p>;
+  }
+  
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <p className="text-xs text-primary-color/50 italic">None</p>;
+    
+    return (
+      <div className="space-y-3 mt-2">
+        {value.map((item, idx) => (
+          <div key={idx} className={`${depth === 0 ? 'p-3 bg-zinc-50/50 rounded-lg border border-[#D3E5E5]/50' : ''}`}>
+            <RenderValue value={item} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  
+  if (typeof value === "object") {
+    const entries = Object.entries(value);
+    if (entries.length === 0) return <p className="text-xs text-primary-color/50 italic">None</p>;
+    
+    return (
+      <div className="space-y-2 mt-1">
+        {entries.map(([key, val]) => {
+          const formattedKey = key
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+          
+          return (
+            <div key={key}>
+              <span className="text-xs font-semibold text-primary-color/70 uppercase tracking-wide">
+                {formattedKey}
+              </span>
+              <div className="ml-0 mt-0.5">
+                <RenderValue value={val} depth={depth + 1} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  
+  // Primitive values (number, boolean, etc.)
+  return <p className="text-sm text-primary-color">{String(value)}</p>;
+};
+
+/** Render the structured specification */
+const SpecificationView = ({ specification }: { specification: SpecificationOutput }) => {
+  // Define the section mapping with icons and display names
+  const sectionConfig: Array<{
+    key: keyof SpecificationOutput;
+    title: string;
+    icon: React.ComponentType<{ className?: string }>;
+    defaultOpen?: boolean;
+  }> = [
+    { key: "tl_dr", title: "Executive Summary (TL;DR)", icon: BookOpen, defaultOpen: true },
+    { key: "context", title: "Context", icon: Layers, defaultOpen: true },
+    { key: "success_metrics", title: "Success Metrics", icon: Target, defaultOpen: true },
+    { key: "functional_requirements", title: "Functional Requirements", icon: FileText, defaultOpen: true },
+    { key: "non_functional_requirements", title: "Non-Functional Requirements", icon: Shield, defaultOpen: false },
+    { key: "architectural_decisions", title: "Architectural Decisions", icon: Layers, defaultOpen: true },
+    { key: "data_models", title: "Data Models", icon: Database, defaultOpen: false },
+    { key: "interfaces", title: "Interfaces", icon: ExternalLink, defaultOpen: false },
+    { key: "external_dependencies_summary", title: "External Dependencies", icon: ExternalLink, defaultOpen: false },
+  ];
+  
+  // Also collect any extra keys not in the predefined list
+  const knownKeys = new Set(sectionConfig.map(s => s.key));
+  const extraKeys = Object.keys(specification).filter(k => !knownKeys.has(k as keyof SpecificationOutput));
+
+  return (
+    <div className="space-y-2">
+      {sectionConfig.map(({ key, title, icon, defaultOpen }) => {
+        const value = specification[key];
+        if (value === null || value === undefined) return null;
+        // Skip empty arrays
+        if (Array.isArray(value) && value.length === 0) return null;
+        // Skip empty objects
+        if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) return null;
+        
+        return (
+          <SpecSection key={key} title={title} icon={icon} defaultOpen={defaultOpen}>
+            <div className="pt-3">
+              <RenderValue value={value} />
+            </div>
+          </SpecSection>
+        );
+      })}
+      
+      {/* Render any extra/unknown sections */}
+      {extraKeys.map((key) => {
+        const value = specification[key];
+        if (value === null || value === undefined) return null;
+        if (Array.isArray(value) && value.length === 0) return null;
+        
+        const title = key
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        
+        return (
+          <SpecSection key={key} title={title} icon={FileText} defaultOpen={false}>
+            <div className="pt-3">
+              <RenderValue value={value} />
+            </div>
+          </SpecSection>
+        );
+      })}
+    </div>
+  );
+};
 
 const SpecPage = () => {
   const params = useParams();
@@ -68,6 +241,8 @@ const SpecPage = () => {
   const [isProgressExpanded, setIsProgressExpanded] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
+  const [planStatus, setPlanStatus] = useState<PlanStatusResponse | null>(null);
+  const [isLoadingPlanStatus, setIsLoadingPlanStatus] = useState(false);
 
   const specContentRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedRef = useRef(false);
@@ -105,7 +280,7 @@ const SpecPage = () => {
       try {
         console.log("[Spec Page] Fetching recipe details for:", recipeId);
         
-        // Fetch comprehensive recipe details from the API
+        // Try to fetch recipe details - may not exist in new API
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
         console.log("[Spec Page] Recipe details received:", recipeDetails);
         
@@ -151,17 +326,47 @@ const SpecPage = () => {
         hasInitializedRef.current = true;
       } catch (err: any) {
         console.error("[Spec Page] Failed to fetch recipe details:", err);
-        // Set default values on error
-        setRecipeData({
-          recipe_id: recipeId,
-          project_id: "",
-          user_prompt: "Implementation plan generation",
-        });
-        setProjectData({
-          repo: "Unknown Repository",
-          branch: "main",
-          questions: [],
-        });
+        
+        // Try to load from localStorage
+        try {
+          const stored = localStorage.getItem(`recipe_${recipeId}`);
+          if (stored) {
+            const recipeInfo = JSON.parse(stored);
+            setRecipeData({
+              recipe_id: recipeId,
+              project_id: recipeInfo.project_id || "",
+              user_prompt: recipeInfo.user_prompt || "Implementation plan generation",
+            });
+            setProjectData({
+              repo: recipeInfo.repo_name || "Unknown Repository",
+              branch: recipeInfo.branch_name || "main",
+              questions: [],
+            });
+          } else {
+            // Set default values on error
+            setRecipeData({
+              recipe_id: recipeId,
+              project_id: "",
+              user_prompt: "Implementation plan generation",
+            });
+            setProjectData({
+              repo: "Unknown Repository",
+              branch: "main",
+              questions: [],
+            });
+          }
+        } catch {
+          setRecipeData({
+            recipe_id: recipeId,
+            project_id: "",
+            user_prompt: "Implementation plan generation",
+          });
+          setProjectData({
+            repo: "Unknown Repository",
+            branch: "main",
+            questions: [],
+          });
+        }
         hasInitializedRef.current = true;
       }
     };
@@ -170,7 +375,61 @@ const SpecPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeId]);
 
-  // Poll for spec progress
+  /**
+   * Helper: safely extract the specification from API response.
+   * Handles cases where the API may return specification as a JSON string.
+   */
+  const extractSpecification = (response: SpecStatusResponse): SpecStatusResponse => {
+    if (!response.specification) return response;
+    
+    // If specification is a string (double-serialized JSON), parse it
+    if (typeof response.specification === "string") {
+      try {
+        console.log("[Spec Page] specification is a string, attempting JSON parse...");
+        const parsed = JSON.parse(response.specification as unknown as string);
+        return { ...response, specification: parsed };
+      } catch {
+        console.warn("[Spec Page] Failed to parse specification string, using as-is");
+      }
+    }
+    
+    return response;
+  };
+
+  /**
+   * Helper: retry fetching spec until specification is non-null.
+   * Per the updated API contract, when status is "completed", specification should be present.
+   * However, we retry as a safety measure for network issues or edge cases.
+   */
+  const fetchSpecWithRetries = async (
+    recipeId: string,
+    maxRetries: number = 5,
+    delayMs: number = 2000,
+  ): Promise<SpecStatusResponse> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`[Spec Page] Fetching specification (attempt ${attempt}/${maxRetries})...`);
+      const progress = extractSpecification(
+        await SpecService.getSpecProgressByRecipeId(recipeId)
+      );
+      console.log(`[Spec Page] Attempt ${attempt} - specification:`, progress.specification ? "present" : "null");
+      
+      if (progress.specification) {
+        return progress;
+      }
+      
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    
+    // Return last response even if specification is null
+    console.warn("[Spec Page] Exhausted retries, specification still null");
+    return extractSpecification(
+      await SpecService.getSpecProgressByRecipeId(recipeId)
+    );
+  };
+
+  // Poll for spec progress using GET /api/v1/recipes/{recipe_id}/spec
   useEffect(() => {
     if (!recipeId) return;
     if (hasStartedPollingRef.current) return;
@@ -184,88 +443,82 @@ const SpecPage = () => {
       try {
         console.log("[Spec Page] Starting to poll spec progress for recipeId:", recipeId);
         
-        let progress: SpecStatusResponse;
-        let currentSpecId: string | null = null;
-        
-        // Check if we have a spec_id stored (set by repo page after submitting)
-        const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
-        console.log("[Spec Page] Stored spec_id:", storedSpecId);
-        
-        if (storedSpecId) {
-          currentSpecId = storedSpecId;
-          console.log("[Spec Page] Using stored spec_id, calling getSpecProgressBySpecId");
-          progress = await SpecService.getSpecProgressBySpecId(storedSpecId);
-        } else {
-          console.log("[Spec Page] No stored spec_id, calling getSpecProgressByRecipeId");
-          progress = await SpecService.getSpecProgressByRecipeId(recipeId);
-          console.log("[Spec Page] Received progress response:", progress);
-          
-          // Store spec_id for future polling if available
-          if (progress.spec_id) {
-            currentSpecId = progress.spec_id;
-            localStorage.setItem(`spec_${recipeId}`, progress.spec_id);
-            console.log("[Spec Page] Stored spec_id:", currentSpecId);
-          }
-        }
+        // Initial fetch
+        let progress = extractSpecification(
+          await SpecService.getSpecProgressByRecipeId(recipeId)
+        );
         
         if (!mounted) return;
+
+        console.log("[Spec Page] Initial progress:", {
+          generation_status: progress.generation_status,
+          has_specification: !!progress.specification,
+          specification_type: typeof progress.specification,
+          raw_response: progress,
+        });
 
         setSpecProgress(progress);
         setError(null);
         setIsLoading(false);
 
-        const currentStatus = progress.status;
+        const currentStatus = progress.generation_status;
 
-        // Stop polling when completed or failed
-        if (currentStatus === 'COMPLETED' || currentStatus === 'FAILED') {
-          if (interval) clearInterval(interval);
-          if (currentStatus === 'COMPLETED') {
-            setIsProgressExpanded(false);
-          }
-        } else {
-          // Continue polling if in progress
-          if (interval) clearInterval(interval);
-          interval = setInterval(async () => {
-            try {
-              const latestSpecId = localStorage.getItem(`spec_${recipeId}`) || currentSpecId;
-              
-              let updated: SpecStatusResponse;
-              if (latestSpecId) {
-                console.log("[Spec Page] Polling with spec_id:", latestSpecId);
-                updated = await SpecService.getSpecProgressBySpecId(latestSpecId);
-              } else {
-                console.log("[Spec Page] Polling with recipeId:", recipeId);
-                updated = await SpecService.getSpecProgressByRecipeId(recipeId);
-                
-                // Store spec_id if we got it from the response
-                if (updated.spec_id) {
-                  localStorage.setItem(`spec_${recipeId}`, updated.spec_id);
-                  currentSpecId = updated.spec_id;
-                  console.log("[Spec Page] Stored spec_id during polling:", currentSpecId);
-                }
-              }
-              
-              if (!mounted) return;
-              
-              console.log("[Spec Page] Updated progress:", updated);
-              setSpecProgress(updated);
-              
-              const updatedStatus = updated.status;
-              console.log("[Spec Page] Updated status:", updatedStatus);
-              
-              if (updatedStatus === 'COMPLETED' || updatedStatus === 'FAILED') {
-                clearInterval(interval);
-                if (updatedStatus === 'COMPLETED') {
-                  setIsProgressExpanded(false);
-                }
-              }
-            } catch (pollError) {
-              console.error("[Spec Page] Error polling spec progress:", pollError);
-              if (!mounted) return;
-              // Don't clear interval on error - keep trying
+        // If completed, ensure specification is loaded (retry with delay as safety measure)
+        if (currentStatus === 'completed') {
+          if (!progress.specification) {
+            console.warn("[Spec Page] Completed but specification is null (unexpected), retrying...");
+            const retryProgress = await fetchSpecWithRetries(recipeId);
+            if (mounted) {
+              setSpecProgress(retryProgress);
             }
-          }, 3000); // Poll every 3 seconds
+          }
+          setIsProgressExpanded(false);
+          return;
         }
+
+        // If failed, stop polling
+        if (currentStatus === 'failed') {
+          return;
+        }
+
+        // Continue polling for pending/processing/not_started
+        interval = setInterval(async () => {
+          try {
+            const updated = extractSpecification(
+              await SpecService.getSpecProgressByRecipeId(recipeId)
+            );
+            
+            if (!mounted) return;
+            
+            console.log("[Spec Page] Poll update:", {
+              generation_status: updated.generation_status,
+              has_specification: !!updated.specification,
+            });
+            setSpecProgress(updated);
+            
+            const updatedStatus = updated.generation_status;
+            
+            if (updatedStatus === 'completed') {
+              clearInterval(interval);
+              
+              // If specification is null, retry with delay (safety measure)
+              if (!updated.specification) {
+                console.warn("[Spec Page] Completed but specification null (unexpected), retrying...");
+                const finalProgress = await fetchSpecWithRetries(recipeId);
+                if (mounted) {
+                  setSpecProgress(finalProgress);
+                }
+              }
+              
+              setIsProgressExpanded(false);
+            } else if (updatedStatus === 'failed') {
+              clearInterval(interval);
+            }
+          } catch (pollError) {
+            console.error("[Spec Page] Error polling spec progress:", pollError);
+            // Don't clear interval on error - keep trying
+          }
+        }, 5000); // Poll every 5 seconds per API contract
       } catch (err: any) {
         if (!mounted) return;
         console.error("Error fetching spec progress:", err);
@@ -283,15 +536,39 @@ const SpecPage = () => {
   }, [recipeId]);
 
   // Derive status and progress from API response
-  const status = specProgress?.status ?? null;
-  const progressPercentage = specProgress?.progress_percentage ?? 0;
-  const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
-  const specDocument = specProgress?.spec_document ?? null;
+  const generationStatus = specProgress?.generation_status ?? null;
+  const isGenerating = generationStatus === 'processing' || generationStatus === 'pending' || generationStatus === 'not_started';
   const errorMessage = specProgress?.error_message ?? null;
+  
+  // Extract specification, handling possible string serialization
+  const specification: SpecificationOutput | null = (() => {
+    const raw = specProgress?.specification;
+    if (!raw) return null;
+    if (typeof raw === "string") {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+    return raw;
+  })();
+
+  // Compute a visual progress percentage from generation_status
+  const progressPercentage = (() => {
+    switch (generationStatus) {
+      case 'not_started': return 0;
+      case 'pending': return 15;
+      case 'processing': return 50;
+      case 'completed': return 100;
+      case 'failed': return 0;
+      default: return 0;
+    }
+  })();
 
   // Auto-scroll to spec content when generation completes
   useEffect(() => {
-    if (status === 'COMPLETED' && specContentRef.current) {
+    if (generationStatus === 'completed' && specContentRef.current) {
       setTimeout(() => {
         specContentRef.current?.scrollIntoView({
           behavior: "smooth",
@@ -299,7 +576,52 @@ const SpecPage = () => {
         });
       }, 100);
     }
-  }, [status]);
+  }, [generationStatus]);
+
+  // Poll for plan status when spec is completed
+  useEffect(() => {
+    if (!recipeId) return;
+    if (generationStatus !== 'completed') return;
+
+    let mounted = true;
+    let interval: NodeJS.Timeout;
+
+    const checkPlanStatus = async () => {
+      try {
+        setIsLoadingPlanStatus(true);
+        const status = await PlanService.getPlanStatusByRecipeId(recipeId);
+        if (!mounted) return;
+
+        setPlanStatus(status);
+        setIsLoadingPlanStatus(false);
+
+        // Stop polling if plan is completed or failed
+        if (status.generation_status === 'completed' || status.generation_status === 'failed') {
+          if (interval) clearInterval(interval);
+        }
+      } catch (err) {
+        console.error('[Spec Page] Error checking plan status:', err);
+        if (mounted) {
+          setIsLoadingPlanStatus(false);
+        }
+      }
+    };
+
+    // Initial check
+    checkPlanStatus();
+
+    // Poll every 5 seconds if plan is pending/processing
+    interval = setInterval(() => {
+      if (planStatus?.generation_status === 'pending' || planStatus?.generation_status === 'processing' || !planStatus) {
+        checkPlanStatus();
+      }
+    }, 5000);
+
+    return () => {
+      mounted = false;
+      if (interval) clearInterval(interval);
+    };
+  }, [recipeId, generationStatus]);
 
   if (isLoading && !specProgress) {
     return (
@@ -348,7 +670,7 @@ const SpecPage = () => {
         )}
 
         {/* Failed State */}
-        {status === 'FAILED' && (
+        {generationStatus === 'failed' && (
           <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <X className="w-5 h-5 text-red-600" />
@@ -434,9 +756,9 @@ const SpecPage = () => {
                 <div className="w-6 h-6 flex items-center justify-center">
                   {isCancelled ? (
                     <X className="w-4 h-4 text-primary-color" />
-                  ) : status === 'COMPLETED' ? (
+                  ) : generationStatus === 'completed' ? (
                     <Check className="w-4 h-4 text-primary-color" />
-                  ) : status === 'FAILED' ? (
+                  ) : generationStatus === 'failed' ? (
                     <X className="w-4 h-4 text-red-500" />
                   ) : (
                     <Loader2 className="w-4 h-4 text-primary-color animate-spin" />
@@ -446,14 +768,14 @@ const SpecPage = () => {
                   <span className="text-sm font-bold text-primary-color">
                     {isCancelled
                       ? "Stopped"
-                      : status === 'COMPLETED'
+                      : generationStatus === 'completed'
                         ? "Spec Ready"
-                        : status === 'FAILED'
+                        : generationStatus === 'failed'
                           ? "Failed"
                           : "Generating Spec..."}
                   </span>
                   <span className="text-xs font-mono text-primary-color uppercase tracking-tighter">
-                    Status: {progressPercentage}% Complete
+                    Status: {generationStatus || "waiting"}
                   </span>
                 </div>
               </div>
@@ -469,17 +791,18 @@ const SpecPage = () => {
                   <div className="w-full bg-zinc-200 rounded-full h-2">
                     <div
                       className={`h-2 rounded-full transition-all duration-500 ${
-                        status === 'FAILED' ? 'bg-red-500' : status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-primary-color'
+                        generationStatus === 'failed' ? 'bg-red-500' : generationStatus === 'completed' ? 'bg-emerald-500' : 'bg-primary-color'
                       }`}
                       style={{ width: `${Math.min(progressPercentage, 100)}%` }}
                     />
                   </div>
                   <div className="flex justify-between text-xs text-primary-color">
                     <span>
-                      {status === 'PENDING' && "Waiting to start..."}
-                      {status === 'IN_PROGRESS' && "Generating specification..."}
-                      {status === 'COMPLETED' && "Specification complete!"}
-                      {status === 'FAILED' && (errorMessage || "Generation failed")}
+                      {generationStatus === 'not_started' && "Waiting to start..."}
+                      {generationStatus === 'pending' && "Queued for generation..."}
+                      {generationStatus === 'processing' && "Generating specification..."}
+                      {generationStatus === 'completed' && "Specification complete!"}
+                      {generationStatus === 'failed' && (errorMessage || "Generation failed")}
                     </span>
                     <span>{progressPercentage}%</span>
                   </div>
@@ -489,10 +812,47 @@ const SpecPage = () => {
           </div>
         </section>
 
-        {/* Spec Document Output */}
-        {status === 'COMPLETED' && 
+        {/* Spec completed but specification still loading */}
+        {generationStatus === 'completed' && 
          !isCancelled && 
-         specDocument && (
+         !specification && (
+          <section className="mb-8 p-6 bg-zinc-50/50 border border-[#D3E5E5] rounded-xl">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-primary-color" />
+              <div>
+                <p className="text-sm font-medium text-primary-color">
+                  Spec generation completed — loading specification data...
+                </p>
+                <p className="text-xs text-primary-color/60 mt-1">
+                  The specification is being prepared. This page will update automatically.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  const progress = await SpecService.getSpecProgressByRecipeId(recipeId);
+                  console.log("[Spec Page] Manual refresh - specification:", progress.specification ? "present" : "null", progress);
+                  setSpecProgress(
+                    typeof progress.specification === "string"
+                      ? { ...progress, specification: JSON.parse(progress.specification as unknown as string) }
+                      : progress
+                  );
+                } catch (e) {
+                  console.error("[Spec Page] Manual refresh failed:", e);
+                }
+              }}
+              className="mt-3 text-xs text-primary-color underline hover:opacity-70"
+            >
+              Refresh now
+            </button>
+          </section>
+        )}
+
+        {/* Spec Document Output */}
+        {generationStatus === 'completed' && 
+         !isCancelled && 
+         specification && (
           <section
             ref={specContentRef}
             className="animate-in fade-in slide-in-from-bottom-4 duration-500"
@@ -504,68 +864,101 @@ const SpecPage = () => {
               </h2>
             </div>
             
-            <div className="bg-background border border-[#D3E5E5] rounded-xl p-6 mb-8">
-              <div className="prose prose-sm max-w-none text-primary-color [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-3 [&_h2]:mt-6 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mb-2 [&_h3]:mt-4 [&_p]:leading-relaxed [&_p]:mb-3 [&_ul]:mb-3 [&_ol]:mb-3 [&_li]:mb-1 [&_code]:text-xs [&_code]:bg-zinc-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_pre]:bg-zinc-50 [&_pre]:border [&_pre]:border-[#D3E5E5] [&_pre]:rounded-lg [&_pre]:p-4 [&_pre]:mb-4 [&_pre]:overflow-x-auto [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-[#D3E5E5] [&_th]:px-3 [&_th]:py-2 [&_th]:bg-zinc-50 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_td]:border [&_td]:border-[#D3E5E5] [&_td]:px-3 [&_td]:py-2 [&_td]:text-sm [&_blockquote]:border-l-4 [&_blockquote]:border-[#D3E5E5] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-primary-color/70 [&_hr]:border-[#D3E5E5] [&_hr]:my-6">
-                <SharedMarkdown content={specDocument} />
-              </div>
+            {/* Render structured specification or fallback to raw display */}
+            <div className="mb-8">
+              {typeof specification === "object" && specification !== null && Object.keys(specification).length > 0 ? (
+                <SpecificationView specification={specification} />
+              ) : (
+                <div className="p-4 bg-zinc-50 border border-[#D3E5E5] rounded-xl">
+                  <p className="text-xs text-primary-color/50 mb-2 font-mono uppercase">Raw Specification Data</p>
+                  <pre className="text-xs text-primary-color whitespace-pre-wrap overflow-auto max-h-[600px]">
+                    {JSON.stringify(specification, null, 2)}
+                  </pre>
+                </div>
+              )}
             </div>
 
             {/* Spec metadata */}
             {specProgress && (
               <div className="flex items-center gap-4 text-xs text-primary-color/60 mb-6">
-                {specProgress.spec_id && (
-                  <span>Spec ID: <code className="bg-zinc-100 px-1.5 py-0.5 rounded text-xs">{specProgress.spec_id}</code></span>
+                {specProgress.recipe_id && (
+                  <span>Recipe ID: <code className="bg-zinc-100 px-1.5 py-0.5 rounded text-xs">{specProgress.recipe_id}</code></span>
                 )}
-                {specProgress.created_at && (
-                  <span>Created: {new Date(specProgress.created_at).toLocaleString()}</span>
-                )}
-                {specProgress.updated_at && (
-                  <span>Updated: {new Date(specProgress.updated_at).toLocaleString()}</span>
+                {specProgress.generated_at && (
+                  <span>Generated: {new Date(specProgress.generated_at).toLocaleString()}</span>
                 )}
               </div>
             )}
 
             {/* Action Button */}
             <div className="mt-12 flex justify-end">
-              <button
-                onClick={async () => {
-                  if (isSubmittingPlan) return;
-                  
-                  setIsSubmittingPlan(true);
-                  
-                  try {
-                    // Get spec_id from localStorage or from specProgress
-                    const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
-                    const specId = storedSpecId || specProgress?.spec_id || null;
-                    
-                    // Submit plan generation request
-                    const response = await PlanService.submitPlanGeneration({
-                      spec_id: specId || undefined,
-                      recipe_id: specId ? undefined : recipeId,
-                    });
-                    
-                    toast.success("Plan generation started successfully");
-                    
-                    // Navigate to plan page with planId
-                    router.push(`/task/${recipeId}/plan?planId=${response.plan_id}${specId ? `&specId=${specId}` : ''}`);
-                  } catch (error: any) {
-                    console.error("Error submitting plan generation:", error);
-                    toast.error(error.message || "Failed to start plan generation");
-                    setIsSubmittingPlan(false);
-                  }
-                }}
-                disabled={isSubmittingPlan}
-                className="px-6 py-2 bg-accent-color text-primary-color hover:opacity-90 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {isSubmittingPlan ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Starting Plan Generation...
-                  </>
-                ) : (
-                  "Generate Detailed Plan"
-                )}
-              </button>
+              {(() => {
+                // Determine button state based on plan status
+                const hasPlanGenerating = planStatus?.generation_status === 'processing' || planStatus?.generation_status === 'pending';
+                const hasPlanCompleted = planStatus?.generation_status === 'completed';
+                const hasPlanFailed = planStatus?.generation_status === 'failed';
+
+                if (hasPlanGenerating) {
+                  return (
+                    <button
+                      onClick={() => router.push(`/task/${recipeId}/plan`)}
+                      className="px-6 py-2 bg-accent-color/80 text-primary-color hover:opacity-90 rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
+                    >
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Plan Generating... View Progress
+                    </button>
+                  );
+                }
+
+                if (hasPlanCompleted) {
+                  return (
+                    <button
+                      onClick={() => router.push(`/task/${recipeId}/plan`)}
+                      className="px-6 py-2 bg-green-600 text-white hover:opacity-90 rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
+                    >
+                      <Check className="w-4 h-4" />
+                      View Generated Plan
+                    </button>
+                  );
+                }
+
+                return (
+                  <button
+                    onClick={async () => {
+                      if (isSubmittingPlan) return;
+
+                      setIsSubmittingPlan(true);
+
+                      try {
+                        // Submit plan generation request using recipe_id
+                        await PlanService.submitPlanGeneration({
+                          recipe_id: recipeId,
+                        });
+
+                        toast.success("Plan generation started successfully");
+
+                        // Navigate to plan page (recipeId is the taskId in URL)
+                        router.push(`/task/${recipeId}/plan`);
+                      } catch (error: any) {
+                        console.error("Error submitting plan generation:", error);
+                        toast.error(error.message || "Failed to start plan generation");
+                        setIsSubmittingPlan(false);
+                      }
+                    }}
+                    disabled={isSubmittingPlan}
+                    className="px-6 py-2 bg-accent-color text-primary-color hover:opacity-90 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isSubmittingPlan ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Starting Plan Generation...
+                      </>
+                    ) : (
+                      "Generate Detailed Plan"
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           </section>
         )}

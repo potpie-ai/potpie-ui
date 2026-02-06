@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, Check, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import PlanService from "@/services/PlanService";
-import SpecService from "@/services/SpecService";
 import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
 import { toast } from "sonner";
 
@@ -14,14 +13,9 @@ export default function PlanPage() {
   const router = useRouter();
   const recipeId = searchParams.get("recipeId");
   const specId = searchParams.get("specId");
-  const planIdFromUrl = searchParams.get("planId");
 
-  const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
   const [planStatus, setPlanStatus] = useState<PlanStatusResponse | null>(null);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
-  const [isLoadingItems, setIsLoadingItems] = useState(false);
-  const [nextStart, setNextStart] = useState<number | null>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Submit plan generation if we have recipeId or specId but no planId
   const submitPlanMutation = useMutation({
@@ -30,16 +24,13 @@ export default function PlanPage() {
         throw new Error("Recipe ID or Spec ID is required");
       }
       return await PlanService.submitPlanGeneration({
-        recipe_id: recipeId || undefined,
-        spec_id: specId || undefined,
+        recipe_id: recipeId!,
       });
     },
     onSuccess: (data) => {
-      setPlanId(data.plan_id);
-      // Update URL with planId
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("planId", data.plan_id);
-      router.replace(`/plan?${params.toString()}`);
+      // New API returns recipe_id, not plan_id
+      // We don't set planId anymore since we fetch by recipe_id
+      // Just refresh the page to show the polling state
       toast.success("Plan generation started");
     },
     onError: (error: any) => {
@@ -49,22 +40,18 @@ export default function PlanPage() {
 
   // Fetch plan status
   const { data: statusData, isLoading: isLoadingStatus } = useQuery({
-    queryKey: ["plan-status", planId, recipeId, specId],
+    queryKey: ["plan-status", recipeId],
     queryFn: async () => {
-      if (planId) {
-        return await PlanService.getPlanStatus(planId);
-      } else if (specId) {
-        return await PlanService.getPlanStatusBySpecId(specId);
-      } else if (recipeId) {
+      if (recipeId) {
         return await PlanService.getPlanStatusByRecipeId(recipeId);
       }
       return null;
     },
-    enabled: !!(planId || specId || recipeId),
+    enabled: !!recipeId,
     refetchInterval: (query) => {
       // Poll every 2 seconds if plan is in progress
       const data = query.state.data;
-      if (data?.plan_gen_status === "IN_PROGRESS" || data?.plan_gen_status === "SUBMITTED") {
+      if (data?.generation_status === "processing" || data?.generation_status === "pending") {
         return 2000;
       }
       return false;
@@ -75,50 +62,48 @@ export default function PlanPage() {
   useEffect(() => {
     if (statusData) {
       setPlanStatus(statusData);
-      // If we got a plan_id from the status, store it
-      if (statusData.plan_id && !planId) {
-        setPlanId(statusData.plan_id);
-      }
     }
-  }, [statusData, planId]);
+  }, [statusData]);
 
-  // Auto-submit plan generation if we have recipeId/specId but no planId
+  // Auto-submit plan generation if we have recipeId but no plan is being generated
   useEffect(() => {
-    if ((recipeId || specId) && !planId && !submitPlanMutation.isPending && !statusData) {
+    if (recipeId && !submitPlanMutation.isPending && !statusData) {
       submitPlanMutation.mutate();
     }
-  }, [recipeId, specId, planId]);
+  }, [recipeId]);
 
-  // Fetch plan items when plan is completed
-  const fetchPlanItems = async (start: number = 0) => {
-    if (!planId) return;
-    
-    try {
-      setIsLoadingItems(true);
-      const response = await PlanService.getPlanItems(planId, start, 20);
-      if (start === 0) {
-        setPlanItems(response.plan_items);
-      } else {
-        setPlanItems((prev) => [...prev, ...response.plan_items]);
-      }
-      setNextStart(response.next_start);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to fetch plan items");
-    } finally {
-      setIsLoadingItems(false);
-    }
-  };
-
+  // Extract plan items from phases when plan is completed
   useEffect(() => {
-    if (planStatus?.plan_gen_status === "COMPLETED" && planId && planItems.length === 0) {
-      fetchPlanItems(0);
+    if (planStatus?.generation_status === "completed" && planStatus.plan) {
+      // Extract items from phases
+      const items: PlanItem[] = [];
+      let itemNumber = 1;
+      planStatus.plan.phases.forEach((phase) => {
+        phase.plan_items.forEach((item) => {
+          items.push({
+            id: item.plan_item_id,
+            item_number: itemNumber++,
+            order: item.order,
+            title: item.title,
+            detailed_objective: item.description,
+            implementation_steps: [],
+            description: item.description,
+            verification_criteria: "",
+            files: [],
+            context_handoff: {},
+            reasoning: "",
+            architecture: "",
+          });
+        });
+      });
+      setPlanItems(items);
     }
-  }, [planStatus?.plan_gen_status, planId]);
+  }, [planStatus?.generation_status, planStatus?.plan]);
 
-  if (!recipeId && !specId && !planId) {
+  if (!recipeId) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-500">No recipe ID, spec ID, or plan ID provided</p>
+        <p className="text-gray-500">No recipe ID provided</p>
       </div>
     );
   }
@@ -131,9 +116,9 @@ export default function PlanPage() {
     );
   }
 
-  const isGenerating = planStatus?.plan_gen_status === "IN_PROGRESS" || planStatus?.plan_gen_status === "SUBMITTED";
-  const isCompleted = planStatus?.plan_gen_status === "COMPLETED";
-  const isFailed = planStatus?.plan_gen_status === "FAILED";
+  const isGenerating = planStatus?.generation_status === "processing" || planStatus?.generation_status === "pending";
+  const isCompleted = planStatus?.generation_status === "completed";
+  const isFailed = planStatus?.generation_status === "failed";
 
   return (
     <div className="min-h-screen bg-background">
@@ -150,25 +135,11 @@ export default function PlanPage() {
                 <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-blue-900">
-                    {planStatus?.status_message || "Generating plan..."}
+                    Generating plan...
                   </p>
-                  {planStatus && (
-                    <div className="mt-2">
-                      {(planStatus.progress_percent !== null && planStatus.progress_percent !== undefined) && (
-                        <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${planStatus.progress_percent}%` }}
-                          />
-                        </div>
-                      )}
-                      <p className="text-xs text-blue-700 mt-1">
-                        Step {planStatus.current_step + 1}/3
-                        {planStatus.progress_percent !== null && planStatus.progress_percent !== undefined && ` • ${planStatus.progress_percent}%`}
-                        {planStatus.total_items !== null && planStatus.total_items !== undefined && planStatus.items_completed !== null && planStatus.items_completed !== undefined && ` • ${planStatus.items_completed}/${planStatus.total_items} items`}
-                      </p>
-                    </div>
-                  )}
+                  <p className="text-xs text-blue-700 mt-1">
+                    Status: {planStatus?.generation_status}
+                  </p>
                 </div>
               </div>
             </div>
@@ -277,29 +248,10 @@ export default function PlanPage() {
                 </div>
               ))}
 
-              {/* Load More Button */}
-              {nextStart !== null && (
-                <div className="flex justify-center pt-4">
-                  <button
-                    onClick={() => fetchPlanItems(nextStart)}
-                    disabled={isLoadingItems}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoadingItems ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
-                        Loading...
-                      </>
-                    ) : (
-                      "Load More Items"
-                    )}
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
-          {isCompleted && planItems.length === 0 && !isLoadingItems && (
+          {isCompleted && planItems.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-500">No plan items available yet.</p>
             </div>

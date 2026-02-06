@@ -15,7 +15,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Github, FileText, Loader2, GitBranch } from "lucide-react";
 import {
   QAAnswer,
-  SubmitSpecGenerationResponse,
+  TriggerSpecGenerationResponse,
   RecipeQuestionsResponse,
   RecipeQuestion,
   RecipeQuestionNew,
@@ -91,8 +91,8 @@ export default function RepoPage() {
         console.log("[Repo Page] Recipe details received:", recipeDetails);
 
         // Set repo and branch from recipe details
-        setRecipeRepoName(recipeDetails.repo_name);
-        setRecipeBranchName(recipeDetails.branch_name);
+        setRecipeRepoName(recipeDetails.repo_name ?? null);
+        setRecipeBranchName(recipeDetails.branch_name ?? null);
       } catch (error: any) {
         console.error("[Repo Page] Failed to fetch recipe details:", error);
         // Keep null values on error - will fall back to URL params or projectData
@@ -121,7 +121,7 @@ export default function RepoPage() {
           if (questionsData.questions && questionsData.questions.length > 0) {
             console.log(
               "[Repo Page] Questions already available, status:",
-              questionsData.recipe_status
+              questionsData.generation_status
             );
             // Process questions immediately
             processQuestions(questionsData);
@@ -201,7 +201,7 @@ export default function RepoPage() {
             }
 
             // Legacy format: options are string[]
-            const legacyQ = q as RecipeQuestion;
+            const legacyQ = q as unknown as RecipeQuestion;
             const strOptions = legacyQ.options || [];
             const options = strOptions.map((opt) =>
               typeof opt === "string" ? { label: opt, description: undefined } : opt
@@ -313,7 +313,7 @@ export default function RepoPage() {
         // No questions available
         console.warn(
           "[Repo Page] No questions available, status:",
-          questionsData.recipe_status
+          questionsData.generation_status
         );
         setState((prev) => ({ ...prev, pageState: "questions" }));
       }
@@ -787,8 +787,8 @@ export default function RepoPage() {
 
       console.log("Submitting QA answers with recipeId:", activeRecipeId);
 
-      // Collect all answers - format: option label OR "Other: <user_input>"
-      const qaAnswers: Array<{ question_id: string; answer: string }> = [];
+      // Collect all answers - format: { question_id: answer_text }
+      const answersPayload: Record<string, string> = {};
 
       state.questions.forEach((question) => {
         const qId = question.id;
@@ -831,16 +831,13 @@ export default function RepoPage() {
         }
 
         if (answerStr) {
-          qaAnswers.push({ question_id: qId, answer: answerStr });
+          answersPayload[qId] = answerStr;
         }
       });
 
       // Add additional context if provided (as a special question)
       if (state.additionalContext.trim()) {
-        qaAnswers.push({
-          question_id: "additional_context",
-          answer: state.additionalContext.trim(),
-        });
+        answersPayload["additional_context"] = state.additionalContext.trim();
       }
 
       // Clear localStorage after successful submission since answers are now saved on backend
@@ -853,13 +850,17 @@ export default function RepoPage() {
         }
       }
       
-      // Call new spec generation API
-      return await SpecService.submitSpecGeneration({
-        recipe_id: activeRecipeId,
-        qa_answers: qaAnswers,
-      });
+      // Step 1: Submit answers to the recipe
+      console.log("[Repo Page] Submitting answers...");
+      await SpecService.submitAnswers(activeRecipeId, answersPayload);
+      
+      // Step 2: Trigger spec generation
+      console.log("[Repo Page] Triggering spec generation...");
+      const specResponse = await SpecService.triggerSpecGeneration(activeRecipeId);
+      
+      return specResponse;
     },
-    onSuccess: (response: SubmitSpecGenerationResponse) => {
+    onSuccess: (response: TriggerSpecGenerationResponse) => {
       toast.success("Spec generation started successfully");
       // Navigate to spec page with recipeId
       const activeRecipeId = recipeId || recipeIdFromUrl;
@@ -867,10 +868,6 @@ export default function RepoPage() {
         console.error("recipeId is not set after successful submission");
         toast.error("Navigation failed: Recipe ID missing");
         return;
-      }
-      // Store spec_id so the spec page can use it for polling
-      if (response.spec_id && typeof window !== "undefined") {
-        localStorage.setItem(`spec_${activeRecipeId}`, response.spec_id);
       }
       router.push(`/task/${activeRecipeId}/spec`);
     },

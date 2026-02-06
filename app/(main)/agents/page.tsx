@@ -29,6 +29,7 @@ import { Step, Stepper } from "@/components/ui/stepper";
 import InputField from "./components/InputFields";
 import Footer from "./components/Footer";
 import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
+import { CustomAgentType } from "@/lib/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { auth } from "@/configs/Firebase-config";

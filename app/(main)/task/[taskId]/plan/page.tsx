@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { MermaidDiagram } from "@/components/chat/MermaidDiagram";
 import {
   Check,
@@ -39,8 +39,13 @@ import {
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
 import TaskSplittingService from "@/services/TaskSplittingService";
-import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
-import { useSearchParams } from "next/navigation";
+import {
+  PlanStatusResponse,
+  PlanItem,
+  PlanPhase,
+  PhasedPlanItem,
+  FileReference,
+} from "@/lib/types/spec";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -226,79 +231,171 @@ const PlanPage = () => {
   const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
   const [planStatus, setPlanStatus] = useState<PlanStatusResponse | null>(null);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
+  const [phases, setPhases] = useState<PlanPhase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(0);
   const [repoName, setRepoName] = useState<string>("Repository");
   const [branchName, setBranchName] = useState<string>("Branch");
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const hasInitializedRef = useRef(false);
 
+
+  // Fetch recipe details for repo and branch information
   useEffect(() => {
     const fetchRecipeDetails = async () => {
       if (!recipeId) return;
+      if (hasInitializedRef.current) return;
+      
       try {
+        console.log("[Plan Page] Fetching recipe details for:", recipeId);
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
         setRepoName(recipeDetails.repo_name || "Unknown Repository");
         setBranchName(recipeDetails.branch_name || "main");
-      } catch (error) {}
+        hasInitializedRef.current = true;
+      } catch (error) {
+        console.error("[Plan Page] Failed to fetch recipe details:", error);
+        // Set defaults on error
+        setRepoName("Repository");
+        setBranchName("main");
+        hasInitializedRef.current = true;
+      }
     };
+    
     fetchRecipeDetails();
   }, [recipeId]);
 
+  // Poll for plan status
   const { data: statusData, isLoading: isLoadingStatus } = useQuery({
-    queryKey: ["plan-status", planId, recipeId, specIdFromUrl],
+    queryKey: ["plan-status", recipeId],
     queryFn: async () => {
-      if (planId) return await PlanService.getPlanStatus(planId);
-      if (specIdFromUrl) return await PlanService.getPlanStatusBySpecId(specIdFromUrl);
-      if (recipeId) return await PlanService.getPlanStatusByRecipeId(recipeId);
-      return null;
+      console.log("[Plan Page] Fetching plan status for recipe:", recipeId);
+      
+      if (!recipeId) {
+        throw new Error("Recipe ID is required for plan status");
+      }
+      
+      const result = await PlanService.getPlanStatusByRecipeId(recipeId);
+      console.log("[Plan Page] Plan status fetched:", {
+        generation_status: result.generation_status,
+        has_plan: !!result.plan,
+        error: result.error_message,
+      });
+      return result;
     },
-    enabled: !!(planId || specIdFromUrl || recipeId),
+    enabled: !!recipeId,
     refetchInterval: (query) => {
       const data = query.state.data;
-      return (data?.plan_gen_status === "IN_PROGRESS" || data?.plan_gen_status === "SUBMITTED") ? 2000 : false;
+      if (!data) {
+        console.log("[Plan Page] No data yet, will retry...");
+        return 5000;
+      }
+
+      const status = data.generation_status;
+      console.log("[Plan Page] Polling check - status:", status);
+
+      // Continue polling if status is not completed or failed
+      const shouldPoll = status === "processing" || status === "pending" || status === "not_started";
+
+      if (shouldPoll) {
+        console.log("[Plan Page] ✓ Continuing to poll (status:", status, ")");
+        return 5000; // Poll every 5 seconds
+      }
+
+      console.log("[Plan Page] ✗ Stopping poll (status:", status, ")");
+      return false; // Stop polling
     },
   });
 
+  // Update plan status when data changes and extract plan items from nested structure
   useEffect(() => {
     if (statusData) {
+      console.log("[Plan Page] Plan status received:", statusData);
       setPlanStatus(statusData);
       setIsLoading(false);
-      if (statusData.plan_id && !planId) setPlanId(statusData.plan_id);
-    }
-  }, [statusData, planId]);
 
-  useEffect(() => {
-    if ((recipeId || specIdFromUrl) && !planId && !isLoadingStatus && !statusData) {
-      PlanService.submitPlanGeneration({
-        recipe_id: recipeId || undefined,
-        spec_id: specIdFromUrl || undefined,
-      }).then((response) => {
-        setPlanId(response.plan_id);
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("planId", response.plan_id);
-        router.replace(`/task/${recipeId}/plan?${params.toString()}`);
-      });
-    }
-  }, [recipeId, specIdFromUrl, planId, isLoadingStatus, statusData]);
+      // Store phases and extract plan items from nested phase structure
+      if (statusData.generation_status === "completed" && statusData.plan) {
+        console.log("[Plan Page] Extracting plan items from", statusData.plan.phases.length, "phases");
 
-  useEffect(() => {
-    if (planStatus?.plan_gen_status === "COMPLETED" && planId && planItems.length === 0) {
-      PlanService.getPlanItems(planId, 0, 50).then(res => setPlanItems(res.plan_items));
+        // Store phases for display
+        setPhases(statusData.plan.phases);
+
+        // Also create flattened items for backward compatibility
+        const flattenedItems: PlanItem[] = [];
+        let itemNumber = 1;
+
+        statusData.plan.phases.forEach((phase) => {
+          phase.plan_items.forEach((item) => {
+            // Convert new API format to legacy format for display
+            flattenedItems.push({
+              id: item.plan_item_id,
+              item_number: itemNumber++,
+              order: item.order,
+              title: item.title,
+              detailed_objective: item.description,
+              implementation_steps: [], // Not in new format
+              description: item.description,
+              verification_criteria: "", // Not in new format
+              files: [], // Not in new format
+              context_handoff: {},
+              reasoning: "", // Not in new format
+              architecture: "", // Not in new format
+            });
+          });
+        });
+
+        console.log("[Plan Page] Extracted", flattenedItems.length, "plan items");
+        setPlanItems(flattenedItems);
+      }
     }
-  }, [planStatus?.plan_gen_status, planId]);
+  }, [statusData]);
+
+  // useEffect(() => {
+  //   if ((recipeId || specIdFromUrl) && !planId && !isLoadingStatus && !statusData) {
+  //     PlanService.submitPlanGeneration({
+  //       recipe_id: recipeId || undefined,
+  //       spec_id: specIdFromUrl || undefined,
+  //     }).then((response) => {
+  //       setPlanId(response.plan_id);
+  //       const params = new URLSearchParams(searchParams.toString());
+  //       params.set("planId", response.plan_id);
+  //       router.replace(`/task/${recipeId}/plan?${params.toString()}`);
+  //     });
+  //   }
+  // }, [recipeId, specIdFromUrl, planId, isLoadingStatus, statusData]);
+
+  // useEffect(() => {
+  //   if (planStatus?.plan_gen_status === "COMPLETED" && planId && planItems.length === 0) {
+  //     PlanService.getPlanItems(planId, 0, 50).then(res => setPlanItems(res.plan_items));
+  //   }
+  // }, [planStatus?.plan_gen_status, planId]);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-color" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-color mx-auto mb-3" />
+          <p className="text-sm text-primary-color">Loading...</p>
+        </div>
       </div>
     );
   }
 
-  const isGenerating = planStatus?.plan_gen_status === "IN_PROGRESS" || planStatus?.plan_gen_status === "SUBMITTED";
-  const isCompleted = planStatus?.plan_gen_status === "COMPLETED";
-  const isFailed = planStatus?.plan_gen_status === "FAILED";
+  const isGenerating = planStatus?.generation_status === "processing" || 
+                        planStatus?.generation_status === "pending" || 
+                        planStatus?.generation_status === "not_started";
+  const isCompleted = planStatus?.generation_status === "completed";
+  const isFailed = planStatus?.generation_status === "failed";
+  
+  // Log current state for debugging
+  console.log("[Plan Page] Current state:", {
+    generation_status: planStatus?.generation_status,
+    isGenerating,
+    isCompleted,
+    isFailed,
+    planItems: planItems.length,
+  });
 
   return (
     <div className="min-h-screen bg-background text-primary-color font-sans antialiased">
@@ -321,7 +418,7 @@ const PlanPage = () => {
             <div className="pl-16 py-8">
               <div className="border border-zinc-200 rounded-xl p-8 bg-zinc-50">
                 <Loader2 className="w-5 h-5 animate-spin mb-2" />
-                <p className="text-sm font-medium">{planStatus?.status_message || "Generating..."}</p>
+                <p className="text-sm font-medium">Generating plan... ({planStatus?.generation_status})</p>
               </div>
             </div>
           )}
@@ -335,8 +432,8 @@ const PlanPage = () => {
                     <p className="text-sm font-semibold text-red-900 mb-1">
                       Plan generation failed
                     </p>
-                    {planStatus?.status_message && (
-                      <p className="text-xs text-red-700">{planStatus.status_message}</p>
+                    {planStatus?.error_message && (
+                      <p className="text-xs text-red-700">{planStatus.error_message}</p>
                     )}
                   </div>
                 </div>
@@ -344,177 +441,145 @@ const PlanPage = () => {
             </div>
           )}
 
-          {isCompleted && planItems.length > 0 && (
-            <Accordion type="single" collapsible className="space-y-6">
-              {planItems.map((item) => {
-                const modules = groupFilesByModule(item.files);
-                // FIX: Use unique string based on item.order to prevent global expand
-                const itemValue = `plan-step-${item.order}`;
-
-                return (
-                  <AccordionItem
-                    key={itemValue}
-                    value={itemValue}
-                    className="group bg-background border border-zinc-200 rounded-xl overflow-hidden transition-all data-[state=open]:ring-1 data-[state=open]:ring-zinc-900"
-                  >
-                    <AccordionTrigger className="p-4 flex gap-4 items-start hover:no-underline [&>svg]:hidden w-full">
-                      <div className="pt-0.5 shrink-0"><StatusIcon status="generated" /></div>
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-black uppercase">Slice {item.order + 1}</span>
-                          <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
-                        </div>
-                        <h3 className="text-sm font-bold truncate">{item.title}</h3>
-                      </div>
-                    </AccordionTrigger>
-
-                    <AccordionContent className="border-t border-zinc-100 bg-zinc-50/50 pt-0">
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
-                        <div className="flex items-center gap-2 mb-2"><AlignLeft className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Objective</span></div>
-                        <p className="text-xs">{item.detailed_objective}</p>
-                      </div>
-
-                      {item.description && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                          <div className="flex items-center gap-2 mb-2"><FileText className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Description</span></div>
-                          <p className="text-xs">{item.description}</p>
-                        </div>
+          {isCompleted && phases.length > 0 && (
+            <div className="space-y-8">
+              {phases.map((phase, phaseIndex) => (
+                <div key={phase.phase_id} className="border border-zinc-200 rounded-xl overflow-hidden bg-background">
+                  {/* Phase Header */}
+                  <div className="p-4 bg-zinc-50 border-b border-zinc-200">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase text-zinc-500">Phase {phaseIndex + 1}</span>
+                      {phase.is_final && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-700">Final</span>
                       )}
+                    </div>
+                    <h2 className="text-sm font-bold text-primary-color">{phase.name}</h2>
+                    <p className="text-xs text-zinc-600 mt-1">{phase.description}</p>
+                  </div>
 
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
-                        <div className="flex items-center gap-2 mb-2"><ListTodo className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Implementation Steps</span></div>
-                        <ul className="space-y-2">
-                          {item.implementation_steps && item.implementation_steps.length > 0 ? (
-                            item.implementation_steps.map((step, i) => (
-                              <li key={i} className="flex gap-2 text-xs text-left">
-                                <div className="mt-1.5 w-1 h-1 rounded-full bg-zinc-300 shrink-0" />
-                                <FormattedText text={step} />
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-xs text-zinc-400 italic">No implementation steps defined</li>
-                          )}
-                        </ul>
-                      </div>
+                  {/* Phase Items */}
+                  <Accordion type="single" collapsible className="divide-y divide-zinc-100">
+                    {phase.plan_items.map((item, itemIndex) => {
+                      const itemValue = `phase-${phase.phase_id}-item-${item.plan_item_id}`;
 
-                      {item.verification_criteria && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                          <div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Verification Criteria</span></div>
-                          <p className="text-xs">{item.verification_criteria}</p>
-                        </div>
-                      )}
-
-                      {item.context_handoff && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-background">
-                          <div className="flex items-center gap-2 mb-2"><ArrowRightLeft className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Context Handoff</span></div>
-                          {item.context_handoff.summary ? (
-                            <p className="text-xs">{item.context_handoff.summary}</p>
-                          ) : (
-                            <div className="text-xs">
-                              {Object.entries(item.context_handoff).map(([key, value], i) => (
-                                <div key={i} className="mb-2 last:mb-0">
-                                  <span className="font-bold text-zinc-600">{key}:</span>{" "}
-                                  <span>{typeof value === 'string' ? value : JSON.stringify(value)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {item.reasoning && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                          <div className="flex items-center gap-2 mb-2"><Lightbulb className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Reasoning</span></div>
-                          {Array.isArray(item.reasoning) ? (
-                            <ul className="space-y-2">
-                              {item.reasoning.length > 0 ? (
-                                item.reasoning.map((reason, i) => (
-                                  <li key={i} className="flex gap-2 text-xs text-left">
-                                    <div className="mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0" />
-                                    <FormattedText text={reason} />
-                                  </li>
-                                ))
-                              ) : (
-                                <li className="text-xs text-zinc-400 italic">No reasoning provided</li>
-                              )}
-                            </ul>
-                          ) : (
-                            <p className="text-xs">{item.reasoning}</p>
-                          )}
-                        </div>
-                      )}
-
-                      {item.architecture && (
-                        <div className="px-5 py-4 bg-background">
-                          <div className="flex items-center gap-2 mb-2"><GitMerge className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Architecture</span></div>
-                          <div className="border border-zinc-100 rounded-lg p-4 bg-background overflow-x-auto">
-                            <MermaidDiagram chart={item.architecture} />
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Files changeset */}
-                      {(Object.keys(modules).length > 0 || (item.files && item.files.length > 0)) && (
-                        <div className="px-5 py-4 border-t border-zinc-100">
-                           <div className="flex items-center gap-2 mb-3">
-                              <FileCode className="w-3.5 h-3.5 text-primary-color" />
-                              <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">Specs to Generate</span>
-                              <span className="text-[9px] text-zinc-400">({item.files?.length || 0} files)</span>
-                            </div>
-                            {Object.keys(modules).length > 0 ? (
-                              <div className="grid grid-cols-1 gap-3">
-                                {Object.entries(modules).map(([modName, files]) => (
-                                  <div key={modName} className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      {React.createElement(getModuleIcon(modName), { className: "w-3 h-3" })}
-                                      <span className="text-[10px] font-bold uppercase">{modName}</span>
-                                      <span className="text-[9px] text-zinc-400">({files.length})</span>
-                                    </div>
-                                    <ul className="space-y-1.5">
-                                      {files.map((f, i) => (
-                                        <li key={i} className="flex justify-between items-center text-[10px] gap-2">
-                                          <span className="font-mono truncate text-zinc-600" title={f.path}>{f.path}</span>
-                                          <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded ${
-                                            f.type?.toLowerCase() === 'create' ? 'bg-emerald-50 text-emerald-600' :
-                                            f.type?.toLowerCase() === 'modify' ? 'bg-amber-50 text-amber-600' :
-                                            f.type?.toLowerCase() === 'delete' ? 'bg-red-50 text-red-600' :
-                                            'bg-zinc-100 text-zinc-600'
-                                          }`}>{f.type}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ))}
+                      return (
+                        <AccordionItem
+                          key={itemValue}
+                          value={itemValue}
+                          className="group border-0 transition-all"
+                        >
+                          <AccordionTrigger className="px-5 py-4 flex gap-4 items-start hover:no-underline [&>svg]:hidden w-full hover:bg-zinc-50/50">
+                            <div className="pt-0.5 shrink-0"><StatusIcon status="generated" /></div>
+                            <div className="flex-1 min-w-0 text-left">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-black uppercase text-zinc-500">Step {item.order}</span>
+                                <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180 text-zinc-400" />
                               </div>
-                            ) : (
-                              <div className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
+                              <h3 className="text-sm font-bold truncate text-primary-color">{item.title}</h3>
+                              {item.estimated_effort && (
+                                <span className="inline-block mt-1 text-[9px] font-medium px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600">
+                                  Effort: {item.estimated_effort}
+                                </span>
+                              )}
+                            </div>
+                          </AccordionTrigger>
+
+                          <AccordionContent className="border-t border-zinc-100 bg-zinc-50/30 pt-0">
+                            {/* Description */}
+                            <div className="px-5 py-4 border-b border-zinc-100 bg-background">
+                              <div className="flex items-center gap-2 mb-2">
+                                <AlignLeft className="w-3.5 h-3.5 text-zinc-500" />
+                                <span className="text-[10px] font-bold uppercase text-zinc-600">Description</span>
+                              </div>
+                              <p className="text-xs text-zinc-700 leading-relaxed">{item.description}</p>
+                            </div>
+
+                            {/* Detailed Description - if available */}
+                            {(item as any).detailed_description && (
+                              <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <FileText className="w-3.5 h-3.5 text-zinc-500" />
+                                  <span className="text-[10px] font-bold uppercase text-zinc-600">Detailed Description</span>
+                                </div>
+                                <div className="text-xs text-zinc-700 leading-relaxed whitespace-pre-wrap">
+                                  {(item as any).detailed_description}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Dependencies */}
+                            {item.dependencies && item.dependencies.length > 0 && (
+                              <div className="px-5 py-3 border-b border-zinc-100 bg-background">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <GitMerge className="w-3.5 h-3.5 text-zinc-500" />
+                                  <span className="text-[10px] font-bold uppercase text-zinc-600">Dependencies</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {item.dependencies.map((dep, i) => (
+                                    <span key={i} className="text-[9px] font-medium px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
+                                      {dep}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* File Changes */}
+                            {(item as any).file_changes && (item as any).file_changes.length > 0 && (
+                              <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <FileCode className="w-3.5 h-3.5 text-zinc-500" />
+                                  <span className="text-[10px] font-bold uppercase text-zinc-600">File Changes</span>
+                                  <span className="text-[9px] text-zinc-400">({(item as any).file_changes.length} files)</span>
+                                </div>
+                                <div className="bg-zinc-50 rounded-lg p-3 border border-zinc-100">
+                                  <ul className="space-y-1.5">
+                                    {(item as any).file_changes.map((f: any, i: number) => (
+                                      <li key={i} className="flex justify-between items-center text-[10px] gap-2">
+                                        <span className="font-mono truncate text-zinc-600" title={f.path}>{f.path}</span>
+                                        <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded ${
+                                          f.action?.toLowerCase() === 'create' ? 'bg-emerald-50 text-emerald-600' :
+                                          f.action?.toLowerCase() === 'modify' ? 'bg-amber-50 text-amber-600' :
+                                          f.action?.toLowerCase() === 'delete' ? 'bg-red-50 text-red-600' :
+                                          'bg-zinc-100 text-zinc-600'
+                                        }`}>{f.action}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Verification Criteria */}
+                            {(item as any).verification_criteria && (item as any).verification_criteria.length > 0 && (
+                              <div className="px-5 py-4 bg-background">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
+                                  <span className="text-[10px] font-bold uppercase text-zinc-600">Verification Criteria</span>
+                                </div>
                                 <ul className="space-y-1.5">
-                                  {item.files?.map((f: FileItem, i: number) => (
-                                    <li key={i} className="flex justify-between items-center text-[10px] gap-2">
-                                      <span className="font-mono truncate text-zinc-600" title={f.path}>{f.path}</span>
-                                      <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded ${
-                                        f.type?.toLowerCase() === 'create' ? 'bg-emerald-50 text-emerald-600' :
-                                        f.type?.toLowerCase() === 'modify' ? 'bg-amber-50 text-amber-600' :
-                                        f.type?.toLowerCase() === 'delete' ? 'bg-red-50 text-red-600' :
-                                        'bg-zinc-100 text-zinc-600'
-                                      }`}>{f.type}</span>
+                                  {(item as any).verification_criteria.map((criteria: string, i: number) => (
+                                    <li key={i} className="flex gap-2 text-xs text-left">
+                                      <div className="mt-1.5 w-1 h-1 rounded-full bg-green-400 shrink-0" />
+                                      <span className="text-zinc-700">{criteria}</span>
                                     </li>
                                   ))}
                                 </ul>
                               </div>
                             )}
-                        </div>
-                      )}
-                    </AccordionContent> 
-                  </AccordionItem>
-                );
-              })}
-            </Accordion>
+                          </AccordionContent>
+                        </AccordionItem>
+                      );
+                    })}
+                  </Accordion>
+                </div>
+              ))}
+            </div>
           )}
 
           {/* Static Fallback (for demo/loading) */}
           {visibleCount > 0 && (
-            <Accordion type="single" collapsible className="space-y-6">
+            <Accordion type="single" collapsible className="space-y-6" defaultValue="static-slice-1">
               {FULL_PLAN.slice(0, visibleCount).map((slice, idx) => {
                 const itemValue = `static-slice-${slice.id}`;
                 return (
@@ -543,6 +608,7 @@ const PlanPage = () => {
             <Button
               onClick={async () => {
                 const firstItem = planItems[0];
+                
                 try {
                   await TaskSplittingService.submitTaskSplitting({ plan_item_id: firstItem.id });
                 } catch (error) {

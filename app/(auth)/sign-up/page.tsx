@@ -13,7 +13,7 @@ import type { SSOLoginResponse } from '@/types/auth';
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCustomToken, sendEmailVerification } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCustomToken, sendEmailVerification, GithubAuthProvider, signInWithCredential, signOut, linkWithPopup, User } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { validateWorkEmail } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
@@ -124,7 +124,97 @@ const Signup = () => {
       if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
         return;
       }
+      
+      // Handle credential already in use (edge case for Google)
+      if (error.code === 'auth/credential-already-in-use') {
+        toast.error("This Google account is already linked to another user. Please sign in instead.");
+        const signInUrl = `/sign-in${window.location.search}`;
+        setTimeout(() => {
+          router.push(signInUrl);
+        }, 1500);
+        return;
+      }
+      
       toast.error(getUserFriendlyError(error));
+    }
+  };
+
+  /**
+   * Link GitHub account with automatic conflict resolution
+   * This function handles the auth/credential-already-in-use error
+   * by resolving the conflict and retrying the link
+   */
+  const linkGitHubWithConflictResolution = async (currentUser: User): Promise<{ success: boolean; error?: string }> => {
+    const githubProvider = new GithubAuthProvider();
+    githubProvider.addScope('read:org');
+    githubProvider.addScope('user:email');
+    githubProvider.addScope('repo');
+
+    try {
+      const result = await linkWithPopup(currentUser, githubProvider);
+      const credential = GithubAuthProvider.credentialFromResult(result);
+
+      if (!credential || !credential.accessToken) {
+        throw new Error('Failed to get GitHub credentials');
+      }
+
+      // Send to backend
+      await AuthService.linkGitHub({
+        uid: currentUser.uid,
+        email: currentUser.email,
+        displayName: currentUser.displayName || currentUser.email?.split('@')[0] || '',
+        emailVerified: currentUser.emailVerified,
+        linkToUserId: currentUser.uid,
+        githubFirebaseUid: result.user.providerData.find((p: any) => p.providerId === 'github.com')?.uid,
+        accessToken: credential.accessToken,
+        providerUsername: (result as any)._tokenResponse?.screenName,
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      if (error.code === 'auth/credential-already-in-use') {
+        // Handle conflict - GitHub is already linked to another account
+        try {
+          const credential = GithubAuthProvider.credentialFromError(error);
+          if (!credential) {
+            throw new Error('Could not extract GitHub credential from error');
+          }
+
+          // Temporarily sign in with the conflicting credential to get the UID
+          const tempResult = await signInWithCredential(auth, credential);
+          const conflictingUid = tempResult.user.uid;
+
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Conflicting GitHub UID:', conflictingUid);
+          }
+
+          // Sign out immediately
+          await signOut(auth);
+
+          // Try to resolve the conflict via backend
+          await AuthService.resolveGitHubConflict(currentUser.uid, conflictingUid);
+
+          // User needs to sign in again after conflict resolution
+          return { 
+            success: false, 
+            error: 'GitHub conflict resolved. Please sign in again and retry linking GitHub.' 
+          };
+        } catch (conflictError: any) {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Error handling credential conflict:', conflictError);
+          }
+          return { 
+            success: false, 
+            error: 'This GitHub account is already linked to another account. Please use a different GitHub account or contact support.' 
+          };
+        }
+      }
+
+      if (error.code === 'auth/popup-closed-by-user') {
+        return { success: false, error: 'GitHub sign-in cancelled' };
+      }
+
+      return { success: false, error: getUserFriendlyError(error) };
     }
   };
 

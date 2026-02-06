@@ -1,69 +1,15 @@
 import axios, { AxiosError } from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import {
+  GenerateQuestionsRequest,
+  GenerateQuestionsResponse,
+  GetQuestionsResponse,
+  SubmitAnswersRequest,
+  SubmitAnswersResponse,
+  GeneratePlanRequest,
+  GeneratePlanResponse,
+} from "@/lib/types/questions";
 import { RecipeQuestionsResponse } from "@/lib/types/spec";
-
-/** Normalized option for UI (supports both string and {label, description} formats) */
-export interface MCQOption {
-  label: string;
-  description?: string;
-}
-
-export interface MCQQuestion {
-  id: string;
-  section: string;
-  question: string;
-  /** Options as strings (legacy) or MCQOption[] (new API) - normalized to MCQOption[] internally */
-  options: string[] | MCQOption[];
-  needsInput: boolean;
-  /** Whether multiple options can be selected (true) or only one (false) */
-  multipleChoice?: boolean;
-  /** Legacy: preferred option label. New: derived from answer_recommendation.idx */
-  assumed?: string;
-  /** AI reasoning for recommended option */
-  reasoning?: string;
-  /** New API: index of recommended option (0-based) */
-  answerRecommendationIdx?: number | null;
-  /** New API: expected answer type (e.g., "mcq (bool)") */
-  expectedAnswerType?: string;
-  /** New API: optional context references */
-  contextRefs?: Array<{ path?: string; type?: string; [key: string]: unknown }> | null;
-}
-
-export interface QuestionAnswer {
-  question_id: string;
-  text_answer?: string;
-  mcq_answer?: string;
-  is_user_modified?: boolean;
-  is_skipped?: boolean;
-}
-
-export interface GenerateQuestionsResponse {
-  questions: MCQQuestion[];
-}
-
-export interface GetQuestionsResponse {
-  questions: MCQQuestion[];
-  answers: { [question_id: string]: QuestionAnswer };
-}
-
-export interface SubmitAnswersRequest {
-  answers: {
-    [question_id: string]: {
-      text_answer?: string;
-      mcq_answer?: string;
-    };
-  };
-}
-
-export interface SubmitAnswersResponse {
-  status: string;
-  saved_count: number;
-}
-
-export interface GeneratePlanResponse {
-  plan_id: string;
-  plan_document: string;
-}
 
 /**
  * Service for interacting with the Questions API
@@ -98,7 +44,7 @@ export default class QuestionService {
     }
 
     const headers = await getHeaders();
-    const payload: { project_id: string; feature_idea?: string } = {
+    const payload: GenerateQuestionsRequest = {
       project_id: projectId.trim(),
     };
 
@@ -182,15 +128,16 @@ export default class QuestionService {
     }
 
     const headers = await getHeaders();
+    const payload: GeneratePlanRequest = {
+      project_id: projectId.trim(),
+      answers: answers || {},
+      additional_context: additionalContext?.trim() || "",
+    };
 
     try {
       const response = await axios.post<GeneratePlanResponse>(
         `${this.BASE_URL}/plans/generate`,
-        {
-          project_id: projectId.trim(),
-          answers: answers || {},
-          additional_context: additionalContext?.trim() || "",
-        },
+        payload,
         { headers }
       );
       return response.data;
@@ -201,14 +148,16 @@ export default class QuestionService {
 
   /**
    * Poll recipe questions until they're ready
+   * GET /api/v1/recipes/{recipe_id}/questions
+   * Polls every 4 seconds, max 60 attempts (4 minutes)
    * @param recipeId - The recipe ID
-   * @param pollInterval - Polling interval in ms (default: 3000)
+   * @param pollInterval - Polling interval in ms (default: 4000)
    * @param maxAttempts - Maximum polling attempts (default: 60)
    * @returns Questions when ready
    */
   static async pollRecipeQuestions(
     recipeId: string,
-    pollInterval: number = 3000,
+    pollInterval: number = 4000,
     maxAttempts: number = 60
   ): Promise<RecipeQuestionsResponse> {
     if (!recipeId?.trim()) {
@@ -221,33 +170,35 @@ export default class QuestionService {
     while (attempts < maxAttempts) {
       try {
         const response = await axios.get<RecipeQuestionsResponse>(
-          `${this.BASE_URL}/recipe/codegen/${recipeId.trim()}/questions`,
+          `${this.BASE_URL}/recipes/${recipeId.trim()}/questions`,
           { headers }
         );
 
         const data = response.data;
 
-        // If questions are available (even if status is not QUESTIONS_READY),
-        // return them. This handles cases where status has moved to SPEC_IN_PROGRESS
-        // but questions are still available.
+        // If questions are available and generation is completed, return them
+        if (data.generation_status === 'completed' && data.questions && data.questions.length > 0) {
+          return data;
+        }
+
+        // If questions are available (even if still processing), return them
         if (data.questions && data.questions.length > 0) {
           return data;
         }
 
-        // If questions are ready (status), return them
-        if (data.recipe_status === 'QUESTIONS_READY') {
-          return data;
-        }
-
-        // If error status, throw
-        if (data.recipe_status === 'ERROR') {
-          throw new Error("Failed to generate questions");
+        // If generation failed, throw
+        if (data.generation_status === 'failed') {
+          throw new Error(data.error_message || "Failed to generate questions");
         }
 
         // Otherwise, wait and poll again
         await new Promise(resolve => setTimeout(resolve, pollInterval));
         attempts++;
       } catch (error) {
+        // If it's a known error (not a network issue), throw
+        if (error instanceof Error && error.message.includes("Failed to generate")) {
+          throw error;
+        }
         // If it's a 404 or other error, wait and retry
         if (attempts < maxAttempts - 1) {
           await new Promise(resolve => setTimeout(resolve, pollInterval));
@@ -263,9 +214,9 @@ export default class QuestionService {
 
   /**
    * Get recipe questions directly (without polling)
-   * Use this when you know questions might already be available
+   * GET /api/v1/recipes/{recipe_id}/questions
    * @param recipeId - The recipe ID
-   * @returns Questions response (may have questions even if status is not QUESTIONS_READY)
+   * @returns Questions response (may have questions even if generation not completed)
    */
   static async getRecipeQuestions(
     recipeId: string
@@ -278,7 +229,7 @@ export default class QuestionService {
 
     try {
       const response = await axios.get<RecipeQuestionsResponse>(
-        `${this.BASE_URL}/recipe/codegen/${recipeId.trim()}/questions`,
+        `${this.BASE_URL}/recipes/${recipeId.trim()}/questions`,
         { headers }
       );
       return response.data;

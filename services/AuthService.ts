@@ -24,6 +24,23 @@ interface CheckEmailResponse {
   has_sso?: boolean;
 }
 
+interface ResolveGitHubConflictResponse {
+  success: boolean;
+  message: string;
+  deleted_firebase_uid?: string;
+}
+
+interface LinkGitHubPayload {
+  uid: string;
+  email: string | null;
+  displayName: string;
+  emailVerified: boolean;
+  linkToUserId: string;
+  githubFirebaseUid?: string;
+  accessToken?: string;
+  providerUsername?: string;
+}
+
 export default class AuthService {
   private static baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -135,6 +152,81 @@ export default class AuthService {
         console.error("Error checking SSO status:", error);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Resolve GitHub credential conflict
+   * When a GitHub account is already linked to another Firebase user,
+   * this endpoint allows the current user to claim the GitHub account
+   * by deleting the conflicting user from the backend.
+   */
+  static async resolveGitHubConflict(
+    currentUserUid: string,
+    conflictingGitHubUid: string,
+    githubAccessToken?: string,
+    githubUsername?: string
+  ): Promise<ResolveGitHubConflictResponse> {
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.post<ResolveGitHubConflictResponse>(
+        `${this.baseUrl}/api/v1/resolve-github-conflict`,
+        {
+          current_user_uid: currentUserUid,
+          conflicting_github_uid: conflictingGitHubUid,
+          github_access_token: githubAccessToken,
+          github_username: githubUsername,
+        },
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error("Resolve GitHub conflict API error:", error);
+      }
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.details ||
+        error.message ||
+        "Failed to resolve GitHub conflict";
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Link GitHub to an existing user account
+   * Used after conflict resolution or for first-time GitHub linking
+   */
+  static async linkGitHub(payload: LinkGitHubPayload): Promise<SignupResponse> {
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.post<SignupResponse>(
+        `${this.baseUrl}/api/v1/signup`,
+        {
+          uid: payload.uid,
+          email: payload.email,
+          displayName: payload.displayName,
+          emailVerified: payload.emailVerified,
+          linkToUserId: payload.linkToUserId,
+          githubFirebaseUid: payload.githubFirebaseUid,
+          accessToken: payload.accessToken,
+          providerUsername: payload.providerUsername,
+        },
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error("Link GitHub API error:", error);
+      }
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.details ||
+        error.message ||
+        "Failed to link GitHub account";
+      throw new Error(errorMessage);
     }
   }
 }

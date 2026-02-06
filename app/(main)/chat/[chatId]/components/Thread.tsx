@@ -160,10 +160,14 @@ export const Thread: FC<ThreadProps> = ({
         {(() => {
           if (isInitialLoading) {
             return (
-              <div className="flex items-center justify-center h-full space-x-1 mt-2">
-                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
-                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
-                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                <img 
+                  src="/images/Green Icon.svg" 
+                  alt="Loading" 
+                  className="w-10 h-10 animate-spin"
+                  style={{ animationDuration: '2s' }}
+                />
+                <p className="text-muted-foreground text-sm">Loading...</p>
               </div>
             );
           } else {
@@ -214,7 +218,7 @@ const ThreadWelcome: FC<{ showSuggestions: boolean }> = ({
       <div className="flex w-full h-full max-w-[var(--thread-max-width)] flex-grow flex-col">
         <div className="flex w-full flex-grow flex-col items-center justify-center">
           <Avatar className="rounded-none">
-            <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
+            <AvatarImage src="/images/Green Icon.svg" alt="Agent" />
             <AvatarFallback className="bg-transparent">P</AvatarFallback>
           </Avatar>
           <p className="mt-4 font-medium">How can I help you today?</p>
@@ -702,7 +706,7 @@ const AssistantMessage: FC = () => {
     >
       <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative">
         <Avatar className="mr-4 rounded-none bg-transparent">
-          <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
+          <AvatarImage src="/images/Green Icon.svg" alt="Agent" />
           <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
         </Avatar>
 

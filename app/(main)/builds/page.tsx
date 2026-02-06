@@ -16,7 +16,7 @@ export default function BuildsPage() {
   };
 
   const handleDebugError = () => {
-    router.push("/idea?demo=true");
+    router.push("/idea?showcase=1");
   };
 
   return (

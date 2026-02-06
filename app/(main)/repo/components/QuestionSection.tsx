@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import QuestionCard from "./QuestionCard";
 import type { MCQQuestion, QuestionAnswer } from "@/types/question";
 
@@ -11,12 +10,11 @@ interface QuestionSectionProps {
   hoveredQuestion: string | null;
   expandedOptions: Set<string>;
   skippedQuestions: Set<string>;
+  unansweredQuestionIds?: Set<string>;
+  questionRefs?: React.MutableRefObject<Map<string, HTMLDivElement>>;
   onHover: (questionId: string | null) => void;
   onAnswerChange: (questionId: string, answer: Partial<QuestionAnswer>) => void;
-  onSave: (questionId: string) => void;
-  onCancel: (questionId: string) => void;
   onToggleOptions: (questionId: string) => void;
-  onToggleSkip: (questionId: string) => void;
 }
 
 export default function QuestionSection({
@@ -26,33 +24,51 @@ export default function QuestionSection({
   hoveredQuestion,
   expandedOptions,
   skippedQuestions,
+  unansweredQuestionIds,
+  questionRefs,
   onHover,
   onAnswerChange,
-  onSave,
-  onCancel,
   onToggleOptions,
-  onToggleSkip,
 }: QuestionSectionProps) {
   if (questions.length === 0) return null;
+
+  // Check if a question was auto-selected (has an answer that was NOT user-modified)
+  const isAutoSelected = (questionId: string): boolean => {
+    const answer = answers.get(questionId);
+    if (!answer) return false;
+    // If the answer exists and was NOT user-modified, it was auto-selected
+    return !answer.isUserModified && (
+      answer.selectedOptionIdx != null ||
+      (answer.selectedOptionIndices && answer.selectedOptionIndices.length > 0) ||
+      !!answer.textAnswer
+    );
+  };
 
   return (
     <>
       {questions.map((question) => (
-        <QuestionCard
+        <div
           key={question.id}
-          question={question}
-          answer={answers.get(question.id)}
-          isHovered={hoveredQuestion === question.id}
-          isExpanded={expandedOptions.has(question.id)}
-          isSkipped={skippedQuestions.has(question.id)}
-          onHover={() => onHover(question.id)}
-          onHoverLeave={() => onHover(null)}
-          onAnswerChange={(answer) => onAnswerChange(question.id, answer)}
-          onSave={() => onSave(question.id)}
-          onCancel={() => onCancel(question.id)}
-          onToggleOptions={() => onToggleOptions(question.id)}
-          onToggleSkip={() => onToggleSkip(question.id)}
-        />
+          ref={(el) => {
+            if (el && questionRefs) {
+              questionRefs.current.set(question.id, el);
+            }
+          }}
+        >
+          <QuestionCard
+            question={question}
+            answer={answers.get(question.id)}
+            isHovered={hoveredQuestion === question.id}
+            isExpanded={expandedOptions.has(question.id)}
+            isSkipped={skippedQuestions.has(question.id)}
+            isUnanswered={unansweredQuestionIds?.has(question.id) ?? false}
+            isAutoSelected={isAutoSelected(question.id)}
+            onHover={() => onHover(question.id)}
+            onHoverLeave={() => onHover(null)}
+            onAnswerChange={(answer) => onAnswerChange(question.id, answer)}
+            onToggleOptions={() => onToggleOptions(question.id)}
+          />
+        </div>
       ))}
     </>
   );

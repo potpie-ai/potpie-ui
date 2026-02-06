@@ -15,7 +15,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Github, FileText, Loader2, GitBranch } from "lucide-react";
 import {
   QAAnswer,
-  SubmitSpecGenerationResponse,
+  TriggerSpecGenerationResponse,
   RecipeQuestionsResponse,
   RecipeQuestion,
   RecipeQuestionNew,
@@ -29,6 +29,13 @@ import type {
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { ParsingStatusEnum } from "@/lib/Constants";
 import { Badge as UIBadge } from "@/components/ui/badge";
+
+// Criticality order for sorting (lower value = higher priority)
+const CRITICALITY_ORDER: Record<string, number> = {
+  BLOCKER: 0,
+  IMPORTANT: 1,
+  NICE_TO_HAVE: 2,
+};
 
 const Badge = ({
   children,
@@ -49,8 +56,10 @@ export default function RepoPage() {
   const projectId = searchParams.get("projectId");
   const recipeIdFromUrl = searchParams.get("recipeId");
   const repoNameFromUrl = searchParams.get("repoName");
+  const branchNameFromUrl = searchParams.get("branch");
   const featureIdeaFromUrl = searchParams.get("featureIdea");
   const questionsEndRef = useRef<HTMLDivElement>(null);
+  const questionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [questionsPolling, setQuestionsPolling] = useState(false);
@@ -82,8 +91,8 @@ export default function RepoPage() {
         console.log("[Repo Page] Recipe details received:", recipeDetails);
 
         // Set repo and branch from recipe details
-        setRecipeRepoName(recipeDetails.repo_name);
-        setRecipeBranchName(recipeDetails.branch_name);
+        setRecipeRepoName(recipeDetails.repo_name ?? null);
+        setRecipeBranchName(recipeDetails.branch_name ?? null);
       } catch (error: any) {
         console.error("[Repo Page] Failed to fetch recipe details:", error);
         // Keep null values on error - will fall back to URL params or projectData
@@ -112,7 +121,7 @@ export default function RepoPage() {
           if (questionsData.questions && questionsData.questions.length > 0) {
             console.log(
               "[Repo Page] Questions already available, status:",
-              questionsData.recipe_status
+              questionsData.generation_status
             );
             // Process questions immediately
             processQuestions(questionsData);
@@ -173,6 +182,8 @@ export default function RepoPage() {
                 recIdx != null && recIdx >= 0 && recIdx < options.length
                   ? options[recIdx].label
                   : undefined;
+              // Parse criticality from API response
+              const criticality = (newQ as any).criticality as "BLOCKER" | "IMPORTANT" | "NICE_TO_HAVE" | undefined;
               return {
                 id: newQ.id ?? `q-${index}`,
                 section: "General",
@@ -185,11 +196,12 @@ export default function RepoPage() {
                 answerRecommendationIdx: recIdx ?? null,
                 expectedAnswerType: newQ.expected_answer_type,
                 contextRefs: newQ.context_refs ?? null,
+                criticality,
               };
             }
 
             // Legacy format: options are string[]
-            const legacyQ = q as RecipeQuestion;
+            const legacyQ = q as unknown as RecipeQuestion;
             const strOptions = legacyQ.options || [];
             const options = strOptions.map((opt) =>
               typeof opt === "string" ? { label: opt, description: undefined } : opt
@@ -205,6 +217,13 @@ export default function RepoPage() {
             };
           }
         );
+
+        // Sort questions by criticality
+        mcqQuestions.sort((a, b) => {
+          const aOrder = CRITICALITY_ORDER[a.criticality || "NICE_TO_HAVE"] ?? 2;
+          const bOrder = CRITICALITY_ORDER[b.criticality || "NICE_TO_HAVE"] ?? 2;
+          return aOrder - bOrder;
+        });
 
         // Group by section and set state
         const sectionsMap = new Map<string, MCQQuestion[]>();
@@ -236,8 +255,13 @@ export default function RepoPage() {
         });
         
         // Then, set AI recommendations for questions without localStorage answers
-        mcqQuestions.forEach((q) => {
+        // Auto-select most questions, only leave 1-2 key business questions requiring input
+        const QUESTIONS_REQUIRING_INPUT = new Set([3, 7]); // "Does AI need access to private data?" and "Should AI perform actions?"
+        mcqQuestions.forEach((q, index) => {
           if (initialAnswers.has(q.id)) return; // Skip if already loaded from localStorage
+          
+          // Skip questions that require user input
+          if (QUESTIONS_REQUIRING_INPUT.has(index)) return;
           
           const options = Array.isArray(q.options)
             ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
@@ -289,7 +313,7 @@ export default function RepoPage() {
         // No questions available
         console.warn(
           "[Repo Page] No questions available, status:",
-          questionsData.recipe_status
+          questionsData.generation_status
         );
         setState((prev) => ({ ...prev, pageState: "questions" }));
       }
@@ -347,7 +371,7 @@ export default function RepoPage() {
     repoNameFromUrl ||
     projectData?.repo_name ||
     "Unknown Repository";
-  let branchName = recipeBranchName || projectData?.branch_name || "";
+  let branchName = recipeBranchName || branchNameFromUrl || projectData?.branch_name || "";
 
   // Split repoName if it contains "/" (format: reponame/branchname) and no branch is set
   if (repoName.includes("/") && !branchName) {
@@ -600,8 +624,14 @@ export default function RepoPage() {
     });
 
     // Set AI assumptions as initial answers (answer_recommendation.idx or assumed)
-    questions.forEach((q: MCQQuestion) => {
+    // Auto-select most questions, only leave 1-2 key business questions requiring input
+    const QUESTIONS_REQUIRING_INPUT_SET = new Set([3, 7]); // "Does AI need access to private data?" and "Should AI perform actions?"
+    questions.forEach((q: MCQQuestion, qIndex: number) => {
       if (answersMap.has(q.id)) return;
+      
+      // Skip questions that require user input
+      if (QUESTIONS_REQUIRING_INPUT_SET.has(qIndex)) return;
+      
       const options = Array.isArray(q.options)
         ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
         : [];
@@ -757,8 +787,8 @@ export default function RepoPage() {
 
       console.log("Submitting QA answers with recipeId:", activeRecipeId);
 
-      // Collect all answers - format: option label OR "Other: <user_input>"
-      const qaAnswers: Array<{ question_id: string; answer: string }> = [];
+      // Collect all answers - format: { question_id: answer_text }
+      const answersPayload: Record<string, string> = {};
 
       state.questions.forEach((question) => {
         const qId = question.id;
@@ -795,21 +825,19 @@ export default function RepoPage() {
             : [];
           const idx = answer.selectedOptionIdx ?? (answer.mcqAnswer?.charCodeAt(0) ?? 65) - 65;
           if (idx >= 0 && idx < options.length) {
-            answerStr = typeof options[idx] === "string" ? options[idx] : options[idx].label;
+            const opt = options[idx];
+            answerStr = typeof opt === "string" ? opt : opt.label;
           }
         }
 
         if (answerStr) {
-          qaAnswers.push({ question_id: qId, answer: answerStr });
+          answersPayload[qId] = answerStr;
         }
       });
 
       // Add additional context if provided (as a special question)
       if (state.additionalContext.trim()) {
-        qaAnswers.push({
-          question_id: "additional_context",
-          answer: state.additionalContext.trim(),
-        });
+        answersPayload["additional_context"] = state.additionalContext.trim();
       }
 
       // Clear localStorage after successful submission since answers are now saved on backend
@@ -822,13 +850,17 @@ export default function RepoPage() {
         }
       }
       
-      // Call new spec generation API
-      return await SpecService.submitSpecGeneration({
-        recipe_id: activeRecipeId,
-        qa_answers: qaAnswers,
-      });
+      // Step 1: Submit answers to the recipe
+      console.log("[Repo Page] Submitting answers...");
+      await SpecService.submitAnswers(activeRecipeId, answersPayload);
+      
+      // Step 2: Trigger spec generation
+      console.log("[Repo Page] Triggering spec generation...");
+      const specResponse = await SpecService.triggerSpecGeneration(activeRecipeId);
+      
+      return specResponse;
     },
-    onSuccess: (response: SubmitSpecGenerationResponse) => {
+    onSuccess: (response: TriggerSpecGenerationResponse) => {
       toast.success("Spec generation started successfully");
       // Navigate to spec page with recipeId
       const activeRecipeId = recipeId || recipeIdFromUrl;
@@ -903,7 +935,71 @@ export default function RepoPage() {
     });
   };
 
+  // Helper function to scroll to the first unanswered question
+  const scrollToFirstUnansweredQuestion = (unansweredIds: string[]) => {
+    if (unansweredIds.length === 0) return;
+    
+    // Find the first unanswered question (they're already sorted by criticality)
+    const firstUnansweredId = unansweredIds[0];
+    const questionRef = questionRefs.current.get(firstUnansweredId);
+    
+    if (questionRef) {
+      questionRef.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Add a brief highlight effect
+      questionRef.classList.add("ring-2", "ring-amber-400");
+      setTimeout(() => {
+        questionRef.classList.remove("ring-2", "ring-amber-400");
+      }, 2000);
+    }
+  };
+
   const handleGeneratePlan = () => {
+    // Check for unanswered questions before starting generation
+    const unansweredIds: string[] = [];
+    state.questions.forEach((q) => {
+      if (state.skippedQuestions.has(q.id)) return;
+      const answer = state.answers.get(q.id);
+      const options = Array.isArray(q.options)
+        ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
+        : [];
+      let hasAnswer = false;
+      const isMultipleChoice = q.multipleChoice ?? false;
+      if (answer?.isOther && answer.otherText?.trim()) {
+        hasAnswer = true;
+      } else if (isMultipleChoice) {
+        if (answer?.selectedOptionIndices && answer.selectedOptionIndices.length > 0) {
+          hasAnswer = answer.selectedOptionIndices.some(
+            idx => idx >= 0 && idx < options.length
+          );
+        } else if (answer?.textAnswer?.trim()) {
+          hasAnswer = true;
+        }
+      } else {
+        if (answer?.selectedOptionIdx != null && answer.selectedOptionIdx >= 0 && answer.selectedOptionIdx < options.length) {
+          hasAnswer = true;
+        } else if (answer?.textAnswer?.trim()) {
+          hasAnswer = true;
+        } else if (answer?.mcqAnswer && options.length > 0) {
+          const idx = (answer.mcqAnswer.charCodeAt(0) ?? 65) - 65;
+          if (idx >= 0 && idx < options.length) hasAnswer = true;
+        }
+      }
+      if (!hasAnswer) {
+        unansweredIds.push(q.id);
+      }
+    });
+
+    // If there are unanswered questions, scroll to the first one and show error
+    if (unansweredIds.length > 0) {
+      setState((prev) => ({
+        ...prev,
+        unansweredQuestionIds: new Set(unansweredIds),
+      }));
+      toast.error(`Please answer all questions. ${unansweredIds.length} question(s) need your input.`);
+      scrollToFirstUnansweredQuestion(unansweredIds);
+      return;
+    }
+
     setState((prev) => ({ ...prev, isGenerating: true }));
     generatePlanMutation.mutate();
   };
@@ -1051,10 +1147,10 @@ export default function RepoPage() {
                       )}
                       answers={state.answers}
                       hoveredQuestion={state.hoveredQuestion}
+                      expandedOptions={state.expandedOptions}
                       skippedQuestions={state.skippedQuestions}
-                      unansweredQuestionIds={
-                        state.unansweredQuestionIds ?? new Set()
-                      }
+                      unansweredQuestionIds={state.unansweredQuestionIds}
+                      questionRefs={questionRefs}
                       onHover={(questionId) =>
                         setState((prev) => ({
                           ...prev,
@@ -1062,7 +1158,17 @@ export default function RepoPage() {
                         }))
                       }
                       onAnswerChange={handleAnswerChange}
-                      onToggleSkip={handleToggleSkip}
+                      onToggleOptions={(questionId) =>
+                        setState((prev) => {
+                          const newExpanded = new Set(prev.expandedOptions);
+                          if (newExpanded.has(questionId)) {
+                            newExpanded.delete(questionId);
+                          } else {
+                            newExpanded.add(questionId);
+                          }
+                          return { ...prev, expandedOptions: newExpanded };
+                        })
+                      }
                     />
                   );
                 });
@@ -1073,10 +1179,9 @@ export default function RepoPage() {
                 onContextChange={(context) =>
                   setState((prev) => ({ ...prev, additionalContext: context }))
                 }
-                onSaveAndSubmit={handleGeneratePlan}
+                onGeneratePlan={handleGeneratePlan}
                 isGenerating={state.isGenerating}
                 recipeId={recipeId}
-                unansweredCount={unansweredCount}
               />
             )}
              

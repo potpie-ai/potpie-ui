@@ -5,7 +5,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import type { MCQQuestion, QuestionAnswer } from "@/types/question";
-import type { MCQOption } from "@/services/QuestionService";
+import type { MCQOption } from "@/lib/types/questions";
 
 interface QuestionCardProps {
   question: MCQQuestion;
@@ -14,6 +14,7 @@ interface QuestionCardProps {
   isExpanded: boolean;
   isSkipped: boolean;
   isUnanswered?: boolean;
+  isAutoSelected?: boolean;
   onHover: () => void;
   onHoverLeave: () => void;
   onAnswerChange: (answer: Partial<QuestionAnswer>) => void;
@@ -36,6 +37,7 @@ export default function QuestionCard({
   isExpanded,
   isSkipped,
   isUnanswered = false,
+  isAutoSelected = false,
   onHover,
   onHoverLeave,
   onAnswerChange,
@@ -52,13 +54,6 @@ export default function QuestionCard({
     (isMultipleChoice
       ? selectedIndices.length > 0 && selectedIndices.some(idx => idx >= 0 && idx < options.length)
       : selectedIdx != null && selectedIdx >= 0 && selectedIdx < options.length);
-
-  // Show "Input needed" when: no answer_recommendation.idx AND user hasn't selected
-  const needsInput =
-    question.needsInput &&
-    !hasAnswer &&
-    (question.answerRecommendationIdx == null ||
-      question.answerRecommendationIdx < 0);
 
   const cardClasses = [
     "p-4 rounded-xl border transition-all duration-200",
@@ -155,14 +150,15 @@ export default function QuestionCard({
                 {question.question}
               </p>
               <div className="flex items-center gap-1.5 flex-shrink-0">
+                {/* Show "Needs Input" for non-auto-selected questions, otherwise show nothing */}
+                {!isSkipped && !isAutoSelected && (
+                  <span className="px-1.5 py-0.5 bg-[#022423] border border-[#022423] rounded text-[10px] font-bold uppercase tracking-wider text-white">
+                    Needs Input
+                  </span>
+                )}
                 {isSkipped && (
                   <span className="px-1.5 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
                     Skipped
-                  </span>
-                )}
-                {!isSkipped && needsInput && (
-                  <span className="px-1.5 py-0.5 bg-accent/20 border border-accent/40 rounded text-[10px] font-bold uppercase tracking-wider text-accent-foreground">
-                    Input needed
                   </span>
                 )}
               </div>

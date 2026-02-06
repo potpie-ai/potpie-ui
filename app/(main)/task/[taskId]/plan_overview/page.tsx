@@ -33,6 +33,7 @@ import {
   SpecStatusResponse,
   SpecPlanStatusResponse,
   SpecOutput,
+  SpecificationOutput,
 } from "@/lib/types/spec";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import QuestionService from "@/services/QuestionService";
@@ -347,7 +348,7 @@ const PlanOverviewPage = () => {
   }, [recipeId, taskId]);
   
   const [mockTask, setMockTask] = useState<MockTaskResponse | null>(null);
-  const [specOutput, setSpecOutput] = useState<SpecOutput | null>(null);
+  const [specOutput, setSpecOutput] = useState<SpecOutput | SpecificationOutput | null>(null);
   const [specProgress, setSpecProgress] = useState<SpecStatusResponse | SpecPlanStatusResponse | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -402,44 +403,28 @@ const PlanOverviewPage = () => {
         setError(null);
 
         // Get spec progress from recipe codegen API
-        let progress: SpecStatusResponse | SpecPlanStatusResponse;
-        const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
-        
-        if (storedSpecId) {
-          progress = await SpecService.getSpecProgressBySpecId(storedSpecId);
-        } else {
-          progress = await SpecService.getSpecProgressByRecipeId(recipeId);
-          
-          // Store spec_id if available
-          if ('spec_id' in progress && progress.spec_id) {
-            localStorage.setItem(`spec_${recipeId}`, progress.spec_id);
-          }
-        }
+        // New API only supports fetching by recipe_id
+        const progress = await SpecService.getSpecProgressByRecipeId(recipeId);
 
         // Store progress for display
         setSpecProgress(progress);
 
-        // Extract spec output
-        if (progress.spec_output) {
-          setSpecOutput(progress.spec_output);
+        // Extract spec output using new API format
+        if (progress.specification) {
+          setSpecOutput(progress.specification);
           setIsGenerating(false);
           setIsPlanExpanded(false);
           setPlanProgress(100);
         } else {
           // If spec is not ready, show generating state
-          const status = 'spec_gen_status' in progress 
-            ? (progress as any).spec_gen_status 
-            : (progress as any).spec_generation_step_status;
-          
-          const progressPercent = (progress as any).progress_percent ?? 0;
-          setPlanProgress(progressPercent);
-          
-          if (status === 'COMPLETED') {
+          const status = progress.generation_status;
+
+          if (status === 'completed') {
             setIsGenerating(false);
             setPlanProgress(100);
-          } else if (status === 'IN_PROGRESS' || status === 'PENDING') {
+          } else if (status === 'processing' || status === 'pending') {
             setIsGenerating(true);
-          } else if (status === 'FAILED') {
+          } else if (status === 'failed') {
             setIsGenerating(false);
             setError("Spec generation failed");
           }
@@ -539,17 +524,15 @@ const PlanOverviewPage = () => {
           q2: "Yes",
         });
 
-        // Set mock spec output
+        // Set mock spec output using new API format
         setSpecOutput(mockSpecOutput);
         setSpecProgress({
           recipe_id: recipeId,
-          spec_id: `mock-spec-${recipeId}`,
-          spec_gen_status: "COMPLETED",
-          step_index: 5,
-          progress_percent: 100,
-          step_statuses: {},
-          spec_output: mockSpecOutput,
-        });
+          generation_status: "completed",
+          specification: null, // Mock doesn't have the new format
+          generated_at: new Date().toISOString(),
+          error_message: null,
+        } as SpecStatusResponse);
         setIsGenerating(false);
         setIsPlanExpanded(false);
         setPlanProgress(100);

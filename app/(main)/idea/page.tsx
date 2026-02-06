@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Image from "next/image";
 import IdeaInputCard from "./components/IdeaInputCard";
@@ -64,7 +64,6 @@ const PARSING_STEPS = [
 
 export default function IdeaPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useAuthContext();
@@ -83,28 +82,6 @@ export default function IdeaPage() {
     linkedRepos: [],
     parsingStatus: "",
   });
-
-  // Demo mode check - detect cal.com repo, main branch, and ai/chat in prompt
-  const isDemoModeFromUrl = searchParams.get("showcase") === "1";
-  
-  // Check if demo mode should be activated based on repo selection
-  // Demo mode is enabled for any prompt if cal.com repo and main branch is selected
-  const checkDemoMode = (repoName: string | null, branch: string | null, prompt: string): boolean => {
-    if (!repoName || !branch) return false;
-    
-    // Check if repo is cal.com (case-insensitive)
-    const isCalComRepo = repoName.toLowerCase().includes("calcom") || 
-                         repoName.toLowerCase().includes("cal.com") ||
-                         repoName.toLowerCase() === "cal";
-    
-    // Check if branch is main
-    const isMainBranch = branch.toLowerCase() === "main";
-    
-    // Enable demo mode for any prompt if cal.com + main branch
-    return isCalComRepo && isMainBranch;
-  };
-  
-  const isDemoMode = isDemoModeFromUrl;
 
   // Fetch all repositories
   const {
@@ -232,38 +209,6 @@ export default function IdeaPage() {
     setState((prev) => ({ ...prev, linkedRepos: repositories }));
   }, [repositories]);
 
-  // Demo mode: auto-select first repo (separate effect to avoid conflicts)
-  useEffect(() => {
-    if (isDemoMode && repositories.length > 0) {
-      setState((prev) => {
-        // Only set if not already selected
-        if (prev.selectedRepo) return prev;
-        return {
-          ...prev,
-          selectedRepo: repositories[0].id.toString(),
-        };
-      });
-    }
-  }, [isDemoMode, repositories]);
-
-  // Demo mode: pre-fill textarea
-  useEffect(() => {
-    if (isDemoMode && !state.input) {
-      const demoIdeas = {
-        ask: "How do I implement authentication in my Next.js app?",
-        build:
-          "Integrate payment processing with Stripe. Add a checkout page with credit card validation, handle webhooks for payment status updates, and create an admin dashboard to view transactions.",
-        debug:
-          "Explore the tool with a pre-configured fraud detection pipeline demo showcasing the full workflow. This demo will walk you through the complete process of building, analyzing, and implementing a feature.",
-      };
-      const demoIdea = state.selectedAgent
-        ? demoIdeas[state.selectedAgent as keyof typeof demoIdeas] ||
-          demoIdeas.build
-        : demoIdeas.build;
-      setState((prev) => ({ ...prev, input: demoIdea }));
-    }
-  }, [isDemoMode, state.selectedAgent]);
-
   // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
@@ -336,12 +281,13 @@ export default function IdeaPage() {
     onSuccess: (data: CreateRecipeCodegenResponse) => {
       console.log("[Idea Page] Recipe created successfully:", data);
 
-      const projectId = data.project_id?.toString() || state.projectId;
+      // project_id is no longer in the response; use state.projectId (set during parsing)
+      const projectId = state.projectId;
 
       setState((prev) => ({
         ...prev,
-        recipeId: data.recipe_id, // Store recipe_id instead of projectId
-        projectId: projectId || null, // Also store project_id if available
+        recipeId: data.recipe_id,
+        projectId: projectId || null,
         loading: false,
       }));
 
@@ -391,20 +337,12 @@ export default function IdeaPage() {
             const cleanInput = getCleanInput(state.input);
             params.append("featureIdea", cleanInput);
           }
-          
-          // Check if demo mode should be activated
-          const shouldActivateDemoMode = checkDemoMode(repoName, branchName, state.input);
-          if (shouldActivateDemoMode) {
-            params.append("showcase", "1");
-          }
 
           console.log(
             "[Idea Page] Navigating to repo page with recipeId:",
             data.recipe_id,
             "and projectId:",
-            projectId,
-            "demo mode:",
-            shouldActivateDemoMode
+            projectId
           );
           router.push(`/repo?${params.toString()}`);
         } else {
@@ -955,18 +893,10 @@ export default function IdeaPage() {
         const cleanInput = getCleanInput(state.input);
         params.append("featureIdea", cleanInput);
       }
-      
-      // Check if demo mode should be activated
-      const shouldActivateDemoMode = checkDemoMode(repoName, branchName, state.input);
-      if (shouldActivateDemoMode) {
-        params.append("showcase", "1");
-      }
 
       console.log(
         "[Idea Page] Navigating to repo page with recipeId:",
-        state.recipeId,
-        "demo mode:",
-        shouldActivateDemoMode
+        state.recipeId
       );
       router.push(`/repo?${params.toString()}`);
       return;

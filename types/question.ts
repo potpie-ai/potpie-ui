@@ -1,7 +1,7 @@
-import type { MCQQuestion } from "@/services/QuestionService";
+import type { APIQuestion } from "@/lib/types/questions";
 
-// Re-export MCQQuestion
-export type { MCQQuestion };
+// Re-export APIQuestion as MCQQuestion for backward compatibility
+export type MCQQuestion = APIQuestion;
 
 // QuestionAnswer with camelCase properties for component usage
 export interface QuestionAnswer {

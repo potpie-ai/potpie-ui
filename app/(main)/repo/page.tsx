@@ -29,10 +29,6 @@ import type {
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { ParsingStatusEnum } from "@/lib/Constants";
 import { Badge as UIBadge } from "@/components/ui/badge";
-import qaMockData from "@/lib/mock/qaMock.json";
-
-// Demo mode delay in milliseconds (35 seconds)
-const DEMO_MODE_DELAY = 15000;
 
 // Criticality order for sorting (lower value = higher priority)
 const CRITICALITY_ORDER: Record<string, number> = {
@@ -62,10 +58,8 @@ export default function RepoPage() {
   const repoNameFromUrl = searchParams.get("repoName");
   const branchNameFromUrl = searchParams.get("branch");
   const featureIdeaFromUrl = searchParams.get("featureIdea");
-  const isDemoMode = searchParams.get("showcase") === "1";
   const questionsEndRef = useRef<HTMLDivElement>(null);
   const questionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const [demoDelayComplete, setDemoDelayComplete] = useState(!isDemoMode);
 
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [questionsPolling, setQuestionsPolling] = useState(false);
@@ -86,129 +80,10 @@ export default function RepoPage() {
     isGenerating: false,
   });
 
-  // Demo mode delay effect
-  useEffect(() => {
-    if (!isDemoMode) return;
-    
-    console.log("[Repo Page] Demo mode active - starting 35 second delay");
-    const timer = setTimeout(() => {
-      console.log("[Repo Page] Demo mode delay complete");
-      setDemoDelayComplete(true);
-    }, DEMO_MODE_DELAY);
-
-    return () => clearTimeout(timer);
-  }, [isDemoMode]);
-
-  // Load mock questions in demo mode
-  useEffect(() => {
-    if (!isDemoMode || !demoDelayComplete) return;
-
-    console.log("[Repo Page] Demo mode - loading mock questions");
-    
-    // Convert mock data to MCQQuestion[] format
-    const mockQuestions = qaMockData.response;
-    const mcqQuestions: MCQQuestion[] = mockQuestions.map((q, index) => {
-      const options = q.options.map((opt) => ({
-        label: opt.label,
-        description: opt.description,
-      }));
-      // Use 'recommended' field if available, otherwise fall back to answer_recommendation.idx
-      const recommended = (q as any).recommended as number | undefined;
-      const recIdx = recommended ?? q.answer_recommendation?.idx ?? null;
-      const assumedLabel =
-        recIdx != null && recIdx >= 0 && recIdx < options.length
-          ? options[recIdx].label
-          : undefined;
-      
-      // Parse criticality from mock data
-      const criticality = (q as any).criticality as "BLOCKER" | "IMPORTANT" | "NICE_TO_HAVE" | undefined;
-      
-      return {
-        id: `demo-q-${index}`,
-        section: "General",
-        question: q.question,
-        options,
-        needsInput: true,
-        multipleChoice: q.multiple_choice ?? false,
-        assumed: assumedLabel,
-        reasoning: q.answer_recommendation?.reasoning,
-        answerRecommendationIdx: recIdx,
-        expectedAnswerType: undefined,
-        contextRefs: q.context_refs ?? null,
-        criticality,
-      };
-    });
-
-    // Sort questions by criticality
-    mcqQuestions.sort((a, b) => {
-      const aOrder = CRITICALITY_ORDER[a.criticality || "NICE_TO_HAVE"] ?? 2;
-      const bOrder = CRITICALITY_ORDER[b.criticality || "NICE_TO_HAVE"] ?? 2;
-      return aOrder - bOrder;
-    });
-
-    // Group by section
-    const sectionsMap = new Map<string, MCQQuestion[]>();
-    mcqQuestions.forEach((q) => {
-      if (!sectionsMap.has(q.section)) {
-        sectionsMap.set(q.section, []);
-      }
-      sectionsMap.get(q.section)!.push(q);
-    });
-
-    // Initialize answers with AI recommendations - auto-select most questions
-    // Only leave 1-2 key business questions requiring user input (indices 3 and 7 after sorting)
-    const QUESTIONS_REQUIRING_INPUT = new Set([3, 7]); // "Does AI need access to private data?" and "Should AI perform actions?"
-    const initialAnswers = new Map<string, QuestionAnswer>();
-    mcqQuestions.forEach((q, index) => {
-      // Skip questions that require user input
-      if (QUESTIONS_REQUIRING_INPUT.has(index)) return;
-      
-      const options = Array.isArray(q.options)
-        ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
-        : [];
-      const recIdx = q.answerRecommendationIdx;
-      if (recIdx != null && recIdx >= 0 && recIdx < options.length) {
-        const opt = options[recIdx];
-        const label = typeof opt === "string" ? opt : opt.label;
-        const isMultipleChoice = q.multipleChoice ?? false;
-        
-        initialAnswers.set(q.id, {
-          questionId: q.id,
-          mcqAnswer: String.fromCharCode(65 + recIdx),
-          // Use selectedOptionIndices for multiple choice, selectedOptionIdx for single choice
-          selectedOptionIdx: isMultipleChoice ? undefined : recIdx,
-          selectedOptionIndices: isMultipleChoice ? [recIdx] : undefined,
-          textAnswer: label,
-          isOther: false,
-          isUserModified: false,
-        });
-      }
-    });
-
-    setState((prev) => ({
-      ...prev,
-      questions: mcqQuestions,
-      sections: sectionsMap,
-      answers: initialAnswers,
-      pageState: "questions",
-    }));
-
-    // Animate questions appearing
-    mcqQuestions.forEach((q, index) => {
-      setTimeout(() => {
-        setState((prev) => {
-          const newVisible = new Set(prev.visibleQuestions);
-          newVisible.add(q.id);
-          return { ...prev, visibleQuestions: newVisible };
-        });
-      }, index * 200);
-    });
-  }, [isDemoMode, demoDelayComplete]);
-
   // Fetch recipe details when recipeId is available
   useEffect(() => {
     const fetchRecipeDetails = async () => {
-      if (!recipeId || isDemoMode) return;
+      if (!recipeId) return;
 
       try {
         console.log("[Repo Page] Fetching recipe details for:", recipeId);
@@ -225,11 +100,11 @@ export default function RepoPage() {
     };
 
     fetchRecipeDetails();
-  }, [recipeId, isDemoMode]);
+  }, [recipeId]);
 
   // Fetch questions when recipeId is available (new recipe codegen flow)
   useEffect(() => {
-    if (!recipeId || isDemoMode) return;
+    if (!recipeId) return;
 
     const fetchQuestions = async () => {
       setQuestionsPolling(true);
@@ -445,7 +320,7 @@ export default function RepoPage() {
     };
 
     fetchQuestions();
-  }, [recipeId, isDemoMode]);
+  }, [recipeId]);
 
   // Generate questions on page load (old flow - kept for backward compatibility)
   const {
@@ -835,12 +710,6 @@ export default function RepoPage() {
   // Generate plan mutation
   const generatePlanMutation = useMutation({
     mutationFn: async () => {
-      // In demo mode, skip validation and API call, return mock response
-      if (isDemoMode) {
-        console.log("[Repo Page] Demo mode - skipping spec generation API call");
-        return { spec_id: "demo-spec-id" } as SubmitSpecGenerationResponse;
-      }
-      
       // Validate: all questions must be answered (no NULL in payload)
       const unansweredIds: string[] = [];
       state.questions.forEach((q) => {
@@ -999,10 +868,11 @@ export default function RepoPage() {
         toast.error("Navigation failed: Recipe ID missing");
         return;
       }
-      const specUrl = isDemoMode 
-        ? `/task/${activeRecipeId}/spec?showcase=1` 
-        : `/task/${activeRecipeId}/spec`;
-      router.push(specUrl);
+      // Store spec_id so the spec page can use it for polling
+      if (response.spec_id && typeof window !== "undefined") {
+        localStorage.setItem(`spec_${activeRecipeId}`, response.spec_id);
+      }
+      router.push(`/task/${activeRecipeId}/spec`);
     },
     onError: (error: Error) => {
       console.error("Error in generatePlanMutation:", error);
@@ -1231,15 +1101,12 @@ export default function RepoPage() {
             {state.pageState === "questions" && <AIAnalysisBanner />}
             {/* Loading State - Only show if we don't have questions yet */}
             {(questionsLoading ||
-              (questionsPolling && state.questions.length === 0) ||
-              (isDemoMode && !demoDelayComplete)) && (
+              (questionsPolling && state.questions.length === 0)) && (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
                   <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto mb-3" />
                   <p className="text-xs text-zinc-500">
-                    {isDemoMode && !demoDelayComplete
-                      ? "Analyzing codebase..."
-                      : questionsPolling
+                    {questionsPolling
                       ? "Loading questions..."
                       : "Generating questions..."}
                   </p>

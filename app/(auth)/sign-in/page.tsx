@@ -8,6 +8,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  signInWithCredential,
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
@@ -230,17 +231,98 @@ export default function Signin() {
           }
         }
       })
-      .catch((error) => {
+      .catch(async (error) => {
         // Handle user cancellation - don't show error
         if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
           // User cancelled, don't show error
           return;
         }
         
-        const errorCode = error.code;
-        const errorMessage = error.message;
-        const email = error.customData?.email;
-        const credential = GithubAuthProvider.credentialFromError(error);
+        // Handle credential already in use error
+        // This happens when the GitHub account is already linked to a different Firebase user
+        if (error.code === 'auth/credential-already-in-use') {
+          toast.info("This GitHub account exists. Signing you in...");
+          
+          try {
+            // Extract the credential from the error
+            const credential = GithubAuthProvider.credentialFromError(error);
+            if (!credential) {
+              throw new Error("Could not extract GitHub credential from error");
+            }
+
+            // Sign in with the GitHub credential - this will sign in as the existing GitHub user
+            const tempResult = await signInWithCredential(auth, credential);
+            const githubUser = tempResult.user;
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log("Signed in with existing GitHub account:", githubUser.uid);
+            }
+
+            // Now proceed with normal GitHub sign-in flow
+            // Get the GitHub access token from the credential
+            const githubAccessToken = (credential as any).accessToken;
+            
+            if (githubAccessToken) {
+              try {
+                const userSignup = await AuthService.signupWithGitHub(
+                  githubUser,
+                  githubAccessToken,
+                  (tempResult as any)._tokenResponse?.screenName || ''
+                );
+
+                posthog.identify(githubUser.uid, {
+                  email: githubUser.email,
+                  name: githubUser?.displayName || "",
+                });
+
+                if (userSignup.needs_github_linking) {
+                  toast.info('Almost there! Link your GitHub to unlock the magic');
+                  const urlSearchParams = new URLSearchParams(window.location.search);
+                  const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+                  const prompt = urlSearchParams.get("prompt") || "";
+
+                  const onboardingParams = new URLSearchParams();
+                  if (githubUser.uid) onboardingParams.append('uid', githubUser.uid);
+                  if (githubUser.email) onboardingParams.append('email', githubUser.email);
+                  if (githubUser.displayName) onboardingParams.append('name', githubUser.displayName);
+                  if (plan) onboardingParams.append('plan', plan);
+                  if (prompt) onboardingParams.append('prompt', prompt);
+                  if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+
+                  window.location.href = `/onboarding?${onboardingParams.toString()}`;
+                  return;
+                }
+
+                if (source === "vscode") {
+                  if (userSignup.token) {
+                    handleExternalRedirect(userSignup.token);
+                  }
+                } else if (finalAgent_id) {
+                  handleExternalRedirect("");
+                } else {
+                  window.location.href = "/idea";
+                }
+
+                toast.success("Welcome back " + githubUser.displayName + "! Let's build something amazing");
+                return;
+              } catch (signupError: any) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.error("Error during GitHub signup:", signupError);
+                }
+                toast.error(signupError.message || "Sign-in unsuccessful");
+              }
+            } else {
+              toast.error("Could not get GitHub access token. Please try again.");
+            }
+          } catch (conflictError: any) {
+            if (process.env.NODE_ENV === 'development') {
+              console.error("Error handling credential conflict:", conflictError);
+            }
+            toast.error("This GitHub account is linked to another account. Please try signing in with Google instead.");
+          }
+          return;
+        }
+        
         const friendlyError = getUserFriendlyError(error);
         toast.error(friendlyError);
       });

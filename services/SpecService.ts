@@ -18,7 +18,7 @@ import {
 } from "@/lib/types/spec";
 
 export default class SpecService {
-  private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
+  private static readonly BASE_URL = `http://localhost:8002`;
   private static readonly SPEC_URL = `${this.BASE_URL}/api/v1/recipe/spec`;
   private static readonly API_BASE = `${this.BASE_URL}/api/v1/recipe/codegen`;
 

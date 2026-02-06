@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useRef, useState, useEffect } from "react";
 import { auth } from "@/configs/Firebase-config";
-import { GithubAuthProvider, linkWithPopup } from "firebase/auth";
+import { GithubAuthProvider, linkWithPopup, signInWithCredential, signOut, GoogleAuthProvider, signInWithPopup, unlink } from "firebase/auth";
 import { LucideGithub, LucideCheck, LoaderCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import { testimonials } from "@/lib/utils/testimonials";
 import Image from "next/image";
 import Link from "next/link";
+import AuthService from "@/services/AuthService";
 
 // Helper function to extract company name from email domain
 const extractCompanyNameFromEmail = (email: string): string => {
@@ -341,8 +342,8 @@ const Onboarding = () => {
     popupRef.current = popup;
   };
 
-  const linkGithub = async () => {
-    if (isLinkingGithub) return;
+  const linkGithub = async (retryAfterConflictResolution = false) => {
+    if (isLinkingGithub && !retryAfterConflictResolution) return;
     setIsLinkingGithub(true);
 
     try {
@@ -360,6 +361,9 @@ const Onboarding = () => {
       if (!currentUser) {
         throw new Error("No authenticated user found. Please sign in again.");
       }
+      
+      // Store current user's token for re-authentication after conflict resolution
+      const currentUserToken = await currentUser.getIdToken();
       
       // Log for debugging - note that currentUser.uid might be different after GitHub popup
       if (process.env.NODE_ENV === 'development') {
@@ -443,8 +447,101 @@ const Onboarding = () => {
       if (process.env.NODE_ENV === 'development') {
         console.error("GitHub linking error:", error);
       }
+      
       if (error.code === "auth/popup-closed-by-user") {
         toast.error("GitHub sign-in cancelled. No worries, try again when ready!");
+      } else if (error.code === "auth/credential-already-in-use") {
+        // Handle credential conflict - GitHub is already linked to another account
+        toast.info("Resolving GitHub account conflict...");
+        
+        try {
+          // Extract the credential from the error
+          const githubCredential = GithubAuthProvider.credentialFromError(error);
+          if (!githubCredential) {
+            throw new Error("Could not extract GitHub credential from error");
+          }
+
+          // Temporarily sign in with the conflicting credential to get the UID
+          const tempResult = await signInWithCredential(auth, githubCredential);
+          const conflictingUid = tempResult.user.uid;
+          
+          if (process.env.NODE_ENV === 'development') {
+            console.log("Conflicting GitHub UID:", conflictingUid);
+          }
+          
+          // Sign out from the conflicting account
+          await signOut(auth);
+          
+          // Resolve the conflict via backend
+          try {
+            await AuthService.resolveGitHubConflict(
+              targetUserId!,
+              conflictingUid
+            );
+            
+            toast.success("Conflict resolved! Re-authenticating...");
+            
+            // Re-authenticate with Google to get back to the original user
+            const googleProvider = new GoogleAuthProvider();
+            googleProvider.addScope('profile');
+            googleProvider.addScope('email');
+            
+            try {
+              const googleResult = await signInWithPopup(auth, googleProvider);
+              
+              if (googleResult.user.uid !== targetUserId) {
+                // User signed in with a different Google account
+                toast.warning("Please sign in with the same Google account you started with.");
+                await signOut(auth);
+                const onboardingParams = new URLSearchParams(window.location.search);
+                const redirectUrl = `/onboarding?${onboardingParams.toString()}`;
+                window.location.href = `/sign-in?redirect=${encodeURIComponent(redirectUrl)}`;
+                return;
+              }
+              
+              toast.info("Retrying GitHub linking...");
+              
+              // Small delay before retrying
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              // Retry linking GitHub - this time it should work
+              await linkGithub(true);
+              
+            } catch (googleError: any) {
+              if (googleError.code === 'auth/popup-closed-by-user') {
+                toast.error("Please sign in with Google to continue linking GitHub.");
+              } else {
+                toast.error("Failed to re-authenticate. Please sign in again.");
+              }
+              // Redirect to sign-in as fallback
+              const onboardingParams = new URLSearchParams(window.location.search);
+              const redirectUrl = `/onboarding?${onboardingParams.toString()}`;
+              window.location.href = `/sign-in?redirect=${encodeURIComponent(redirectUrl)}`;
+            }
+            
+          } catch (resolveError: any) {
+            if (process.env.NODE_ENV === 'development') {
+              console.error("Failed to resolve conflict:", resolveError);
+            }
+            toast.error(resolveError.message || "Failed to resolve GitHub conflict. Please contact support.");
+            
+            // Try to re-authenticate the user even if conflict resolution failed
+            const googleProvider = new GoogleAuthProvider();
+            try {
+              await signInWithPopup(auth, googleProvider);
+            } catch {
+              // If re-auth fails, redirect to sign-in
+              const onboardingParams = new URLSearchParams(window.location.search);
+              const redirectUrl = `/onboarding?${onboardingParams.toString()}`;
+              window.location.href = `/sign-in?redirect=${encodeURIComponent(redirectUrl)}`;
+            }
+          }
+        } catch (conflictError: any) {
+          if (process.env.NODE_ENV === 'development') {
+            console.error("Error handling credential conflict:", conflictError);
+          }
+          toast.error("This GitHub account is already linked to another account. Please use a different GitHub account or contact support.");
+        }
       } else {
         toast.error(getUserFriendlyError(error));
       }
@@ -731,7 +828,7 @@ const Onboarding = () => {
                     {!hasGithubLinked ? (
                       <>
                         <Button
-                          onClick={linkGithub}
+                          onClick={() => linkGithub()}
                           className="w-full h-10 rounded-lg bg-[#022D2C] hover:bg-[#033d3c] text-[#FFF9F5] font-medium flex items-center justify-center gap-2 transition-colors mb-3"
                           disabled={isLinkingGithub}
                         >

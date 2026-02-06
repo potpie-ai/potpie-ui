@@ -1,77 +1,21 @@
 import axios, { AxiosError } from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import {
+  GenerateQuestionsRequest,
+  GenerateQuestionsResponse,
+  GetQuestionsResponse,
+  SubmitAnswersRequest,
+  SubmitAnswersResponse,
+  GeneratePlanRequest,
+  GeneratePlanResponse,
+} from "@/lib/types/questions";
 import { RecipeQuestionsResponse } from "@/lib/types/spec";
-
-/** Normalized option for UI (supports both string and {label, description} formats) */
-export interface MCQOption {
-  label: string;
-  description?: string;
-}
-
-export interface MCQQuestion {
-  id: string;
-  section: string;
-  question: string;
-  /** Options as strings (legacy) or MCQOption[] (new API) - normalized to MCQOption[] internally */
-  options: string[] | MCQOption[];
-  needsInput: boolean;
-  /** Whether multiple options can be selected (true) or only one (false) */
-  multipleChoice?: boolean;
-  /** Legacy: preferred option label. New: derived from answer_recommendation.idx */
-  assumed?: string;
-  /** AI reasoning for recommended option */
-  reasoning?: string;
-  /** New API: index of recommended option (0-based) */
-  answerRecommendationIdx?: number | null;
-  /** New API: expected answer type (e.g., "mcq (bool)") */
-  expectedAnswerType?: string;
-  /** New API: optional context references */
-  contextRefs?: Array<{ path?: string; type?: string; [key: string]: unknown }> | null;
-  /** Criticality level of the question: BLOCKER > IMPORTANT > NICE_TO_HAVE */
-  criticality?: "BLOCKER" | "IMPORTANT" | "NICE_TO_HAVE";
-}
-
-export interface QuestionAnswer {
-  question_id: string;
-  text_answer?: string;
-  mcq_answer?: string;
-  is_user_modified?: boolean;
-  is_skipped?: boolean;
-}
-
-export interface GenerateQuestionsResponse {
-  questions: MCQQuestion[];
-}
-
-export interface GetQuestionsResponse {
-  questions: MCQQuestion[];
-  answers: { [question_id: string]: QuestionAnswer };
-}
-
-export interface SubmitAnswersRequest {
-  answers: {
-    [question_id: string]: {
-      text_answer?: string;
-      mcq_answer?: string;
-    };
-  };
-}
-
-export interface SubmitAnswersResponse {
-  status: string;
-  saved_count: number;
-}
-
-export interface GeneratePlanResponse {
-  plan_id: string;
-  plan_document: string;
-}
 
 /**
  * Service for interacting with the Questions API
  */
 export default class QuestionService {
-  private static readonly BASE_URL = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1`;
+  private static readonly BASE_URL = `http://localhost:8002/api/v1`;
 
   /**
    * Extract error message from axios error
@@ -100,7 +44,7 @@ export default class QuestionService {
     }
 
     const headers = await getHeaders();
-    const payload: { project_id: string; feature_idea?: string } = {
+    const payload: GenerateQuestionsRequest = {
       project_id: projectId.trim(),
     };
 
@@ -184,15 +128,16 @@ export default class QuestionService {
     }
 
     const headers = await getHeaders();
+    const payload: GeneratePlanRequest = {
+      project_id: projectId.trim(),
+      answers: answers || {},
+      additional_context: additionalContext?.trim() || "",
+    };
 
     try {
       const response = await axios.post<GeneratePlanResponse>(
         `${this.BASE_URL}/plans/generate`,
-        {
-          project_id: projectId.trim(),
-          answers: answers || {},
-          additional_context: additionalContext?.trim() || "",
-        },
+        payload,
         { headers }
       );
       return response.data;

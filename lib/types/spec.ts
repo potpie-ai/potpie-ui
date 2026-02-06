@@ -58,52 +58,71 @@ export interface QAAnswer {
   is_skipped?: boolean;
 }
 
+/**
+ * Request payload for POST /api/v1/recipe/spec (Legacy)
+ * Submit QA answers and trigger spec generation
+ */
 export interface SpecPlanRequest {
   recipe_id: string;
   qa_answers: QAAnswer[];
 }
 
+/**
+ * Response from POST /api/v1/recipe/spec (Legacy)
+ * Submit QA answers and trigger spec generation
+ */
 export interface SpecPlanSubmitResponse {
-  recipe_id: string;
-  status: "spec_generation_started" | "spec_generation_in_progress";
-  message: string;
+  spec_id?: string;
+  status: string;
+  message?: string;
 }
 
+/**
+ * Response from GET /api/v1/recipe/spec/{recipeId} (Legacy)
+ * Get spec generation progress by recipe_id
+ */
 export interface SpecPlanStatusResponse {
   recipe_id: string;
-  spec_generation_step_status: SpecGenerationStatus;
-  step_index: number | null;
-  progress_percent: number | null;
-  step_statuses: Record<number, StepStatus> | null;
-  spec_output: SpecOutput | null;
-  celery_task_id: string | null;
+  status: string;
+  progress_percentage?: number;
+  spec_document?: string;
+  error_message?: string;
 }
 
+/**
+ * Request payload for POST /api/v1/recipe
+ * Create a new recipe for spec generation
+ */
 export interface CreateRecipeRequest {
   project_id: string; // UUID, required
   user_prompt: string; // required
   user_requirements?: Record<string, any>; // Optional JSON object
 }
 
+/**
+ * Response from POST /api/v1/recipe
+ * Create a new recipe for spec generation
+ */
 export interface CreateRecipeResponse {
-  recipe_id: string; // UUID
-  project_id: string; // UUID
-  status: string; // e.g., "created"
-  message: string; // e.g., "Recipe created successfully. Use recipe_id for subsequent operations."
+  recipe_id: string;
 }
 
-// New recipe codegen types
+/**
+ * Request payload for POST /api/v1/recipe/codegen
+ * Create a new recipe and trigger QA question generation
+ */
 export interface CreateRecipeCodegenRequest {
   user_prompt: string;
   project_id: string;
   additional_links?: string[];
 }
 
+/**
+ * Response from POST /api/v1/recipe/codegen
+ * Create a new recipe and trigger QA question generation
+ */
 export interface CreateRecipeCodegenResponse {
   recipe_id: string;
-  project_id: string;
-  status: string;
-  message: string;
 }
 
 /** Option format for new API (label + description) */
@@ -151,6 +170,11 @@ export interface RecipeQuestion {
 /** Union type - API may return either format */
 export type RecipeQuestionUnion = RecipeQuestion | (RecipeQuestionNew & { id: string });
 
+/**
+ * Response from GET /api/v1/recipe/codegen/{recipeId}/questions
+ * Get QA questions for a recipe
+ * Note: Questions format matches APIQuestion from questions.ts
+ */
 export interface RecipeQuestionsResponse {
   recipe_id: string;
   recipe_status:
@@ -162,6 +186,10 @@ export interface RecipeQuestionsResponse {
   questions: RecipeQuestionUnion[];
 }
 
+/**
+ * Request payload for POST /api/v1/recipe/codegen/spec
+ * Submit QA answers and trigger spec generation
+ */
 export interface SubmitSpecGenerationRequest {
   recipe_id: string;
   qa_answers: Array<{
@@ -170,27 +198,29 @@ export interface SubmitSpecGenerationRequest {
   }>;
 }
 
+/**
+ * Response from POST /api/v1/recipe/codegen/spec
+ * Submit QA answers and trigger spec generation
+ */
 export interface SubmitSpecGenerationResponse {
-  recipe_id: string;
   spec_id: string;
-  status: "SUBMITTED";
-  message: string;
+  status: string;
 }
 
+/**
+ * Response from GET /api/v1/recipe/codegen/spec/{specId}
+ * or GET /api/v1/recipe/codegen/spec/recipe/{recipeId}
+ * Get spec generation progress
+ */
 export interface SpecStatusResponse {
-  recipe_id: string;
   spec_id: string;
-  spec_gen_status: "IN_PROGRESS" | "COMPLETED" | "FAILED";
-  step_index: number;
-  progress_percent: number;
-  step_statuses: Record<
-    string,
-    {
-      status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
-      message: string;
-    }
-  >;
-  spec_output: SpecOutput | null;
+  recipe_id: string;
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+  progress_percentage?: number;
+  spec_document?: string;
+  created_at: string;
+  updated_at: string;
+  error_message?: string;
 }
 
 // Plan generation types
@@ -301,7 +331,10 @@ export interface TaskSplittingItemsResponse {
   next_layer_order: number | null;
 }
 
-// Recipe Details API types
+/**
+ * Response from GET /api/v1/recipe/codegen/{recipeId}/details
+ * Get comprehensive recipe details including repo and branch information
+ */
 export interface QuestionAnswerPair {
   question_id: string;
   question: string;
@@ -312,8 +345,8 @@ export interface RecipeDetailsResponse {
   recipe_id: string;
   project_id: string;
   user_prompt: string;
-  repo_name: string | null;
-  branch_name: string | null;
+  repo_name?: string | null;
+  branch_name?: string | null;
   questions_and_answers: QuestionAnswerPair[];
 }
 

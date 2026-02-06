@@ -1,852 +1,663 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Github,
-  GitBranch,
-  Check,
-  Loader2,
-  ChevronDown,
-  X,
-  FileCode,
-  Zap,
-  Search,
-  Layers,
-  Wand2,
-  ShieldCheck,
-  Flag,
-  FileText,
-  Package,
-  Link2,
-  Info,
-} from "lucide-react";
+import { toast } from "sonner";
+import { Loader2, AlertCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
-import { toast } from "sonner";
+import { SpecChatPanel, ChatMessage, SpecChatPanelRef } from "./components/SpecChatPanel";
+import { SpecContentDisplay } from "./components/SpecContentDisplay";
+import { TaskOverview } from "./components/TaskOverview";
 import {
-  SpecPlanStatusResponse,
-  SpecStatusResponse,
+  SpecChatRequest,
+  SpecChatResponse,
+  SpecUndoRequest,
   SpecOutput,
-  StepStatusValue,
+  SpecChatEditHistoryItem,
+  SpecStatusResponse,
+  SpecEditRequest,
+  SpecEditResponse,
+  PlanEditRequest,
+  PlanEditResponse,
+  PlanUndoRequest,
 } from "@/lib/types/spec";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "@/lib/state/store";
-import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
+import { Button } from "@/components/ui/button";
 
-const PLAN_CHAPTERS = [
-  {
-    id: 1,
-    title: "Analyzing codebase",
-    icon: Search,
-    description: "Scanning repository structure and dependencies.",
-    progressThreshold: 20,
-  },
-  {
-    id: 2,
-    title: "Identifying dependencies",
-    icon: Layers,
-    description: "Mapping module relationships and imports.",
-    progressThreshold: 40,
-  },
-  {
-    id: 3,
-    title: "Generating implementation steps",
-    icon: Wand2,
-    description: "Creating detailed action items for the plan.",
-    progressThreshold: 60,
-  },
-  {
-    id: 4,
-    title: "Validating plan",
-    icon: ShieldCheck,
-    description: "Checking feasibility and completeness.",
-    progressThreshold: 80,
-  },
-  {
-    id: 5,
-    title: "Finalizing",
-    icon: Flag,
-    description: "Preparing the final implementation plan.",
-    progressThreshold: 100,
-  },
-];
+const MAX_EDIT_HISTORY = 10;
 
-interface FileItem {
-  path: string;
-  type: string;
-}
-
-interface PlanItem {
-  id: string;
-  files: FileItem[];
-  dependencies?: string[];
-  externalConnections?: string[];
-  [key: string]: any;
-}
-
-interface Plan {
-  add: PlanItem[];
-  modify: PlanItem[];
-  fix: PlanItem[];
-  [key: string]: PlanItem[];
-}
-
-const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color">
-    {Icon && <Icon className="w-3.5 h-3.5" />}
-    {children}
-  </div>
-);
-
-const PlanTabs = ({ plan }: { plan: Plan }) => {
-  const [activeTab, setActiveTab] = useState("add");
-
-  const categories = [
-    { id: "add", label: "Create", count: plan.add.length },
-    { id: "modify", label: "Update", count: plan.modify.length },
-    { id: "fix", label: "Fix", count: plan.fix.length },
-  ];
-
-  // Get all item IDs for the active tab to set as default open values
-  const defaultOpenValues = plan[activeTab].map((item) => item.id);
-
-  return (
-    <div className="space-y-6">
-      <div className="flex gap-1 border-b border-[#D3E5E5]">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveTab(cat.id)}
-            className={`px-4 py-2 text-xs font-semibold transition-all relative ${
-              activeTab === cat.id
-                ? "text-primary-color"
-                : "text-primary-color hover:text-primary-color"
-            }`}
-          >
-            {cat.label} ({cat.count})
-            {activeTab === cat.id && (
-              <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-primary-color" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      <Accordion 
-        key={activeTab}
-        type="multiple" 
-        defaultValue={defaultOpenValues} 
-        className="space-y-4"
-      >
-        {plan[activeTab].map((item) => (
-          <AccordionItem
-            key={item.id}
-            value={item.id}
-            className="bg-background border border-[#D3E5E5] transition-all rounded-lg overflow-hidden data-[state=open]:border-[#D3E5E5] data-[state=open]:shadow-sm border-[#D3E5E5] hover:border-[#D3E5E5]"
-          >
-            <AccordionTrigger className="p-4 flex justify-between items-start cursor-pointer select-none hover:no-underline [&>svg]:hidden [&[data-state=open] svg:last-child]:rotate-180">
-              <div className="flex gap-3 flex-1 min-w-0">
-                <FileCode className="w-4 h-4 mt-1 flex-shrink-0 text-primary-color" />
-                <div className="flex flex-col gap-2 flex-1 min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                    <h4 className="text-sm font-semibold text-foreground font-sans leading-snug">
-                      {item.title}
-                    </h4>
-
-                  </div>
-                  <div className="text-sm text-muted-foreground leading-relaxed font-sans text-left [&_p]:my-2 [&_p]:leading-relaxed [&_p]:text-left [&_p]:text-muted-foreground">
-                    <SharedMarkdown content={item.details} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left" />
-                  </div>
-                </div>
-              </div>
-              <div className="flex-shrink-0 mt-1 ml-2">
-                <ChevronDown className="w-4 h-4 text-primary-color transition-transform duration-200" />
-              </div>
-            </AccordionTrigger>
-
-            <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-[#D3E5E5] font-sans">
-              {/* Target Files */}
-              {item.files?.length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
-                    <FileCode className="w-3.5 h-3.5" />
-                    Target Files
-                  </p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {item.files.map((file, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between py-2.5 px-3 bg-zinc-50/50 border border-[#D3E5E5] rounded-md"
-                      >
-                        <code className="text-xs font-mono text-primary-color truncate pr-3">
-                          {file.path}
-                        </code>
-                        <span
-                          className={`text-xs font-medium uppercase shrink-0 ${file.type === "Create" ? "text-emerald-600" : "text-blue-600"}`}
-                        >
-                          {file.type}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Libraries & External Connections */}
-              {((item.dependencies?.length ?? 0) > 0 || (item.externalConnections?.length ?? 0) > 0) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                  {/* Libraries */}
-                  {(item.dependencies?.length ?? 0) > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
-                        <Package className="w-3.5 h-3.5" />
-                        Libraries
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {item.dependencies?.map((dep, i) => (
-                          <span
-                            key={i}
-                            className="px-3 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded-md text-xs font-mono text-primary-color"
-                          >
-                            {dep}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* External Connections */}
-                  {(item.externalConnections?.length ?? 0) > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-xs font-semibold  text-primary-color uppercase tracking-wide flex items-center gap-1.5">
-                        <Link2 className="w-3.5 h-3.5" />
-                        External
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {item.externalConnections?.map((conn, i) => (
-                          <span
-                            key={i}
-                            className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-xs font-medium text-blue-600"
-                          >
-                            {conn}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Context */}
-              {item.context && (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold mt-4 text-primary-color uppercase tracking-wide flex items-center gap-1.5">
-                    <Info className="w-3.5 h-3.5" />
-                    Context
-                  </p>
-                  <div className="bg-zinc-50 border border-[#D3E5E5] rounded-md p-4">
-                    <div className="text-sm text-muted-foreground leading-relaxed">
-                      <SharedMarkdown content={item.context} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left [&_p]:mb-2 [&_p:last-child]:mb-0" />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
-    </div>
-  );
-};
-
-const SpecPage = () => {
+export default function SpecPage() {
   const params = useParams();
   const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
-  // Note: taskId in URL is actually recipeId now
-  const recipeId = params?.taskId as string;
-  const repoBranchByTask = useSelector(
-    (state: RootState) => state.RepoAndBranch.byTaskId
-  );
-  const storedRepoContext = recipeId
-    ? repoBranchByTask?.[recipeId]
-    : undefined;
-  
-  // Reset initialization ref when recipeId changes
-  useEffect(() => {
-    hasInitializedRef.current = false;
-  }, [recipeId]);
+  const queryClient = useQueryClient();
+  const taskId = params.taskId as string; // This is actually recipeId or specId
+  const chatPanelRef = useRef<SpecChatPanelRef>(null);
 
-  const [recipeData, setRecipeData] = useState<{
-    recipe_id: string;
-    project_id: string;
-    user_prompt: string;
-  } | null>(null);
-
-  const [projectData, setProjectData] = useState<{
-    repo: string;
-    branch: string;
-    questions: Array<{ id: string; question: string }>;
-  } | null>(null);
-
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [specProgress, setSpecProgress] = useState<SpecPlanStatusResponse | SpecStatusResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // State
+  const [specId, setSpecId] = useState<string | null>(null);
+  const [specOutput, setSpecOutput] = useState<SpecOutput>({
+    add: [],
+    modify: [],
+    fix: [],
+  });
+  const [specStatus, setSpecStatus] = useState<"IN_PROGRESS" | "COMPLETED" | "FAILED" | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingSpec, setIsLoadingSpec] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isPlanExpanded, setIsPlanExpanded] = useState(true);
-  const [isCancelled, setIsCancelled] = useState(false);
-  const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
+  const [undoToken, setUndoToken] = useState<string | null>(null);
+  const [editHistory, setEditHistory] = useState<SpecChatEditHistoryItem[]>([]);
+  const [recentlyChangedIds, setRecentlyChangedIds] = useState<Set<string>>(new Set());
+  const [nextActions, setNextActions] = useState<string[]>([]);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [showTaskOverview, setShowTaskOverview] = useState(false);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [currentScope, setCurrentScope] = useState<"spec" | "plan">("spec");
 
-  const planContentRef = useRef<HTMLDivElement | null>(null);
-  const hasInitializedRef = useRef(false);
+  // Fetch spec function
+  const fetchSpec = useCallback(async () => {
+    if (!taskId) return;
 
-  // Update projectData when storedRepoContext changes (from Redux)
-  useEffect(() => {
-    if (!storedRepoContext) return;
-    setProjectData((prev) => {
-      const repoName =
-        storedRepoContext.repoName || prev?.repo || "Unknown Repository";
-      const branchName =
-        storedRepoContext.branchName || prev?.branch || "main";
+    setIsLoadingSpec(true);
+    setError(null);
 
-      if (prev && prev.repo === repoName && prev.branch === branchName) {
-        return prev;
-      }
-
-      return {
-        repo: repoName,
-        branch: branchName,
-        questions: prev?.questions || [],
-      };
-    });
-  }, [storedRepoContext]);
-
-  // Fetch recipe details including repo and branch information
-  useEffect(() => {
-    const fetchRecipeDetails = async () => {
-      if (!recipeId) return;
-      
-      // Prevent multiple initializations
-      if (hasInitializedRef.current) return;
-      
+    try {
+      // Try to get spec by recipe_id first
+      let specData: SpecStatusResponse;
       try {
-        console.log("[Spec Page] Fetching recipe details for:", recipeId);
-        
-        // Fetch comprehensive recipe details from the API
-        const recipeDetails = await SpecService.getRecipeDetails(recipeId);
-        console.log("[Spec Page] Recipe details received:", recipeDetails);
-        
-        // Set recipe data
-        setRecipeData({
-          recipe_id: recipeDetails.recipe_id,
-          project_id: recipeDetails.project_id,
-          user_prompt: recipeDetails.user_prompt,
-        });
-
-        // Set project data with repo and branch
-        const repoName = recipeDetails.repo_name || "Unknown Repository";
-        const branchName = recipeDetails.branch_name || "main";
-        
-        setProjectData({
-          repo: repoName,
-          branch: branchName,
-          questions: recipeDetails.questions_and_answers.map((qa) => ({
-            id: qa.question_id,
-            question: qa.question,
-          })),
-        });
-
-        // Set answers
-        const answersMap: Record<string, string> = {};
-        recipeDetails.questions_and_answers.forEach((qa) => {
-          if (qa.answer) {
-            answersMap[qa.question_id] = qa.answer;
-          }
-        });
-        setAnswers(answersMap);
-
-        // Update Redux state
-        dispatch(
-          setRepoAndBranchForTask({
-            taskId: recipeId,
-            repoName: repoName,
-            branchName: branchName,
-            projectId: recipeDetails.project_id || undefined,
-          })
-        );
-        
-        hasInitializedRef.current = true;
-      } catch (err: any) {
-        console.error("[Spec Page] Failed to fetch recipe details:", err);
-        // Set default values on error
-        setRecipeData({
-          recipe_id: recipeId,
-          project_id: "",
-          user_prompt: "Implementation plan generation",
-        });
-        setProjectData({
-          repo: "Unknown Repository",
-          branch: "main",
-          questions: [],
-        });
-        hasInitializedRef.current = true;
-      }
-    };
-    
-    fetchRecipeDetails();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipeId]);
-
-  // Poll for spec progress
-  useEffect(() => {
-    if (!recipeId) return;
-    if (hasInitializedRef.current) return;
-    
-    hasInitializedRef.current = true;
-    
-    let mounted = true;
-    let interval: NodeJS.Timeout;
-
-    const pollSpecProgress = async () => {
-      try {
-        console.log("[Spec Page] Starting to poll spec progress for recipeId:", recipeId);
-        
-        // Try to get spec_id from previous response if available
-        // Otherwise use recipe_id
-        let progress: SpecStatusResponse | SpecPlanStatusResponse;
-        let currentSpecId: string | null = null;
-        
-        // Check if we have a spec_id stored
-        const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
-        console.log("[Spec Page] Stored spec_id:", storedSpecId);
-        
-        if (storedSpecId) {
-          currentSpecId = storedSpecId;
-          console.log("[Spec Page] Using stored spec_id, calling getSpecProgressBySpecId");
-          progress = await SpecService.getSpecProgressBySpecId(storedSpecId);
+        specData = await SpecService.getSpecByRecipeId(taskId);
+      } catch (recipeError: any) {
+        // If that fails, try by spec_id
+        if (recipeError.message?.includes("not found")) {
+          specData = await SpecService.getSpec(taskId);
         } else {
-          // Always use new recipe codegen endpoint - don't fall back to old endpoint
-          console.log("[Spec Page] No stored spec_id, calling getSpecProgressByRecipeId");
-          progress = await SpecService.getSpecProgressByRecipeId(recipeId);
-          console.log("[Spec Page] Received progress response:", progress);
-          
-          // Store spec_id for future polling if available
-          if ('spec_id' in progress && progress.spec_id) {
-            currentSpecId = progress.spec_id;
-            localStorage.setItem(`spec_${recipeId}`, progress.spec_id);
-            console.log("[Spec Page] Stored spec_id:", currentSpecId);
-          }
+          throw recipeError;
         }
-        
-        if (!mounted) return;
-
-        setSpecProgress(progress);
-        setError(null);
-        setIsLoading(false);
-
-        // Determine status based on response type
-        const status = 'spec_gen_status' in progress 
-          ? (progress as any).spec_gen_status 
-          : (progress as any).spec_generation_step_status;
-
-        // Stop polling when completed or failed
-        if (status === 'COMPLETED' || status === 'FAILED') {
-          if (interval) clearInterval(interval);
-          if (status === 'COMPLETED') {
-            setIsPlanExpanded(false);
-          }
-        } else {
-          // Continue polling if in progress
-          if (interval) clearInterval(interval);
-          interval = setInterval(async () => {
-            try {
-              // Always check localStorage for the latest spec_id (in case it was updated)
-              const latestSpecId = localStorage.getItem(`spec_${recipeId}`) || currentSpecId;
-              
-              let updated: SpecStatusResponse | SpecPlanStatusResponse;
-              if (latestSpecId) {
-                console.log("[Spec Page] Polling with spec_id:", latestSpecId);
-                updated = await SpecService.getSpecProgressBySpecId(latestSpecId);
-              } else {
-                console.log("[Spec Page] Polling with recipeId:", recipeId);
-                updated = await SpecService.getSpecProgressByRecipeId(recipeId);
-                
-                // Store spec_id if we got it from the response
-                if ('spec_id' in updated && updated.spec_id) {
-                  localStorage.setItem(`spec_${recipeId}`, updated.spec_id);
-                  currentSpecId = updated.spec_id;
-                  console.log("[Spec Page] Stored spec_id during polling:", currentSpecId);
-                }
-              }
-              
-              if (!mounted) return;
-              
-              console.log("[Spec Page] Updated progress:", updated);
-              setSpecProgress(updated);
-              
-              const updatedStatus = 'spec_gen_status' in updated 
-                ? (updated as any).spec_gen_status 
-                : (updated as any).spec_generation_step_status;
-              
-              console.log("[Spec Page] Updated status:", updatedStatus);
-              
-              if (updatedStatus === 'COMPLETED' || updatedStatus === 'FAILED') {
-                clearInterval(interval);
-                if (updatedStatus === 'COMPLETED') {
-                  setIsPlanExpanded(false);
-                }
-              }
-            } catch (error) {
-              console.error("[Spec Page] Error polling spec progress:", error);
-              if (!mounted) return;
-              // Don't clear interval on error - keep trying
-            }
-          }, 2000); // Poll every 2 seconds
-        }
-      } catch (err: any) {
-        if (!mounted) return;
-        console.error("Error fetching spec progress:", err);
-        setError(err.message || "Failed to load spec progress");
-        setIsLoading(false);
       }
-    };
-    
-    pollSpecProgress();
 
-    return () => {
-      mounted = false;
-      if (interval) clearInterval(interval);
-    };
-  }, [recipeId]);
+      setSpecId(specData.spec_id);
+      setSpecStatus(specData.spec_gen_status as any);
 
-  // Calculate progress from API response (support both old and new response formats)
-  const planProgress = specProgress 
-    ? (('progress_percent' in specProgress && specProgress.progress_percent !== null) 
-        ? specProgress.progress_percent 
-        : ('progress_percent' in specProgress ? specProgress.progress_percent : null)) ?? 0
-    : 0;
-  const status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null = specProgress 
-    ? ('spec_gen_status' in specProgress 
-        ? specProgress.spec_gen_status 
-        : ('spec_generation_step_status' in specProgress 
-            ? specProgress.spec_generation_step_status 
-            : null))
-    : null;
-  const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
-  const currentStep = specProgress 
-    ? (('step_index' in specProgress && specProgress.step_index !== null)
-        ? specProgress.step_index
-        : ('step_index' in specProgress ? specProgress.step_index : null)) ?? 0
-    : 0;
-  const stepStatuses: Record<string | number, { status: StepStatusValue; message: string }> | Record<number, { status: StepStatusValue; message: string }> | null = specProgress 
-    ? ('step_statuses' in specProgress 
-        ? (specProgress as any).step_statuses 
-        : null) ?? {}
-    : {};
-  const specOutput: SpecOutput | null = specProgress?.spec_output ?? null;
-
-  // Auto-scroll to bottom when plan is generated
-  useEffect(() => {
-    if (status === 'COMPLETED' && planContentRef.current) {
-      setTimeout(() => {
-        planContentRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 100);
+      // Set spec_output if available
+      if (specData.spec_output) {
+        setSpecOutput(specData.spec_output);
+      }
+    } catch (err: any) {
+      console.error("Error fetching spec:", err);
+      setError(err.message || "Failed to load spec");
+      if (err.message?.includes("Access denied")) {
+        toast.error("Access denied");
+      } else if (err.message?.includes("not found")) {
+        toast.error("Spec not found");
+      } else {
+        toast.error(err.message || "Failed to load spec");
+      }
+    } finally {
+      setIsLoadingSpec(false);
     }
-  }, [status]);
+  }, [taskId]);
 
-  if (isLoading && !specProgress) {
+  // Fetch spec on mount
+  useEffect(() => {
+    fetchSpec();
+  }, [fetchSpec]);
+
+  // Clean up chat history when navigating away
+  useEffect(() => {
+    return () => {
+      // Cleanup function runs when component unmounts or specId changes
+      if (specId) {
+        SpecService.deleteChatHistory(specId).catch((err) => {
+          console.error("Error deleting chat history on unmount:", err);
+        });
+      }
+    };
+  }, [specId]);
+
+  // Handle sending a chat message
+  const handleSendMessage = useCallback(
+    async (message: string) => {
+      if (!specId || !message.trim()) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      // Add user message to UI immediately
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: message,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+
+      try {
+        // Use plan endpoints when in plan mode, spec endpoints otherwise
+        // Plan mode should only edit the plan (not the spec)
+        let response: SpecEditResponse | PlanEditResponse;
+        const isPlanMode = currentScope === "plan";
+
+        if (isPlanMode) {
+          if (!planId) {
+            throw new Error("Plan ID is required for plan edits");
+          }
+          const planRequest: PlanEditRequest = {
+            plan_id: planId,
+            user_message: message.trim(),
+          };
+          response = await PlanService.editPlan(planRequest);
+        } else {
+          const specRequest: SpecEditRequest = {
+            spec_id: specId,
+            user_message: message.trim(),
+          };
+          response = await SpecService.editSpec(specRequest);
+        }
+
+        // Update scope based on response
+        if (response.scope) {
+          setCurrentScope(response.scope);
+        }
+
+        // Update planId if returned from edit response (for plan edits)
+        const responsePlanId = 'plan_id' in response ? response.plan_id : null;
+        if (responsePlanId) {
+          if (!planId || responsePlanId !== planId) {
+            setPlanId(responsePlanId);
+          }
+          // Invalidate plan items query to refresh TaskOverview when plan edits are made
+          queryClient.invalidateQueries({ queryKey: ["plan-items", responsePlanId] });
+          // Also invalidate plan status to ensure it's up to date
+          queryClient.invalidateQueries({ queryKey: ["plan-status", responsePlanId, taskId, specId] });
+        } else if (planId) {
+          // If we have a planId but response doesn't include it, still invalidate with current planId
+          queryClient.invalidateQueries({ queryKey: ["plan-items", planId] });
+          queryClient.invalidateQueries({ queryKey: ["plan-status", planId, taskId, specId] });
+        }
+
+        // Build assistant message content with explanation and details
+        let assistantContent = response.explanation || "";
+
+        // Add applied edits information
+        if (response.applied_edits && response.applied_edits.length > 0) {
+          assistantContent += "\n\n**Applied Edits:**\n";
+          response.applied_edits.forEach((edit) => {
+            const editType = edit.type.charAt(0).toUpperCase() + edit.type.slice(1);
+            const category = edit.category ? ` (${edit.category})` : "";
+            const itemId = edit.item_id ? ` - Item: ${edit.item_id}` : "";
+            assistantContent += `- ${editType}${category}${itemId}\n`;
+          });
+        }
+
+        // Add errors if any
+        if (response.errors && response.errors.length > 0) {
+          assistantContent += "\n\n**Errors:**\n";
+          response.errors.forEach((error) => {
+            assistantContent += `- ${error}\n`;
+          });
+        }
+
+        // Add suggestions if any
+        if (response.suggestions && response.suggestions.length > 0) {
+          assistantContent += "\n\n**Suggestions:**\n";
+          response.suggestions.forEach((suggestion) => {
+            assistantContent += `- ${suggestion}\n`;
+          });
+        }
+
+        // Add warnings if any
+        if (response.warnings && response.warnings.length > 0) {
+          assistantContent += "\n\n**Warnings:**\n";
+          response.warnings.forEach((warning) => {
+            assistantContent += `- ${warning}\n`;
+          });
+        }
+
+        // Add conflicts if any
+        if (response.conflicts && response.conflicts.length > 0) {
+          assistantContent += "\n\n**Conflicts:**\n";
+          response.conflicts.forEach((conflict) => {
+            assistantContent += `- [${conflict.severity.toUpperCase()}] ${conflict.description} (Path: ${conflict.path})\n`;
+          });
+        }
+
+        // Add assistant message
+        const assistantMessage: ChatMessage = {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: assistantContent,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+
+        // Update edit history
+        setEditHistory((prev) => [
+          ...prev,
+          { message: message.trim(), response: response.explanation },
+        ]);
+
+        // Update spec_output
+        if (response.spec_output) {
+          setSpecOutput(response.spec_output);
+
+          // Track recently changed items from applied_edits
+          const newChangedIds = new Set<string>();
+          if (response.applied_edits) {
+            response.applied_edits.forEach((edit) => {
+              if (edit.item_id) {
+                newChangedIds.add(edit.item_id);
+              }
+            });
+          }
+          // Also track from spec_output items
+          [
+            ...response.spec_output.add,
+            ...response.spec_output.modify,
+            ...response.spec_output.fix,
+          ].forEach((item) => newChangedIds.add(item.id));
+
+          // Update highlights: replace with new changed items
+          // This automatically removes highlights from items not modified in the new change
+          setRecentlyChangedIds(newChangedIds);
+
+          // Clear highlight after 3 seconds
+          setTimeout(() => {
+            setRecentlyChangedIds((prev) => {
+              // Only keep items that are still in the current set (weren't modified again)
+              const stillHighlighted = new Set<string>();
+              prev.forEach((id) => {
+                if (newChangedIds.has(id)) {
+                  stillHighlighted.add(id);
+                }
+              });
+              return stillHighlighted;
+            });
+          }, 3000);
+        } else {
+          // If spec_output is not in response, refetch the spec to get updated data
+          // Use a small delay to allow backend to process
+          setTimeout(async () => {
+            if (specId) {
+              try {
+                const specData = await SpecService.getSpec(specId);
+                if (specData.spec_output) {
+                  setSpecOutput(specData.spec_output);
+                }
+              } catch (err) {
+                console.error("Error refetching spec after edit:", err);
+              }
+            }
+          }, 1000);
+        }
+
+        // Store undo token
+        if (response.undo_token) {
+          setUndoToken(response.undo_token);
+        }
+
+        // Only show a toast when the edit was applied successfully
+        const hasErrors = response.errors && response.errors.length > 0;
+        const hasConflicts = response.conflicts && response.conflicts.length > 0;
+        const hasAppliedEdits =
+          response.applied_edits && response.applied_edits.length > 0;
+
+        // If the agent only clarified/explained without changing the spec,
+        // don't show a success toast – the chat message is enough.
+        if (hasAppliedEdits && !hasErrors && !hasConflicts) {
+          const scopeLabel =
+            response.scope === "plan" ? "Plan" : "Spec";
+          toast.success(`${scopeLabel} edited successfully`);
+        }
+
+        // Note: Warnings, conflicts, errors, and suggestions are displayed in the chat message above
+      } catch (err: any) {
+        console.error("Error editing spec:", err);
+        const errorMessage = err.message || "Failed to edit spec";
+        setError(errorMessage);
+
+        // Add error message to chat
+        const errorChatMessage: ChatMessage = {
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          content: `❌ Error: ${errorMessage}`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorChatMessage]);
+
+        // Handle specific error cases
+        if (err.message?.includes("Access denied") || err.message?.includes("403")) {
+          toast.error("Access denied. You don't have permission to edit this spec.");
+        } else if (err.message?.includes("not found") || err.message?.includes("404")) {
+          toast.error("Spec not found. Please refresh the page.");
+        } else if (err.message?.includes("Invalid") || err.message?.includes("400")) {
+          toast.error(`Invalid request: ${errorMessage}`);
+        } else {
+          toast.error(errorMessage);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [specId, editHistory, planId, currentScope, queryClient, taskId]
+  );
+
+  // Handle quick actions
+  const handleQuickAction = useCallback(
+    async (action: "add" | "modify" | "remove" | "undo" | "regenerate") => {
+      if (!specId) return;
+
+      switch (action) {
+        case "add":
+          chatPanelRef.current?.setInput("Add ");
+          chatPanelRef.current?.focusInput();
+          break;
+
+        case "modify":
+          chatPanelRef.current?.setInput("Modify ");
+          chatPanelRef.current?.focusInput();
+          break;
+
+        case "remove":
+          chatPanelRef.current?.setInput("Remove ");
+          chatPanelRef.current?.focusInput();
+          break;
+
+        case "undo": {
+          if (!undoToken) {
+            toast.error("No undo available");
+            return;
+          }
+
+          const isPlanMode = currentScope === "plan";
+
+          if (isPlanMode && !planId) {
+            toast.error("Plan ID not available");
+            return;
+          }
+
+          if (!isPlanMode && !specId) {
+            toast.error("Spec ID not available");
+            return;
+          }
+
+          setIsLoading(true);
+          setError(null);
+
+          try {
+            const response = isPlanMode
+              ? await PlanService.undoPlanEdit({
+                  plan_id: planId as string,
+                  undo_token: undoToken,
+                } as PlanUndoRequest)
+              : await SpecService.undoSpecEdit({
+                  spec_id: specId,
+                  undo_token: undoToken,
+                } as SpecUndoRequest);
+
+            // Build undo message content
+            let undoMessageContent = `✅ Successfully undone ${response.successful} edit(s).`;
+            if (response.undone_edits && response.undone_edits.length > 0) {
+              undoMessageContent += "\n\n**Undone Edits:**\n";
+              response.undone_edits.forEach((edit) => {
+                const editType = edit.type.charAt(0).toUpperCase() + edit.type.slice(1);
+                undoMessageContent += `- ${editType} (Item: ${edit.item_id})\n`;
+              });
+            }
+            if (response.errors && response.errors.length > 0) {
+              undoMessageContent += "\n\n**Errors:**\n";
+              response.errors.forEach((error) => {
+                undoMessageContent += `- ${error}\n`;
+              });
+            }
+
+            // Update spec_output if provided
+            if (response.spec_output) {
+              setSpecOutput(response.spec_output);
+
+              // Track undone items for highlighting
+              const undoneIds = new Set<string>();
+              if (response.undone_edits) {
+                response.undone_edits.forEach((edit) => {
+                  if (edit.item_id) {
+                    undoneIds.add(edit.item_id);
+                  }
+                });
+              }
+              // Update highlights: replace with undone items (removes previous highlights)
+              setRecentlyChangedIds(undoneIds);
+
+              // Clear highlight after 3 seconds
+              setTimeout(() => {
+                setRecentlyChangedIds((prev) => {
+                  // Only keep items that are still in the undone set
+                  const stillHighlighted = new Set<string>();
+                  prev.forEach((id) => {
+                    if (undoneIds.has(id)) {
+                      stillHighlighted.add(id);
+                    }
+                  });
+                  return stillHighlighted;
+                });
+              }, 3000);
+            } else if (!isPlanMode) {
+              // Refetch spec if spec_output not in response (spec mode only)
+              setTimeout(async () => {
+                if (specId) {
+                  try {
+                    const specData = await SpecService.getSpec(specId);
+                    if (specData.spec_output) {
+                      setSpecOutput(specData.spec_output);
+                    }
+                  } catch (err) {
+                    console.error("Error refetching spec after undo:", err);
+                  }
+                }
+              }, 1000);
+            }
+
+            if (isPlanMode && planId) {
+              queryClient.invalidateQueries({ queryKey: ["plan-items", planId] });
+              queryClient.invalidateQueries({ queryKey: ["plan-status", planId, taskId, specId] });
+            }
+
+            // Add undo message to chat
+            const undoMessage: ChatMessage = {
+              id: `assistant-undo-${Date.now()}`,
+              role: "assistant",
+              content: undoMessageContent,
+              timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, undoMessage]);
+
+            // Show success toast with details
+            if (response.failed > 0) {
+              toast.warning(`Undone ${response.successful} edit(s), ${response.failed} failed`);
+            } else {
+              toast.success(`Successfully undone ${response.successful} edit(s)`);
+            }
+
+            // Clear undo token since it can only be used once
+            setUndoToken(null);
+          } catch (err: any) {
+            console.error("Error undoing:", err);
+            const errorMessage = err.message || "Failed to undo edit";
+            setError(errorMessage);
+
+            // Add error message to chat for better visibility
+            const errorChatMessage: ChatMessage = {
+              id: `assistant-error-undo-${Date.now()}`,
+              role: "assistant",
+              content: `❌ **Error undoing edit:**\n\n${errorMessage}\n\nPlease try again or contact support if the issue persists.`,
+              timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, errorChatMessage]);
+
+            // Show toast with error
+            toast.error(errorMessage, {
+              duration: 6000,
+            });
+          } finally {
+            setIsLoading(false);
+          }
+          break;
+        }
+
+        case "regenerate":
+          await handleSendMessage(
+            currentScope === "plan" ? "Regenerate the plan" : "Regenerate the spec"
+          );
+          break;
+      }
+    },
+    [specId, undoToken, handleSendMessage, currentScope, planId, queryClient, taskId]
+  );
+
+  // Handle retry
+  const handleRetry = useCallback(() => {
+    setError(null);
+    // Could implement retry logic here if needed
+  }, []);
+
+  // Check if chat should be disabled
+  const isChatDisabled = specStatus !== "COMPLETED" || isLoadingSpec || !specId;
+
+  // Handle generate plan
+  const handleGeneratePlan = useCallback(async () => {
+    if (!specId) {
+      toast.error("Spec ID not available");
+      return;
+    }
+
+    setIsGeneratingPlan(true);
+    try {
+      const response = await PlanService.submitPlanGeneration({
+        spec_id: specId,
+      });
+      
+      toast.success("Plan generation started");
+      
+      // Set planId and show task overview instead of navigating
+      if (response.plan_id) {
+        setPlanId(response.plan_id);
+      }
+      setShowTaskOverview(true);
+    } catch (err: any) {
+      console.error("Error generating plan:", err);
+      toast.error(err.message || "Failed to start plan generation");
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  }, [specId]);
+
+  if (isLoadingSpec) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-primary-color" />
-        <p className="ml-3 text-primary-color">Loading spec generation...</p>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-color mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading spec...</p>
+        </div>
       </div>
     );
   }
 
-  if (!recipeId) {
+  if (error && !specOutput) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-2">Recipe not found</h2>
-          <p className="text-primary-color mb-6">
-            The recipe ID was not found. Please start a new project.
-          </p>
-          <button
-            onClick={() => router.push("/idea")}
-            className="px-4 py-2 bg-primary-color text-accent-color rounded hover:opacity-90"
-          >
-            Create New Project
-          </button>
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-700 mb-4">{error}</p>
+          <Button onClick={() => router.back()} variant="outline">
+            Go Back
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      <main className="max-w-3xl mx-auto px-6 py-12">
-        {/* Error Display */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-700">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-xs text-red-600 underline"
-            >
-              Retry
-            </button>
-          </div>
-        )}
+    <div className="flex h-screen bg-background overflow-hidden">
+      {/* Chat Panel (LHS) */}
+      <div className="w-[600px] shrink-0 border-r border-[#D3E5E5] flex flex-col">
+        <SpecChatPanel
+          ref={chatPanelRef}
+          specId={specId || ""}
+          disabled={isChatDisabled}
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          isLoading={isLoading}
+          error={error}
+          onRetry={handleRetry}
+          nextActions={nextActions}
+          onQuickAction={handleQuickAction}
+          canUndo={!!undoToken}
+          scope={currentScope}
+          suggestedPrompts={[
+            "Add rate limiting to the API",
+            "Remove Redis dependency",
+            "Add authentication middleware",
+            "Simplify the database schema",
+          ]}
+        />
+      </div>
 
-        {/* Failed State */}
-        {status === 'FAILED' && (
-          <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <X className="w-5 h-5 text-red-600" />
-              <h3 className="text-sm font-semibold text-red-900">
-                Spec Generation Failed
-              </h3>
-            </div>
-            <p className="text-sm text-red-700 mb-3">
-              The spec generation process encountered an error. Please try again.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-        <div className="flex justify-between items-start mb-10">
-          <h1 className="text-2xl font-bold text-primary-color">Plan Spec</h1>
-          {projectData && (
-            <div className="flex items-center gap-2">
-              <Badge icon={Github}>{projectData.repo}</Badge>
-              <Badge icon={GitBranch}>{projectData.branch}</Badge>
-            </div>
-          )}
-        </div>
-        {/* Project Briefing */}
-        <section className="mb-8 pb-8 border-b border-[#D3E5E5]">
-          <div className="space-y-6">
-            <p className="text-base font-medium tracking-tight text-primary-color leading-relaxed">
-              {recipeData?.user_prompt || "Loading..."}
-            </p>
-
-            <div className="grid grid-cols-1 gap-6 pt-2">
-              {/* Questions as Parameters */}
-              {projectData?.questions
-                .filter((q) => answers[q.id])
-                .map((q) => (
-                  <div key={q.id} className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-primary-color">
-                        PARAM
-                      </span>
-                      <p className="text-sm font-bold text-primary-color">
-                        {q.question}
-                      </p>
-                    </div>
-                    <div className="pl-14">
-                      <p className="text-sm font-medium text-primary-color">
-                        {answers[q.id]}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Dynamic Progress Indicator */}
-        <section className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap className="w-4 h-4 text-primary-color" />
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-primary-color font-sans">
-              Plan Specification
-            </h2>
-          </div>
-          <p className="text-sm text-primary-color mb-6 leading-relaxed">
-            Plan spec is a granular specification of the user prompt and
-            question. These represent the specific goals of the workflow. It
-            also makes approximation on what libraries to use, files to modify
-            and external services that might be used. Make sure that you review
-            the goals of the workflow before your proceed.
-          </p>
-          <div className="bg-zinc-50/50 border border-[#D3E5E5] rounded-xl overflow-hidden">
-            <div
-              onClick={() => setIsPlanExpanded(!isPlanExpanded)}
-              role="button"
-              tabIndex={0}
-              className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-zinc-100/50 transition-colors border-b border-transparent"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 flex items-center justify-center">
-                  {isCancelled ? (
-                    <X className="w-4 h-4 text-primary-color" />
-                  ) : planProgress >= 100 ? (
-                    <Check className="w-4 h-4 text-primary-color" />
-                  ) : (
-                    <Loader2 className="w-4 h-4 text-primary-color animate-spin" />
-                  )}
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-primary-color">
-                    {isCancelled
-                      ? "Stopped"
-                      : status === 'COMPLETED'
-                        ? "Plan Ready"
-                        : status === 'FAILED'
-                          ? "Failed"
-                          : "Architecting System"}
-                  </span>
-                  <span className="text-xs font-mono text-primary-color uppercase tracking-tighter">
-                    Status: {planProgress}% Compiled
+      {/* Spec Content (RHS) */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-[#D3E5E5] shrink-0">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold text-primary-color">
+              {showTaskOverview ? "Task Overview" : "Spec Editor"}
+            </h1>
+            <div className="flex items-center gap-4">
+              {specStatus !== "COMPLETED" && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>
+                    {specStatus === "IN_PROGRESS"
+                      ? "Generating spec..."
+                      : specStatus === "FAILED"
+                        ? "Spec generation failed"
+                        : "Pending"}
                   </span>
                 </div>
-              </div>
-              <ChevronDown
-                className={`w-4 h-4 text-primary-color transition-transform ${isPlanExpanded ? "" : "-rotate-90"}`}
-              />
-            </div>
-
-            {isPlanExpanded && (
-              <div className="relative px-4 py-8">
-                {/* Connecting Vertical Line */}
-                <div className="absolute left-8 top-8 bottom-8 w-[1px] bg-[#D3E5E5]" />
-
-                <div className="space-y-8 relative">
-                  {PLAN_CHAPTERS.map((step, idx) => {
-                    // Handle both old (Record<number, StepStatus>) and new (Record<string, StepStatus>) formats
-                    const stepStatus = stepStatuses 
-                      ? (typeof stepStatuses[idx] !== 'undefined' 
-                          ? stepStatuses[idx] 
-                          : (stepStatuses as any)[idx.toString()])
-                      : undefined;
-                    const isDone = stepStatus?.status === 'COMPLETED';
-                    const isActive = stepStatus?.status === 'IN_PROGRESS';
-                    const isFailed = stepStatus?.status === 'FAILED';
-                    const Icon = step.icon;
-
-                    return (
-                      <div
-                        key={step.id}
-                        className={`flex items-start gap-5 transition-all duration-300 ${
-                          !isDone && !isActive ? "opacity-30 grayscale" : "opacity-100"
-                        }`}
-                      >
-                        {/* Icon Node */}
-                        <div
-                          className={`relative z-10 w-8 h-8 flex items-center justify-center rounded-lg border transition-all duration-500 bg-background ${
-                            isDone
-                              ? "border-primary-color bg-primary-color text-accent-color shadow-sm"
-                              : isActive
-                                ? "border-primary-color animate-pulse text-primary-color"
-                                : isFailed
-                                  ? "border-red-500 bg-red-50 text-red-500"
-                                  : "border-[#D3E5E5] text-primary-color"
-                          }`}
-                        >
-                          {isDone ? (
-                            <Check className="w-3.5 h-3.5" />
-                          ) : isFailed ? (
-                            <X className="w-3.5 h-3.5" />
-                          ) : (
-                            <Icon className="w-3.5 h-3.5" />
-                          )}
-                        </div>
-
-                        {/* Text Content */}
-                        <div className="flex flex-col pt-0.5">
-                          <span
-                            className={`text-xs font-bold uppercase tracking-wider ${
-                              isActive ? "text-primary-color" : "text-primary-color"
-                            }`}
-                          >
-                            {step.title}
-                          </span>
-                          <span className="text-xs text-primary-color mt-0.5 max-w-[240px]">
-                            {stepStatus?.message || step.description}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Implementation Output */}
-          {status === 'COMPLETED' && 
-           !isCancelled && 
-           specOutput && (
-            <section
-              ref={planContentRef}
-              className="animate-in fade-in slide-in-from-bottom-4 duration-500"
-            >
-              <PlanTabs plan={specOutput as unknown as Plan} />
-
-              {/* Action Button */}
-              <div className="mt-12 flex justify-end">
-                <button
-                  onClick={async () => {
-                    if (isSubmittingPlan) return;
-                    
-                    setIsSubmittingPlan(true);
-                    try {
-                      // Get spec_id from localStorage or from specProgress
-                      const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
-                      const specId = storedSpecId || (specProgress && 'spec_id' in specProgress ? specProgress.spec_id : null);
-                      
-                      // Submit plan generation request
-                      const response = await PlanService.submitPlanGeneration({
-                        spec_id: specId || undefined,
-                        recipe_id: specId ? undefined : recipeId,
-                      });
-                      
-                      toast.success("Plan generation started successfully");
-                      
-                      // Navigate to plan page with planId
-                      router.push(`/task/${recipeId}/plan?planId=${response.plan_id}${specId ? `&specId=${specId}` : ''}`);
-                    } catch (error: any) {
-                      console.error("Error submitting plan generation:", error);
-                      toast.error(error.message || "Failed to start plan generation");
-                      setIsSubmittingPlan(false);
-                    }
-                  }}
-                  disabled={isSubmittingPlan}
-                  className="px-6 py-2 bg-accent-color text-primary-color hover:opacity-90 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              )}
+              {specStatus === "COMPLETED" && specId && !showTaskOverview && (
+                <Button
+                  onClick={handleGeneratePlan}
+                  disabled={isGeneratingPlan}
+                  className="px-6 py-2 bg-zinc-900 text-white rounded-lg font-medium text-sm hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmittingPlan ? (
+                  {isGeneratingPlan ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Starting Plan Generation...
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Generating Plan...
                     </>
                   ) : (
-                    "Generate Detailed Plan"
+                    "Generate Plan"
                   )}
-                </button>
-              </div>
-            </section>
-          )}
-      </main>
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
 
-      {/* Floating Interaction Footer */}
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
+          {showTaskOverview && specId ? (
+            <TaskOverview
+              specId={specId}
+              recipeId={taskId}
+              planId={planId}
+            />
+          ) : (
+            <SpecContentDisplay
+              specOutput={specOutput}
+              recentlyChangedIds={recentlyChangedIds}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
-};
-
-export default SpecPage;
+}

@@ -355,10 +355,110 @@ export interface SpecChatResponse {
 }
 
 export interface SpecUndoRequest {
+  spec_id: string;
   undo_token: string;
 }
 
+export interface SpecUndoUndoneEdit {
+  edit_id: string;
+  type: "add" | "modify" | "remove";
+  item_id: string;
+}
+
 export interface SpecUndoResponse {
-  spec_output: SpecOutput;
-  message: string;
+  spec_id: string;
+  undone_edits: SpecUndoUndoneEdit[];
+  errors: string[];
+  total_edits: number;
+  successful: number;
+  failed: number;
+  spec_output?: SpecOutput;
+}
+
+// Spec Edit API types
+export interface SpecEditRequest {
+  spec_id: string;
+  user_message: string;
+}
+
+export interface SpecEditAppliedEdit {
+  edit_id: string;
+  type: "add" | "modify" | "remove";
+  item_id?: string;
+  category?: "add" | "modify" | "fix";
+}
+
+export interface SpecEditConflict {
+  path: string;
+  description: string;
+  severity: "high" | "medium" | "low";
+}
+
+export interface SpecEditResponse {
+  spec_id: string;
+  scope?: "spec" | "plan"; // Optional for backward compatibility, but backend should return it
+  intent: SpecChatIntent;
+  explanation: string;
+  applied_edits: SpecEditAppliedEdit[];
+  errors: string[];
+  conflicts: SpecEditConflict[];
+  warnings: string[];
+  suggestions: string[];
+  undo_token: string;
+  spec_output?: SpecOutput;
+}
+
+// Plan Edit API types (mirroring Spec Edit API)
+export interface PlanEditRequest {
+  plan_id: string;
+  user_message: string;
+}
+
+export interface PlanEditAppliedEdit {
+  edit_id: string;
+  type: "add" | "modify" | "remove";
+  item_id?: string;
+  category?: "add" | "modify" | "fix";
+}
+
+export interface PlanEditConflict {
+  path: string;
+  description: string;
+  severity: "high" | "medium" | "low";
+}
+
+export interface PlanEditResponse {
+  plan_id: string;
+  spec_id: string;
+  scope: "spec" | "plan";
+  intent: SpecChatIntent;
+  explanation: string;
+  applied_edits: PlanEditAppliedEdit[];
+  errors: string[];
+  conflicts: PlanEditConflict[];
+  warnings: string[];
+  suggestions: string[];
+  undo_token: string;
+  spec_output?: SpecOutput;
+}
+
+export interface PlanUndoRequest {
+  plan_id: string;
+  undo_token: string;
+}
+
+export interface PlanUndoUndoneEdit {
+  edit_id: string;
+  type: "add" | "modify" | "remove";
+  item_id: string;
+}
+
+export interface PlanUndoResponse {
+  plan_id: string;
+  undone_edits: PlanUndoUndoneEdit[];
+  errors: string[];
+  total_edits: number;
+  successful: number;
+  failed: number;
+  spec_output?: SpecOutput;
 }

@@ -9,13 +9,13 @@ interface QuestionSectionProps {
   questions: MCQQuestion[];
   answers: Map<string, QuestionAnswer>;
   hoveredQuestion: string | null;
-  expandedOptions: Set<string>;
-  skippedQuestions: Set<string>;
+  expandedOptions?: Set<string>;
+  skippedQuestions?: Set<string>;
   onHover: (questionId: string | null) => void;
   onAnswerChange: (questionId: string, answer: Partial<QuestionAnswer>) => void;
-  onSave: (questionId: string) => void;
-  onCancel: (questionId: string) => void;
-  onToggleOptions: (questionId: string) => void;
+  onSave?: (questionId: string) => void;
+  onCancel?: (questionId: string) => void;
+  onToggleOptions?: (questionId: string) => void;
   onToggleSkip: (questionId: string) => void;
 }
 
@@ -35,6 +35,9 @@ export default function QuestionSection({
 }: QuestionSectionProps) {
   if (questions.length === 0) return null;
 
+  const safeExpandedOptions = expandedOptions ?? new Set<string>();
+  const safeSkippedQuestions = skippedQuestions ?? new Set<string>();
+
   return (
     <>
       {questions.map((question) => (
@@ -43,15 +46,14 @@ export default function QuestionSection({
           question={question}
           answer={answers.get(question.id)}
           isHovered={hoveredQuestion === question.id}
-          isExpanded={expandedOptions.has(question.id)}
-          isSkipped={skippedQuestions.has(question.id)}
+          isExpanded={safeExpandedOptions.has(question.id)}
+          isSkipped={safeSkippedQuestions.has(question.id)}
           onHover={() => onHover(question.id)}
           onHoverLeave={() => onHover(null)}
           onAnswerChange={(answer) => onAnswerChange(question.id, answer)}
-          onSave={() => onSave(question.id)}
-          onCancel={() => onCancel(question.id)}
-          onToggleOptions={() => onToggleOptions(question.id)}
-          onToggleSkip={() => onToggleSkip(question.id)}
+          onToggleOptions={
+            onToggleOptions ? () => onToggleOptions(question.id) : undefined
+          }
         />
       ))}
     </>

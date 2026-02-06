@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { parseApiError } from "@/lib/utils";
 import {
@@ -15,12 +15,36 @@ import {
   SubmitSpecGenerationResponse,
   SpecStatusResponse,
   RecipeDetailsResponse,
+  SpecChatRequest,
+  SpecChatResponse,
+  SpecUndoRequest,
+  SpecUndoResponse,
+  SpecOutput,
+  SpecEditRequest,
+  SpecEditResponse,
 } from "@/lib/types/spec";
 
+/**
+ * Service for interacting with the Spec API
+ */
 export default class SpecService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
   private static readonly SPEC_URL = `${this.BASE_URL}/api/v1/recipe/spec`;
   private static readonly API_BASE = `${this.BASE_URL}/api/v1/recipe/codegen`;
+  private static readonly CODEGEN_BASE = `${this.BASE_URL}/api/v1`;
+
+  /**
+   * Extract error message from axios error
+   */
+  private static getErrorMessage(error: unknown, defaultMessage: string): string {
+    if (error instanceof AxiosError) {
+      return error.response?.data?.detail || error.response?.data?.message || defaultMessage;
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return defaultMessage;
+  }
 
   /**
    * Create a new recipe for spec generation
@@ -156,6 +180,38 @@ export default class SpecService {
   }
 
   /**
+   * Get spec by spec_id
+   * GET /api/v1/recipe/codegen/spec/{specId}
+   * @param specId - The spec ID
+   */
+  static async getSpec(specId: string): Promise<SpecStatusResponse> {
+    if (!specId?.trim()) {
+      throw new Error("Spec ID is required");
+    }
+
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get<SpecStatusResponse>(
+        `${this.CODEGEN_BASE}/recipe/codegen/spec/${specId.trim()}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      const errorMessage = this.getErrorMessage(error, "Failed to fetch spec");
+      if (error instanceof AxiosError) {
+        if (error.response?.status === 403) {
+          throw new Error("Access denied");
+        }
+        if (error.response?.status === 404) {
+          throw new Error("Spec not found");
+        }
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
    * Get QA questions for a recipe (polling endpoint)
    * @param recipeId - The recipe ID
    * @returns Questions response with recipe_status and questions array
@@ -179,8 +235,41 @@ export default class SpecService {
   }
 
   /**
+   * Get spec by recipe_id (path param, no query)
+   * GET /api/v1/recipe/codegen/spec/recipe/{recipe_id}
+   * @param recipeId - The recipe ID
+   */
+  static async getSpecByRecipeId(recipeId: string): Promise<SpecStatusResponse> {
+    if (!recipeId?.trim()) {
+      throw new Error("Recipe ID is required");
+    }
+
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.get<SpecStatusResponse>(
+        `${this.CODEGEN_BASE}/recipe/codegen/spec/recipe/${recipeId.trim()}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      const errorMessage = this.getErrorMessage(error, "Failed to fetch spec");
+      if (error instanceof AxiosError) {
+        if (error.response?.status === 403) {
+          throw new Error("Access denied");
+        }
+        if (error.response?.status === 404) {
+          throw new Error("Spec not found");
+        }
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
    * Submit QA answers and trigger spec generation
-   * @param request - Request with recipe_id and qa_answers
+   * POST /api/v1/recipe/codegen/spec — recipe_id and qa_answers in body only
+   * @param request - Request with recipe_id and qa_answers (question_id, answer)[]
    * @returns Response with spec_id and status
    */
   static async submitSpecGeneration(
@@ -189,16 +278,14 @@ export default class SpecService {
     try {
       const headers = await getHeaders();
       const response = await axios.post<SubmitSpecGenerationResponse>(
-        `${this.API_BASE}/spec`,
+        `${this.CODEGEN_BASE}/recipe/codegen/spec`,
         request,
         { headers },
       );
 
       return response.data;
-    } catch (error: any) {
-      console.error("Error submitting spec generation:", error);
-      const errorMessage = parseApiError(error);
-      throw new Error(errorMessage);
+    } catch (error) {
+      throw new Error(this.getErrorMessage(error, "Failed to submit spec generation"));
     }
   }
 
@@ -250,6 +337,7 @@ export default class SpecService {
 
   /**
    * Get comprehensive recipe details including repo and branch information
+   * GET /api/v1/recipe/codegen/{recipe_id}/details
    * @param recipeId - The recipe ID
    * @returns Recipe details including repo_name, branch_name, and questions/answers
    */
@@ -260,15 +348,182 @@ export default class SpecService {
       console.log("[SpecService] Fetching recipe details for:", recipeId);
       const headers = await getHeaders();
       const response = await axios.get<RecipeDetailsResponse>(
-        `${this.API_BASE}/${recipeId}/details`,
+        `${this.CODEGEN_BASE}/recipe/codegen/${recipeId.trim()}/details`,
         { headers },
       );
 
       console.log("[SpecService] Recipe details response:", response.data);
       return response.data;
-    } catch (error: any) {
-      console.error("[SpecService] Error fetching recipe details:", error);
-      const errorMessage = parseApiError(error);
+    } catch (error) {
+      throw new Error(this.getErrorMessage(error, "Failed to fetch recipe details"));
+    }
+  }
+
+  /**
+   * Chat with Spec Editor Agent
+   * @param specId - The spec ID
+   * @param request - Chat request with message and optional edit_history
+   */
+  static async chatWithSpecEditor(
+    specId: string,
+    request: SpecChatRequest
+  ): Promise<SpecChatResponse> {
+    if (!specId?.trim()) {
+      throw new Error("Spec ID is required");
+    }
+    if (!request.message?.trim()) {
+      throw new Error("Message is required");
+    }
+
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.post<SpecChatResponse>(
+        `${this.CODEGEN_BASE}/recipe/codegen/spec/${specId.trim()}/chat`,
+        request,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      const errorMessage = this.getErrorMessage(error, "Failed to send message");
+      if (error instanceof AxiosError) {
+        if (error.response?.status === 403) {
+          throw new Error("Access denied");
+        }
+        if (error.response?.status === 404) {
+          throw new Error("Spec not found");
+        }
+        if (error.response?.status === 400) {
+          const detail = error.response?.data?.detail || error.response?.data?.message;
+          throw new Error(detail || "Invalid request");
+        }
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Undo spec edit
+   * POST /api/v1/recipe/codegen/spec/undo
+   * @param request - Undo request with spec_id and undo_token
+   */
+  static async undoSpecEdit(
+    request: SpecUndoRequest
+  ): Promise<SpecUndoResponse> {
+    if (!request.spec_id?.trim()) {
+      throw new Error("Spec ID is required");
+    }
+    if (!request.undo_token?.trim()) {
+      throw new Error("Undo token is required");
+    }
+
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.post<SpecUndoResponse>(
+        `${this.API_BASE}/spec/undo`,
+        request,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error("[SpecService] Error undoing spec edit:", error);
+      if (error instanceof AxiosError) {
+        const status = error.response?.status;
+        const responseData = error.response?.data;
+
+        // Extract detailed error message
+        const detail = responseData?.detail || responseData?.message || responseData?.error;
+        const errorMessage = detail || this.getErrorMessage(error, "Failed to undo edit");
+
+        if (status === 403) {
+          throw new Error("Access denied. You don't have permission to undo this edit.");
+        }
+        if (status === 404) {
+          throw new Error("Spec not found. The spec may have been deleted or the ID is incorrect.");
+        }
+        if (status === 400) {
+          throw new Error(errorMessage || "Invalid undo token or spec not completed. The undo token may have expired or already been used.");
+        }
+        if (status === 405) {
+          throw new Error("Method not allowed. The undo endpoint may not be available.");
+        }
+        if (status === 500) {
+          // Server error - try to extract more details
+          const serverError = errorMessage || "Internal server error occurred while undoing the edit.";
+          console.error("[SpecService] Server error details:", responseData);
+          throw new Error(`Server error: ${serverError}`);
+        }
+        // For other status codes, use the detailed error message
+        throw new Error(errorMessage);
+      }
+      // For non-axios errors (network errors, etc.)
+      const errorMessage = this.getErrorMessage(error, "Failed to undo edit");
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Delete chat history for a spec
+   * DELETE /api/v1/recipe/codegen/spec/{specId}/chat-history
+   * @param specId - The spec ID
+   */
+  static async deleteChatHistory(specId: string): Promise<void> {
+    if (!specId?.trim()) {
+      throw new Error("Spec ID is required");
+    }
+
+    const headers = await getHeaders();
+
+    try {
+      await axios.delete(
+        `${this.API_BASE}/spec/${specId.trim()}/chat-history`,
+        { headers }
+      );
+    } catch (error) {
+      // Log error but don't throw - don't block navigation
+      console.error("[SpecService] Failed to delete chat history:", error);
+      // Silently fail - navigation should not be blocked
+    }
+  }
+
+  /**
+   * Edit spec via Spec Editor Agent
+   * POST /api/v1/recipe/codegen/spec/edit
+   * @param request - Edit request with spec_id and user_message
+   * @returns Edit response with applied edits, errors, conflicts, etc.
+   */
+  static async editSpec(request: SpecEditRequest): Promise<SpecEditResponse> {
+    if (!request.spec_id?.trim()) {
+      throw new Error("Spec ID is required");
+    }
+    if (!request.user_message?.trim()) {
+      throw new Error("User message is required");
+    }
+
+    const headers = await getHeaders();
+
+    try {
+      const response = await axios.post<SpecEditResponse>(
+        `${this.API_BASE}/spec/edit`,
+        request,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      const errorMessage = this.getErrorMessage(error, "Failed to edit spec");
+      if (error instanceof AxiosError) {
+        if (error.response?.status === 403) {
+          throw new Error("Access denied");
+        }
+        if (error.response?.status === 404) {
+          throw new Error("Spec not found");
+        }
+        if (error.response?.status === 400) {
+          const detail = error.response?.data?.detail || error.response?.data?.message;
+          throw new Error(detail || "Invalid request");
+        }
+      }
       throw new Error(errorMessage);
     }
   }

@@ -33,7 +33,9 @@ const ChatV2 = () => {
   const dispatch: AppDispatch = useDispatch();
   const [projectId, setProjectId] = useState<string>("");
   const [parsingStatus, setParsingStatus] = useState<string>("");
-  const [infoLoadedForChat, setInfoLoadedForChat] = useState<string | null>(null);
+  const [infoLoadedForChat, setInfoLoadedForChat] = useState<string | null>(
+    null,
+  );
   const currentConversationId = params.chatId;
   const [showNavbar, setShowNavbar] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
@@ -54,7 +56,9 @@ const ChatV2 = () => {
 
   // Call hook before any early returns
   // Returns runtime + session states for background task handling
-  const { runtime, isSessionResuming, isBackgroundTaskActive } = useChatRuntime(params.chatId);
+  const { runtime, isSessionResuming, isBackgroundTaskActive } = useChatRuntime(
+    params.chatId,
+  );
 
   const parseRepo = async () => {
     // Guard: prevent overlapping polls and bail if projectId is missing
@@ -67,7 +71,7 @@ const ChatV2 = () => {
       await BranchAndRepositoryService.pollParsingStatus(
         projectId,
         parsingStatus,
-        setParsingStatus
+        setParsingStatus,
       );
     } catch (err) {
       console.error("Error during parsing:", err);
@@ -92,7 +96,7 @@ const ChatV2 = () => {
 
     try {
       const info = await ChatService.loadConversationInfo(
-        currentConversationId
+        currentConversationId,
       );
       if (info.type === "error") {
         if (info.status === 404) {
@@ -113,7 +117,6 @@ const ChatV2 = () => {
         return;
       }
 
-
       setIsCreator(info.is_creator);
 
       if (!list_system_agents.includes(info.agent_ids[0])) {
@@ -126,7 +129,7 @@ const ChatV2 = () => {
         setChat({
           agentId: info.agent_ids[0],
           title: info.title,
-        })
+        }),
       );
 
       setProjectId(info.project_ids[0]);
@@ -139,7 +142,7 @@ const ChatV2 = () => {
       }
 
       const parsingStatus = await BranchAndRepositoryService.getParsingStatus(
-        info.project_ids[0]
+        info.project_ids[0],
       );
       setParsingStatus(parsingStatus);
     } catch (error) {
@@ -170,7 +173,10 @@ const ChatV2 = () => {
 
   if (errorState.isError)
     return (
-      <GlobalError title={errorState.message} description={errorState.description} />
+      <GlobalError
+        title={errorState.message}
+        description={errorState.description}
+      />
     );
   if (chatAccess === "not_found") {
     return (
@@ -184,6 +190,25 @@ const ChatV2 = () => {
           </DialogHeader>
         </DialogContent>
       </Dialog>
+    );
+  }
+
+  // Guard: Don't render AssistantRuntimeProvider until runtime is ready
+  if (!runtime) {
+    return (
+      <div className="flex flex-col h-screen">
+        <Navbar
+          disableShare={!isCreator}
+          showShare
+          hidden={!showNavbar || errorState.isError}
+        />
+        <div className="h-[calc(90vh)] flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p className="text-gray-600">Initializing chat...</p>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -236,4 +261,3 @@ const ChatV2 = () => {
 };
 
 export default ChatV2;
-

@@ -193,7 +193,7 @@ export function isNewUser(result: UserCredential): boolean {
   // Method 1: additionalUserInfo.isNewUser
   // Note: This only returns true if the current SDK call created the account.
   // It will be false for accounts created via Admin SDK, console, or backend.
-  if (result.additionalUserInfo?.isNewUser === true) {
+  if ((result as any).additionalUserInfo?.isNewUser === true) {
     return true;
   }
   

@@ -7,10 +7,13 @@ import {
   GithubAuthProvider,
   signInWithEmailAndPassword,
   signInWithPopup,
+  GoogleAuthProvider,
+  signInWithCredential,
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
+import { testimonials } from "@/lib/utils/testimonials";
 import { isNewUser, deleteUserAndSignOut } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
 
@@ -20,9 +23,7 @@ import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { useSearchParams, useRouter } from "next/navigation";
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { LinkProviderDialog } from '@/components/auth/LinkProviderDialog';
-import { DirectSSOButtons } from '@/components/auth/DirectSSOButtons';
 import type { SSOLoginResponse } from '@/types/auth';
 
 export default function Signin() {
@@ -31,11 +32,13 @@ export default function Signin() {
   const source = searchParams.get("source");
   const agent_id = searchParams.get("agent_id");
   const redirectUrl = searchParams.get("redirect");
-  
+
   // SSO state
   const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(null);
   const [showLinkingDialog, setShowLinkingDialog] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
+  const [currentTestimonial, setCurrentTestimonial] = React.useState(0);
 
   // Extract agent_id from redirect URL if present
   let redirectAgent_id = "";
@@ -66,9 +69,11 @@ export default function Signin() {
     },
   });
 
-  const provider = new GithubAuthProvider();
-  provider.addScope("read:org");
-  provider.addScope("user:email");
+  const githubProvider = new GithubAuthProvider();
+  githubProvider.addScope("read:org");
+  githubProvider.addScope("user:email");
+
+  const googleProvider = new GoogleAuthProvider();
 
   const handleExternalRedirect = async (token: string) => {
     if (finalAgent_id) {
@@ -82,19 +87,16 @@ export default function Signin() {
     signInWithEmailAndPassword(auth, data.email, data.password)
       .then(async (userCredential) => {
         const user = userCredential.user;
-        
+
         try {
           const userSignup = await AuthService.signupWithEmailPassword(user);
-          
-          // CRITICAL: Check GitHub linking from backend response
-          // Login cannot succeed unless GitHub is linked
+
           if (userSignup.needs_github_linking) {
-            // Redirect to onboarding to link GitHub
             toast.info('Almost there! Link your GitHub to unlock the magic');
             const urlSearchParams = new URLSearchParams(window.location.search);
             const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
             const prompt = urlSearchParams.get("prompt") || "";
-            
+
             const onboardingParams = new URLSearchParams({
               uid: user.uid,
               ...(user.email && { email: user.email }),
@@ -103,41 +105,34 @@ export default function Signin() {
               ...(prompt && { prompt }),
               ...(finalAgent_id && { agent_id: finalAgent_id }),
             });
-            
-            // Use window.location.href for a full page navigation to avoid React hooks issues
+
             window.location.href = `/onboarding?${onboardingParams.toString()}`;
             return;
           }
-          
-          // GitHub is linked - proceed with normal login flow
+
           if (source === "vscode") {
-            if (process.env.NODE_ENV !== 'production') {
-              console.log("res.data", userSignup);
-            }
             if (userSignup.token) {
               handleExternalRedirect(userSignup.token);
             }
           } else if (finalAgent_id) {
             handleExternalRedirect("");
           } else {
-            router.push('/newchat');
+            router.push('/idea');
           }
-          
+
           toast.success("Welcome back " + (user.displayName || user.email) + "! Ready to build?");
         } catch (error: any) {
           toast.error(error.message || "Signup call unsuccessful");
         }
       })
       .catch((error) => {
-        const errorCode = error.code;
         const errorMessage = error.message;
-        console.error("Firebase auth error:", errorCode, errorMessage);
         toast.error(errorMessage);
       });
   };
 
   const onGithub = async () => {
-    signInWithPopup(auth, provider)
+    signInWithPopup(auth, githubProvider)
       .then(async (result) => {
         // VALIDATION CHECKPOINT: Block new GitHub signups
         const isNew = isNewUser(result);
@@ -183,11 +178,8 @@ export default function Signin() {
               email: result.user.email,
               name: result.user?.displayName || "",
             });
-            
-            // CRITICAL: Check GitHub linking from backend response
-            // Even if signing in with GitHub, check the flag for consistency
+
             if (userSignup.needs_github_linking) {
-              // Redirect to onboarding to link GitHub (shouldn't happen for GitHub sign-in, but handle it)
               toast.info('Almost there! Link your GitHub to unlock the magic');
               const urlSearchParams = new URLSearchParams(window.location.search);
               const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
@@ -204,22 +196,11 @@ export default function Signin() {
               window.location.href = `/onboarding?${onboardingParams.toString()}`;
               return;
             }
-            
-            //if this is a new user
-            if (!userSignup.exists) {
-              // For new users, redirect to onboarding
-              toast.success(
-                "Welcome aboard " + result.user.displayName + "! Let's get started"
-              );
 
-              const urlSearchParams = new URLSearchParams(
-                window.location.search
-              );
-              const plan = (
-                urlSearchParams.get("plan") ||
-                urlSearchParams.get("PLAN") ||
-                ""
-              ).toLowerCase();
+            if (!userSignup.exists) {
+              toast.success("Welcome aboard " + result.user.displayName + "! Let's get started");
+              const urlSearchParams = new URLSearchParams(window.location.search);
+              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
               const onboardingParams = new URLSearchParams();
@@ -234,8 +215,6 @@ export default function Signin() {
               return;
             }
 
-            // For existing users, GitHub is already linked (they signed in with GitHub)
-            // So we can proceed directly
             if (source === "vscode") {
               if (userSignup.token) {
                 handleExternalRedirect(userSignup.token);
@@ -243,225 +222,443 @@ export default function Signin() {
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
-              window.location.href = "/newchat";
+              window.location.href = "/idea";
             }
 
-            toast.success(
-              "Welcome back " + result.user.displayName + "! Let's build something amazing"
-            );
+            toast.success("Welcome back " + result.user.displayName + "! Let's build something amazing");
           } catch (e: any) {
-            if (process.env.NODE_ENV !== 'production') {
-              console.error("API error:", e);
-            }
             toast.error(e.message || "Sign-in unsuccessful");
           }
         }
       })
-      .catch((error) => {
+      .catch(async (error) => {
         // Handle user cancellation - don't show error
         if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
           // User cancelled, don't show error
           return;
         }
         
-        const errorCode = error.code;
-        const errorMessage = error.message;
-        const email = error.customData?.email;
-        const credential = GithubAuthProvider.credentialFromError(error);
+        // Handle credential already in use error
+        // This happens when the GitHub account is already linked to a different Firebase user
+        if (error.code === 'auth/credential-already-in-use') {
+          toast.info("This GitHub account exists. Signing you in...");
+          
+          try {
+            // Extract the credential from the error
+            const credential = GithubAuthProvider.credentialFromError(error);
+            if (!credential) {
+              throw new Error("Could not extract GitHub credential from error");
+            }
+
+            // Sign in with the GitHub credential - this will sign in as the existing GitHub user
+            const tempResult = await signInWithCredential(auth, credential);
+            const githubUser = tempResult.user;
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log("Signed in with existing GitHub account:", githubUser.uid);
+            }
+
+            // Now proceed with normal GitHub sign-in flow
+            // Get the GitHub access token from the credential
+            const githubAccessToken = (credential as any).accessToken;
+            
+            if (githubAccessToken) {
+              try {
+                const userSignup = await AuthService.signupWithGitHub(
+                  githubUser,
+                  githubAccessToken,
+                  (tempResult as any)._tokenResponse?.screenName || ''
+                );
+
+                posthog.identify(githubUser.uid, {
+                  email: githubUser.email,
+                  name: githubUser?.displayName || "",
+                });
+
+                if (userSignup.needs_github_linking) {
+                  toast.info('Almost there! Link your GitHub to unlock the magic');
+                  const urlSearchParams = new URLSearchParams(window.location.search);
+                  const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+                  const prompt = urlSearchParams.get("prompt") || "";
+
+                  const onboardingParams = new URLSearchParams();
+                  if (githubUser.uid) onboardingParams.append('uid', githubUser.uid);
+                  if (githubUser.email) onboardingParams.append('email', githubUser.email);
+                  if (githubUser.displayName) onboardingParams.append('name', githubUser.displayName);
+                  if (plan) onboardingParams.append('plan', plan);
+                  if (prompt) onboardingParams.append('prompt', prompt);
+                  if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+
+                  window.location.href = `/onboarding?${onboardingParams.toString()}`;
+                  return;
+                }
+
+                if (source === "vscode") {
+                  if (userSignup.token) {
+                    handleExternalRedirect(userSignup.token);
+                  }
+                } else if (finalAgent_id) {
+                  handleExternalRedirect("");
+                } else {
+                  window.location.href = "/idea";
+                }
+
+                toast.success("Welcome back " + githubUser.displayName + "! Let's build something amazing");
+                return;
+              } catch (signupError: any) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.error("Error during GitHub signup:", signupError);
+                }
+                toast.error(signupError.message || "Sign-in unsuccessful");
+              }
+            } else {
+              toast.error("Could not get GitHub access token. Please try again.");
+            }
+          } catch (conflictError: any) {
+            if (process.env.NODE_ENV === 'development') {
+              console.error("Error handling credential conflict:", conflictError);
+            }
+            toast.error("This GitHub account is linked to another account. Please try signing in with Google instead.");
+          }
+          return;
+        }
+        
         const friendlyError = getUserFriendlyError(error);
         toast.error(friendlyError);
       });
   };
 
-  // SSO handlers
-  const handleSSONeedsLinking = (response: SSOLoginResponse) => {
-    setLinkingData(response);
-    setShowLinkingDialog(true);
+  const onGoogle = async () => {
+    signInWithPopup(auth, googleProvider)
+      .then(async (result) => {
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (credential) {
+          try {
+            const userSignup = await AuthService.signupWithEmailPassword(result.user);
+
+            posthog.identify(result.user.uid, {
+              email: result.user.email,
+              name: result.user?.displayName || "",
+            });
+
+            if (userSignup.needs_github_linking) {
+              toast.info('Almost there! Link your GitHub to unlock the magic');
+              const urlSearchParams = new URLSearchParams(window.location.search);
+              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              const prompt = urlSearchParams.get("prompt") || "";
+
+              const onboardingParams = new URLSearchParams();
+              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
+              if (result.user.email) onboardingParams.append('email', result.user.email);
+              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
+              if (plan) onboardingParams.append('plan', plan);
+              if (prompt) onboardingParams.append('prompt', prompt);
+              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+
+              window.location.href = `/onboarding?${onboardingParams.toString()}`;
+              return;
+            }
+
+            if (!userSignup.exists) {
+              toast.success("Welcome aboard " + result.user.displayName + "! Let's get started");
+              const urlSearchParams = new URLSearchParams(window.location.search);
+              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              const prompt = urlSearchParams.get("prompt") || "";
+
+              const onboardingParams = new URLSearchParams();
+              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
+              if (result.user.email) onboardingParams.append('email', result.user.email);
+              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
+              if (plan) onboardingParams.append('plan', plan);
+              if (prompt) onboardingParams.append('prompt', prompt);
+              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+
+              window.location.href = `/onboarding?${onboardingParams.toString()}`;
+              return;
+            }
+
+            if (source === "vscode") {
+              if (userSignup.token) {
+                handleExternalRedirect(userSignup.token);
+              }
+            } else if (finalAgent_id) {
+              handleExternalRedirect("");
+            } else {
+              window.location.href = "/idea";
+            }
+
+            toast.success("Welcome back " + result.user.displayName + "! Let's build something amazing");
+          } catch (e: any) {
+            toast.error(e.message || "Sign-in unsuccessful");
+          }
+        }
+      })
+      .catch((error) => {
+        const friendlyError = getUserFriendlyError(error);
+        toast.error(friendlyError);
+      });
   };
 
   const handleSSOLinked = () => {
-    // After linking, redirect based on context
     if (source === "vscode") {
-      router.push('/newchat');
+      router.push('/idea');
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push('/newchat');
-    }
-  };
-
-  const handleSSOSuccess = (response?: SSOLoginResponse) => {
-      // Check if GitHub needs to be linked (fallback check, though DirectSSOButtons should handle this)
-      if (response?.needs_github_linking) {
-        // Get URL parameters for plan, prompt, agent_id
-        const urlSearchParams = new URLSearchParams(window.location.search);
-        const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
-        const prompt = urlSearchParams.get("prompt") || "";
-        
-        // Redirect to onboarding with user info from SSO response
-        const onboardingParams = new URLSearchParams({
-          ...(response.user_id && { uid: response.user_id }),
-          ...(response.email && { email: response.email }),
-          ...(response.display_name && { name: response.display_name }),
-          ...(plan && { plan }),
-          ...(prompt && { prompt }),
-          ...(finalAgent_id && { agent_id: finalAgent_id }),
-        });
-        
-        // Use window.location.href for a full page navigation to avoid React hooks issues
-        window.location.href = `/onboarding?${onboardingParams.toString()}`;
-        return;
-      }
-    
-    // For existing users signing in via SSO
-    if (source === "vscode") {
-      router.push('/newchat');
-    } else if (finalAgent_id) {
-      router.push(`/shared-agent?agent_id=${finalAgent_id}`);
-    } else {
-      router.push('/newchat');
+      router.push('/idea');
     }
   };
 
   return (
-    <section className="lg:flex-row flex-col-reverse flex items-center justify-between w-full lg:h-screen relative page-transition">
-      <div className="flex items-center justify-center w-1/2 h-full p-6">
-        <div className="relative h-full w-full rounded-lg overflow-hidden">
-          <Image
-            src={"/images/landing.png"}
-            alt="landing"
-            layout="fill"
-            objectFit="cover"
-          />
-        </div>
-      </div>
+    <div className="relative h-screen w-full font-sans bg-[#022D2C] overflow-hidden">
+      {/* Background vector */}
+      <Image
+        src="/images/figma/auth/auth-signin-vector.svg"
+        alt=""
+        width={1523}
+        height={1452}
+        priority
+        className="pointer-events-none select-none absolute w-[1623px] h-[1452px] top-[-276px] left-[-1.5px] opacity-100"
+      />
 
-      <div className="w-1/2 h-full flex items-center justify-center flex-col gap-4">
-        <div className="flex items-center justify-center flex-row gap-3 mb-4">
-          <Image
-            src={"/images/potpie-blue.svg"}
-            width={100}
-            height={100}
-            alt="logo"
-            className="transition-transform duration-300 hover:scale-105"
-          />
-          <h1 className="text-7xl font-bold text-gray-800 tracking-tight">potpie</h1>
-        </div>
-        <div className="flex items-center justify-center flex-col text-border">
-          {/* <h3 className="text-2xl font-bold text-black">Get Started!</h3> */}
-          {/* <div className="flex items-start justify-start flex-col mt-10 gap-4">
-          <p className="flex items-center justify-center text-start gap-4">
-            <LucideCheck
-              size={20}
-              className="bg-primary rounded-full p-[0.5px] text-white"
-            />
-            Select the repositories you want to build your AI agents on.
-          </p>
-          <p className="flex items-center justify-center text-start gap-4">
-            <LucideCheck
-              size={20}
-              className="bg-primary rounded-full p-[0.5px] text-white"
-            />
-            You can choose to add more repositories later on from the
-            dashboard
-          </p>
-        </div> */}
-          <div className="w-80 mt-14 space-y-6 form-fade-in">
-            {/* GitHub Sign-in */}
-            <button
-              onClick={() => onGithub()}
-              className="btn-enterprise flex items-center justify-center w-full h-14 px-5 py-4 gap-3 hover:bg-black hover:shadow-lg bg-gray-800 rounded-lg text-white text-base"
-            >
-              <LucideGithub className="w-6 h-6 flex-shrink-0" />
-              <span className="font-medium text-base">Sign in with GitHub</span>
-            </button>
+      {/* Right-side blur glow */}
+      <div
+        className="pointer-events-none absolute top-0 right-0 h-[900px] w-[900px] rounded-full"
+        style={{
+          transform: "translateX(153px)",
+          backgroundColor: "#022423",
+          filter: "blur(162px)",
+        }}
+      />
 
-            {/* SSO Buttons */}
-            <DirectSSOButtons
-              onNeedsLinking={handleSSONeedsLinking}
-              onSuccess={handleSSOSuccess}
-            />
+      {/* Main frame content */}
+      <div className="relative z-10 mx-auto h-full w-full max-w-[1440px] px-2 py-2">
+        <div className="grid h-full grid-cols-1 lg:grid-cols-[836px_1fr] gap-10">
+          {/* Left panel */}
+          <section className="flex h-full w-full flex-col rounded-2xl bg-[#FFF9F5]">
+            {/* Header */}
+            <div className="flex w-full items-center justify-between px-8 pt-8">
+              <Link href="/" className="inline-flex items-center">
+                <Image
+                  src="/images/figma/auth/auth-signin-logo.svg"
+                  width={42}
+                  height={42}
+                  alt="Potpie"
+                  priority
+                />
+              </Link>
 
-            {/* Divider */}
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-4 text-gray-500 font-medium">or continue with email</span>
-              </div>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-sm font-normal text-[#656969] hover:text-[#022D2C] transition-colors"
+              >
+                <Image
+                  src="/images/figma/auth/auth-signin-globe.svg"
+                  alt=""
+                  width={20}
+                  height={20}
+                />
+                <span className="px-1">ENG</span>
+                <Image
+                  src="/images/figma/auth/auth-signin-arrow-down.svg"
+                  alt=""
+                  width={20}
+                  height={20}
+                />
+              </button>
             </div>
 
-            {/* Email/Password Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-              <div>
-                <input
-                  type="email"
-                  placeholder="you@company.com"
-                  {...form.register("email")}
-                  className={`input-enterprise w-full px-5 py-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
-                    form.formState.errors.email
-                      ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                      : "border-gray-300 hover:border-gray-400"
-                  }`}
+            {/* Form content */}
+            <div className="flex flex-1 items-center justify-center px-8 pb-8">
+              <div className="w-full max-w-[392px]">
+                <div className="flex flex-col items-center gap-3">
+                <Image
+                  src="/images/figma/auth/auth-signin-icon.svg"
+                  alt=""
+                  width={80}
+                  height={80}
+                  priority
                 />
-                {form.formState.errors.email && (
-                  <p className="mt-2 text-sm text-red-600 error-message-enter font-medium">
-                    {form.formState.errors.email.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Password"
-                    {...form.register("password")}
-                    className={`input-enterprise w-full px-5 py-4 pr-14 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm placeholder:text-gray-400 text-gray-900 text-base ${
-                      form.formState.errors.password
-                        ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                        : "border-gray-300 hover:border-gray-400"
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-6 w-6" />
-                    ) : (
-                      <Eye className="h-6 w-6" />
-                    )}
-                  </button>
+                <h1 className="text-center text-2xl font-medium text-[#022D2C]">
+                  Sign in to your account
+                </h1>
                 </div>
-                {form.formState.errors.password && (
-                  <p className="mt-2 text-sm text-red-600 error-message-enter font-medium">
-                    {form.formState.errors.password.message}
-                  </p>
-                )}
+
+              {/* Social buttons (interactive, styled to match) */}
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={onGithub}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
+                  aria-label="Continue with GitHub"
+                >
+                  <LucideGithub className="h-5 w-5 text-black" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onGoogle}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
+                  aria-label="Continue with Google"
+                >
+                  <Image
+                    src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                    width={20}
+                    height={20}
+                    alt="Google"
+                  />
+                </button>
               </div>
-              <Button
-                type="submit"
-                className="btn-enterprise w-full h-14 px-5 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md hover:shadow-lg text-base"
-              >
-                Sign in
-              </Button>
-            </form>
-          </div>
-          
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Don&apos;t have an account?{" "}
-              <Link 
-                href="/sign-up" 
-                className="link-smooth text-blue-600 font-semibold hover:text-blue-700"
-              >
-                Sign up
-              </Link>
-            </p>
-          </div>
+
+              {/* Divider */}
+              <div className="mt-5 flex items-center gap-3">
+                <div className="h-px flex-1 bg-[#EBEBEB]" />
+                <span className="text-[11px] font-medium tracking-[0.02em] text-[#A3A3A3]">
+                  OR
+                </span>
+                <div className="h-px flex-1 bg-[#EBEBEB]" />
+              </div>
+
+              {/* Email/Pass Form */}
+              <form onSubmit={form.handleSubmit(onSubmit)} className="mt-5 space-y-4">
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-[#022D2C]">
+                    Email Address<span className="ml-0.5">*</span>
+                  </label>
+                  <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
+                    <Image
+                      src="/images/figma/auth/auth-signin-mail.svg"
+                      alt=""
+                      width={20}
+                      height={20}
+                    />
+                    <input
+                      type="email"
+                      placeholder="hello@potpie.com"
+                      {...form.register("email")}
+                      className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
+                    />
+                  </div>
+                  {form.formState.errors.email && (
+                    <p className="text-sm text-red-600">{form.formState.errors.email.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-[#022D2C]">
+                    Password<span className="ml-0.5">*</span>
+                  </label>
+                  <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
+                    <Image
+                      src="/images/figma/auth/auth-signin-lock.svg"
+                      alt=""
+                      width={20}
+                      height={20}
+                    />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••••"
+                      {...form.register("password")}
+                      className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-[#656969] hover:text-[#022D2C] transition-colors"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {form.formState.errors.password && (
+                    <p className="text-sm text-red-600">{form.formState.errors.password.message}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={keepLoggedIn}
+                      onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                      className="h-4 w-4 rounded border border-[#EBEBEB] accent-[#B7F600]"
+                    />
+                    <span className="text-sm text-[#022D2C]">Keep me logged in</span>
+                  </label>
+                  <Link href="/forgot-password" className="text-sm font-medium text-[#656969] hover:text-[#022D2C]">
+                    Forgot password?
+                  </Link>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="mt-2 h-10 w-full rounded-lg bg-[#B7F600] text-[#00291C] hover:bg-[#a7e400] font-medium"
+                >
+                  Sign in
+                </Button>
+              </form>
+
+              <p className="mt-4 text-center text-base font-medium text-[#656969]">
+                Don&apos;t have an account?{" "}
+                <Link href="/sign-up" className="text-[#656969] hover:text-[#022D2C] underline underline-offset-2">
+                  Sign up
+                </Link>
+              </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Right testimonials */}
+          <aside className="hidden lg:flex h-full items-center justify-end pr-10">
+            <div className="w-[404px]">
+              <Image
+                src={testimonials[currentTestimonial].image}
+                alt=""
+                width={56}
+                height={56}
+                className="mb-10 rounded-full"
+              />
+
+              <p className="text-2xl font-normal leading-[1.3333333] text-[#FFF9F5]">
+                {testimonials[currentTestimonial].quote}
+              </p>
+
+              <div className="mt-7">
+                <p className="text-base font-medium text-[#FFF9F5]">{testimonials[currentTestimonial].name}</p>
+                <p className="mt-1 text-sm font-medium text-[rgba(255,249,245,0.72)]">
+                  {testimonials[currentTestimonial].title}
+                </p>
+              </div>
+
+              <div className="mt-10 flex items-center gap-2">
+                {testimonials.map((_: unknown, index: number) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setCurrentTestimonial(index)}
+                    className="h-4 w-4"
+                    aria-label={`Go to testimonial ${index + 1}`}
+                  >
+                    <span
+                      className="block h-1 rounded-full transition-all"
+                      style={{
+                        width: index === currentTestimonial ? 16 : 4,
+                        background: index === currentTestimonial ? "#FFF9F5" : "rgba(255,249,245,0.35)",
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              {/* Static slider asset from Figma (optional visual parity) */}
+              <Image
+                src="/images/figma/auth/auth-signin-slider.svg"
+                alt=""
+                width={36}
+                height={4}
+                className="mt-3 opacity-0"
+              />
+            </div>
+          </aside>
         </div>
       </div>
 
@@ -477,6 +674,6 @@ export default function Signin() {
           onLinked={handleSSOLinked}
         />
       )}
-    </section>
+    </div>
   );
 }

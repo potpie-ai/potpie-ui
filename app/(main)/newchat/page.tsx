@@ -275,7 +275,7 @@ export default function NewChatPage() {
       additionalLinks?: string[];
       attachmentIds?: string[];
     }): Promise<CreateRecipeCodegenResponse> => {
-      return await SpecService.createRecipeCodegen({
+      const recipeResponse = await SpecService.createRecipeCodegen({
         user_prompt: data.userPrompt,
         project_id: data.projectId,
         additional_links: data.additionalLinks,
@@ -283,12 +283,19 @@ export default function NewChatPage() {
           ? data.attachmentIds
           : undefined,
       });
+      const recipeId = recipeResponse.recipe.id;
+      await SpecService.triggerQuestionGeneration(recipeId, {
+        user_prompt: data.userPrompt,
+        additional_links: data.additionalLinks,
+      });
+      return recipeResponse;
     },
     onSuccess: (data: CreateRecipeCodegenResponse) => {
-      const projectId = data.project_id?.toString() || state.projectId;
+      const recipeId = data.recipe.id;
+      const projectId = data.recipe.project_id?.toString() || state.projectId;
       setState((prev) => ({
         ...prev,
-        recipeId: data.recipe_id,
+        recipeId,
         projectId: projectId || null,
         loading: false,
       }));
@@ -302,23 +309,24 @@ export default function NewChatPage() {
           const branchName =
             state.selectedBranch || selectedRepoData.default_branch || "main";
           localStorage.setItem(
-            `recipe_${data.recipe_id}`,
+            `recipe_${recipeId}`,
             JSON.stringify({
-              recipe_id: data.recipe_id,
+              recipe_id: recipeId,
               project_id: projectId || null,
               repo_name: repoName,
               branch_name: branchName,
+              user_prompt: state.input ? getCleanInput(state.input) : undefined,
             })
           );
           dispatch(
             setRepoAndBranchForTask({
-              taskId: data.recipe_id,
+              taskId: recipeId,
               repoName: repoName || "",
               branchName,
               projectId: projectId || undefined,
             })
           );
-          const params = new URLSearchParams({ recipeId: data.recipe_id });
+          const params = new URLSearchParams({ recipeId });
           if (repoName) params.append("repoName", repoName);
           if (state.input) params.append("featureIdea", getCleanInput(state.input));
           router.push(`/repo?${params.toString()}`);

@@ -258,7 +258,7 @@ const Signup = () => {
     } else if (prompt) {
       router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
     } else {
-      router.push('/idea');
+      router.push('/newchat');
     }
   };
 
@@ -299,7 +299,7 @@ const Signup = () => {
     } else if (prompt) {
       router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
     } else {
-      router.push('/idea');
+      router.push('/newchat');
     }
   };
 
@@ -417,7 +417,7 @@ const Signup = () => {
         } else if (prompt) {
           router.push(`/all-agents?createAgent=true&prompt=${encodeURIComponent(prompt)}`);
         } else {
-          router.push('/idea');
+          router.push('/newchat');
         }
       } else {
         // New user - GitHub is linked, proceed to onboarding for other setup

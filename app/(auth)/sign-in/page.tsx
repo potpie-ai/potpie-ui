@@ -117,7 +117,7 @@ export default function Signin() {
           } else if (finalAgent_id) {
             handleExternalRedirect("");
           } else {
-            router.push('/idea');
+            router.push('/newchat');
           }
 
           toast.success("Welcome back " + (user.displayName || user.email) + "! Ready to build?");
@@ -222,7 +222,7 @@ export default function Signin() {
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
-              window.location.href = "/idea";
+              window.location.href = "/newchat";
             }
 
             toast.success("Welcome back " + result.user.displayName + "! Let's build something amazing");
@@ -300,7 +300,7 @@ export default function Signin() {
                 } else if (finalAgent_id) {
                   handleExternalRedirect("");
                 } else {
-                  window.location.href = "/idea";
+                  window.location.href = "/newchat";
                 }
 
                 toast.success("Welcome back " + githubUser.displayName + "! Let's build something amazing");
@@ -384,7 +384,7 @@ export default function Signin() {
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
-              window.location.href = "/idea";
+              window.location.href = "/newchat";
             }
 
             toast.success("Welcome back " + result.user.displayName + "! Let's build something amazing");
@@ -401,11 +401,11 @@ export default function Signin() {
 
   const handleSSOLinked = () => {
     if (source === "vscode") {
-      router.push('/idea');
+      router.push('/newchat');
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push('/idea');
+      router.push('/newchat');
     }
   };
 

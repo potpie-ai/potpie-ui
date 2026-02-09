@@ -50,7 +50,7 @@ const LinkGithub = () => {
       const originalUser = auth.currentUser;
       const linkToUserId = originalUser?.uid;
 
-      if (!originalUser || !linkToUserId) {
+      if (!linkToUserId || !originalUser) {
         toast.error("Please sign in with your work email first, then link GitHub.");
         return;
       }
@@ -93,7 +93,7 @@ const LinkGithub = () => {
         )
         .then((res: { data: any }) => {
           openPopup();
-          router.push(`/newchat`);
+          router.push(`/idea`);
           return res.data;
         })
         .catch((e: any) => {

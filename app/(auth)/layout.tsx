@@ -2,6 +2,8 @@
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect } from "react";
+import AuthService from "@/services/AuthService";
+import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
 
 export default function AuthLayout({
   children,
@@ -19,12 +21,19 @@ export default function AuthLayout({
     if (user) {
       // Handle VSCode authentication flow
       if (source === "vscode") {
-        user.getIdToken().then((token: any) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log("token", token);
-          }
-          window.location.href = `http://localhost:54333/auth/callback?token=${token}`;
-        });
+        Promise.all([user.getIdToken(), AuthService.getCustomToken()]).then(
+          ([token, customToken]) => {
+            if (process.env.NODE_ENV === "development") {
+              console.log(
+                "token",
+                token,
+                "customToken",
+                customToken ? "present" : "absent",
+              );
+            }
+            window.location.href = buildVSCodeCallbackUrl(token, customToken);
+          },
+        );
         return;
       }
 
@@ -35,11 +44,16 @@ export default function AuthLayout({
       }
 
       // Handle regular authentication flow with redirect parameter
-      if (!window.location.pathname.startsWith('/onboarding') && 
-          !window.location.pathname.startsWith('/sign-up') && 
-          !window.location.pathname.startsWith('/link-github')) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("redirecting to", redirectUrl ? decodeURIComponent(redirectUrl) : "/");
+      if (
+        !window.location.pathname.startsWith("/onboarding") &&
+        !window.location.pathname.startsWith("/sign-up") &&
+        !window.location.pathname.startsWith("/link-github")
+      ) {
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            "redirecting to",
+            redirectUrl ? decodeURIComponent(redirectUrl) : "/",
+          );
         }
         router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
       }

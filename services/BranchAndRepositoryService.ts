@@ -10,14 +10,24 @@ type Headers = {
 
 export default class BranchAndRepositoryService {
 
-    static async parseRepo(repo_name: string, branch_name: string, filters?: any) {
+    static async parseRepo(repo_name: string, branch_name?: string, filters?: any, commit_id?: string) {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
         try {
+            const payload: any = { repo_name };
+            if (commit_id) {
+                payload.commit_id = commit_id;
+            } else if (branch_name) {
+                payload.branch_name = branch_name;
+            }
+            if (filters) {
+                payload.filters = filters;
+            }
+            
             const parseResponse = await axios.post(
                 `${baseUrl}/api/v1/parse`,
-                { repo_name, branch_name, filters },
+                payload,
                 { headers }
             );
             return parseResponse.data;
@@ -173,14 +183,24 @@ export default class BranchAndRepositoryService {
       }
     }
 
-    static async checkParsingStatus(repoName: string, branchName: string, filters?: any) {
+    static async checkParsingStatus(repoName: string, branchName?: string, filters?: any, commitId?: string) {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
       try {
+        const payload: any = { repo_name: repoName };
+        if (commitId) {
+          payload.commit_id = commitId;
+        } else if (branchName) {
+          payload.branch_name = branchName;
+        }
+        if (filters) {
+          payload.filters = filters;
+        }
+        
         const response = await axios.post(
           `${baseUrl}/api/v1/check-status`,
-          { repo_name: repoName, branch_name: branchName, filters },
+          payload,
           { headers }
         );
         return response.data;

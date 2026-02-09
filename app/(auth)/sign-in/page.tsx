@@ -17,7 +17,7 @@ import { testimonials } from "@/lib/utils/testimonials";
 import { isNewUser, deleteUserAndSignOut } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
 
-import { LucideGithub, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
@@ -447,25 +447,6 @@ export default function Signin() {
                   priority
                 />
               </Link>
-
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-sm font-normal text-[#656969] hover:text-[#022D2C] transition-colors"
-              >
-                <Image
-                  src="/images/figma/auth/auth-signin-globe.svg"
-                  alt=""
-                  width={20}
-                  height={20}
-                />
-                <span className="px-1">ENG</span>
-                <Image
-                  src="/images/figma/auth/auth-signin-arrow-down.svg"
-                  alt=""
-                  width={20}
-                  height={20}
-                />
-              </button>
             </div>
 
             {/* Form content */}
@@ -492,7 +473,12 @@ export default function Signin() {
                   className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
                   aria-label="Continue with GitHub"
                 >
-                  <LucideGithub className="h-5 w-5 text-black" />
+                  <Image
+                    src="/images/github-icon-1.svg"
+                    width={20}
+                    height={20}
+                    alt="GitHub"
+                  />
                 </button>
                 <button
                   type="button"

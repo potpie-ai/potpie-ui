@@ -2,6 +2,6 @@
 import { redirect } from "next/navigation";
 
 export default function Home() {
-  redirect('/idea');
+  redirect('/newchat');
   return null; 
 }

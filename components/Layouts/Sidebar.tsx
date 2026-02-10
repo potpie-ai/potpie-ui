@@ -5,18 +5,18 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { planTypesEnum, SidebarItems } from "@/lib/Constants";
 import Image from "next/image";
 import Link from "next/link";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
@@ -46,8 +46,17 @@ import {
   setTotalHumanMessages,
   setUserPlanType,
 } from "@/lib/state/Reducers/User";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export function AppSidebar() {
+  const [supportPopoverOpen, setSupportPopoverOpen] = useState(false);
+  const supportPopoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const [progress, setProgress] = React.useState(90);
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
@@ -99,11 +108,11 @@ export function AppSidebar() {
   //   }
   // }, [subscriptionLoading]);
 
-  const redirectToNewIdea = () => {
+  const redirectToNewChat = () => {
     dispatch(clearChat());
     dispatch(setBranchName(""));
     dispatch(setRepoName(""));
-    window.location.href = "/idea";
+    window.location.href = "/newchat";
   };
 
   useEffect(() => {
@@ -167,61 +176,163 @@ export function AppSidebar() {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
-                className="flex gap-2 text-[#EFE6DF] text-sm font-medium w-full items-center justify-start bg-[#295245] hover:bg-[#295245] px-3 py-2 rounded-lg"
-                onClick={() => redirectToNewIdea()}
+                className="flex gap-2 text-primary-foreground text-sm font-medium w-full items-center justify-start bg-primary hover:bg-primary/90 px-3 py-2 rounded-lg"
+                onClick={() => redirectToNewChat()}
               >
                 <Plus className="size-4" /> <span>New chat</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </div>
-        {SidebarItems.map((item) => (
-          <SidebarGroup key={item.title}>
-            <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {item.links.map((link) => {
-                  const isActive = pathname === link.href.split("/").pop();
-                  return (
-                    <SidebarMenuItem key={link.title}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        disabled={link.disabled}
-                        onClick={link.handleTrack ? handleTrack : undefined}
+        <SidebarGroup className="border-b-0">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {SidebarItems[0].links.map((link) => {
+                const isActive = pathname === link.href.split("/").pop();
+                return (
+                  <SidebarMenuItem key={link.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      disabled={link.disabled}
+                      onClick={link.handleTrack ? handleTrack : undefined}
+                    >
+                      <Link
+                        href={link.href}
+                        className="flex gap-2 items-center w-full"
                       >
-                        <Link
-                          href={link.href}
+                        {link.icons && <span>{link.icons}</span>}
+                        <span>{link.title}</span>
+                        {link.description && (
+                          <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto">
+                            {link.description}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+              {/* Support button (hover popover) in same group */}
+              {(() => {
+                const supportItem = SidebarItems[1];
+                return (
+                  <SidebarMenuItem>
+                    <Popover
+                      open={supportPopoverOpen}
+                      onOpenChange={setSupportPopoverOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <SidebarMenuButton
                           className="flex gap-2 items-center w-full"
+                          onMouseEnter={() => {
+                            if (
+                              supportPopoverTimeoutRef.current !=
+                              null
+                            ) {
+                              clearTimeout(
+                                supportPopoverTimeoutRef.current
+                              );
+                              supportPopoverTimeoutRef.current = null;
+                            }
+                            setSupportPopoverOpen(true);
+                          }}
+                          onMouseLeave={() => {
+                            supportPopoverTimeoutRef.current =
+                              setTimeout(
+                                () => setSupportPopoverOpen(false),
+                                150
+                              );
+                          }}
                         >
-                          {link.icons && <span>{link.icons}</span>}
-                          <span>{link.title}</span>
-                          {link.description && (
-                            <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto">
-                              {link.description}
-                            </span>
+                          {supportItem.links[0]?.icons && (
+                            <span>{supportItem.links[0].icons}</span>
                           )}
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+                          <span>Support</span>
+                        </SidebarMenuButton>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="right"
+                        align="start"
+                        sideOffset={8}
+                        className="w-56 p-1 bg-[#FFFBF7] border-border text-foreground"
+                        onMouseEnter={() => {
+                          if (
+                            supportPopoverTimeoutRef.current !=
+                            null
+                          ) {
+                            clearTimeout(
+                              supportPopoverTimeoutRef.current
+                            );
+                            supportPopoverTimeoutRef.current = null;
+                          }
+                          setSupportPopoverOpen(true);
+                        }}
+                        onMouseLeave={() =>
+                          setSupportPopoverOpen(false)
+                        }
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          {supportItem.links.map((link) =>
+                            link.disabled && link.handleTrack ? (
+                              <button
+                                key={link.title}
+                                type="button"
+                                className="flex w-full gap-2 items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => {
+                                  handleTrack();
+                                  setSupportPopoverOpen(false);
+                                }}
+                              >
+                                {link.icons && (
+                                  <span className="shrink-0">
+                                    {link.icons}
+                                  </span>
+                                )}
+                                <span>{link.title}</span>
+                              </button>
+                            ) : (
+                              <Link
+                                key={link.title}
+                                href={link.href}
+                                className="flex gap-2 items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                                onClick={() =>
+                                  setSupportPopoverOpen(false)
+                                }
+                              >
+                                {link.icons && (
+                                  <span className="shrink-0">
+                                    {link.icons}
+                                  </span>
+                                )}
+                                <span>{link.title}</span>
+                              </Link>
+                            )
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </SidebarMenuItem>
+                );
+              })()}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser
-          user={{
-            avatar: user?.photoURL,
-            // Use work email from backend (database), fallback to Firebase email
-            email: accountInfo?.email || user?.email || "",
-            name: user?.displayName,
-            // Use verification status from backend (work email), fallback to Firebase status
-            emailVerified: accountInfo?.email_verified ?? user?.emailVerified ?? false,
-          }}
-        />
+      <SidebarFooter className="flex flex-col gap-0">
+        <SidebarSeparator className="my-0" />
+        <div className="pt-2">
+          <NavUser
+            user={{
+              avatar: user?.photoURL,
+              // Use work email from backend (database), fallback to Firebase email
+              email: accountInfo?.email || user?.email || "",
+              name: user?.displayName,
+              // Use verification status from backend (work email), fallback to Firebase status
+              emailVerified: accountInfo?.email_verified ?? user?.emailVerified ?? false,
+            }}
+          />
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

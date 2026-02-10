@@ -588,10 +588,10 @@ const PlanOverviewPage = () => {
           <h2 className="text-2xl font-semibold mb-2">Error loading plan</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
-            onClick={() => router.push("/idea")}
+            onClick={() => router.push("/newchat")}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            Go to Idea Page
+            Go to New chat
           </button>
         </div>
       </div>
@@ -608,10 +608,10 @@ const PlanOverviewPage = () => {
             The recipe ID was not found in the URL. Please start a new task.
           </p>
           <button
-            onClick={() => router.push("/idea")}
+            onClick={() => router.push("/newchat")}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            Go to Idea Page
+            Go to New chat
           </button>
         </div>
       </div>

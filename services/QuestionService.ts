@@ -199,12 +199,12 @@ export default class QuestionService {
     }
   }
 
+  /** New recipes API base for recipe questions */
+  private static readonly RECIPES_URL = `${process.env.NEXT_PUBLIC_WORKFLOWS_URL}/api/v1/recipes`;
+
   /**
    * Poll recipe questions until they're ready
-   * @param recipeId - The recipe ID
-   * @param pollInterval - Polling interval in ms (default: 3000)
-   * @param maxAttempts - Maximum polling attempts (default: 60)
-   * @returns Questions when ready
+   * Uses GET /api/v1/recipes/{recipe_id}/questions
    */
   static async pollRecipeQuestions(
     recipeId: string,
@@ -214,41 +214,33 @@ export default class QuestionService {
     if (!recipeId?.trim()) {
       throw new Error("Recipe ID is required");
     }
-
     const headers = await getHeaders();
     let attempts = 0;
 
     while (attempts < maxAttempts) {
       try {
         const response = await axios.get<RecipeQuestionsResponse>(
-          `${this.BASE_URL}/recipe/codegen/${recipeId.trim()}/questions`,
+          `${this.RECIPES_URL}/${recipeId.trim()}/questions`,
           { headers }
         );
 
         const data = response.data;
 
-        // If questions are available (even if status is not QUESTIONS_READY),
-        // return them. This handles cases where status has moved to SPEC_IN_PROGRESS
-        // but questions are still available.
         if (data.questions && data.questions.length > 0) {
           return data;
         }
 
-        // If questions are ready (status), return them
-        if (data.recipe_status === 'QUESTIONS_READY') {
+        if (data.generation_status === "completed") {
           return data;
         }
 
-        // If error status, throw
-        if (data.recipe_status === 'ERROR') {
-          throw new Error("Failed to generate questions");
+        if (data.generation_status === "failed") {
+          throw new Error(data.error_message || "Failed to generate questions");
         }
 
-        // Otherwise, wait and poll again
         await new Promise(resolve => setTimeout(resolve, pollInterval));
         attempts++;
       } catch (error) {
-        // If it's a 404 or other error, wait and retry
         if (attempts < maxAttempts - 1) {
           await new Promise(resolve => setTimeout(resolve, pollInterval));
           attempts++;
@@ -263,9 +255,7 @@ export default class QuestionService {
 
   /**
    * Get recipe questions directly (without polling)
-   * Use this when you know questions might already be available
-   * @param recipeId - The recipe ID
-   * @returns Questions response (may have questions even if status is not QUESTIONS_READY)
+   * Uses GET /api/v1/recipes/{recipe_id}/questions
    */
   static async getRecipeQuestions(
     recipeId: string
@@ -273,12 +263,11 @@ export default class QuestionService {
     if (!recipeId?.trim()) {
       throw new Error("Recipe ID is required");
     }
-
     const headers = await getHeaders();
 
     try {
       const response = await axios.get<RecipeQuestionsResponse>(
-        `${this.BASE_URL}/recipe/codegen/${recipeId.trim()}/questions`,
+        `${this.RECIPES_URL}/${recipeId.trim()}/questions`,
         { headers }
       );
       return response.data;

@@ -14,12 +14,11 @@ import QuestionProgress from "./components/QuestionProgress";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Github, FileText, Loader2, GitBranch } from "lucide-react";
 import {
-  QAAnswer,
-  SubmitSpecGenerationResponse,
   RecipeQuestionsResponse,
   RecipeQuestion,
   RecipeQuestionNew,
   QuestionOption,
+  TriggerSpecGenerationResponse,
 } from "@/lib/types/spec";
 import type {
   MCQQuestion,
@@ -47,9 +46,9 @@ export default function RepoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
-  const recipeIdFromUrl = searchParams.get("recipeId");
+  const recipeIdFromUrl = searchParams.get("recipeId") ?? searchParams.get("recipeld"); // support typo "recipeld"
   const repoNameFromUrl = searchParams.get("repoName");
-  const featureIdeaFromUrl = searchParams.get("featureIdea");
+  const featureIdeaFromUrl = searchParams.get("featureIdea") ?? searchParams.get("featureldea"); // support typo "featureldea"
   const questionsEndRef = useRef<HTMLDivElement>(null);
 
   const [recipeId, setRecipeId] = useState<string | null>(null);
@@ -82,8 +81,8 @@ export default function RepoPage() {
         console.log("[Repo Page] Recipe details received:", recipeDetails);
 
         // Set repo and branch from recipe details
-        setRecipeRepoName(recipeDetails.repo_name);
-        setRecipeBranchName(recipeDetails.branch_name);
+        setRecipeRepoName(recipeDetails.repo_name ?? null);
+        setRecipeBranchName(recipeDetails.branch_name ?? null);
       } catch (error: any) {
         console.error("[Repo Page] Failed to fetch recipe details:", error);
         // Keep null values on error - will fall back to URL params or projectData
@@ -111,8 +110,8 @@ export default function RepoPage() {
           // If questions are available, use them immediately
           if (questionsData.questions && questionsData.questions.length > 0) {
             console.log(
-              "[Repo Page] Questions already available, status:",
-              questionsData.recipe_status
+            "[Repo Page] Questions already available, status:",
+            questionsData.generation_status
             );
             // Process questions immediately
             processQuestions(questionsData);
@@ -161,12 +160,16 @@ export default function RepoPage() {
             const isNewFormat = "answer_recommendation" in q || ("options" in q && q.options && q.options.length > 0 && typeof q.options[0] === "object");
             const newQ = q as RecipeQuestionNew;
 
-            if (isNewFormat && newQ.options && Array.isArray(newQ.options) && newQ.options.length > 0 && typeof newQ.options[0] === "object") {
-              // New API format: options are {label, description}[]
-              const options = (newQ.options as QuestionOption[]).map((opt) => ({
-                label: opt.label,
-                description: opt.description,
-              }));
+            if (isNewFormat) {
+              // New API format: options may be {label, description}[] or empty (free-text question)
+              const rawOptions = newQ.options && Array.isArray(newQ.options) ? newQ.options : [];
+              const options =
+                rawOptions.length > 0 && typeof rawOptions[0] === "object"
+                  ? (rawOptions as QuestionOption[]).map((opt) => ({
+                      label: opt.label,
+                      description: opt.description,
+                    }))
+                  : [];
               const recIdxRaw = newQ.answer_recommendation?.idx;
               const recIdx = typeof recIdxRaw === "number" ? recIdxRaw : null;
               const assumedLabel =
@@ -178,7 +181,7 @@ export default function RepoPage() {
                 section: "General",
                 question: newQ.question,
                 options,
-                needsInput: true, // "Other" always available for MCQs
+                needsInput: true, // free-text when no options; "Other" for MCQs
                 multipleChoice: newQ.multiple_choice ?? false,
                 assumed: assumedLabel,
                 reasoning: newQ.answer_recommendation?.reasoning,
@@ -189,7 +192,7 @@ export default function RepoPage() {
             }
 
             // Legacy format: options are string[]
-            const legacyQ = q as RecipeQuestion;
+            const legacyQ = q as unknown as RecipeQuestion;
             const strOptions = legacyQ.options || [];
             const options = strOptions.map((opt) =>
               typeof opt === "string" ? { label: opt, description: undefined } : opt
@@ -288,8 +291,8 @@ export default function RepoPage() {
       } else {
         // No questions available
         console.warn(
-          "[Repo Page] No questions available, status:",
-          questionsData.recipe_status
+            "[Repo Page] No questions available, status:",
+            questionsData.generation_status
         );
         setState((prev) => ({ ...prev, pageState: "questions" }));
       }
@@ -381,10 +384,9 @@ export default function RepoPage() {
     }
   }, [questionsError]);
 
-  // Recover recipeId from URL (created in idea page)
+  // Recover recipeId from URL (created in newchat page), or use mock recipe when workflow mock is on
   useEffect(() => {
     if (recipeIdFromUrl) {
-      // Validate it's a UUID format
       const uuidRegex =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (uuidRegex.test(recipeIdFromUrl)) {
@@ -401,10 +403,10 @@ export default function RepoPage() {
       }
     } else {
       console.warn(
-        "[Repo Page] No recipeId in URL - recipe should have been created in idea page"
+        "[Repo Page] No recipeId in URL - recipe should have been created in newchat page"
       );
     }
-  }, [recipeIdFromUrl]);
+  }, [recipeIdFromUrl, projectId]);
 
   // Process questions when received (skip when in recipe flow - recipe has its own data source)
   useEffect(() => {
@@ -757,8 +759,8 @@ export default function RepoPage() {
 
       console.log("Submitting QA answers with recipeId:", activeRecipeId);
 
-      // Collect all answers - format: option label OR "Other: <user_input>"
-      const qaAnswers: Array<{ question_id: string; answer: string }> = [];
+      // Collect all answers - format: { question_id: answer_text }
+      const answersPayload: Record<string, string> = {};
 
       state.questions.forEach((question) => {
         const qId = question.id;
@@ -800,16 +802,13 @@ export default function RepoPage() {
         }
 
         if (answerStr) {
-          qaAnswers.push({ question_id: qId, answer: answerStr });
+          answersPayload[qId] = answerStr;
         }
       });
 
-      // Add additional context if provided (as a special question)
+      // Add additional context if provided
       if (state.additionalContext.trim()) {
-        qaAnswers.push({
-          question_id: "additional_context",
-          answer: state.additionalContext.trim(),
-        });
+        answersPayload["additional_context"] = state.additionalContext.trim();
       }
 
       // Clear localStorage after successful submission since answers are now saved on backend
@@ -821,16 +820,12 @@ export default function RepoPage() {
           console.warn("Failed to clear localStorage after submission:", error);
         }
       }
-      
-      // Call new spec generation API
-      return await SpecService.submitSpecGeneration({
-        recipe_id: activeRecipeId,
-        qa_answers: qaAnswers,
-      });
+
+      await SpecService.submitAnswers(activeRecipeId, answersPayload);
+      return await SpecService.triggerSpecGeneration(activeRecipeId);
     },
-    onSuccess: (response: SubmitSpecGenerationResponse) => {
+    onSuccess: (response: TriggerSpecGenerationResponse) => {
       toast.success("Spec generation started successfully");
-      // Navigate to spec page with recipeId
       const activeRecipeId = recipeId || recipeIdFromUrl;
       if (!activeRecipeId) {
         console.error("recipeId is not set after successful submission");
@@ -901,6 +896,23 @@ export default function RepoPage() {
       }
       return { ...prev, skippedQuestions: newSkipped };
     });
+  };
+
+  const handleToggleOptions = (questionId: string) => {
+    setState((prev) => {
+      const newExpanded = new Set(prev.expandedOptions);
+      if (newExpanded.has(questionId)) newExpanded.delete(questionId);
+      else newExpanded.add(questionId);
+      return { ...prev, expandedOptions: newExpanded };
+    });
+  };
+
+  const handleSaveQuestion = (_questionId: string) => {
+    // No-op: inline edits are persisted via onAnswerChange
+  };
+
+  const handleCancelQuestion = (_questionId: string) => {
+    // No-op: collapse options if needed
   };
 
   const handleGeneratePlan = () => {
@@ -1051,6 +1063,7 @@ export default function RepoPage() {
                       )}
                       answers={state.answers}
                       hoveredQuestion={state.hoveredQuestion}
+                      expandedOptions={state.expandedOptions}
                       skippedQuestions={state.skippedQuestions}
                       unansweredQuestionIds={
                         state.unansweredQuestionIds ?? new Set()
@@ -1062,6 +1075,9 @@ export default function RepoPage() {
                         }))
                       }
                       onAnswerChange={handleAnswerChange}
+                      onSave={handleSaveQuestion}
+                      onCancel={handleCancelQuestion}
+                      onToggleOptions={handleToggleOptions}
                       onToggleSkip={handleToggleSkip}
                     />
                   );
@@ -1073,7 +1089,7 @@ export default function RepoPage() {
                 onContextChange={(context) =>
                   setState((prev) => ({ ...prev, additionalContext: context }))
                 }
-                onSaveAndSubmit={handleGeneratePlan}
+                onGeneratePlan={handleGeneratePlan}
                 isGenerating={state.isGenerating}
                 recipeId={recipeId}
                 unansweredCount={unansweredCount}

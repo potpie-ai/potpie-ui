@@ -10,9 +10,12 @@ import {
   CreateRecipeResponse,
   CreateRecipeCodegenRequest,
   CreateRecipeCodegenResponse,
+  TriggerQuestionGenerationRequest,
+  TriggerQuestionGenerationResponse,
   RecipeQuestionsResponse,
-  SubmitSpecGenerationRequest,
-  SubmitSpecGenerationResponse,
+  SubmitRecipeAnswersRequest,
+  SubmitRecipeAnswersResponse,
+  TriggerSpecGenerationResponse,
   SpecStatusResponse,
   RecipeDetailsResponse,
 } from "@/lib/types/spec";
@@ -20,50 +23,34 @@ import {
 export default class SpecService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
   private static readonly SPEC_URL = `${this.BASE_URL}/api/v1/recipe/spec`;
-  private static readonly API_BASE = `${this.BASE_URL}/api/v1/recipe/codegen`;
+  /** New API base: /api/v1/recipes */
+  private static readonly API_BASE = `${this.BASE_URL}/api/v1/recipes`;
 
   /**
-   * Create a new recipe for spec generation
-   * @param request - Recipe creation request with project_id and user_prompt
-   * @returns Recipe creation response with recipe_id
+   * Create a new recipe for spec generation (Legacy)
    */
   static async createRecipe(
     request: CreateRecipeRequest,
   ): Promise<CreateRecipeResponse> {
     try {
       console.log("[SpecService] Creating recipe with request:", request);
-      console.log(
-        "[SpecService] API endpoint:",
-        `${this.BASE_URL}/api/v1/recipe`,
-      );
-
       const headers = await getHeaders();
-      console.log("[SpecService] Making POST request to create recipe...");
-
       const response = await axios.post<CreateRecipeResponse>(
         `${this.BASE_URL}/api/v1/recipe`,
         request,
-        {
-          headers,
-        },
+        { headers },
       );
-
       console.log("[SpecService] Recipe creation response:", response.data);
       return response.data;
     } catch (error: any) {
       console.error("[SpecService] Error creating recipe:", error);
-      console.error("[SpecService] Error response:", error.response?.data);
-      console.error("[SpecService] Error status:", error.response?.status);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }
   }
 
   /**
-   * Submit QA answers and trigger spec generation
-   * @param recipeId - The recipe/task ID (taskId maps directly to recipe_id)
-   * @param qaAnswers - Array of QA answers
-   * @returns Response indicating if spec generation started
+   * Submit QA answers and trigger spec generation (Legacy)
    */
   static async submitQAAnswers(
     recipeId: string,
@@ -72,18 +59,14 @@ export default class SpecService {
     try {
       const headers = await getHeaders();
       const request: SpecPlanRequest = {
-        recipe_id: recipeId, // taskId maps directly to recipe_id
+        recipe_id: recipeId,
         qa_answers: qaAnswers,
       };
-
       const response = await axios.post<SpecPlanSubmitResponse>(
         this.SPEC_URL,
         request,
-        {
-          headers,
-        },
+        { headers },
       );
-
       return response.data;
     } catch (error: any) {
       console.error("Error submitting QA answers:", error);
@@ -93,9 +76,7 @@ export default class SpecService {
   }
 
   /**
-   * Get spec generation progress
-   * @param recipeId - The recipe/task ID (taskId maps directly to recipe_id)
-   * @returns Current progress and status
+   * Get spec generation progress (Legacy)
    */
   static async getSpecProgress(
     recipeId: string,
@@ -104,11 +85,8 @@ export default class SpecService {
       const headers = await getHeaders();
       const response = await axios.get<SpecPlanStatusResponse>(
         `${this.SPEC_URL}/${recipeId}`,
-        {
-          headers,
-        },
+        { headers },
       );
-
       return response.data;
     } catch (error: any) {
       console.error("Error fetching spec progress:", error);
@@ -117,16 +95,17 @@ export default class SpecService {
     }
   }
 
+  // ====== New /api/v1/recipes endpoints ======
+
   /**
-   * Create a new recipe and trigger QA question generation
-   * @param request - Recipe creation request with user_prompt, repo_slug, and branch/commit
-   * @returns Recipe creation response with recipe_id
+   * Create a new recipe
+   * POST /api/v1/recipes/
    */
   static async createRecipeCodegen(
     request: CreateRecipeCodegenRequest,
   ): Promise<CreateRecipeCodegenResponse> {
     try {
-      console.log("[SpecService] Creating recipe codegen with request:", {
+      console.log("[SpecService] Creating recipe with request:", {
         user_prompt: request.user_prompt,
         project_id: request.project_id,
         additional_links: request.additional_links,
@@ -137,10 +116,8 @@ export default class SpecService {
       }
 
       const headers = await getHeaders();
-      console.log("[SpecService] API endpoint:", `${this.API_BASE}`);
-
       const response = await axios.post<CreateRecipeCodegenResponse>(
-        `${this.API_BASE}`,
+        `${this.API_BASE}/`,
         request,
         { headers },
       );
@@ -149,7 +126,31 @@ export default class SpecService {
       return response.data;
     } catch (error: any) {
       console.error("[SpecService] Error creating recipe:", error);
-      console.error("[SpecService] Error response:", error.response?.data);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Trigger question generation for a recipe
+   * POST /api/v1/recipes/{recipe_id}/questions/generate
+   */
+  static async triggerQuestionGeneration(
+    recipeId: string,
+    request: TriggerQuestionGenerationRequest,
+  ): Promise<TriggerQuestionGenerationResponse> {
+    try {
+      console.log("[SpecService] Triggering question generation for recipe:", recipeId);
+      const headers = await getHeaders();
+      const response = await axios.post<TriggerQuestionGenerationResponse>(
+        `${this.API_BASE}/${recipeId}/questions/generate`,
+        request,
+        { headers },
+      );
+      console.log("[SpecService] Question generation trigger response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("[SpecService] Error triggering question generation:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }
@@ -157,8 +158,7 @@ export default class SpecService {
 
   /**
    * Get QA questions for a recipe (polling endpoint)
-   * @param recipeId - The recipe ID
-   * @returns Questions response with recipe_status and questions array
+   * GET /api/v1/recipes/{recipe_id}/questions
    */
   static async getRecipeQuestions(
     recipeId: string,
@@ -169,7 +169,6 @@ export default class SpecService {
         `${this.API_BASE}/${recipeId}/questions`,
         { headers },
       );
-
       return response.data;
     } catch (error: any) {
       console.error("Error fetching recipe questions:", error);
@@ -179,56 +178,88 @@ export default class SpecService {
   }
 
   /**
-   * Submit QA answers and trigger spec generation
-   * @param request - Request with recipe_id and qa_answers
-   * @returns Response with spec_id and status
+   * Submit answers to recipe questions
+   * POST /api/v1/recipes/{recipe_id}/answers
    */
-  static async submitSpecGeneration(
-    request: SubmitSpecGenerationRequest,
-  ): Promise<SubmitSpecGenerationResponse> {
+  static async submitAnswers(
+    recipeId: string,
+    answers: Record<string, string>,
+  ): Promise<SubmitRecipeAnswersResponse> {
     try {
+      console.log("[SpecService] Submitting answers for recipe:", recipeId);
       const headers = await getHeaders();
-      const response = await axios.post<SubmitSpecGenerationResponse>(
-        `${this.API_BASE}/spec`,
+      const request: SubmitRecipeAnswersRequest = { answers };
+      const response = await axios.post<SubmitRecipeAnswersResponse>(
+        `${this.API_BASE}/${recipeId}/answers`,
         request,
         { headers },
       );
-
+      console.log("[SpecService] Submit answers response:", response.data);
       return response.data;
     } catch (error: any) {
-      console.error("Error submitting spec generation:", error);
+      console.error("[SpecService] Error submitting answers:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }
   }
 
   /**
-   * Get spec generation progress by spec_id
-   * @param specId - The spec ID
-   * @returns Current progress and status
+   * Trigger spec generation (only when recipe is in ANSWERS_SUBMITTED).
+   * To regenerate after spec is ready, use regenerateSpec() which calls .../spec/regenerate.
+   * POST /api/v1/recipes/{recipe_id}/spec/generate
    */
-  static async getSpecProgressBySpecId(
-    specId: string,
-  ): Promise<SpecStatusResponse> {
+  static async triggerSpecGeneration(
+    recipeId: string,
+  ): Promise<TriggerSpecGenerationResponse> {
     try {
+      console.log("[SpecService] Triggering spec generation for recipe:", recipeId);
       const headers = await getHeaders();
-      const response = await axios.get<SpecStatusResponse>(
-        `${this.API_BASE}/spec/${specId}`,
+      const response = await axios.post<TriggerSpecGenerationResponse>(
+        `${this.API_BASE}/${recipeId}/spec/generate`,
+        {},
         { headers },
       );
-
+      console.log("[SpecService] Spec generation trigger response:", response.data);
       return response.data;
     } catch (error: any) {
-      console.error("Error fetching spec progress:", error);
+      console.error("[SpecService] Error triggering spec generation:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }
   }
 
   /**
-   * Get latest spec generation progress by recipe_id
-   * @param recipeId - The recipe ID
-   * @returns Current progress and status
+   * Regenerate spec for a recipe (e.g. when already in SPEC_READY).
+   * Backend resets recipe to ANSWERS_SUBMITTED and triggers new spec generation.
+   * API: POST /api/v1/recipes/{recipe_id}/spec/regenerate → 202 Accepted.
+   * Response: { recipe_id, status, created_at } (same shape as triggerSpecGeneration).
+   */
+  static async regenerateSpec(recipeId: string): Promise<TriggerSpecGenerationResponse> {
+    try {
+      console.log("[SpecService] Regenerating spec for recipe:", recipeId);
+      const headers = await getHeaders();
+      const response = await axios.post<TriggerSpecGenerationResponse>(
+        `${this.API_BASE}/${recipeId}/spec/regenerate`,
+        {},
+        { headers },
+      );
+      console.log("[SpecService] Spec regenerate response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("[SpecService] Error regenerating spec:", error);
+      if (error?.response?.status === 404) {
+        throw new Error(
+          "Spec regeneration is not available. The workflows backend needs to implement POST /api/v1/recipes/{id}/spec/regenerate."
+        );
+      }
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Get spec generation progress by recipe_id
+   * GET /api/v1/recipes/{recipe_id}/spec
    */
   static async getSpecProgressByRecipeId(
     recipeId: string,
@@ -236,10 +267,9 @@ export default class SpecService {
     try {
       const headers = await getHeaders();
       const response = await axios.get<SpecStatusResponse>(
-        `${this.API_BASE}/spec/recipe/${recipeId}`,
+        `${this.API_BASE}/${recipeId}/spec`,
         { headers },
       );
-
       return response.data;
     } catch (error: any) {
       console.error("Error fetching spec progress:", error);
@@ -250,8 +280,7 @@ export default class SpecService {
 
   /**
    * Get comprehensive recipe details including repo and branch information
-   * @param recipeId - The recipe ID
-   * @returns Recipe details including repo_name, branch_name, and questions/answers
+   * GET /api/v1/recipes/{recipe_id}/details
    */
   static async getRecipeDetails(
     recipeId: string,
@@ -263,7 +292,6 @@ export default class SpecService {
         `${this.API_BASE}/${recipeId}/details`,
         { headers },
       );
-
       console.log("[SpecService] Recipe details response:", response.data);
       return response.data;
     } catch (error: any) {

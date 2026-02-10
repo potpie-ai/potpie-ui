@@ -2650,28 +2650,48 @@ export default function VerticalTaskExecution() {
 
   const activeMockPhase = MOCK_PLAN_DATA[activePlanItemKey]?.[0];
 
-  // Get plan_id from URL or try to get latest plan for recipe
+  // Fetch plan by recipeId (new API: plan items come from getPlanStatusByRecipeId)
   useEffect(() => {
-    if (!planId && recipeId) {
-      // Try to get latest plan for this recipe
-      PlanService.getPlanStatusByRecipeId(recipeId)
-        .then((status) => {
-          if (status.plan_id) {
-            setPlanId(status.plan_id);
-            const params = new URLSearchParams(searchParams.toString());
-            params.set("planId", status.plan_id);
-            // Default to item 1 if no itemNumber specified
-            if (!params.get("itemNumber")) {
-              params.set("itemNumber", "1");
-            }
-            router.replace(`/task/${recipeId}/code?${params.toString()}`);
-          }
-        })
-        .catch((error) => {
-          console.error("Error fetching plan status:", error);
-        });
-    }
-  }, [planId, recipeId]);
+    if (!recipeId || planItems.length > 0) return;
+    setIsLoadingPlanItems(true);
+    PlanService.getPlanStatusByRecipeId(recipeId)
+      .then((status) => {
+        if (status.plan) {
+          const items: PlanItem[] = [];
+          let itemNumber = 1;
+          status.plan.phases.forEach((phase) => {
+            phase.plan_items.forEach((item) => {
+              items.push({
+                id: item.plan_item_id,
+                item_number: itemNumber++,
+                order: item.order,
+                title: item.title,
+                detailed_objective: item.description,
+                implementation_steps: [],
+                description: item.description,
+                verification_criteria: "",
+                files: [],
+                context_handoff: {},
+                reasoning: "",
+                architecture: "",
+              });
+            });
+          });
+          setPlanItems(items);
+          setPlanId(recipeId);
+          const params = new URLSearchParams(searchParams.toString());
+          params.set("planId", recipeId);
+          if (!params.get("itemNumber")) params.set("itemNumber", "1");
+          router.replace(`/task/${recipeId}/code?${params.toString()}`);
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching plan status:", error);
+      })
+      .finally(() => {
+        setIsLoadingPlanItems(false);
+      });
+  }, [recipeId, planItems.length]);
 
   // Submit task splitting when we have planId and itemNumber but no taskSplittingId
   useEffect(() => {
@@ -2756,40 +2776,6 @@ export default function VerticalTaskExecution() {
     planItems,
     isLoadingPlanItems,
   ]);
-
-  // Fetch plan items for sidebar display
-  useEffect(() => {
-    if (!planId || planItems.length > 0) return;
-
-    const fetchPlanItems = async () => {
-      setIsLoadingPlanItems(true);
-      try {
-        console.log("[Code Page] Fetching plan items for planId:", planId);
-        let allItems: any[] = [];
-        let start = 0;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await PlanService.getPlanItems(planId, start, 20);
-          allItems = [...allItems, ...response.plan_items];
-          if (response.next_start === null) {
-            hasMore = false;
-          } else {
-            start = response.next_start;
-          }
-        }
-
-        console.log("[Code Page] Fetched plan items:", allItems.length);
-        setPlanItems(allItems);
-      } catch (error) {
-        console.error("[Code Page] Error fetching plan items:", error);
-      } finally {
-        setIsLoadingPlanItems(false);
-      }
-    };
-
-    fetchPlanItems();
-  }, [planId, planItems.length]);
 
   // 1. Reset State when Slice Changes
   useEffect(() => {

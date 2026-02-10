@@ -37,7 +37,7 @@ import {
   Trash2,
   Undo2,
   Plus,
-  SendHorizonal,
+  SendHorizontal,
   RotateCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -546,7 +546,7 @@ const PlanPage = () => {
                 onClick={handleSendChatMessage}
                 className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity"
               >
-                <SendHorizonal className="w-5 h-5" />
+                <SendHorizontal className="w-5 h-5" />
               </button>
             </div>
           </div>

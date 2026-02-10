@@ -27,7 +27,7 @@ import {
   RefreshCw,
   Plus,
   Bot,
-  SendHorizonal,
+  SendHorizontal,
   RefreshCcw,
   RotateCcw,
   RotateCw,
@@ -125,6 +125,25 @@ interface Plan {
   modify: PlanItem[];
   fix: PlanItem[];
   [key: string]: PlanItem[];
+}
+
+type SpecStatus = "IN_PROGRESS" | "COMPLETED" | "FAILED" | "PENDING" | null;
+
+function deriveSpecStatus(progress: { generation_status?: string; spec_generation_step_status?: SpecStatus; spec_gen_status?: SpecStatus } | null): SpecStatus {
+  if (progress == null) return null;
+  if ("generation_status" in progress && progress.generation_status != null) {
+    const g = progress.generation_status;
+    if (g === "completed") return "COMPLETED";
+    if (g === "failed") return "FAILED";
+    if (g === "processing" || g === "pending") return "IN_PROGRESS";
+    if (g === "not_started") return "PENDING";
+    return "PENDING";
+  }
+  if ("spec_generation_step_status" in progress && progress.spec_generation_step_status != null)
+    return progress.spec_generation_step_status;
+  if ("spec_gen_status" in progress && progress.spec_gen_status != null)
+    return progress.spec_gen_status;
+  return null;
 }
 
 /** Normalize one item from workflows API (add/modify/fix) to PlanItem shape. Libraries from libraries/packages/dependencies; requirement IDs from requirement_dependencies. */
@@ -779,14 +798,11 @@ const SpecPage = () => {
         setError(null);
         setIsLoading(false);
 
-        // New API: generation_status is "pending" | "processing" | "completed" | "failed" | "not_started"
-        const status = 'generation_status' in progress
-          ? (progress.generation_status === 'completed' ? 'COMPLETED' : progress.generation_status === 'failed' ? 'FAILED' : progress.generation_status === 'processing' || progress.generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
-          : (progress as any).spec_generation_step_status;
+        const status = deriveSpecStatus(progress);
 
-        if (status === 'COMPLETED' || status === 'FAILED') {
+        if (status === "COMPLETED" || status === "FAILED") {
           if (interval) clearInterval(interval);
-          if (status === 'COMPLETED') {
+          if (status === "COMPLETED") {
             setIsPlanExpanded(false);
           }
         } else {
@@ -804,12 +820,10 @@ const SpecPage = () => {
               const updated = await SpecService.getSpecProgressByRecipeId(recipeId);
               if (!mounted) return;
               setSpecProgress(updated);
-              const updatedStatus = 'generation_status' in updated
-                ? (updated.generation_status === 'completed' ? 'COMPLETED' : updated.generation_status === 'failed' ? 'FAILED' : 'IN_PROGRESS')
-                : (updated as any).spec_generation_step_status;
-              if (updatedStatus === 'COMPLETED' || updatedStatus === 'FAILED') {
+              const updatedStatus = deriveSpecStatus(updated);
+              if (updatedStatus === "COMPLETED" || updatedStatus === "FAILED") {
                 clearInterval(interval);
-                if (updatedStatus === 'COMPLETED') setIsPlanExpanded(false);
+                if (updatedStatus === "COMPLETED") setIsPlanExpanded(false);
               }
             } catch (error) {
               console.error("[Spec Page] Error polling spec progress:", error);
@@ -834,16 +848,12 @@ const SpecPage = () => {
   }, [recipeId, regenerateSpecKey]);
 
   // Calculate progress and status (support new API: generation_status, and legacy formats)
-  const planProgress = specProgress 
-    ? (('progress_percent' in specProgress && specProgress.progress_percent !== null) 
-        ? specProgress.progress_percent 
-        : ('generation_status' in specProgress && (specProgress as any).generation_status === 'completed' ? 100 : 0)) ?? 0
+  const planProgress = specProgress
+    ? (("progress_percent" in specProgress && specProgress.progress_percent !== null)
+        ? specProgress.progress_percent
+        : ("generation_status" in specProgress && (specProgress as any).generation_status === "completed" ? 100 : 0)) ?? 0
     : 0;
-  const status = (specProgress 
-    ? ('generation_status' in specProgress
-        ? ((specProgress as any).generation_status === 'completed' ? 'COMPLETED' : (specProgress as any).generation_status === 'failed' ? 'FAILED' : (specProgress as any).generation_status === 'processing' || (specProgress as any).generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
-        : ('spec_gen_status' in specProgress ? specProgress.spec_gen_status : ('spec_generation_step_status' in specProgress ? specProgress.spec_generation_step_status : null)))
-    : null) as 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null;
+  const status = deriveSpecStatus(specProgress);
   const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
   const currentStep = specProgress 
     ? (('step_index' in specProgress && specProgress.step_index !== null) ? specProgress.step_index : 0) ?? 0
@@ -1024,7 +1034,7 @@ const SpecPage = () => {
                 onClick={handleSendChatMessage}
                 className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity"
               >
-                <SendHorizonal className="w-5 h-5" />
+                <SendHorizontal className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -1074,7 +1084,7 @@ const SpecPage = () => {
                   <button
                     type="button"
                     onClick={async () => {
-                      if (!recipeId || isRegeneratingSpec) return;
+                      if (!recipeId || isRegeneratingSpec || isGenerating) return;
                       setIsRegeneratingSpec(true);
                       try {
                         await SpecService.regenerateSpec(recipeId);
@@ -1089,7 +1099,7 @@ const SpecPage = () => {
                         setIsRegeneratingSpec(false);
                       }
                     }}
-                    disabled={isRegeneratingSpec}
+                    disabled={isRegeneratingSpec || isGenerating}
                     className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label="Regenerate spec"
                   >

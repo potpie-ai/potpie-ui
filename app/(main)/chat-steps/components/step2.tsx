@@ -1,3 +1,4 @@
+"use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
@@ -41,6 +42,7 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [visibleCards, setVisibleCards] = useState(0);
+  const [isCreating, setIsCreating] = useState(false);
 
   const cardWidth = 280; // Fixed width for each card in pixels
   const containerPadding = 32; // 16px padding on both sides (px-4)
@@ -88,6 +90,8 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
   }, [AgentTypes, visibleCards, currentIndex]);
 
   const createConversation = async (agentId: string) => {
+    if (isCreating) return;
+    setIsCreating(true);
     try {
       const response = await ChatService.createConversation(userId, title, projectId, agentId);
       dispatch(setChat({ agentId }));
@@ -95,6 +99,8 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
       gotoChat(response.conversation_id);
     } catch (err) {
       setChatStep(2);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -148,10 +154,11 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
               : AgentTypes?.map((content) => (
                   <div key={content.id} style={{ width: `${cardWidth}px` }} className="flex-shrink-0">
                     <Card
-                      className={`relative flex flex-col h-[210px] border transition-all duration-300 rounded-xl p-4 cursor-pointer hover:shadow-lg ${
-                        selectedCard === content.id ? "border-blue-500 shadow-md" : "border-gray-200"
-                      }`}
+                      className={`relative flex flex-col h-[210px] border transition-all duration-300 rounded-xl p-4 ${
+                        isCreating ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:shadow-lg"
+                      } ${selectedCard === content.id ? "border-blue-500 shadow-md" : "border-gray-200"}`}
                       onClick={() => {
+                        if (isCreating) return;
                         createConversation(content.id);
                         setSelectedCard(content.id);
                       }}

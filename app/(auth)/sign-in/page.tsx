@@ -317,13 +317,19 @@ export default function Signin() {
       });
   };
 
-  const handleSSOLinked = () => {
+  const handleSSOLinked = async () => {
     if (source === "vscode") {
-      router.push('/newchat');
+      const user = auth.currentUser;
+      if (user) {
+        const token = await user.getIdToken();
+        await handleExternalRedirect(token);
+      } else {
+        router.push("/newchat");
+      }
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push('/newchat');
+      router.push("/newchat");
     }
   };
 

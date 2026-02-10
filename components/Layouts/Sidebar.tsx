@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/popover";
 
 export function AppSidebar() {
+  const router = useRouter();
   const [supportPopoverOpen, setSupportPopoverOpen] = useState(false);
   const supportPopoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -112,7 +113,7 @@ export function AppSidebar() {
     dispatch(clearChat());
     dispatch(setBranchName(""));
     dispatch(setRepoName(""));
-    window.location.href = "/newchat";
+    router.push("/newchat");
   };
 
   useEffect(() => {

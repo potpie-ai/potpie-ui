@@ -839,11 +839,11 @@ const SpecPage = () => {
         ? specProgress.progress_percent 
         : ('generation_status' in specProgress && (specProgress as any).generation_status === 'completed' ? 100 : 0)) ?? 0
     : 0;
-  const status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null = specProgress 
+  const status = (specProgress 
     ? ('generation_status' in specProgress
         ? ((specProgress as any).generation_status === 'completed' ? 'COMPLETED' : (specProgress as any).generation_status === 'failed' ? 'FAILED' : (specProgress as any).generation_status === 'processing' || (specProgress as any).generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
         : ('spec_gen_status' in specProgress ? specProgress.spec_gen_status : ('spec_generation_step_status' in specProgress ? specProgress.spec_generation_step_status : null)))
-    : null;
+    : null) as 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null;
   const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
   const currentStep = specProgress 
     ? (('step_index' in specProgress && specProgress.step_index !== null) ? specProgress.step_index : 0) ?? 0

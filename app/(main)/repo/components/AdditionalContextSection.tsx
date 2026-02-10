@@ -10,6 +10,7 @@ interface AdditionalContextSectionProps {
   onGeneratePlan: () => void;
   isGenerating: boolean;
   recipeId: string | null;
+  unansweredCount?: number;
 }
 
 export default function AdditionalContextSection({
@@ -18,6 +19,7 @@ export default function AdditionalContextSection({
   onGeneratePlan,
   isGenerating,
   recipeId,
+  unansweredCount: _unansweredCount,
 }: AdditionalContextSectionProps) {
   return (
     <div className="bg-background border-zinc-100 px-6 py-4">

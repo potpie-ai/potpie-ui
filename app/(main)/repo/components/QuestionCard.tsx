@@ -17,7 +17,10 @@ interface QuestionCardProps {
   onHover: () => void;
   onHoverLeave: () => void;
   onAnswerChange: (answer: Partial<QuestionAnswer>) => void;
+  onSave?: () => void;
+  onCancel?: () => void;
   onToggleOptions?: () => void;
+  onToggleSkip?: () => void;
 }
 
 /** Normalize options to MCQOption[] */
@@ -39,7 +42,10 @@ export default function QuestionCard({
   onHover,
   onHoverLeave,
   onAnswerChange,
+  onSave: _onSave,
+  onCancel: _onCancel,
   onToggleOptions,
+  onToggleSkip: _onToggleSkip,
 }: QuestionCardProps) {
   const options = getOptions(question);
   const isMultipleChoice = question.multipleChoice ?? false;

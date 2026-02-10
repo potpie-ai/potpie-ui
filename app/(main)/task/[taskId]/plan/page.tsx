@@ -2,11 +2,16 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Roboto_Mono } from "next/font/google";
 import { MermaidDiagram } from "@/components/chat/MermaidDiagram";
+
+const robotoMono = Roboto_Mono({ subsets: ["latin"] });
 import {
   Check,
   Loader2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FileCode,
   ShieldCheck,
   Database,
@@ -18,24 +23,24 @@ import {
   Layout,
   Settings,
   Code2,
-  AlignLeft,
   ListTodo,
   AlertCircle,
   Github,
   GitBranch,
-  Rocket,
   LucideIcon,
   FileText,
   Lightbulb,
   ArrowRightLeft,
+  Info,
+  RefreshCw,
+  Pencil,
+  Trash2,
+  Undo2,
+  Plus,
+  SendHorizonal,
+  RotateCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
 import TaskSplittingService from "@/services/TaskSplittingService";
@@ -43,6 +48,14 @@ import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import Image from "next/image";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 /**
  * VERTICAL SLICE PLANNER (Auto-Generation Mode)
@@ -180,7 +193,15 @@ const getModuleIcon = (name: string) => {
 };
 
 const HeaderBadge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: LucideIcon }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-primary-color">
+  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border border-border-light text-primary-color">
+    {Icon && <Icon className="w-3.5 h-3.5" />}
+    {children}
+  </div>
+);
+
+/** Chat pill badge (matches spec page) */
+const ChatBadge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: LucideIcon }) => (
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-border-light rounded text-xs font-medium text-primary-color">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
@@ -208,11 +229,11 @@ const FormattedText = ({ text }: { text: string }) => {
 const StatusIcon = ({ status }: { status: string }) => {
   if (status === "generated")
     return (
-      <div className="w-5 h-5 bg-primary-color rounded-full flex items-center justify-center text-accent-color">
-        <Check className="w-3 h-3" />
+      <div className="w-5 h-5 rounded-full flex items-center justify-center bg-primary-color">
+        <Check className="w-3 h-3 text-white" />
       </div>
     );
-  return <div className="w-5 h-5 border border-zinc-200 rounded-full bg-zinc-50" />;
+  return <div className="w-5 h-5 rounded-full border border-border-light bg-card" />;
 };
 
 const PlanPage = () => {
@@ -220,43 +241,93 @@ const PlanPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const recipeId = params?.taskId as string;
-  const planIdFromUrl = searchParams.get("planId");
-  const specIdFromUrl = searchParams.get("specId");
 
-  const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
   const [planStatus, setPlanStatus] = useState<PlanStatusResponse | null>(null);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(0);
   const [repoName, setRepoName] = useState<string>("Repository");
   const [branchName, setBranchName] = useState<string>("Branch");
+  const [userPrompt, setUserPrompt] = useState<string>("");
+
+  type ChatMessage = { role: "user" | "assistant"; content: string };
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const hasChatInitializedRef = useRef(false);
+  const [selectedPhaseIndex, setSelectedPhaseIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<"objective" | "reasoning" | "architecture">("objective");
+  const [underlineStyle, setUnderlineStyle] = useState<{ left: number; width: number } | null>(null);
+  const tabListRef = useRef<HTMLDivElement>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const TAB_ORDER = ["objective", "reasoning", "architecture"] as const;
 
   useEffect(() => {
     const fetchRecipeDetails = async () => {
       if (!recipeId) return;
+      let fromStorage: { repo_name?: string; branch_name?: string; user_prompt?: string } | null = null;
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem(`recipe_${recipeId}`);
+          if (raw) fromStorage = JSON.parse(raw);
+        } catch {
+          fromStorage = null;
+        }
+      }
       try {
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
-        setRepoName(recipeDetails.repo_name || "Unknown Repository");
-        setBranchName(recipeDetails.branch_name || "main");
-      } catch (error) {}
+        setRepoName(recipeDetails.repo_name ?? fromStorage?.repo_name ?? "Unknown Repository");
+        setBranchName(recipeDetails.branch_name ?? fromStorage?.branch_name ?? "main");
+        setUserPrompt(
+          (recipeDetails.user_prompt && recipeDetails.user_prompt.trim()) ||
+            fromStorage?.user_prompt ||
+            "Implementation plan generation"
+        );
+      } catch {
+        setRepoName(fromStorage?.repo_name ?? "Unknown Repository");
+        setBranchName(fromStorage?.branch_name ?? "main");
+        setUserPrompt(fromStorage?.user_prompt ?? "Implementation plan generation");
+      }
     };
     fetchRecipeDetails();
   }, [recipeId]);
 
+  useEffect(() => {
+    if (!userPrompt || hasChatInitializedRef.current) return;
+    hasChatInitializedRef.current = true;
+    setChatMessages([
+      { role: "user", content: userPrompt },
+      {
+        role: "assistant",
+        content:
+          "I've generated a granular specification for the AI Chat Metadata logging. Review the goals below before we proceed to implementation.",
+      },
+    ]);
+  }, [userPrompt]);
+
+  const handleSendChatMessage = () => {
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatMessages((prev) => [...prev, { role: "user", content: text }]);
+    setChatInput("");
+  };
+
+  const handleChatAction = (_action: "add" | "modify" | "remove" | "undo") => {
+    toast.info("Plan chat actions will be connected when the backend is ready.");
+  };
+
   const { data: statusData, isLoading: isLoadingStatus } = useQuery({
-    queryKey: ["plan-status", planId, recipeId, specIdFromUrl],
+    queryKey: ["plan-status", recipeId],
     queryFn: async () => {
-      if (planId) return await PlanService.getPlanStatus(planId);
-      if (specIdFromUrl) return await PlanService.getPlanStatusBySpecId(specIdFromUrl);
       if (recipeId) return await PlanService.getPlanStatusByRecipeId(recipeId);
       return null;
     },
-    enabled: !!(planId || specIdFromUrl || recipeId),
+    enabled: !!recipeId,
     refetchInterval: (query) => {
       const data = query.state.data;
-      return (data?.plan_gen_status === "IN_PROGRESS" || data?.plan_gen_status === "SUBMITTED") ? 2000 : false;
+      return (data?.generation_status === "processing" || data?.generation_status === "pending") ? 2000 : false;
     },
   });
 
@@ -264,29 +335,66 @@ const PlanPage = () => {
     if (statusData) {
       setPlanStatus(statusData);
       setIsLoading(false);
-      if (statusData.plan_id && !planId) setPlanId(statusData.plan_id);
     }
-  }, [statusData, planId]);
+  }, [statusData]);
 
   useEffect(() => {
-    if ((recipeId || specIdFromUrl) && !planId && !isLoadingStatus && !statusData) {
-      PlanService.submitPlanGeneration({
-        recipe_id: recipeId || undefined,
-        spec_id: specIdFromUrl || undefined,
-      }).then((response) => {
-        setPlanId(response.plan_id);
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("planId", response.plan_id);
-        router.replace(`/task/${recipeId}/plan?${params.toString()}`);
+    if (recipeId && !isLoadingStatus && !statusData) {
+      PlanService.submitPlanGeneration({ recipe_id: recipeId }).catch(() => {});
+    }
+  }, [recipeId, isLoadingStatus, statusData]);
+
+  // Extract plan items from phases (new API)
+  useEffect(() => {
+    if (planStatus?.generation_status === "completed" && planStatus.plan && planItems.length === 0) {
+      const items: PlanItem[] = [];
+      let itemNumber = 1;
+      planStatus.plan.phases.forEach((phase) => {
+        phase.plan_items.forEach((item) => {
+          items.push({
+            id: item.plan_item_id,
+            item_number: itemNumber++,
+            order: item.order,
+            title: item.title,
+            detailed_objective: item.description,
+            implementation_steps: [],
+            description: item.description,
+            verification_criteria: "",
+            files: [],
+            context_handoff: {},
+            reasoning: "",
+            architecture: "",
+          });
+        });
       });
+      setPlanItems(items);
     }
-  }, [recipeId, specIdFromUrl, planId, isLoadingStatus, statusData]);
+  }, [planStatus?.generation_status, planStatus?.plan]);
+
+  // Keep selected phase index in bounds when phases load or change
+  const phaseCount = planStatus?.plan?.phases?.length ?? 0;
+  useEffect(() => {
+    if (phaseCount > 0 && selectedPhaseIndex >= phaseCount) {
+      setSelectedPhaseIndex(0);
+    }
+  }, [phaseCount, selectedPhaseIndex]);
+
+  const isGenerating = planStatus?.generation_status === "processing" || planStatus?.generation_status === "pending";
+  const isCompleted = planStatus?.generation_status === "completed";
+  const isFailed = planStatus?.generation_status === "failed";
+  const planId = searchParams.get("planId") ?? recipeId ?? "";
 
   useEffect(() => {
-    if (planStatus?.plan_gen_status === "COMPLETED" && planId && planItems.length === 0) {
-      PlanService.getPlanItems(planId, 0, 50).then(res => setPlanItems(res.plan_items));
+    if (!tabListRef.current || !isCompleted) return;
+    const buttons = tabListRef.current.querySelectorAll("button");
+    const index = TAB_ORDER.indexOf(activeTab);
+    const btn = buttons[index];
+    if (btn) {
+      const run = () =>
+        setUnderlineStyle({ left: btn.offsetLeft, width: btn.offsetWidth });
+      requestAnimationFrame(() => requestAnimationFrame(run));
     }
-  }, [planStatus?.plan_gen_status, planId]);
+  }, [activeTab, isCompleted]);
 
   if (isLoading) {
     return (
@@ -296,269 +404,357 @@ const PlanPage = () => {
     );
   }
 
-  const isGenerating = planStatus?.plan_gen_status === "IN_PROGRESS" || planStatus?.plan_gen_status === "SUBMITTED";
-  const isCompleted = planStatus?.plan_gen_status === "COMPLETED";
-  const isFailed = planStatus?.plan_gen_status === "FAILED";
+  // Plan status card label and icon from API generation_status
+  const planGenStatus = planStatus?.generation_status ?? "not_started";
+  const planStatusCard = (() => {
+    switch (planGenStatus) {
+      case "completed":
+        return { title: "Plan Generation Completed", icon: "check" as const };
+      case "processing":
+      case "pending":
+        return { title: "Plan Generation In Progress", icon: "spinner" as const };
+      case "failed":
+        return { title: "Plan Generation Failed", icon: "failed" as const };
+      case "not_started":
+      default:
+        return { title: "Plan Generation Pending", icon: "pending" as const };
+    }
+  })();
 
   return (
-    <div className="min-h-screen bg-background text-primary-color font-sans antialiased">
-      <main className="max-w-2xl mx-auto px-6 py-12 pb-32">
-        <div className="flex justify-between items-start mb-10">
-          <div>
-            <h1 className="text-2xl font-bold text-primary-color mb-2">Task Overview</h1>
-            <p className="text-sm text-primary-color leading-relaxed">Execution plan generated step-by-step.</p>
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-foreground font-sans antialiased">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Left: Chat (same pattern as spec page) */}
+        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-border-light" style={{ backgroundColor: "#FAF8F7" }}>
+          <div className="flex justify-between items-center px-6 pt-6 pb-4 shrink-0">
+            <h1 className="text-lg font-medium capitalize text-primary-color truncate">
+              {userPrompt?.slice(0, 50) || "Chat Name"}
+              {(userPrompt?.length ?? 0) > 50 ? "…" : ""}
+            </h1>
+            <div className="flex items-center gap-2 shrink-0">
+              <ChatBadge icon={Github}>{repoName}</ChatBadge>
+              <ChatBadge icon={GitBranch}>{branchName}</ChatBadge>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <HeaderBadge icon={Github}>{repoName}</HeaderBadge>
-            <HeaderBadge icon={GitBranch}>{branchName}</HeaderBadge>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex items-center ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                {msg.role === "assistant" && (
+                  <div className="w-8 h-8 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-primary">
+                    <Image src="/images/logo.svg" width={20} height={20} alt="Potpie" className="w-5 h-5" />
+                  </div>
+                )}
+                <div
+                  className={`max-w-[85%] text-sm ${
+                    msg.role === "user"
+                      ? "rounded-t-xl rounded-bl-xl px-4 py-3 bg-white border border-gray-200 text-gray-900"
+                      : "rounded-t-xl rounded-br-xl px-4 py-3 text-gray-900"
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {/* Status cards: same width, aligned with assistant message text */}
+            <div className="flex flex-col gap-2 ml-[44px] w-full max-w-[85%]">
+              <div className="rounded-lg border border-border-light px-4 py-3 flex flex-col gap-1 w-full">
+                <div className="flex items-center gap-3">
+                  <Check className="w-5 h-5 shrink-0 text-primary-color" />
+                  <p className="text-sm font-bold text-primary-color">Spec Generation Completed</p>
+                </div>
+                <p className="text-xs font-medium text-muted-foreground pl-8">STATUS: 100% COMPLETED</p>
+              </div>
+              {/* Plan status: generating → eventually Generated Plan list */}
+              {isGenerating && (
+                <div className="rounded-lg border border-border-light px-4 py-3 flex flex-col gap-1 w-full">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 shrink-0 animate-spin text-primary-color" />
+                    <p className="text-sm font-bold text-primary-color">Generating plan...</p>
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground pl-8">Plan will appear here when ready.</p>
+                </div>
+              )}
+              {/* Generated Plan: list of phases (clickable) */}
+              {isCompleted && planStatus?.plan?.phases && planStatus.plan.phases.length > 0 && (
+              <div className="rounded-lg border border-border-light overflow-hidden w-full">
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <FileText className="w-4 h-4 text-primary-color" />
+                  <p className="text-sm font-bold text-foreground">Generated Plan</p>
+                </div>
+                <div className="flex flex-col py-2">
+                  {planStatus.plan.phases.map((phase, idx) => (
+                    <button
+                      key={phase.phase_id}
+                      type="button"
+                      onClick={() => setSelectedPhaseIndex(idx)}
+                      className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-none hover:bg-muted/60 transition-colors ${
+                        selectedPhaseIndex === idx ? "bg-muted" : ""
+                      }`}
+                    >
+                      <span className={`text-sm font-bold shrink-0 text-primary-color ${robotoMono.className}`}>
+                        PHASE {idx + 1} :
+                      </span>
+                      <span className="text-sm font-medium text-foreground truncate flex-1 min-w-0">
+                        {phase.name}
+                      </span>
+                      <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              )}
+            </div>
+            <div ref={chatEndRef} />
+          </div>
+
+          <div className="px-6 py-2 flex flex-wrap gap-2 shrink-0">
+            {[
+              { id: "add" as const, label: "Add Item", icon: Plus },
+              { id: "modify" as const, label: "Modify", icon: Pencil },
+              { id: "remove" as const, label: "Remove", icon: Trash2 },
+              { id: "undo" as const, label: "Undo", icon: Undo2 },
+            ].map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => handleChatAction(id)}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-800 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50 transition-colors"
+              >
+                <Icon className="w-3.5 h-3.5 text-primary-color" />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-4 shrink-0">
+            <div className="relative">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendChatMessage();
+                  }
+                }}
+                placeholder="Describe any change that you want...."
+                rows={3}
+                className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-input bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+              />
+              <button
+                type="button"
+                onClick={handleSendChatMessage}
+                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity"
+              >
+                <SendHorizonal className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-6 relative">
-          <div className="absolute left-[26px] top-4 bottom-4 w-[1px] bg-zinc-100 -z-10" />
-
-          {isGenerating && (
-            <div className="pl-16 py-8">
-              <div className="border border-zinc-200 rounded-xl p-8 bg-zinc-50">
-                <Loader2 className="w-5 h-5 animate-spin mb-2" />
-                <p className="text-sm font-medium">{planStatus?.status_message || "Generating..."}</p>
+        {/* Right: Phase Plan panel (top bar matches Spec page) */}
+        <aside className="flex-1 flex flex-col min-w-0 min-h-0 border-l border-border-light bg-white">
+          <div className="p-6 border-b border-border-light shrink-0 bg-white">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0 text-primary-color">
+                    Phase Plan
+                  </h2>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="p-1 rounded-full hover:bg-muted/50 transition-colors shrink-0"
+                          aria-label="Phase Plan info"
+                        >
+                          <Info className="w-4 h-4 text-primary-color" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipPortal>
+                        <TooltipContent
+                          side="bottom"
+                          align="start"
+                          sideOffset={8}
+                          className="max-w-[280px] bg-white text-gray-900 border border-gray-200 shadow-lg rounded-lg px-4 py-3 text-sm font-normal"
+                        >
+                          Phase Plan breaks the specification into ordered phases and implementation steps.
+                        </TooltipContent>
+                      </TooltipPortal>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <button
+                  type="button"
+                  className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0"
+                  aria-label="Refresh"
+                >
+                  <RotateCw className="w-4 h-4 text-primary-color" />
+                </button>
               </div>
+              {isCompleted && planItems.length > 0 && (
+                <Button
+                  onClick={async () => {
+                    const firstItem = planItems[0];
+                    try {
+                      await TaskSplittingService.submitTaskSplitting({ plan_item_id: firstItem.id });
+                    } catch (e) {
+                      console.error("Failed to start implementation", e);
+                    } finally {
+                      router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
+                    }
+                  }}
+                  className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm bg-primary text-primary-foreground hover:opacity-90"
+                >
+                  START IMPLEMENTATION
+                </Button>
+              )}
             </div>
-          )}
+          </div>
 
-          {isFailed && (
-            <div className="pl-16 py-8">
-              <div className="border border-red-200 rounded-xl p-8 bg-red-50">
+          <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 xl:px-10 xl:py-8 2xl:px-12 2xl:py-10 flex flex-col">
+            {isGenerating && (
+              <div className="rounded-lg p-8 border border-border-light bg-white w-full max-w-2xl xl:max-w-4xl 2xl:max-w-5xl mx-auto">
+                <Loader2 className="w-5 h-5 animate-spin mb-2 text-primary-color" />
+                <p className="text-sm font-medium text-primary-color">Generating...</p>
+              </div>
+            )}
+
+            {isFailed && (
+              <div className="rounded-lg p-8 border border-red-200 bg-red-50 w-full max-w-2xl xl:max-w-4xl 2xl:max-w-5xl mx-auto">
                 <div className="flex items-center gap-3">
                   <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
                   <div>
-                    <p className="text-sm font-semibold text-red-900 mb-1">
-                      Plan generation failed
-                    </p>
-                    {planStatus?.status_message && (
-                      <p className="text-xs text-red-700">{planStatus.status_message}</p>
+                    <p className="text-sm font-semibold text-red-900 mb-1">Plan generation failed</p>
+                    {planStatus?.error_message && (
+                      <p className="text-xs text-red-700">{planStatus.error_message}</p>
                     )}
                   </div>
                 </div>
               </div>
+            )}
+
+            {isCompleted && planStatus?.plan?.phases && planStatus.plan.phases.length > 0 && (() => {
+              const selectedPhase = planStatus.plan.phases[selectedPhaseIndex];
+              const firstItem = selectedPhase?.plan_items?.[0];
+              const firstPlanItem = planItems.find((p) => p.id === firstItem?.plan_item_id);
+              return (
+                <div className="w-full max-w-2xl xl:max-w-4xl 2xl:max-w-5xl mx-auto">
+                  <div ref={tabListRef} className="relative flex gap-10 border-b border-border-light pb-0">
+                    {TAB_ORDER.map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setActiveTab(tab)}
+                        className={`pb-3 text-sm font-medium border-b-4 border-transparent transition-colors duration-200 capitalize ${
+                          activeTab === tab ? "text-primary-color" : "text-muted-foreground hover:text-primary-color"
+                        }`}
+                      >
+                        {tab === "objective" ? "Objective" : tab === "reasoning" ? "Reasoning" : "Architecture"}
+                      </button>
+                    ))}
+                    {underlineStyle && (
+                      <span
+                        className="absolute bottom-0 left-0 h-1 bg-primary-foreground rounded-full transition-[left,width] duration-200 ease-out"
+                        style={{
+                          left: underlineStyle.left,
+                          width: underlineStyle.width,
+                        }}
+                        aria-hidden
+                      />
+                    )}
+                  </div>
+
+                  <div className="mt-8">
+                    {activeTab === "objective" && selectedPhase && (
+                      <div className="space-y-10">
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <ListTodo className="w-4 h-4 shrink-0 text-primary-color" />
+                            <span className={`text-xs font-bold uppercase tracking-wider text-primary-color ${robotoMono.className}`}>OBJECTIVE</span>
+                          </div>
+                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap pl-6">
+                            {firstItem?.description || selectedPhase.description || "No objective specified."}
+                          </p>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <FileText className="w-4 h-4 shrink-0 text-primary-color" />
+                            <span className={`text-xs font-bold uppercase tracking-wider text-primary-color ${robotoMono.className}`}>DESCRIPTION</span>
+                          </div>
+                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap pl-6">
+                            {selectedPhase.summary || firstItem?.description || selectedPhase.description || "No description specified."}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "reasoning" && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <Lightbulb className="w-4 h-4 shrink-0 text-primary-color" />
+                          <span className={`text-xs font-bold uppercase tracking-wider text-primary-color ${robotoMono.className}`}>REASONING</span>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap pl-6">
+                          {firstPlanItem?.reasoning || selectedPhase?.summary || "No reasoning provided for this phase."}
+                        </p>
+                      </div>
+                    )}
+
+                    {activeTab === "architecture" && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <GitMerge className="w-4 h-4 shrink-0 text-primary-color" />
+                          <span className={`text-xs font-bold uppercase tracking-wider text-primary-color ${robotoMono.className}`}>ARCHITECTURE</span>
+                        </div>
+                        {firstPlanItem?.architecture ? (
+                          <div className="border border-border-light rounded-lg p-4 overflow-x-auto bg-white mt-0 pl-0">
+                            <MermaidDiagram chart={firstPlanItem.architecture} />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground pl-6">No architecture diagram for this phase.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Phase navigation footer (sticky at bottom of right panel) */}
+          {isCompleted && planStatus?.plan?.phases && planStatus.plan.phases.length > 0 && (
+            <div className="border-t border-border-light bg-white px-8 py-4 xl:px-10 2xl:px-12">
+              <div className="max-w-2xl xl:max-w-4xl 2xl:max-w-5xl mx-auto flex items-center justify-between gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={selectedPhaseIndex === 0}
+                  onClick={() => setSelectedPhaseIndex((i) => Math.max(0, i - 1))}
+                  className="bg-white shrink-0 px-4 py-2 rounded-lg border-border-light text-primary-color hover:bg-muted disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </Button>
+                <span className={`text-sm font-medium text-foreground ${robotoMono.className}`}>
+                  Phase {selectedPhaseIndex + 1} of {planStatus?.plan?.phases?.length ?? 0}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={selectedPhaseIndex === (planStatus?.plan?.phases?.length ?? 1) - 1}
+                  onClick={() => setSelectedPhaseIndex((i) => Math.min((planStatus?.plan?.phases?.length ?? 1) - 1, i + 1))}
+                  className="bg-white shrink-0 px-4 py-2 rounded-lg border-border-light text-primary-color hover:bg-muted disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           )}
-
-          {isCompleted && planItems.length > 0 && (
-            <Accordion type="single" collapsible className="space-y-6">
-              {planItems.map((item) => {
-                const modules = groupFilesByModule(item.files);
-                // FIX: Use unique string based on item.order to prevent global expand
-                const itemValue = `plan-step-${item.order}`;
-
-                return (
-                  <AccordionItem
-                    key={itemValue}
-                    value={itemValue}
-                    className="group bg-background border border-zinc-200 rounded-xl overflow-hidden transition-all data-[state=open]:ring-1 data-[state=open]:ring-zinc-900"
-                  >
-                    <AccordionTrigger className="p-4 flex gap-4 items-start hover:no-underline [&>svg]:hidden w-full">
-                      <div className="pt-0.5 shrink-0"><StatusIcon status="generated" /></div>
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-black uppercase">Slice {item.order + 1}</span>
-                          <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
-                        </div>
-                        <h3 className="text-sm font-bold truncate">{item.title}</h3>
-                      </div>
-                    </AccordionTrigger>
-
-                    <AccordionContent className="border-t border-zinc-100 bg-zinc-50/50 pt-0">
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
-                        <div className="flex items-center gap-2 mb-2"><AlignLeft className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Objective</span></div>
-                        <p className="text-xs">{item.detailed_objective}</p>
-                      </div>
-
-                      {item.description && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                          <div className="flex items-center gap-2 mb-2"><FileText className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Description</span></div>
-                          <p className="text-xs">{item.description}</p>
-                        </div>
-                      )}
-
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
-                        <div className="flex items-center gap-2 mb-2"><ListTodo className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Implementation Steps</span></div>
-                        <ul className="space-y-2">
-                          {item.implementation_steps && item.implementation_steps.length > 0 ? (
-                            item.implementation_steps.map((step, i) => (
-                              <li key={i} className="flex gap-2 text-xs text-left">
-                                <div className="mt-1.5 w-1 h-1 rounded-full bg-zinc-300 shrink-0" />
-                                <FormattedText text={step} />
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-xs text-zinc-400 italic">No implementation steps defined</li>
-                          )}
-                        </ul>
-                      </div>
-
-                      {item.verification_criteria && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                          <div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Verification Criteria</span></div>
-                          <p className="text-xs">{item.verification_criteria}</p>
-                        </div>
-                      )}
-
-                      {item.context_handoff && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-background">
-                          <div className="flex items-center gap-2 mb-2"><ArrowRightLeft className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Context Handoff</span></div>
-                          {item.context_handoff.summary ? (
-                            <p className="text-xs">{item.context_handoff.summary}</p>
-                          ) : (
-                            <div className="text-xs">
-                              {Object.entries(item.context_handoff).map(([key, value], i) => (
-                                <div key={i} className="mb-2 last:mb-0">
-                                  <span className="font-bold text-zinc-600">{key}:</span>{" "}
-                                  <span>{typeof value === 'string' ? value : JSON.stringify(value)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {item.reasoning && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                          <div className="flex items-center gap-2 mb-2"><Lightbulb className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Reasoning</span></div>
-                          {Array.isArray(item.reasoning) ? (
-                            <ul className="space-y-2">
-                              {item.reasoning.length > 0 ? (
-                                item.reasoning.map((reason, i) => (
-                                  <li key={i} className="flex gap-2 text-xs text-left">
-                                    <div className="mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0" />
-                                    <FormattedText text={reason} />
-                                  </li>
-                                ))
-                              ) : (
-                                <li className="text-xs text-zinc-400 italic">No reasoning provided</li>
-                              )}
-                            </ul>
-                          ) : (
-                            <p className="text-xs">{item.reasoning}</p>
-                          )}
-                        </div>
-                      )}
-
-                      {item.architecture && (
-                        <div className="px-5 py-4 bg-background">
-                          <div className="flex items-center gap-2 mb-2"><GitMerge className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Architecture</span></div>
-                          <div className="border border-zinc-100 rounded-lg p-4 bg-background overflow-x-auto">
-                            <MermaidDiagram chart={item.architecture} />
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Files changeset */}
-                      {(Object.keys(modules).length > 0 || (item.files && item.files.length > 0)) && (
-                        <div className="px-5 py-4 border-t border-zinc-100">
-                           <div className="flex items-center gap-2 mb-3">
-                              <FileCode className="w-3.5 h-3.5 text-primary-color" />
-                              <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">Specs to Generate</span>
-                              <span className="text-[9px] text-zinc-400">({item.files?.length || 0} files)</span>
-                            </div>
-                            {Object.keys(modules).length > 0 ? (
-                              <div className="grid grid-cols-1 gap-3">
-                                {Object.entries(modules).map(([modName, files]) => (
-                                  <div key={modName} className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      {React.createElement(getModuleIcon(modName), { className: "w-3 h-3" })}
-                                      <span className="text-[10px] font-bold uppercase">{modName}</span>
-                                      <span className="text-[9px] text-zinc-400">({files.length})</span>
-                                    </div>
-                                    <ul className="space-y-1.5">
-                                      {files.map((f, i) => (
-                                        <li key={i} className="flex justify-between items-center text-[10px] gap-2">
-                                          <span className="font-mono truncate text-zinc-600" title={f.path}>{f.path}</span>
-                                          <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded ${
-                                            f.type?.toLowerCase() === 'create' ? 'bg-emerald-50 text-emerald-600' :
-                                            f.type?.toLowerCase() === 'modify' ? 'bg-amber-50 text-amber-600' :
-                                            f.type?.toLowerCase() === 'delete' ? 'bg-red-50 text-red-600' :
-                                            'bg-zinc-100 text-zinc-600'
-                                          }`}>{f.type}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
-                                <ul className="space-y-1.5">
-                                  {item.files?.map((f: FileItem, i: number) => (
-                                    <li key={i} className="flex justify-between items-center text-[10px] gap-2">
-                                      <span className="font-mono truncate text-zinc-600" title={f.path}>{f.path}</span>
-                                      <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded ${
-                                        f.type?.toLowerCase() === 'create' ? 'bg-emerald-50 text-emerald-600' :
-                                        f.type?.toLowerCase() === 'modify' ? 'bg-amber-50 text-amber-600' :
-                                        f.type?.toLowerCase() === 'delete' ? 'bg-red-50 text-red-600' :
-                                        'bg-zinc-100 text-zinc-600'
-                                      }`}>{f.type}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                        </div>
-                      )}
-                    </AccordionContent> 
-                  </AccordionItem>
-                );
-              })}
-            </Accordion>
-          )}
-
-          {/* Static Fallback (for demo/loading) */}
-          {visibleCount > 0 && (
-            <Accordion type="single" collapsible className="space-y-6">
-              {FULL_PLAN.slice(0, visibleCount).map((slice, idx) => {
-                const itemValue = `static-slice-${slice.id}`;
-                return (
-                  <AccordionItem key={itemValue} value={itemValue} className="group border border-zinc-200 rounded-xl overflow-hidden">
-                    <AccordionTrigger className="p-4 flex gap-4">
-                       <StatusIcon status="generated" />
-                       <div className="text-left">
-                         <span className="text-[10px] font-black uppercase">Slice {slice.id}</span>
-                         <h3 className="text-sm font-bold">{slice.title}</h3>
-                       </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="p-5 bg-zinc-50/50">
-                      <p className="text-xs">{slice.description}</p>
-                    </AccordionContent>
-                  </AccordionItem>
-                );
-              })}
-            </Accordion>
-          )}
-
-          <div ref={bottomRef} />
-        </div>
-
-        {isCompleted && planItems.length > 0 && (
-          <div className="mt-12 flex justify-end">
-            <Button
-              onClick={async () => {
-                const firstItem = planItems[0];
-                try {
-                  await TaskSplittingService.submitTaskSplitting({ plan_item_id: firstItem.id });
-                } catch (error) {
-                  console.error("Failed to start implementation, but redirecting anyway");
-                } finally {
-                  // Always redirect regardless of API call success/failure
-                  router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
-                }
-              }}
-              className="bg-accent-color hover:bg-[#006B66] text-primary-color px-6 py-2 rounded-lg font-medium text-sm flex items-center gap-2"
-            >
-              <Rocket className="w-4 h-4" /> Start Implementation
-            </Button>
-          </div>
-        )}
-      </main>
+        </aside>
+      </div>
     </div>
   );
 };

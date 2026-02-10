@@ -28,6 +28,9 @@ import {
   Plus,
   Bot,
   SendHorizonal,
+  RefreshCcw,
+  RotateCcw,
+  RotateCw,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
@@ -50,6 +53,13 @@ import {
 } from "@/components/ui/accordion";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 import { Card } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import Image from "next/image";
 
 const PLAN_CHAPTERS = [
@@ -245,7 +255,7 @@ function FunctionalRequirementCard({ fr }: { fr: any }) {
   const extStrings = externalDeps.map((e: any) => typeof e === "string" ? e : (e?.name != null ? String(e.name) : String(e)));
   const appendix = fr?.appendix != null && typeof fr.appendix === "object" ? fr.appendix : null;
   return (
-    <div className="rounded-lg border border-[#D3E5E5] bg-zinc-50/50 p-4 space-y-3">
+    <div className="rounded-lg border border-border-light bg-zinc-50/50 p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <span className="text-xs font-mono text-primary-color">{id}</span>
         {priority && <span className="text-xs font-medium text-zinc-600 capitalize">{priority}</span>}
@@ -267,7 +277,7 @@ function FunctionalRequirementCard({ fr }: { fr: any }) {
           <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Depends on</p>
           <div className="flex flex-wrap gap-1.5">
             {requirementDeps.map((reqId: string, i: number) => (
-              <span key={i} className="px-2 py-0.5 bg-zinc-100 border border-[#D3E5E5] rounded text-xs font-mono text-primary-color">
+              <span key={i} className="px-2 py-0.5 bg-zinc-100 border border-border-light rounded text-xs font-mono text-primary-color">
                 {reqId}
               </span>
             ))}
@@ -309,7 +319,7 @@ function FunctionalRequirementCard({ fr }: { fr: any }) {
       {appendix && Object.keys(appendix).length > 0 && (
         <div>
           <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Appendix</p>
-          <pre className="text-xs text-muted-foreground bg-white border border-[#D3E5E5] rounded p-3 overflow-x-auto">
+          <pre className="text-xs text-muted-foreground bg-white border border-border-light rounded p-3 overflow-x-auto">
             {JSON.stringify(appendix, null, 2)}
           </pre>
         </div>
@@ -340,7 +350,7 @@ function SpecContextBlock({ context }: { context: Record<string, any> }) {
       {items.map(({ label, value }, i) => (
         <div key={i}>
           <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">{label}</p>
-          <SharedMarkdown content={value} className="text-sm text-muted-foreground [&_p]:my-0 rounded-md border border-[#D3E5E5] bg-zinc-50/50 p-3" />
+          <SharedMarkdown content={value} className="text-sm text-muted-foreground [&_p]:my-0 rounded-md border border-border-light bg-zinc-50/50 p-3" />
         </div>
       ))}
     </div>
@@ -381,7 +391,7 @@ function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
               {content.map((item: any, j: number) => <FunctionalRequirementCard key={j} fr={item} />)}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground leading-relaxed rounded-md border border-[#D3E5E5] bg-zinc-50/50 p-4">
+            <div className="text-sm text-muted-foreground leading-relaxed rounded-md border border-border-light bg-zinc-50/50 p-4">
               {Array.isArray(content) ? (
                 <ul className="list-disc pl-4 space-y-1">
                   {content.map((item: any, j: number) => (
@@ -402,7 +412,7 @@ function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
 }
 
 const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color">
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-border-light rounded text-xs font-medium text-primary-color">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
@@ -422,7 +432,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-1 border-b border-[#D3E5E5]">
+      <div className="flex gap-1 border-b border-border-light">
         {categories.map((cat) => (
           <button
             key={cat.id}
@@ -451,7 +461,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
           <AccordionItem
             key={item.id}
             value={item.id}
-            className="bg-background border border-[#D3E5E5] transition-all rounded-lg overflow-hidden data-[state=open]:border-[#D3E5E5] data-[state=open]:shadow-sm border-[#D3E5E5] hover:border-[#D3E5E5]"
+            className="bg-background border border-border-light transition-all rounded-lg overflow-hidden data-[state=open]:shadow-sm data-[state=open]:border-border-light hover:border-border-light"
           >
             <AccordionTrigger className="p-4 flex justify-between items-start cursor-pointer select-none hover:no-underline [&>svg]:hidden [&[data-state=open] svg:last-child]:rotate-180">
               <div className="flex gap-3 flex-1 min-w-0">
@@ -473,7 +483,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
               </div>
             </AccordionTrigger>
 
-            <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-[#D3E5E5] font-sans">
+            <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-border-light font-sans">
               {/* Depends on (requirement IDs), Libraries, External dependencies — no Target Files per API */}
               {((item.requirementDependencies?.length ?? 0) > 0 || (item.dependencies?.length ?? 0) > 0 || (item.externalConnections?.length ?? 0) > 0) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -488,7 +498,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                         {item.requirementDependencies?.map((reqId, i) => (
                           <span
                             key={i}
-                            className="px-3 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded-md text-xs font-mono text-primary-color"
+                            className="px-3 py-1.5 bg-zinc-50 border border-border-light rounded-md text-xs font-mono text-primary-color"
                           >
                             {typeof reqId === "string" ? reqId : String(reqId)}
                           </span>
@@ -507,7 +517,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                         {item.dependencies?.map((dep, i) => (
                           <span
                             key={i}
-                            className="px-3 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded-md text-xs font-mono text-primary-color"
+                            className="px-3 py-1.5 bg-zinc-50 border border-border-light rounded-md text-xs font-mono text-primary-color"
                           >
                             {typeof dep === "string" ? dep : (dep && typeof dep === "object" && "name" in dep ? String((dep as { name?: string }).name) : String(dep))}
                           </span>
@@ -544,7 +554,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                     <Info className="w-3.5 h-3.5" />
                     Context
                   </p>
-                  <div className="bg-zinc-50 border border-[#D3E5E5] rounded-md p-4">
+                  <div className="bg-zinc-50 border border-border-light rounded-md p-4">
                     <div className="text-sm text-muted-foreground leading-relaxed">
                       <SharedMarkdown content={item.context} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left [&_p]:mb-2 [&_p:last-child]:mb-0" />
                     </div>
@@ -596,6 +606,8 @@ const SpecPage = () => {
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
+  const [isRegeneratingSpec, setIsRegeneratingSpec] = useState(false);
+  const [regenerateSpecKey, setRegenerateSpecKey] = useState(0);
 
   // Chat UI state (first message = new chat input; backend for chat to be wired later)
   type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -746,7 +758,7 @@ const SpecPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeId]);
 
-  // Poll for spec progress (separate ref so this always runs; recipe-details uses hasInitializedRef)
+  // Poll for spec progress (re-runs when regenerateSpecKey changes so we can restart after regenerate)
   useEffect(() => {
     if (!recipeId) return;
     if (hasSpecPollStartedRef.current) return;
@@ -816,10 +828,10 @@ const SpecPage = () => {
 
     return () => {
       mounted = false;
-      hasSpecPollStartedRef.current = false; // Reset so effect can run again on re-mount (e.g. React Strict Mode)
+      hasSpecPollStartedRef.current = false; // Reset so effect can run again on re-mount or after regenerate
       if (interval) clearInterval(interval);
     };
-  }, [recipeId]);
+  }, [recipeId, regenerateSpecKey]);
 
   // Calculate progress and status (support new API: generation_status, and legacy formats)
   const planProgress = specProgress 
@@ -827,11 +839,11 @@ const SpecPage = () => {
         ? specProgress.progress_percent 
         : ('generation_status' in specProgress && (specProgress as any).generation_status === 'completed' ? 100 : 0)) ?? 0
     : 0;
-  const status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null = specProgress 
+  const status = (specProgress 
     ? ('generation_status' in specProgress
         ? ((specProgress as any).generation_status === 'completed' ? 'COMPLETED' : (specProgress as any).generation_status === 'failed' ? 'FAILED' : (specProgress as any).generation_status === 'processing' || (specProgress as any).generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
         : ('spec_gen_status' in specProgress ? specProgress.spec_gen_status : ('spec_generation_step_status' in specProgress ? specProgress.spec_generation_step_status : null)))
-    : null;
+    : null) as 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null;
   const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
   const currentStep = specProgress 
     ? (('step_index' in specProgress && specProgress.step_index !== null) ? specProgress.step_index : 0) ?? 0
@@ -912,10 +924,10 @@ const SpecPage = () => {
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
-        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7]">
+        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-border-light" style={{ backgroundColor: "#FAF8F7" }}>
           {/* Chat header */}
-          <div className="flex justify-between items-center px-6 py-4 shrink-0">
-            <h1 className="text-lg font-bold text-primary-color truncate">
+          <div className="flex justify-between items-center px-6 pt-6 pb-4 shrink-0">
+            <h1 className="text-lg font-bold text-primary-color truncate capitalize">
               {recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}
               {(recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""}
             </h1>
@@ -932,11 +944,11 @@ const SpecPage = () => {
             {chatMessages.map((msg, i) => (
               <React.Fragment key={i}>
                 <div
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex items-center ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {msg.role === "assistant" && (
-                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
-                      <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
+                    <div className="w-8 h-8 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-primary">
+                      <Image src="/images/logo.svg" width={20} height={20} alt="Potpie Logo" className="w-5 h-5" />
                     </div>
                   )}
                   <div
@@ -951,16 +963,16 @@ const SpecPage = () => {
                       : msg.content}
                   </div>
                 </div>
-                {/* Spec bar: heading + spinner/check only */}
+                {/* Spec bar: same width/alignment as plan page status cards */}
                 {i === 1 && (
-                  <div className="flex justify-start">
-                    <div className="max-w-[85%] w-full rounded-lg border border-gray-200 bg-white px-4 py-3 flex items-center gap-3">
+                  <div className="flex flex-col gap-2 ml-[44px] w-full max-w-[85%]">
+                    <div className="rounded-lg border border-border-light bg-card px-4 py-3 flex items-center gap-3 w-full">
                       {planProgress >= 100 ? (
-                        <Check className="w-5 h-5 shrink-0" style={{ color: "#022D2C" }} />
+                        <Check className="w-5 h-5 shrink-0 text-primary-color" />
                       ) : (
                         <div className="w-5 h-5 shrink-0 rounded-full border-2 border-primary-color border-t-transparent animate-spin" />
                       )}
-                      <p className="text-sm font-bold text-[#00291C]">
+                      <p className="text-sm font-bold text-primary-color">
                         {status === "COMPLETED" ? "Spec generated" : "Generating spec ..."}
                       </p>
                     </div>
@@ -985,7 +997,7 @@ const SpecPage = () => {
                 onClick={() => handleChatAction(id)}
                 className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-800 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50 transition-colors"
               >
-                <Icon className="w-3.5 h-3.5 text-[#00291C]" />
+                <Icon className="w-3.5 h-3.5 text-primary-color" />
                 {label}
               </button>
             ))}
@@ -1005,12 +1017,12 @@ const SpecPage = () => {
                 }}
                 placeholder="Describe any change that you want...."
                 rows={3}
-                className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-[#FFFDFC] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#102C2C]/20 focus:border-[#102C2C] resize-none"
+                className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-card text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
               />
               <button
                 type="button"
                 onClick={handleSendChatMessage}
-                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity"
+                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity"
               >
                 <SendHorizonal className="w-5 h-5" />
               </button>
@@ -1027,12 +1039,66 @@ const SpecPage = () => {
             transition: "width 0.35s ease-out",
           }}
         >
-          <aside className="h-full w-full min-w-[280px] flex flex-col border-l border-[#D3E5E5]">
-            <div className="p-6 border-b border-[#D3E5E5]">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-lg font-bold text-primary-color">Generated Spec</h2>
-
+          <aside className="h-full w-full min-w-[280px] flex flex-col border-l border-border-light bg-white">
+            <div className="p-6 border-b border-border-light bg-white">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+                  <div className="flex items-center gap-2">
+                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0 text-primary-color">
+                    Specification
+                  </h2>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="p-1 rounded-full hover:bg-muted/50 transition-colors shrink-0"
+                          aria-label="Specification info"
+                        >
+                          <Info className="w-4 h-4 text-primary-color" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipPortal>
+                        <TooltipContent
+                          side="bottom"
+                          align="start"
+                          sideOffset={8}
+                          className="max-w-[280px] bg-white text-gray-900 border border-gray-200 shadow-lg rounded-lg px-4 py-3 text-sm font-normal"
+                        >
+                          Plan Spec is granular specification of the user prompt and the question. These represent the specific goals of the workflow.
+                        </TooltipContent>
+                      </TooltipPortal>
+                    </Tooltip>
+                  </TooltipProvider>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!recipeId || isRegeneratingSpec) return;
+                      setIsRegeneratingSpec(true);
+                      try {
+                        await SpecService.regenerateSpec(recipeId);
+                        setSpecProgress(null);
+                        setError(null);
+                        setRegenerateSpecKey((k) => k + 1);
+                        toast.success("Spec regeneration started");
+                      } catch (err: any) {
+                        console.error("Error regenerating spec:", err);
+                        toast.error(err?.message ?? "Failed to regenerate spec");
+                      } finally {
+                        setIsRegeneratingSpec(false);
+                      }
+                    }}
+                    disabled={isRegeneratingSpec}
+                    className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Regenerate spec"
+                  >
+                    {isRegeneratingSpec ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-primary-color" />
+                    ) : (
+                      <RotateCw className="w-4 h-4 text-primary-color" />
+                    )}
+                  </button>
                 </div>
                 {status === "COMPLETED" && !isCancelled && hasSpecContent && (
                   <button
@@ -1050,7 +1116,7 @@ const SpecPage = () => {
                       }
                     }}
                     disabled={isSubmittingPlan}
-                    className="shrink-0 px-6 py-2 bg-primary-color text-accent-color hover:opacity-90 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                   >
                     {isSubmittingPlan ? (
                       <>
@@ -1075,9 +1141,9 @@ const SpecPage = () => {
               </div>
             ) : (
               /* Always show timeline on the right when not yet showing spec content (no duplicate "Generating specification" message) */
-              <div className="bg-background rounded-xl overflow-hidden">
+              <div className="bg-white rounded-xl overflow-hidden">
                 <div className="relative px-4 pb-6 pt-2">
-                  <div className="absolute left-8 top-6 bottom-6 w-[2px] rounded-full" style={{ backgroundColor: "#B4D13F" }} />
+                  <div className="absolute left-8 top-6 bottom-6 w-[2px] rounded-full bg-accent-color" />
                   <div className="space-y-6 relative">
                     {PLAN_CHAPTERS.map((step, idx) => {
                       const stepStatus = hasStepLevelProgress && stepStatuses
@@ -1089,11 +1155,11 @@ const SpecPage = () => {
                       const isPending = !isDone && !isActive && !isFailed;
                       const Icon = step.icon;
                       const isPlanComplete = planProgress >= 100;
-                      const boxStyle = isFailed
-                        ? undefined
+                      const boxClassName = isFailed
+                        ? ""
                         : isPending
-                          ? { borderColor: "rgba(16, 44, 44, 0.5)", backgroundColor: "rgba(16, 44, 44, 0.2)", color: "#B4D13F" }
-                          : { borderColor: "#102C2C", backgroundColor: "#102C2C", color: "#B4D13F" };
+                          ? "border-primary/50 bg-primary/20 text-accent-color"
+                          : "border-primary bg-primary text-primary-foreground";
                       const liveMessage = stepStatus?.message ?? step.description;
                       return (
                         <div
@@ -1102,9 +1168,8 @@ const SpecPage = () => {
                         >
                           <div
                             className={`relative z-10 w-8 h-8 flex items-center justify-center rounded border-2 shrink-0 transition-colors ${
-                              isFailed ? "border-red-500 bg-red-50 text-red-500" : ""
+                              isFailed ? "border-red-500 bg-red-50 text-red-500" : boxClassName
                             }`}
-                            style={boxStyle}
                           >
                             {isPlanComplete ? (
                               <Icon className="w-3.5 h-3.5" />

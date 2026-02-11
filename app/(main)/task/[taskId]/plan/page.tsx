@@ -28,6 +28,14 @@ import {
   FileText,
   Lightbulb,
   ArrowRightLeft,
+  Info,
+  RefreshCw,
+  Pencil,
+  Trash2,
+  Undo2,
+  Plus,
+  SendHorizonal,
+  RotateCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +51,14 @@ import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import Image from "next/image";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 /**
  * VERTICAL SLICE PLANNER (Auto-Generation Mode)
@@ -180,7 +196,15 @@ const getModuleIcon = (name: string) => {
 };
 
 const HeaderBadge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: LucideIcon }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-primary-color">
+  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium" style={{ border: "1px solid #CCD3CF", color: "#022019" }}>
+    {Icon && <Icon className="w-3.5 h-3.5" />}
+    {children}
+  </div>
+);
+
+/** Chat pill badge (matches spec page) */
+const ChatBadge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: LucideIcon }) => (
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-[#022019]">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
@@ -208,11 +232,11 @@ const FormattedText = ({ text }: { text: string }) => {
 const StatusIcon = ({ status }: { status: string }) => {
   if (status === "generated")
     return (
-      <div className="w-5 h-5 bg-primary-color rounded-full flex items-center justify-center text-accent-color">
-        <Check className="w-3 h-3" />
+      <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "#022019" }}>
+        <Check className="w-3 h-3 text-[#FFFDFC]" />
       </div>
     );
-  return <div className="w-5 h-5 border border-zinc-200 rounded-full bg-zinc-50" />;
+  return <div className="w-5 h-5 rounded-full border" style={{ borderColor: "#CCD3CF", backgroundColor: "#FFFDFC" }} />;
 };
 
 const PlanPage = () => {
@@ -220,43 +244,87 @@ const PlanPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const recipeId = params?.taskId as string;
-  const planIdFromUrl = searchParams.get("planId");
-  const specIdFromUrl = searchParams.get("specId");
 
-  const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
   const [planStatus, setPlanStatus] = useState<PlanStatusResponse | null>(null);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(0);
   const [repoName, setRepoName] = useState<string>("Repository");
   const [branchName, setBranchName] = useState<string>("Branch");
+  const [userPrompt, setUserPrompt] = useState<string>("");
+
+  type ChatMessage = { role: "user" | "assistant"; content: string };
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const hasChatInitializedRef = useRef(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchRecipeDetails = async () => {
       if (!recipeId) return;
+      let fromStorage: { repo_name?: string; branch_name?: string; user_prompt?: string } | null = null;
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem(`recipe_${recipeId}`);
+          if (raw) fromStorage = JSON.parse(raw);
+        } catch {
+          fromStorage = null;
+        }
+      }
       try {
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
-        setRepoName(recipeDetails.repo_name || "Unknown Repository");
-        setBranchName(recipeDetails.branch_name || "main");
-      } catch (error) {}
+        setRepoName(recipeDetails.repo_name ?? fromStorage?.repo_name ?? "Unknown Repository");
+        setBranchName(recipeDetails.branch_name ?? fromStorage?.branch_name ?? "main");
+        setUserPrompt(
+          (recipeDetails.user_prompt && recipeDetails.user_prompt.trim()) ||
+            fromStorage?.user_prompt ||
+            "Implementation plan generation"
+        );
+      } catch {
+        setRepoName(fromStorage?.repo_name ?? "Unknown Repository");
+        setBranchName(fromStorage?.branch_name ?? "main");
+        setUserPrompt(fromStorage?.user_prompt ?? "Implementation plan generation");
+      }
     };
     fetchRecipeDetails();
   }, [recipeId]);
 
+  useEffect(() => {
+    if (!userPrompt || hasChatInitializedRef.current) return;
+    hasChatInitializedRef.current = true;
+    setChatMessages([
+      { role: "user", content: userPrompt },
+      {
+        role: "assistant",
+        content:
+          "I've generated a granular specification for the Al Chat Metadata logging. Review the goals below before we proceed to implementation.",
+      },
+    ]);
+  }, [userPrompt]);
+
+  const handleSendChatMessage = () => {
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatMessages((prev) => [...prev, { role: "user", content: text }]);
+    setChatInput("");
+  };
+
+  const handleChatAction = (_action: "add" | "modify" | "remove" | "undo") => {
+    toast.info("Plan chat actions will be connected when the backend is ready.");
+  };
+
   const { data: statusData, isLoading: isLoadingStatus } = useQuery({
-    queryKey: ["plan-status", planId, recipeId, specIdFromUrl],
+    queryKey: ["plan-status", recipeId],
     queryFn: async () => {
-      if (planId) return await PlanService.getPlanStatus(planId);
-      if (specIdFromUrl) return await PlanService.getPlanStatusBySpecId(specIdFromUrl);
       if (recipeId) return await PlanService.getPlanStatusByRecipeId(recipeId);
       return null;
     },
-    enabled: !!(planId || specIdFromUrl || recipeId),
+    enabled: !!recipeId,
     refetchInterval: (query) => {
       const data = query.state.data;
-      return (data?.plan_gen_status === "IN_PROGRESS" || data?.plan_gen_status === "SUBMITTED") ? 2000 : false;
+      return (data?.generation_status === "processing" || data?.generation_status === "pending") ? 2000 : false;
     },
   });
 
@@ -264,29 +332,41 @@ const PlanPage = () => {
     if (statusData) {
       setPlanStatus(statusData);
       setIsLoading(false);
-      if (statusData.plan_id && !planId) setPlanId(statusData.plan_id);
     }
-  }, [statusData, planId]);
+  }, [statusData]);
 
   useEffect(() => {
-    if ((recipeId || specIdFromUrl) && !planId && !isLoadingStatus && !statusData) {
-      PlanService.submitPlanGeneration({
-        recipe_id: recipeId || undefined,
-        spec_id: specIdFromUrl || undefined,
-      }).then((response) => {
-        setPlanId(response.plan_id);
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("planId", response.plan_id);
-        router.replace(`/task/${recipeId}/plan?${params.toString()}`);
+    if (recipeId && !isLoadingStatus && !statusData) {
+      PlanService.submitPlanGeneration({ recipe_id: recipeId }).catch(() => {});
+    }
+  }, [recipeId, isLoadingStatus, statusData]);
+
+  // Extract plan items from phases (new API)
+  useEffect(() => {
+    if (planStatus?.generation_status === "completed" && planStatus.plan && planItems.length === 0) {
+      const items: PlanItem[] = [];
+      let itemNumber = 1;
+      planStatus.plan.phases.forEach((phase) => {
+        phase.plan_items.forEach((item) => {
+          items.push({
+            id: item.plan_item_id,
+            item_number: itemNumber++,
+            order: item.order,
+            title: item.title,
+            detailed_objective: item.description,
+            implementation_steps: [],
+            description: item.description,
+            verification_criteria: "",
+            files: [],
+            context_handoff: {},
+            reasoning: "",
+            architecture: "",
+          });
+        });
       });
+      setPlanItems(items);
     }
-  }, [recipeId, specIdFromUrl, planId, isLoadingStatus, statusData]);
-
-  useEffect(() => {
-    if (planStatus?.plan_gen_status === "COMPLETED" && planId && planItems.length === 0) {
-      PlanService.getPlanItems(planId, 0, 50).then(res => setPlanItems(res.plan_items));
-    }
-  }, [planStatus?.plan_gen_status, planId]);
+  }, [planStatus?.generation_status, planStatus?.plan]);
 
   if (isLoading) {
     return (
@@ -296,47 +376,211 @@ const PlanPage = () => {
     );
   }
 
-  const isGenerating = planStatus?.plan_gen_status === "IN_PROGRESS" || planStatus?.plan_gen_status === "SUBMITTED";
-  const isCompleted = planStatus?.plan_gen_status === "COMPLETED";
-  const isFailed = planStatus?.plan_gen_status === "FAILED";
+  const isGenerating = planStatus?.generation_status === "processing" || planStatus?.generation_status === "pending";
+  const isCompleted = planStatus?.generation_status === "completed";
+  const isFailed = planStatus?.generation_status === "failed";
+  const planId = searchParams.get("planId") ?? recipeId ?? "";
+
+  // Plan status card label and icon from API generation_status
+  const planGenStatus = planStatus?.generation_status ?? "not_started";
+  const planStatusCard = (() => {
+    switch (planGenStatus) {
+      case "completed":
+        return { title: "Plan Generation Completed", icon: "check" as const };
+      case "processing":
+      case "pending":
+        return { title: "Plan Generation In Progress", icon: "spinner" as const };
+      case "failed":
+        return { title: "Plan Generation Failed", icon: "failed" as const };
+      case "not_started":
+      default:
+        return { title: "Plan Generation Pending", icon: "pending" as const };
+    }
+  })();
 
   return (
-    <div className="min-h-screen bg-background text-primary-color font-sans antialiased">
-      <main className="max-w-2xl mx-auto px-6 py-12 pb-32">
-        <div className="flex justify-between items-start mb-10">
-          <div>
-            <h1 className="text-2xl font-bold text-primary-color mb-2">Task Overview</h1>
-            <p className="text-sm text-primary-color leading-relaxed">Execution plan generated step-by-step.</p>
+    <div className="h-screen flex flex-col overflow-hidden bg-[#FAF8F7] text-[#000000] font-sans antialiased">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Left: Chat (same pattern as spec page) */}
+        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7]">
+          <div className="flex justify-between items-center px-6 py-4 shrink-0">
+            <h1 className="text-lg font-bold text-[#022019] truncate">
+              {userPrompt?.slice(0, 50) || "Chat Name"}
+              {(userPrompt?.length ?? 0) > 50 ? "…" : ""}
+            </h1>
+            <div className="flex items-center gap-2 shrink-0">
+              <ChatBadge icon={Github}>{repoName}</ChatBadge>
+              <ChatBadge icon={GitBranch}>{branchName}</ChatBadge>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <HeaderBadge icon={Github}>{repoName}</HeaderBadge>
-            <HeaderBadge icon={GitBranch}>{branchName}</HeaderBadge>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                {msg.role === "assistant" && (
+                  <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
+                    <Image src="/images/logo.svg" width={24} height={24} alt="Potpie" className="w-6 h-6" />
+                  </div>
+                )}
+                <div
+                  className={`max-w-[85%] text-sm ${
+                    msg.role === "user"
+                      ? "rounded-t-xl rounded-bl-xl px-4 py-3 bg-white border border-gray-200 text-gray-900"
+                      : "rounded-t-xl rounded-br-xl px-4 py-3 text-gray-900"
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {/* Status cards: Spec Generation Completed, Plan Generation Completed */}
+            <div className="flex justify-start flex-col gap-2">
+              <div className="rounded-lg border border-[#CCD3CF] px-4 py-3 flex items-center gap-3 max-w-[85%]">
+                <Check className="w-5 h-5 shrink-0 text-[#022D2C]" />
+                <p className="text-sm font-bold text-[#022019]">Spec Generation Completed</p>
+              </div>
+              <div className="rounded-lg border border-[#CCD3CF] px-4 py-3 flex items-center gap-3 max-w-[85%]">
+                {planStatusCard.icon === "check" && <Check className="w-5 h-5 shrink-0 text-[#022D2C]" />}
+                {planStatusCard.icon === "spinner" && <Loader2 className="w-5 h-5 shrink-0 animate-spin text-[#696D6D]" />}
+                {planStatusCard.icon === "failed" && <AlertCircle className="w-5 h-5 shrink-0 text-red-600" />}
+                {planStatusCard.icon === "pending" && (
+                  <div className="w-5 h-5 shrink-0 rounded-full border-2 border-[#CCD3CF]" />
+                )}
+                <p className="text-sm font-bold text-[#022019]">{planStatusCard.title}</p>
+              </div>
+            </div>
+            <div ref={chatEndRef} />
+          </div>
+
+          <div className="px-6 py-2 flex flex-wrap gap-2 shrink-0">
+            {[
+              { id: "add" as const, label: "Add Item", icon: Plus },
+              { id: "modify" as const, label: "Modify", icon: Pencil },
+              { id: "remove" as const, label: "Remove", icon: Trash2 },
+              { id: "undo" as const, label: "Undo", icon: Undo2 },
+            ].map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => handleChatAction(id)}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-800 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50 transition-colors"
+              >
+                <Icon className="w-3.5 h-3.5 text-[#00291C]" />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-4 shrink-0">
+            <div className="relative">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendChatMessage();
+                  }
+                }}
+                placeholder="Describe any change that you want...."
+                rows={3}
+                className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-[#FFFDFC] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#102C2C]/20 focus:border-[#102C2C] resize-none"
+              />
+              <button
+                type="button"
+                onClick={handleSendChatMessage}
+                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity"
+              >
+                <SendHorizonal className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-6 relative">
-          <div className="absolute left-[26px] top-4 bottom-4 w-[1px] bg-zinc-100 -z-10" />
+        {/* Right: Phase Plan panel (top bar matches Spec page) */}
+        <aside className="flex-1 flex flex-col min-w-0 min-h-0 border-l border-[#D3E5E5]">
+          <div className="p-6 border-b border-[#D3E5E5] bg-[#FFFDFC] shrink-0">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0" style={{ color: "#022019" }}>
+                    Phase Plan
+                  </h2>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="p-1 rounded-full hover:bg-[#CCD3CF]/30 transition-colors shrink-0"
+                          aria-label="Phase Plan info"
+                        >
+                          <Info className="w-4 h-4" style={{ color: "#022019" }} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipPortal>
+                        <TooltipContent
+                          side="bottom"
+                          align="start"
+                          sideOffset={8}
+                          className="max-w-[280px] bg-white text-gray-900 border border-gray-200 shadow-lg rounded-lg px-4 py-3 text-sm font-normal"
+                        >
+                          Phase Plan breaks the specification into ordered phases and implementation steps.
+                        </TooltipContent>
+                      </TooltipPortal>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <button
+                  type="button"
+                  className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0"
+                  aria-label="Refresh"
+                >
+                  <RotateCw className="w-4 h-4" style={{ color: "#022019" }} />
+                </button>
+              </div>
+              {isCompleted && planItems.length > 0 && (
+                <Button
+                  onClick={async () => {
+                    const firstItem = planItems[0];
+                    try {
+                      await TaskSplittingService.submitTaskSplitting({ plan_item_id: firstItem.id });
+                    } catch (e) {
+                      console.error("Failed to start implementation", e);
+                    } finally {
+                      router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
+                    }
+                  }}
+                  className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm bg-[#022019] text-white hover:opacity-90 flex items-center gap-2"
+                >
+                  <Rocket className="w-4 h-4" /> START IMPLEMENTATION
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+            <div className="max-w-2xl mx-auto space-y-4 relative">
+              <div className="absolute left-[26px] top-4 bottom-4 w-[1px] -z-10" style={{ backgroundColor: "#696D6D" }} />
 
           {isGenerating && (
             <div className="pl-16 py-8">
-              <div className="border border-zinc-200 rounded-xl p-8 bg-zinc-50">
-                <Loader2 className="w-5 h-5 animate-spin mb-2" />
-                <p className="text-sm font-medium">{planStatus?.status_message || "Generating..."}</p>
+              <div className="rounded-lg p-8 border" style={{ borderColor: "#CCD3CF", backgroundColor: "#FFFDFC" }}>
+                <Loader2 className="w-5 h-5 animate-spin mb-2 text-[#022D2C]" />
+                <p className="text-sm font-medium text-[#022D2C]">Generating...</p>
               </div>
             </div>
           )}
 
           {isFailed && (
             <div className="pl-16 py-8">
-              <div className="border border-red-200 rounded-xl p-8 bg-red-50">
+              <div className="rounded-lg p-8 border border-red-200 bg-red-50">
                 <div className="flex items-center gap-3">
                   <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
                   <div>
                     <p className="text-sm font-semibold text-red-900 mb-1">
                       Plan generation failed
                     </p>
-                    {planStatus?.status_message && (
-                      <p className="text-xs text-red-700">{planStatus.status_message}</p>
+                    {planStatus?.error_message && (
+                      <p className="text-xs text-red-700">{planStatus.error_message}</p>
                     )}
                   </div>
                 </div>
@@ -345,43 +589,46 @@ const PlanPage = () => {
           )}
 
           {isCompleted && planItems.length > 0 && (
-            <Accordion type="single" collapsible className="space-y-6">
+            <Accordion type="single" collapsible className="space-y-4">
               {planItems.map((item) => {
                 const modules = groupFilesByModule(item.files);
-                // FIX: Use unique string based on item.order to prevent global expand
                 const itemValue = `plan-step-${item.order}`;
+                const phaseNum = String(item.order + 1).padStart(2, "0");
 
                 return (
                   <AccordionItem
                     key={itemValue}
                     value={itemValue}
-                    className="group bg-background border border-zinc-200 rounded-xl overflow-hidden transition-all data-[state=open]:ring-1 data-[state=open]:ring-zinc-900"
+                    className="group overflow-hidden transition-all rounded-lg border data-[state=open]:ring-1 data-[state=open]:ring-[#022019]"
+                    style={{ backgroundColor: "#FFFDFC", borderColor: "#CCD3CF" }}
                   >
                     <AccordionTrigger className="p-4 flex gap-4 items-start hover:no-underline [&>svg]:hidden w-full">
                       <div className="pt-0.5 shrink-0"><StatusIcon status="generated" /></div>
                       <div className="flex-1 min-w-0 text-left">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-black uppercase">Slice {item.order + 1}</span>
-                          <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+                          <span className="text-xs font-semibold tracking-wider" style={{ color: "#747575", letterSpacing: "0.04em" }}>
+                            PHASE {phaseNum}
+                          </span>
+                          <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180 text-[#747575]" />
                         </div>
-                        <h3 className="text-sm font-bold truncate">{item.title}</h3>
+                        <h3 className="text-sm font-medium truncate leading-snug" style={{ color: "#000000", fontSize: 14 }}>{item.title}</h3>
                       </div>
                     </AccordionTrigger>
 
-                    <AccordionContent className="border-t border-zinc-100 bg-zinc-50/50 pt-0">
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
+                    <AccordionContent className="border-t pt-0" style={{ borderColor: "#CCD3CF", backgroundColor: "rgba(255,253,252,0.6)" }}>
+                      <div className="px-5 py-4 border-b bg-[#FFFDFC]" style={{ borderColor: "#CCD3CF" }}>
                         <div className="flex items-center gap-2 mb-2"><AlignLeft className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Objective</span></div>
                         <p className="text-xs">{item.detailed_objective}</p>
                       </div>
 
                       {item.description && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                        <div className="px-5 py-4 border-b" style={{ borderColor: "#CCD3CF", backgroundColor: "rgba(255,253,252,0.6)" }}>
                           <div className="flex items-center gap-2 mb-2"><FileText className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Description</span></div>
                           <p className="text-xs">{item.description}</p>
                         </div>
                       )}
 
-                      <div className="px-5 py-4 border-b border-zinc-100 bg-background">
+                      <div className="px-5 py-4 border-b bg-[#FFFDFC]" style={{ borderColor: "#CCD3CF" }}>
                         <div className="flex items-center gap-2 mb-2"><ListTodo className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Implementation Steps</span></div>
                         <ul className="space-y-2">
                           {item.implementation_steps && item.implementation_steps.length > 0 ? (
@@ -398,14 +645,14 @@ const PlanPage = () => {
                       </div>
 
                       {item.verification_criteria && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                        <div className="px-5 py-4 border-b" style={{ borderColor: "#CCD3CF", backgroundColor: "rgba(255,253,252,0.6)" }}>
                           <div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Verification Criteria</span></div>
                           <p className="text-xs">{item.verification_criteria}</p>
                         </div>
                       )}
 
                       {item.context_handoff && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-background">
+                        <div className="px-5 py-4 border-b bg-[#FFFDFC]" style={{ borderColor: "#CCD3CF" }}>
                           <div className="flex items-center gap-2 mb-2"><ArrowRightLeft className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Context Handoff</span></div>
                           {item.context_handoff.summary ? (
                             <p className="text-xs">{item.context_handoff.summary}</p>
@@ -423,7 +670,7 @@ const PlanPage = () => {
                       )}
 
                       {item.reasoning && (
-                        <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                        <div className="px-5 py-4 border-b" style={{ borderColor: "#CCD3CF", backgroundColor: "rgba(255,253,252,0.6)" }}>
                           <div className="flex items-center gap-2 mb-2"><Lightbulb className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Reasoning</span></div>
                           {Array.isArray(item.reasoning) ? (
                             <ul className="space-y-2">
@@ -445,9 +692,9 @@ const PlanPage = () => {
                       )}
 
                       {item.architecture && (
-                        <div className="px-5 py-4 bg-background">
+                        <div className="px-5 py-4 bg-[#FFFDFC]">
                           <div className="flex items-center gap-2 mb-2"><GitMerge className="w-3.5 h-3.5" /><span className="text-[10px] font-bold uppercase">Architecture</span></div>
-                          <div className="border border-zinc-100 rounded-lg p-4 bg-background overflow-x-auto">
+                          <div className="border rounded-lg p-4 overflow-x-auto bg-[#FFFDFC]" style={{ borderColor: "#CCD3CF" }}>
                             <MermaidDiagram chart={item.architecture} />
                           </div>
                         </div>
@@ -455,16 +702,16 @@ const PlanPage = () => {
                       
                       {/* Files changeset */}
                       {(Object.keys(modules).length > 0 || (item.files && item.files.length > 0)) && (
-                        <div className="px-5 py-4 border-t border-zinc-100">
+                        <div className="px-5 py-4 border-t" style={{ borderColor: "#CCD3CF" }}>
                            <div className="flex items-center gap-2 mb-3">
-                              <FileCode className="w-3.5 h-3.5 text-primary-color" />
-                              <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">Specs to Generate</span>
+                              <FileCode className="w-3.5 h-3.5" style={{ color: "#022019" }} />
+                              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#022019" }}>Specs to Generate</span>
                               <span className="text-[9px] text-zinc-400">({item.files?.length || 0} files)</span>
                             </div>
                             {Object.keys(modules).length > 0 ? (
                               <div className="grid grid-cols-1 gap-3">
                                 {Object.entries(modules).map(([modName, files]) => (
-                                  <div key={modName} className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
+                                  <div key={modName} className="rounded-lg p-3 border" style={{ backgroundColor: "#FFFDFC", borderColor: "#CCD3CF" }}>
                                     <div className="flex items-center gap-2 mb-2">
                                       {React.createElement(getModuleIcon(modName), { className: "w-3 h-3" })}
                                       <span className="text-[10px] font-bold uppercase">{modName}</span>
@@ -487,7 +734,7 @@ const PlanPage = () => {
                                 ))}
                               </div>
                             ) : (
-                              <div className="bg-zinc-50 rounded-lg p-3 border border-zinc-100/80">
+                              <div className="rounded-lg p-3 border" style={{ backgroundColor: "#FFFDFC", borderColor: "#CCD3CF" }}>
                                 <ul className="space-y-1.5">
                                   {item.files?.map((f: FileItem, i: number) => (
                                     <li key={i} className="flex justify-between items-center text-[10px] gap-2">
@@ -514,20 +761,24 @@ const PlanPage = () => {
 
           {/* Static Fallback (for demo/loading) */}
           {visibleCount > 0 && (
-            <Accordion type="single" collapsible className="space-y-6">
+            <Accordion type="single" collapsible className="space-y-4">
               {FULL_PLAN.slice(0, visibleCount).map((slice, idx) => {
                 const itemValue = `static-slice-${slice.id}`;
+                const phaseNum = String(slice.id).padStart(2, "0");
                 return (
-                  <AccordionItem key={itemValue} value={itemValue} className="group border border-zinc-200 rounded-xl overflow-hidden">
-                    <AccordionTrigger className="p-4 flex gap-4">
-                       <StatusIcon status="generated" />
-                       <div className="text-left">
-                         <span className="text-[10px] font-black uppercase">Slice {slice.id}</span>
-                         <h3 className="text-sm font-bold">{slice.title}</h3>
-                       </div>
+                  <AccordionItem key={itemValue} value={itemValue} className="group overflow-hidden transition-all rounded-lg border data-[state=open]:ring-1 data-[state=open]:ring-[#022019]" style={{ backgroundColor: "#FFFDFC", borderColor: "#CCD3CF" }}>
+                    <AccordionTrigger className="p-4 flex gap-4 hover:no-underline [&>svg]:hidden w-full">
+                      <div className="pt-0.5 shrink-0"><StatusIcon status="generated" /></div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold tracking-wider" style={{ color: "#747575", letterSpacing: "0.04em" }}>PHASE {phaseNum}</span>
+                          <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180 text-[#747575]" />
+                        </div>
+                        <h3 className="text-sm font-medium truncate leading-snug" style={{ color: "#000000", fontSize: 14 }}>{slice.title}</h3>
+                      </div>
                     </AccordionTrigger>
-                    <AccordionContent className="p-5 bg-zinc-50/50">
-                      <p className="text-xs">{slice.description}</p>
+                    <AccordionContent className="border-t pt-0 p-5" style={{ borderColor: "#CCD3CF", backgroundColor: "rgba(255,253,252,0.6)" }}>
+                      <p className="text-xs text-[#000000]">{slice.description}</p>
                     </AccordionContent>
                   </AccordionItem>
                 );
@@ -536,29 +787,10 @@ const PlanPage = () => {
           )}
 
           <div ref={bottomRef} />
-        </div>
-
-        {isCompleted && planItems.length > 0 && (
-          <div className="mt-12 flex justify-end">
-            <Button
-              onClick={async () => {
-                const firstItem = planItems[0];
-                try {
-                  await TaskSplittingService.submitTaskSplitting({ plan_item_id: firstItem.id });
-                } catch (error) {
-                  console.error("Failed to start implementation, but redirecting anyway");
-                } finally {
-                  // Always redirect regardless of API call success/failure
-                  router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
-                }
-              }}
-              className="bg-accent-color hover:bg-[#006B66] text-primary-color px-6 py-2 rounded-lg font-medium text-sm flex items-center gap-2"
-            >
-              <Rocket className="w-4 h-4" /> Start Implementation
-            </Button>
+            </div>
           </div>
-        )}
-      </main>
+        </aside>
+      </div>
     </div>
   );
 };

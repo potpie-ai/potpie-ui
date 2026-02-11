@@ -93,7 +93,7 @@ const LinkGithub = () => {
         )
         .then((res: { data: any }) => {
           openPopup();
-          router.push(`/idea`);
+          router.push(`/newchat`);
           return res.data;
         })
         .catch((e: any) => {

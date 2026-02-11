@@ -17,7 +17,10 @@ interface QuestionCardProps {
   onHover: () => void;
   onHoverLeave: () => void;
   onAnswerChange: (answer: Partial<QuestionAnswer>) => void;
+  onSave?: () => void;
+  onCancel?: () => void;
   onToggleOptions?: () => void;
+  onToggleSkip?: () => void;
 }
 
 /** Normalize options to MCQOption[] */
@@ -39,7 +42,10 @@ export default function QuestionCard({
   onHover,
   onHoverLeave,
   onAnswerChange,
+  onSave: _onSave,
+  onCancel: _onCancel,
   onToggleOptions,
+  onToggleSkip: _onToggleSkip,
 }: QuestionCardProps) {
   const options = getOptions(question);
   const isMultipleChoice = question.multipleChoice ?? false;
@@ -48,6 +54,7 @@ export default function QuestionCard({
   const isOther = answer?.isOther ?? false;
   const otherText = answer?.otherText ?? "";
   const hasAnswer =
+    (answer?.textAnswer != null && answer.textAnswer.trim() !== "" && !answer.isOther) || // free-text answer (no options)
     (isOther && otherText.trim()) ||
     (isMultipleChoice
       ? selectedIndices.length > 0 && selectedIndices.some(idx => idx >= 0 && idx < options.length)
@@ -136,6 +143,21 @@ export default function QuestionCard({
     });
   };
 
+  const handleFreeTextChange = (value: string) => {
+    if (isSkipped) return;
+    onAnswerChange({
+      textAnswer: value.trim() || undefined,
+      isOther: false,
+      selectedOptionIdx: undefined,
+      selectedOptionIndices: undefined,
+      otherText: undefined,
+      isUserModified: true,
+    });
+  };
+
+  const isFreeTextOnly = options.length === 0;
+  const freeTextValue = isFreeTextOnly ? (answer?.textAnswer ?? "") : "";
+
   return (
     <div
       className={cardClasses}
@@ -176,6 +198,19 @@ export default function QuestionCard({
             )}
           </div>
         </div>
+
+        {/* Free-text input when question has no options (input-needed / open-ended) */}
+        {isFreeTextOnly && (
+          <div className="pt-1">
+            <Input
+              value={freeTextValue}
+              onChange={(e) => handleFreeTextChange(e.target.value)}
+              placeholder="Enter your answer..."
+              className="min-h-[40px] text-sm border-zinc-200 focus:border-primary rounded-lg"
+              disabled={isSkipped}
+            />
+          </div>
+        )}
 
         {/* Options - radio or checkbox selection */}
         {options.length > 0 && (

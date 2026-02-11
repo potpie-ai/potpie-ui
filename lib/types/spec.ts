@@ -97,19 +97,43 @@ export interface CreateRecipeCodegenRequest {
   user_prompt: string;
   project_id: string;
   additional_links?: string[];
+  /** Attachment IDs from media upload (e.g. newchat page document/image) */
+  attachment_ids?: string[];
 }
 
+/** Response from POST /api/v1/recipes/ - recipe object contains id */
 export interface CreateRecipeCodegenResponse {
-  recipe_id: string;
-  project_id: string;
-  status: string;
-  message: string;
+  recipe: {
+    id: string;
+    project_id: string;
+    user_prompt: string;
+    additional_links: string[];
+    status: string;
+    created_by: string;
+    current_question_task_id: string | null;
+    current_spec_task_id: string | null;
+    current_plan_task_id: string | null;
+  };
 }
 
-/** Option format for new API (label + description) */
+/** Request for POST /api/v1/recipes/{recipe_id}/questions/generate */
+export interface TriggerQuestionGenerationRequest {
+  user_prompt: string;
+  additional_links?: string[];
+}
+
+/** Response from POST /api/v1/recipes/{recipe_id}/questions/generate */
+export interface TriggerQuestionGenerationResponse {
+  recipe_id: string;
+  status: string;
+  created_at: string;
+}
+
+/** Option format for new API (label + description + optional effort_estimate) */
 export interface QuestionOption {
   label: string;
   description?: string;
+  effort_estimate?: string | null;
 }
 
 /** AI recommendation with index and reasoning */
@@ -120,16 +144,20 @@ export interface AnswerRecommendation {
 
 /** Context reference for display */
 export interface ContextReference {
+  source?: string;
+  reference?: string;
+  description?: string;
+  line_range?: string;
   path?: string;
   type?: string;
   [key: string]: unknown;
 }
 
-/** New API question format */
+/** New API question format from GET /api/v1/recipes/{recipe_id}/questions */
 export interface RecipeQuestionNew {
   id?: string;
   question: string;
-  criticality?: "important" | "optional" | string;
+  criticality?: "BLOCKER" | "IMPORTANT" | "NICE_TO_HAVE" | string;
   multiple_choice?: boolean;
   options?: QuestionOption[] | null;
   expected_answer_type?: string;
@@ -151,70 +179,130 @@ export interface RecipeQuestion {
 /** Union type - API may return either format */
 export type RecipeQuestionUnion = RecipeQuestion | (RecipeQuestionNew & { id: string });
 
+/** Response from GET /api/v1/recipes/{recipe_id}/questions */
 export interface RecipeQuestionsResponse {
   recipe_id: string;
-  recipe_status:
-    | "PENDING_QUESTIONS"
-    | "QUESTIONS_READY"
-    | "SPEC_IN_PROGRESS"
-    | "IN_PROGRESS"
-    | "ERROR";
+  generation_status: "pending" | "processing" | "completed" | "failed";
   questions: RecipeQuestionUnion[];
+  generated_at: string | null;
+  error_message: string | null;
 }
 
-export interface SubmitSpecGenerationRequest {
-  recipe_id: string;
-  qa_answers: Array<{
-    question_id: string;
-    answer: string;
-  }>;
+/** Request for POST /api/v1/recipes/{recipe_id}/answers */
+export interface SubmitRecipeAnswersRequest {
+  answers: Record<string, string>;
 }
 
-export interface SubmitSpecGenerationResponse {
-  recipe_id: string;
-  spec_id: string;
-  status: "SUBMITTED";
+/** Response from POST /api/v1/recipes/{recipe_id}/answers */
+export interface SubmitRecipeAnswersResponse {
   message: string;
+  recipe_id: string;
+  new_status: string;
 }
 
+/** Response from POST /api/v1/recipes/{recipe_id}/spec/generate */
+export interface TriggerSpecGenerationResponse {
+  recipe_id: string;
+  status: string;
+  created_at: string;
+}
+
+/** Response from GET /api/v1/recipes/{recipe_id}/spec */
 export interface SpecStatusResponse {
   recipe_id: string;
-  spec_id: string;
-  spec_gen_status: "IN_PROGRESS" | "COMPLETED" | "FAILED";
-  step_index: number;
-  progress_percent: number;
-  step_statuses: Record<
-    string,
-    {
-      status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
-      message: string;
-    }
-  >;
-  spec_output: SpecOutput | null;
+  generation_status: "pending" | "processing" | "completed" | "failed" | "not_started";
+  specification: SpecificationOutput | null;
+  generated_at: string | null;
+  error_message: string | null;
 }
 
-// Plan generation types
-export interface PlanGenerationRequest {
-  spec_id?: string;
-  recipe_id?: string;
+/** Context structure within specification */
+export interface SpecificationContext {
+  original_request?: string;
+  janus_analysis?: string;
+  qa_answers?: string;
+  research_findings?: string;
+  [key: string]: any;
 }
 
-export interface PlanSubmitResponse {
-  plan_id: string;
-  status: "SUBMITTED" | "ERROR";
-  message: string;
+/** Specification output structure from the API */
+export interface SpecificationOutput {
+  tl_dr?: string;
+  context?: SpecificationContext | any;
+  success_metrics?: string[];
+  functional_requirements?: any[];
+  non_functional_requirements?: any[];
+  architectural_decisions?: any[];
+  data_models?: any[];
+  interfaces?: any[];
+  external_dependencies_summary?: any[];
+  [key: string]: any;
 }
 
-export interface PlanStatusResponse {
-  plan_id: string;
-  spec_id: string;
+/** @deprecated Use SubmitRecipeAnswersRequest + TriggerSpecGenerationResponse */
+export interface SubmitSpecGenerationRequest {
   recipe_id: string;
-  plan_gen_status: "SUBMITTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
-  current_step: number;
-  progress_percent: number | null;
-  total_items: number | null;
-  items_completed: number | null;
-  status_message: string;
+  qa_answers: Array<{ question_id: string; answer: string }>;
+}
+
+/** @deprecated Use TriggerSpecGenerationResponse */
+export interface SubmitSpecGenerationResponse {
+  recipe_id: string;
+  status: string;
+}
+
+// Plan generation types - new API uses recipe_id only
+export interface PlanGenerationRequest {
+  recipe_id: string;
+}
+
+/** Response from POST /api/v1/recipes/{recipe_id}/plan/generate */
+export interface PlanSubmitResponse {
+  recipe_id: string;
+  status: string;
+  created_at: string;
+}
+
+/** New API plan item structure */
+export interface PhasedPlanItem {
+  plan_item_id: string;
+  order: number;
+  title: string;
+  description: string;
+  estimated_effort: string;
+  dependencies: string[];
+  status: string;
+  created_at: string;
+}
+
+/** New API phase structure */
+export interface PlanPhase {
+  phase_id: string;
+  name: string;
+  description: string;
+  summary: string;
+  plan_items: PhasedPlanItem[];
+  dependencies: string[];
+  is_final: boolean;
+  iteration: number;
+}
+
+/** New API plan structure */
+export interface PhasedPlan {
+  phases: PlanPhase[];
+  current_phase_index: number;
+  validation_history: any[];
+  is_complete: boolean;
+  summary: string;
+  estimated_total_effort: string;
+}
+
+/** Response from GET /api/v1/recipes/{recipe_id}/plan */
+export interface PlanStatusResponse {
+  recipe_id: string;
+  generation_status: "pending" | "processing" | "completed" | "failed" | "not_started";
+  plan: PhasedPlan | null;
+  generated_at: string | null;
   error_message: string | null;
 }
 
@@ -223,6 +311,7 @@ export interface FileReference {
   type: "create" | "modify" | "delete";
 }
 
+/** @deprecated Legacy plan item. New API uses PhasedPlanItem; use for UI display mapping. */
 export interface PlanItem {
   id: string;
   item_number: number;
@@ -238,6 +327,7 @@ export interface PlanItem {
   architecture: string;
 }
 
+/** @deprecated Plan items are now in plan.phases from PlanStatusResponse */
 export interface PlanItemsResponse {
   plan_id: string;
   plan_items: PlanItem[];
@@ -312,8 +402,8 @@ export interface RecipeDetailsResponse {
   recipe_id: string;
   project_id: string;
   user_prompt: string;
-  repo_name: string | null;
-  branch_name: string | null;
+  repo_name?: string | null;
+  branch_name?: string | null;
   questions_and_answers: QuestionAnswerPair[];
 }
 

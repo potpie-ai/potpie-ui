@@ -108,7 +108,7 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
         }
         // Use setTimeout to defer navigation and avoid React hooks issues
         setTimeout(() => {
-          router.push('/idea');
+          router.push('/newchat');
         }, 0);
       }
     } else if (response.status === 'needs_linking') {
@@ -304,7 +304,7 @@ function DirectSSOButtonsContent({ onNeedsLinking, onSuccess, onNewUser, isSignU
             if (onSuccess) {
               onSuccess();
             } else {
-              router.push('/idea');
+              router.push('/newchat');
             }
           }}
         />

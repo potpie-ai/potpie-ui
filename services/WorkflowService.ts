@@ -1,6 +1,7 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { parseApiError } from "@/lib/utils";
+import { ProFeatureError } from "@/lib/hooks/useProFeatureError";
 
 // Helper function to convert camelCase fields to snake_case and prioritize snake_case
 const normalizeWorkflowData = (data: any): any => {
@@ -228,6 +229,17 @@ export default class WorkflowService {
       return response.data.available_triggers;
     } catch (error: any) {
       console.error("Error fetching triggers:", error);
+      
+      // Check for 404/500 status errors (backend exists but endpoint not available)
+      if (error?.response?.status === 404 || error?.response?.status === 500) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
+      // Check for network errors (CORS, connection refused, etc.) - backend not accessible
+      if (!error.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
       const errorMessage = parseApiError(error);
 
       // toast.error("Failed to fetch triggers", {
@@ -248,6 +260,17 @@ export default class WorkflowService {
       return response.data.workflows;
     } catch (error: any) {
       console.error("Error fetching workflows:", error);
+      
+      // Check for 404/500 status errors (backend exists but endpoint not available)
+      if (error?.response?.status === 404 || error?.response?.status === 500) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
+      // Check for network errors (CORS, connection refused, etc.) - backend not accessible
+      if (!error.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
       const errorMessage = parseApiError(error);
 
       // toast.error("Failed to fetch workflows", {
@@ -301,6 +324,17 @@ export default class WorkflowService {
       return normalizedWorkflow;
     } catch (error: any) {
       console.error("Error fetching workflow:", error);
+      
+      // Check for 404/500 status errors (backend exists but endpoint not available)
+      if (error?.response?.status === 404 || error?.response?.status === 500) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
+      // Check for network errors (CORS, connection refused, etc.) - backend not accessible
+      if (!error.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
       const errorMessage = parseApiError(error);
 
       // toast.error("Failed to fetch workflow", {
@@ -348,6 +382,17 @@ export default class WorkflowService {
       return response.data;
     } catch (error: any) {
       console.error("Error creating workflow:", error);
+      
+      // Check for 404/500 status errors (backend exists but endpoint not available)
+      if (error?.response?.status === 404 || error?.response?.status === 500) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
+      // Check for network errors (CORS, connection refused, etc.) - backend not accessible
+      if (!error.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
       const errorMessage = parseApiError(error);
 
       // Don't show toast here - let the calling component handle error display
@@ -389,6 +434,17 @@ export default class WorkflowService {
       return response.data;
     } catch (error: any) {
       console.error("Error updating workflow:", error);
+      
+      // Check for 404/500 status errors (backend exists but endpoint not available)
+      if (error?.response?.status === 404 || error?.response?.status === 500) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
+      // Check for network errors (CORS, connection refused, etc.) - backend not accessible
+      if (!error.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
+        throw new ProFeatureError("Workflows feature is not available");
+      }
+      
       const errorMessage = parseApiError(error);
 
       // Don't show toast here - let the calling component handle error display

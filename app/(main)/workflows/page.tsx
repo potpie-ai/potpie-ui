@@ -40,6 +40,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
+import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
+import { ProFeatureError } from "@/lib/hooks/useProFeatureError";
+import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 
 interface Agent {
   id: string;
@@ -166,42 +171,84 @@ const templates = [
 ];
 
 const Workflows = () => {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [openAccordionId, setOpenAccordionId] = useState<string | null>(null);
+  const [backendAccessible, setBackendAccessible] = useState<boolean | null>(null);
+  const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
+
+  // Check backend accessibility on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const accessible = await isWorkflowsBackendAccessible();
+      setBackendAccessible(accessible);
+      if (!accessible) {
+        // Backend not accessible, show modal immediately
+        setIsModalOpen(true);
+      }
+    };
+    checkBackend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  const handleModalCancel = () => {
+    // Redirect away from workflows if backend is not accessible
+    if (backendAccessible === false) {
+      router.push("/");
+    }
+  };
 
   async function fetchData() {
+    // Check if backend is accessible before fetching
+    const accessible = await isWorkflowsBackendAccessible();
+    if (!accessible) {
+      // Backend not accessible, don't fetch data
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
-    const workflows = await WorkflowService.getWorkflowsList();
+    try {
+      const workflows = await WorkflowService.getWorkflowsList();
 
-    // Skip validation flow - set all workflows as valid by default
-    const workflowsWithValidation = workflows.map((workflow) => ({
-      ...workflow,
-      validation: {
-        is_valid: true, // Skip validation - assume all workflows are valid
-        errors: [],
-        warnings: [],
-      },
-    }));
+      // Skip validation flow - set all workflows as valid by default
+      const workflowsWithValidation = workflows.map((workflow) => ({
+        ...workflow,
+        validation: {
+          is_valid: true, // Skip validation - assume all workflows are valid
+          errors: [],
+          warnings: [],
+        },
+      }));
 
-    setWorkflows(
-      workflowsWithValidation.sort(
-        (a: any, b: any) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-    );
+      setWorkflows(
+        workflowsWithValidation.sort(
+          (a: any, b: any) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+      );
 
-    // Fetch custom agents using getAgentList
-    const customAgents = await AgentService.getAgentList();
-    setAvailableAgents(
-      customAgents.map((agent: any) => ({ id: agent.id, name: agent.name }))
-    );
-    const _triggers = await WorkflowService.getAllTriggers();
-    setTriggers(_triggers);
-    setLoading(false);
+      // Fetch custom agents using getAgentList
+      const customAgents = await AgentService.getAgentList();
+      setAvailableAgents(
+        customAgents.map((agent: any) => ({ id: agent.id, name: agent.name }))
+      );
+      const _triggers = await WorkflowService.getAllTriggers();
+      setTriggers(_triggers);
+    } catch (error) {
+      if (handleError(error)) {
+        // Pro feature error was handled, modal is shown
+        return;
+      }
+      // Other errors - could show toast or handle differently
+      console.error("Error fetching workflows data:", error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -210,26 +257,34 @@ const Workflows = () => {
 
   const handleDeleteWorkflow = (workflow: Workflow) => {
     if (confirm("Are you sure you want to delete this workflow?")) {
-      WorkflowService.deleteWorkflow(workflow.id).then(() => {
-        setWorkflows((prevWorkflows) =>
-          prevWorkflows.filter((w) => w.id !== workflow.id)
-        );
-      });
+      WorkflowService.deleteWorkflow(workflow.id)
+        .then(() => {
+          setWorkflows((prevWorkflows) =>
+            prevWorkflows.filter((w) => w.id !== workflow.id)
+          );
+        })
+        .catch((error) => {
+          handleError(error);
+        });
     }
   };
 
   const handlePause = async (workflow: Workflow, index: number) => {
-    if (workflow.is_paused) {
-      await WorkflowService.resumeWorkflow(workflow.id);
-    } else {
-      await WorkflowService.pauseWorkflow(workflow.id);
+    try {
+      if (workflow.is_paused) {
+        await WorkflowService.resumeWorkflow(workflow.id);
+      } else {
+        await WorkflowService.pauseWorkflow(workflow.id);
+      }
+
+      const updatedWorkflows = workflows.map((w, i) =>
+        i === index ? { ...w, is_paused: !w.is_paused } : w
+      );
+
+      setWorkflows(updatedWorkflows);
+    } catch (error) {
+      handleError(error);
     }
-
-    const updatedWorkflows = workflows.map((w, i) =>
-      i === index ? { ...w, is_paused: !w.is_paused } : w
-    );
-
-    setWorkflows(updatedWorkflows);
   };
 
   const [openTemplateModal, setOpenTemplateModal] = useState(false);
@@ -747,6 +802,11 @@ const Workflows = () => {
           </Card>
         )}
       </div>
+      <ProFeatureModal 
+        open={isModalOpen} 
+        onOpenChange={setIsModalOpen}
+        onCancel={handleModalCancel}
+      />
     </div>
   );
 };

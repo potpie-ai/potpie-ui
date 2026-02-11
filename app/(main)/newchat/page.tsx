@@ -20,6 +20,8 @@ import MediaService from "@/services/MediaService";
 import { setPendingMessage, setChat } from "@/lib/state/Reducers/chat";
 import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
 import { ParsingStatusEnum } from "@/lib/Constants";
+import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
+import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
 
 interface Repo {
   id: string;
@@ -70,6 +72,7 @@ export default function NewChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useAuthContext();
+  const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
 
   const [state, setState] = useState<NewChatPageState>({
     input: "",
@@ -332,6 +335,14 @@ export default function NewChatPage() {
     },
     onError: (error: any) => {
       console.error("Error creating recipe:", error);
+      
+      // Check if it's a pro feature error
+      if (handleError(error)) {
+        // Pro feature error was handled, modal is shown
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+      
       toast.error(error.message || "Failed to create recipe");
       setState((prev) => ({ ...prev, loading: false }));
     },
@@ -939,6 +950,7 @@ export default function NewChatPage() {
           </div>
         </div>
       </div>
+      <ProFeatureModal open={isModalOpen} onOpenChange={setIsModalOpen} />
     </div>
   );
 }

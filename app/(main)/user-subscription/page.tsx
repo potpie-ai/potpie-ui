@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthContext } from "@/contexts/AuthContext";
 import MinorService from "@/services/minorService";
 import axios from 'axios';
+import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
 
 const PricingPage = () => {
   const { user } = useAuthContext();
@@ -68,6 +69,7 @@ const PricingPage = () => {
     isActive: false,
     isCancelled: false
   });
+  const [showProModal, setShowProModal] = useState(false);
 
   useEffect(() => {
     const fetchSubscriptionDetails = async () => {
@@ -204,7 +206,7 @@ const PricingPage = () => {
             </div>
             {!subscription.isCancelled && subscription.plan !== 'Individual - Free' && (
               <button
-                onClick={handleCancelSubscription}
+                onClick={() => setShowProModal(true)}
                 className="bg-background text-red-600 border border-red-600 px-4 py-2 rounded hover:bg-red-50"
               >
                 Cancel Subscription
@@ -240,8 +242,8 @@ const PricingPage = () => {
                 onClick={(e) => {
                   e.preventDefault();
                   const buttonText = getButtonText(plan.name);
-                  if (buttonText === 'Upgrade') {
-                    handleCheckoutRedirect(getPlanType(plan.name));
+                  if (buttonText === 'Upgrade' || buttonText === 'Contact Us') {
+                    setShowProModal(true);
                   }
                 }}
                 className={`${
@@ -280,6 +282,10 @@ const PricingPage = () => {
           ))}
         </div>
       </div>
+      <ProFeatureModal 
+        open={showProModal} 
+        onOpenChange={setShowProModal}
+      />
     </div>
   );
 };

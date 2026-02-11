@@ -51,9 +51,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ProFeatureModal } from "./ProFeatureModal";
+import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 
 export function AppSidebar() {
   const [supportPopoverOpen, setSupportPopoverOpen] = useState(false);
+  const [proModalOpen, setProModalOpen] = useState(false);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
+  const [isBackendAccessible, setIsBackendAccessible] = useState<boolean | null>(null);
   const supportPopoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -62,6 +67,16 @@ export function AppSidebar() {
   const pathname = usePathname().split("/").pop();
   const dispatch: AppDispatch = useDispatch();
   const { toggleSidebar, open } = useSidebar();
+  const router = useRouter();
+
+  // Check backend accessibility on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const accessible = await isWorkflowsBackendAccessible();
+      setIsBackendAccessible(accessible);
+    };
+    checkBackend();
+  }, []);
 
   const userId = user?.uid;
   const { total_human_messages } = useSelector(
@@ -189,26 +204,71 @@ export function AppSidebar() {
             <SidebarMenu>
               {SidebarItems[0].links.map((link) => {
                 const isActive = pathname === link.href.split("/").pop();
+                // Check if this is the workflows link
+                const isWorkflowsLink = link.href === "/workflows";
+                
+                const handleClick = async (e: React.MouseEvent) => {
+                  if (link.showProModal) {
+                    e.preventDefault();
+                    setProModalOpen(true);
+                  } else if (isWorkflowsLink) {
+                    e.preventDefault();
+                    
+                    // Check backend accessibility before navigating
+                    if (isCheckingBackend) {
+                      return; // Already checking, prevent double clicks
+                    }
+                    
+                    setIsCheckingBackend(true);
+                    const accessible = await isWorkflowsBackendAccessible();
+                    setIsCheckingBackend(false);
+                    
+                    if (accessible) {
+                      // Backend is accessible, allow navigation
+                      router.push(link.href);
+                    } else {
+                      // Backend not accessible, show pro feature modal
+                      setProModalOpen(true);
+                    }
+                  } else if (link.handleTrack) {
+                    handleTrack();
+                  }
+                };
                 return (
                   <SidebarMenuItem key={link.title}>
                     <SidebarMenuButton
-                      asChild
+                      asChild={!link.showProModal && !isWorkflowsLink}
                       isActive={isActive}
-                      disabled={link.disabled}
-                      onClick={link.handleTrack ? handleTrack : undefined}
+                      disabled={link.disabled || (isWorkflowsLink && isCheckingBackend)}
+                      onClick={link.showProModal || isWorkflowsLink ? handleClick : link.handleTrack ? handleTrack : undefined}
                     >
-                      <Link
-                        href={link.href}
-                        className="flex gap-2 items-center w-full"
-                      >
-                        {link.icons && <span>{link.icons}</span>}
-                        <span>{link.title}</span>
-                        {link.description && (
-                          <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto">
-                            {link.description}
-                          </span>
-                        )}
-                      </Link>
+                      {link.showProModal || isWorkflowsLink ? (
+                        <button
+                          className="flex gap-2 items-center w-full"
+                          onClick={handleClick}
+                        >
+                          {link.icons && <span>{link.icons}</span>}
+                          <span>{link.title}</span>
+                          {link.description && (
+                            <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto">
+                              {link.description}
+                            </span>
+                          )}
+                        </button>
+                      ) : (
+                        <Link
+                          href={link.href}
+                          className="flex gap-2 items-center w-full"
+                        >
+                          {link.icons && <span>{link.icons}</span>}
+                          <span>{link.title}</span>
+                          {link.description && (
+                            <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto">
+                              {link.description}
+                            </span>
+                          )}
+                        </Link>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -319,6 +379,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <ProFeatureModal open={proModalOpen} onOpenChange={setProModalOpen} />
       <SidebarFooter className="flex flex-col gap-0">
         <SidebarSeparator className="my-0" />
         <div className="pt-2">

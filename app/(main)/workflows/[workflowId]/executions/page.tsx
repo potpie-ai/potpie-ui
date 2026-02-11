@@ -23,6 +23,9 @@ import { Separator } from "@/components/ui/separator";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { formatLocalTime, formatRelativeTime } from "@/lib/utils";
+import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
+import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
+import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 
 dayjs.extend(relativeTime);
 
@@ -34,9 +37,40 @@ export default function WorkflowExecutionsPage() {
   const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [backendAccessible, setBackendAccessible] = useState<boolean | null>(null);
+  const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
+
+  // Check backend accessibility on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const accessible = await isWorkflowsBackendAccessible();
+      setBackendAccessible(accessible);
+      if (!accessible) {
+        // Backend not accessible, show modal immediately
+        setIsModalOpen(true);
+      }
+    };
+    checkBackend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  const handleModalCancel = () => {
+    // Redirect away from workflows if backend is not accessible
+    if (backendAccessible === false) {
+      router.push("/");
+    }
+  };
 
   useEffect(() => {
     async function fetchData() {
+      // Check if backend is accessible before fetching
+      const accessible = await isWorkflowsBackendAccessible();
+      if (!accessible) {
+        // Backend not accessible, don't fetch
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         // Fetch workflow details
@@ -56,6 +90,10 @@ export default function WorkflowExecutionsPage() {
         setExecutions(_executions);
       } catch (error) {
         console.error("Error fetching data:", error);
+        if (handleError(error)) {
+          // Pro feature error was handled, modal is shown
+          return;
+        }
         toast.error("Error loading workflow executions. Please try again.");
       } finally {
         setLoading(false);
@@ -77,6 +115,10 @@ export default function WorkflowExecutionsPage() {
       toast.success("Executions refreshed successfully");
     } catch (error) {
       console.error("Error refreshing executions:", error);
+      if (handleError(error)) {
+        // Pro feature error was handled, modal is shown
+        return;
+      }
       toast.error("Error refreshing executions. Please try again.");
     } finally {
       setRefreshing(false);
@@ -143,14 +185,21 @@ export default function WorkflowExecutionsPage() {
 
   if (!workflow) {
     return (
-      <div className="flex w-full h-svh items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Workflow not found</h2>
-          <p className="text-gray-600">
-            {`The workflow you're looking for doesn't exist.`}
-          </p>
+      <>
+        <div className="flex w-full h-svh items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold mb-2">Workflow not found</h2>
+            <p className="text-gray-600">
+              {`The workflow you're looking for doesn't exist.`}
+            </p>
+          </div>
         </div>
-      </div>
+        <ProFeatureModal 
+          open={isModalOpen} 
+          onOpenChange={setIsModalOpen}
+          onCancel={handleModalCancel}
+        />
+      </>
     );
   }
 
@@ -352,6 +401,11 @@ export default function WorkflowExecutionsPage() {
           )}
         </CardContent>
       </Card>
+      <ProFeatureModal 
+        open={isModalOpen} 
+        onOpenChange={setIsModalOpen}
+        onCancel={handleModalCancel}
+      />
     </div>
   );
 }

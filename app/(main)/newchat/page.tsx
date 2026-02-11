@@ -278,7 +278,10 @@ export default function NewChatPage() {
       SpecService.triggerQuestionGeneration(recipeId, {
         user_prompt: data.userPrompt,
         additional_links: data.additionalLinks,
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error("[newchat] triggerQuestionGeneration failed", { recipeId, userPrompt: data.userPrompt, error: err });
+        toast.error("Question generation could not be started. You can continue to the repo page; questions may load later.");
+      });
       return recipeResponse;
     },
     onSuccess: (data: CreateRecipeCodegenResponse) => {

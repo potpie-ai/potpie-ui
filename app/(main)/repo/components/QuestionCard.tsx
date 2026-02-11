@@ -14,6 +14,8 @@ interface QuestionCardProps {
   isExpanded: boolean;
   isSkipped: boolean;
   isUnanswered?: boolean;
+  /** Root element id for scroll-into-view (e.g. `question-${question.id}`). */
+  id?: string;
   onHover: () => void;
   onHoverLeave: () => void;
   onAnswerChange: (answer: Partial<QuestionAnswer>) => void;
@@ -39,6 +41,7 @@ export default function QuestionCard({
   isExpanded,
   isSkipped,
   isUnanswered = false,
+  id: idProp,
   onHover,
   onHoverLeave,
   onAnswerChange,
@@ -160,6 +163,7 @@ export default function QuestionCard({
 
   return (
     <div
+      id={idProp}
       className={cardClasses}
       onMouseEnter={onHover}
       onMouseLeave={onHoverLeave}

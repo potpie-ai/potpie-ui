@@ -29,6 +29,26 @@ import type {
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { ParsingStatusEnum } from "@/lib/Constants";
 
+/** Sort section keys by DEFAULT_SECTION_ORDER, then alphabetically. */
+function getSortedSections(sectionKeys: Iterable<string>): string[] {
+  return Array.from(sectionKeys).sort((a, b) => {
+    const aIndex = DEFAULT_SECTION_ORDER.findIndex(
+      (s) =>
+        a.toLowerCase().includes(s.toLowerCase()) ||
+        s.toLowerCase().includes(a.toLowerCase())
+    );
+    const bIndex = DEFAULT_SECTION_ORDER.findIndex(
+      (s) =>
+        b.toLowerCase().includes(s.toLowerCase()) ||
+        s.toLowerCase().includes(b.toLowerCase())
+    );
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
 const Badge = ({
   children,
   icon: Icon,
@@ -1030,22 +1050,7 @@ export default function RepoPage() {
   }, [recipeId, repoName, branchName, projectId]);
 
   // Figma: flat list for right sidebar
-  const sortedSections = Array.from(state.sections.keys()).sort((a, b) => {
-    const aIndex = DEFAULT_SECTION_ORDER.findIndex(
-      (s) =>
-        a.toLowerCase().includes(s.toLowerCase()) ||
-        s.toLowerCase().includes(a.toLowerCase())
-    );
-    const bIndex = DEFAULT_SECTION_ORDER.findIndex(
-      (s) =>
-        b.toLowerCase().includes(s.toLowerCase()) ||
-        s.toLowerCase().includes(b.toLowerCase())
-    );
-    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-    if (aIndex !== -1) return -1;
-    if (bIndex !== -1) return 1;
-    return a.localeCompare(b);
-  });
+  const sortedSections = getSortedSections(state.sections.keys());
   const questionsInOrder = sortedSections.flatMap(
     (s) => state.sections.get(s) || []
   ).filter((q) => state.visibleQuestions.has(q.id));
@@ -1097,23 +1102,6 @@ export default function RepoPage() {
             )}
             {state.pageState === "questions" &&
               (() => {
-                const allSections = Array.from(state.sections.keys());
-                const sortedSections = allSections.sort((a, b) => {
-                  const aIndex = DEFAULT_SECTION_ORDER.findIndex(
-                    (s) =>
-                      a.toLowerCase().includes(s.toLowerCase()) ||
-                      s.toLowerCase().includes(a.toLowerCase())
-                  );
-                  const bIndex = DEFAULT_SECTION_ORDER.findIndex(
-                    (s) =>
-                      b.toLowerCase().includes(s.toLowerCase()) ||
-                      s.toLowerCase().includes(b.toLowerCase())
-                  );
-                  if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-                  if (aIndex !== -1) return -1;
-                  if (bIndex !== -1) return 1;
-                  return a.localeCompare(b);
-                });
                 return sortedSections.map((section) => {
                   const sectionQuestions = state.sections.get(section) || [];
                   if (sectionQuestions.length === 0) return null;

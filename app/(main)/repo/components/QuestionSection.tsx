@@ -41,6 +41,7 @@ export default function QuestionSection({
       {questions.map((question) => (
         <QuestionCard
           key={question.id}
+          id={`question-${question.id}`}
           question={question}
           answer={answers.get(question.id)}
           isHovered={hoveredQuestion === question.id}

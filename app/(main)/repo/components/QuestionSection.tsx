@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import QuestionCard from "./QuestionCard";
 import type { MCQQuestion, QuestionAnswer } from "@/types/question";
 
@@ -38,7 +37,7 @@ export default function QuestionSection({
   if (questions.length === 0) return null;
 
   return (
-    <>
+    <div className="space-y-6">
       {questions.map((question) => (
         <QuestionCard
           key={question.id}
@@ -56,6 +55,6 @@ export default function QuestionSection({
           onToggleSkip={() => onToggleSkip(question.id)}
         />
       ))}
-    </>
+    </div>
   );
 }

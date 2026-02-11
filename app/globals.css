@@ -27,6 +27,7 @@
     --primary-color: #022D2C;
     --foreground-color: #022D2C;
     --muted-text: #656969;
+    --border-light: #E5E8E6;
     --tertiary: 180 30% 86%;
     --tertiary-foreground: 179 91% 9%;
     --border: 214 32% 91%;
@@ -61,6 +62,7 @@
     --primary-color: #022D2C;
     --foreground-color: #022D2C;
     --muted-text: #656969;
+    --border-light: #E5E8E6;
     --tertiary: 180 30% 30%;
     --tertiary-foreground: 23 100% 98%;
     --bg-muted: 0 63% 31%;

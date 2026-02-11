@@ -6,9 +6,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <>
+    <div className="h-screen flex flex-col overflow-hidden">
       <Navbar showShare={false} />
-      {children}
-    </>
+      <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
+    </div>
   );
 }

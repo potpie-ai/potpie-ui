@@ -19,6 +19,13 @@ const FIGMA = {
   modelDropdownText: "#00291C",
 } as const;
 
+const UPGRADE_DROPDOWN_PLACEHOLDER_MODELS = [
+  "GPT-5.2",
+  "Claude Sonnet 4.5",
+  "DeepSeek V3",
+  "Gemini 2.0 Flash",
+];
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal } from "lucide-react";
@@ -31,12 +38,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useAuthContext } from "@/contexts/AuthContext";
 import MinorService from "@/services/minorService";
 import ModelService from "@/services/ModelService";
@@ -599,55 +600,78 @@ export default function IdeaInputCard({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <TooltipProvider>
-              {isFreeUser ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
+            {isFreeUser ? (
+              <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full border"
+                    style={{
+                      backgroundColor: FIGMA.claudeDropdownBg,
+                      borderColor: FIGMA.inputBorder,
+                      color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
+                      opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
+                    }}
+                    aria-label="Upgrade to change plan"
+                  >
+                    <Lock className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
+                    <span className="shrink-0">{displayModelName}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="min-w-[200px] w-[200px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+                >
+                  <div className="py-1 max-h-[240px] overflow-y-auto">
+                    {UPGRADE_DROPDOWN_PLACEHOLDER_MODELS.map((name) => (
+                      <div
+                        key={name}
+                        className="px-4 py-2.5 text-sm text-zinc-400 cursor-default select-none"
+                      >
+                        {name}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="p-3 border-t border-zinc-100">
                     <button
                       type="button"
-                      onClick={() => router.push("/user-subscription")}
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity"
-                      style={{
-                        backgroundColor: FIGMA.claudeDropdownBg,
-                        border: `1px solid ${FIGMA.inputBorder}`,
-                        borderRadius: FIGMA.inputRadius,
-                        color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
-                        opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
+                      onClick={() => {
+                        setModelDropdownOpen(false);
+                        router.push("/user-subscription");
                       }}
-                      aria-label="Upgrade to change model"
+                      className="w-full py-2.5 px-4 text-sm font-semibold rounded-lg transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
                     >
-                      <span className="flex h-6 w-6 items-center justify-center shrink-0 -ml-0.5" aria-hidden>
-                        <Lock className="h-4 w-4" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.modelDropdownText }} />
-                      </span>
-                      <span className="shrink-0">{displayModelName}</span>
-                      <ChevronDown className="h-4 w-4 shrink-0 opacity-50" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.modelDropdownText }} aria-hidden />
+                      Upgrade to change plan
                     </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    Upgrade to change model
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
-                  <DropdownMenuTrigger asChild>
-                    <div
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none"
-                      style={{
-                        backgroundColor: FIGMA.claudeDropdownBg,
-                        border: `1px solid ${FIGMA.inputBorder}`,
-                        borderRadius: FIGMA.inputRadius,
-                        color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
-                        opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
-                      }}
-                    >
-                      <span className="flex h-6 w-6 items-center justify-center shrink-0 -ml-0.5" aria-hidden>
-                        <Lock className="h-4 w-4" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.modelDropdownText }} />
-                      </span>
-                      <span className="shrink-0">{displayModelName}</span>
-                      <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : FIGMA.modelDropdownText }} />
-                    </div>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[180px] max-h-[280px] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg" style={{ color: FIGMA.modelDropdownText }}>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full border"
+                    style={{
+                      backgroundColor: FIGMA.claudeDropdownBg,
+                      borderColor: FIGMA.inputBorder,
+                      color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
+                      opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
+                    }}
+                    aria-label="Change model"
+                  >
+                    <Lock className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
+                    <span className="shrink-0">{displayModelName}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="min-w-[200px] w-[200px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+                  style={{ color: FIGMA.modelDropdownText }}
+                >
+                  <div className="py-1 max-h-[240px] overflow-y-auto">
                     {modelList.map((model) => (
                       <DropdownMenuItem
                         key={model.id}
@@ -666,10 +690,10 @@ export default function IdeaInputCard({
                         {model.name}
                       </DropdownMenuItem>
                     ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </TooltipProvider>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <button
               type="button"
               onClick={() => {

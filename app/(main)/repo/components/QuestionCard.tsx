@@ -149,7 +149,7 @@ export default function QuestionCard({
   const handleFreeTextChange = (value: string) => {
     if (isSkipped) return;
     onAnswerChange({
-      textAnswer: value.trim() || undefined,
+      textAnswer: value,
       isOther: false,
       selectedOptionIdx: undefined,
       selectedOptionIndices: undefined,

@@ -7,6 +7,8 @@ import {
   Check,
   Loader2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FileCode,
   ShieldCheck,
   Database,
@@ -23,7 +25,6 @@ import {
   AlertCircle,
   Github,
   GitBranch,
-  Rocket,
   LucideIcon,
   FileText,
   Lightbulb,
@@ -37,7 +38,6 @@ import {
   SendHorizonal,
   RotateCw,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Accordion,
   AccordionContent,
@@ -47,7 +47,7 @@ import {
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
 import TaskSplittingService from "@/services/TaskSplittingService";
-import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
+import { PlanStatusResponse, PlanItem, PlanPhase } from "@/lib/types/spec";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -59,6 +59,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 /**
  * VERTICAL SLICE PLANNER (Auto-Generation Mode)
@@ -256,6 +257,7 @@ const PlanPage = () => {
   type ChatMessage = { role: "user" | "assistant"; content: string };
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [selectedPhaseIndex, setSelectedPhaseIndex] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasChatInitializedRef = useRef(false);
 
@@ -368,6 +370,13 @@ const PlanPage = () => {
     }
   }, [planStatus?.generation_status, planStatus?.plan]);
 
+  const phasesFromApi: PlanPhase[] = planStatus?.plan?.phases ?? [];
+  useEffect(() => {
+    if (phasesFromApi.length > 0 && selectedPhaseIndex >= phasesFromApi.length) {
+      setSelectedPhaseIndex(Math.max(0, phasesFromApi.length - 1));
+    }
+  }, [phasesFromApi.length, selectedPhaseIndex]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
@@ -433,22 +442,53 @@ const PlanPage = () => {
                 </div>
               </div>
             ))}
-            {/* Status cards: Spec Generation Completed, Plan Generation Completed */}
-            <div className="flex justify-start flex-col gap-2">
-              <div className="rounded-lg border border-[#CCD3CF] px-4 py-3 flex items-center gap-3 max-w-[85%]">
-                <Check className="w-5 h-5 shrink-0 text-[#022D2C]" />
-                <p className="text-sm font-bold text-[#022019]">Spec Generation Completed</p>
-              </div>
-              <div className="rounded-lg border border-[#CCD3CF] px-4 py-3 flex items-center gap-3 max-w-[85%]">
-                {planStatusCard.icon === "check" && <Check className="w-5 h-5 shrink-0 text-[#022D2C]" />}
-                {planStatusCard.icon === "spinner" && <Loader2 className="w-5 h-5 shrink-0 animate-spin text-[#696D6D]" />}
-                {planStatusCard.icon === "failed" && <AlertCircle className="w-5 h-5 shrink-0 text-red-600" />}
-                {planStatusCard.icon === "pending" && (
-                  <div className="w-5 h-5 shrink-0 rounded-full border-2 border-[#CCD3CF]" />
+            {/* Single status card: Spec + Plan generation (same dialog box) — align with agent message content (after icon) */}
+            <div className="flex justify-start flex-col gap-2 max-w-[85%] ml-[3.25rem]">
+              <div className="rounded-lg border border-[#CCD3CF] px-4 py-3 flex flex-col gap-1 bg-[#FAF8F7]">
+                <div className="flex items-center gap-3">
+                  <Check className="w-5 h-5 shrink-0 text-[#022D2C]" />
+                  <p className="text-sm font-bold text-[#022019]">Spec Generation Completed</p>
+                </div>
+                {planStatusCard.icon !== "check" && (
+                  <div className="flex items-center gap-3 pl-8">
+                    {planStatusCard.icon === "spinner" && <Loader2 className="w-4 h-4 shrink-0 animate-spin text-[#696D6D]" />}
+                    {planStatusCard.icon === "failed" && <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                    {planStatusCard.icon === "pending" && (
+                      <div className="w-4 h-4 shrink-0 rounded-full border-2 border-[#CCD3CF]" />
+                    )}
+                    <p className="text-xs font-medium text-[#696D6D]">{planStatusCard.title}</p>
+                  </div>
                 )}
-                <p className="text-sm font-bold text-[#022019]">{planStatusCard.title}</p>
               </div>
             </div>
+            {isCompleted && phasesFromApi.length > 0 && (
+              <div className="max-w-[85%] mt-2 ml-[3.25rem]">
+                <div className="rounded-lg border border-[#E5E7EB] bg-[#FAF8F7] p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="w-4 h-4 shrink-0 text-[#022D2C]" />
+                    <span className="text-sm font-bold text-[#022D2C]">Generated Plan</span>
+                  </div>
+                  <div className="flex flex-col">
+                    {phasesFromApi.map((phase, idx) => {
+                      const isSelected = selectedPhaseIndex === idx;
+                      return (
+                        <button
+                          key={phase.phase_id}
+                          type="button"
+                          onClick={() => setSelectedPhaseIndex(idx)}
+                          className={`flex items-center w-full px-4 py-3 text-left transition-colors first:rounded-t last:rounded-b ${isSelected ? "bg-[#F8F8F8] text-[#022D2C] font-semibold" : "bg-transparent text-[#374151] font-normal hover:bg-[#F8F8F8]/50"}`}
+                        >
+                          <span className="text-sm flex-1 min-w-0 text-left">
+                            PHASE {idx + 1} : {phase.name}
+                          </span>
+                          <ChevronRight className="w-4 h-4 shrink-0 text-[#6B7280]" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={chatEndRef} />
           </div>
 
@@ -503,7 +543,7 @@ const PlanPage = () => {
               <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
                 <div className="flex items-center gap-2">
                   <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0" style={{ color: "#022019" }}>
-                    Phase Plan
+                    {phasesFromApi.length > 0 ? `Plan ${selectedPhaseIndex + 1}` : "Phase Plan"}
                   </h2>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
@@ -529,31 +569,34 @@ const PlanPage = () => {
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                <button
-                  type="button"
-                  className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0"
-                  aria-label="Refresh"
-                >
-                  <RotateCw className="w-4 h-4" style={{ color: "#022019" }} />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+                    aria-label="Refresh"
+                  >
+                    <RotateCw className="w-4 h-4" style={{ color: "#022019" }} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhaseIndex((i) => Math.max(0, i - 1))}
+                    disabled={phasesFromApi.length === 0 || selectedPhaseIndex <= 0}
+                    className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                    aria-label="Previous phase"
+                  >
+                    <ChevronLeft className="w-4 h-4" style={{ color: "#022019" }} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhaseIndex((i) => Math.min((phasesFromApi.length || 1) - 1, i + 1))}
+                    disabled={phasesFromApi.length === 0 || selectedPhaseIndex >= phasesFromApi.length - 1}
+                    className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                    aria-label="Next phase"
+                  >
+                    <ChevronRight className="w-4 h-4" style={{ color: "#022019" }} />
+                  </button>
+                </div>
               </div>
-              {isCompleted && planItems.length > 0 && (
-                <Button
-                  onClick={async () => {
-                    const firstItem = planItems[0];
-                    try {
-                      await TaskSplittingService.submitTaskSplitting({ plan_item_id: firstItem.id });
-                    } catch (e) {
-                      console.error("Failed to start implementation", e);
-                    } finally {
-                      router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
-                    }
-                  }}
-                  className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm bg-[#022019] text-white hover:opacity-90 flex items-center gap-2"
-                >
-                  <Rocket className="w-4 h-4" /> START IMPLEMENTATION
-                </Button>
-              )}
             </div>
           </div>
 
@@ -588,7 +631,86 @@ const PlanPage = () => {
             </div>
           )}
 
-          {isCompleted && planItems.length > 0 && (
+          {isCompleted && phasesFromApi.length > 0 && (() => {
+            const phase = phasesFromApi[selectedPhaseIndex];
+            if (!phase) return null;
+            const combinedDescription = (phase.plan_items ?? [])
+              .map((item) => item.description || item.title)
+              .filter(Boolean)
+              .join("\n\n");
+            return (
+              <div className="space-y-4 pl-16">
+                <Tabs defaultValue="objective" className="w-full">
+                  <TabsList className="w-full justify-start rounded-none border-b border-[#CCD3CF] bg-transparent p-0 h-auto gap-0">
+                    <TabsTrigger
+                      value="objective"
+                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#022019] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-sm font-medium text-[#696D6D] data-[state=active]:text-[#022019]"
+                    >
+                      Objective
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="reasoning"
+                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#022019] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-sm font-medium text-[#696D6D] data-[state=active]:text-[#022019]"
+                    >
+                      Reasoning
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="architecture"
+                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#022019] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-sm font-medium text-[#696D6D] data-[state=active]:text-[#022019]"
+                    >
+                      Architecture
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="objective" className="mt-4 pt-2 pb-12 pr-4">
+                    <div className="space-y-8">
+                      <div className="py-5 pr-2">
+                        <div className="flex items-center gap-2 mb-3">
+                          <AlignLeft className="w-4 h-4 text-[#6B7280]" />
+                          <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Objective</span>
+                        </div>
+                        <p className="text-sm text-[#374151] leading-relaxed">
+                          {phase.description || phase.summary || "No objective provided."}
+                        </p>
+                      </div>
+                      <div className="py-5 pr-2">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FileText className="w-4 h-4 text-[#6B7280]" />
+                          <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Description</span>
+                        </div>
+                        <p className="text-sm text-[#374151] leading-relaxed whitespace-pre-line">
+                          {combinedDescription || "No description provided."}
+                        </p>
+                      </div>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="reasoning" className="mt-4 pt-2 pb-12 pr-4">
+                    <div className="py-5 pr-2">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Lightbulb className="w-4 h-4 text-[#6B7280]" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Reasoning</span>
+                      </div>
+                      <p className="text-sm text-[#374151] leading-relaxed">
+                        {phase.summary || "No reasoning provided for this phase."}
+                      </p>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="architecture" className="mt-4 pt-2 pb-12 pr-4">
+                    <div className="py-5 pr-2">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Layout className="w-4 h-4 text-[#6B7280]" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Architecture</span>
+                      </div>
+                      <p className="text-sm text-[#374151] leading-relaxed">
+                        No architecture diagram available for this phase.
+                      </p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            );
+          })()}
+
+          {isCompleted && planItems.length > 0 && phasesFromApi.length === 0 && (
             <Accordion type="single" collapsible className="space-y-4">
               {planItems.map((item) => {
                 const modules = groupFilesByModule(item.files);
@@ -789,6 +911,30 @@ const PlanPage = () => {
           <div ref={bottomRef} />
             </div>
           </div>
+
+          {isCompleted && planItems.length > 0 && (
+            <div className="shrink-0 p-6 pt-4 border-t border-[#D3E5E5] bg-[#FFFDFC] flex justify-end">
+              <button
+                type="button"
+                onClick={async () => {
+                  const firstItem = planItems[0];
+                  try {
+                    await TaskSplittingService.submitTaskSplitting({
+                      recipe_id: recipeId,
+                      plan_item_id: firstItem.id,
+                    });
+                  } catch (e) {
+                    console.error("Failed to start implementation", e);
+                  } finally {
+                    router.push(`/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`);
+                  }
+                }}
+                className="px-6 py-2.5 rounded-lg font-medium text-sm bg-[#022019] text-[#B4D13F] hover:opacity-90 shadow-sm"
+              >
+                START IMPLEMENTATION
+              </button>
+            </div>
+          )}
         </aside>
       </div>
     </div>

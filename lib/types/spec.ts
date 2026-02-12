@@ -336,7 +336,8 @@ export interface PlanItemsResponse {
 
 // Task splitting types
 export interface SubmitTaskSplittingRequest {
-  plan_item_id: string;
+  recipe_id: string;
+  plan_item_id?: string;
 }
 
 export interface SubmitTaskSplittingResponse {

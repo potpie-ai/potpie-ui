@@ -230,11 +230,15 @@ export default class QuestionService {
           return data;
         }
 
-        if (data.generation_status === "completed") {
+        // Workflows API: generation_status "completed" or legacy recipe_status "QUESTIONS_READY"
+        const status = data.generation_status;
+        const legacyStatus = (data as { recipe_status?: string }).recipe_status;
+        if (status === "completed" || legacyStatus === "QUESTIONS_READY") {
           return data;
         }
 
-        if (data.generation_status === "failed") {
+        // Failed: workflows "failed" or legacy "ERROR"
+        if (status === "failed" || legacyStatus === "ERROR") {
           throw new Error(data.error_message || "Failed to generate questions");
         }
 

@@ -41,6 +41,9 @@ export interface RepoPageState {
   /** IDs of questions that need answers (for validation highlighting) */
   unansweredQuestionIds?: Set<string>;
   isGenerating: boolean;
+  /** Attachment IDs from media upload (for additional context) */
+  attachmentIds: string[];
+  attachmentUploading: boolean;
 }
 
 /**

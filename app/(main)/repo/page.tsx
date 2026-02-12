@@ -7,12 +7,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import QuestionService from "@/services/QuestionService";
 import SpecService from "@/services/SpecService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
+import MediaService from "@/services/MediaService";
 import AIAnalysisBanner from "./components/AIAnalysisBanner";
 import QuestionSection from "./components/QuestionSection";
 import AdditionalContextSection from "./components/AdditionalContextSection";
 import QuestionProgress from "./components/QuestionProgress";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Github, FileText, Loader2, GitBranch } from "lucide-react";
+import { Github, FileText, Loader2, GitBranch, Info } from "lucide-react";
 import {
   RecipeQuestionsResponse,
   RecipeQuestion,
@@ -27,7 +28,26 @@ import type {
 } from "@/types/question";
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { ParsingStatusEnum } from "@/lib/Constants";
-import { Badge as UIBadge } from "@/components/ui/badge";
+
+/** Sort section keys by DEFAULT_SECTION_ORDER, then alphabetically. */
+function getSortedSections(sectionKeys: Iterable<string>): string[] {
+  return Array.from(sectionKeys).sort((a, b) => {
+    const aIndex = DEFAULT_SECTION_ORDER.findIndex(
+      (s) =>
+        a.toLowerCase().includes(s.toLowerCase()) ||
+        s.toLowerCase().includes(a.toLowerCase())
+    );
+    const bIndex = DEFAULT_SECTION_ORDER.findIndex(
+      (s) =>
+        b.toLowerCase().includes(s.toLowerCase()) ||
+        s.toLowerCase().includes(b.toLowerCase())
+    );
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
 
 const Badge = ({
   children,
@@ -36,7 +56,7 @@ const Badge = ({
   children: React.ReactNode;
   icon?: React.ComponentType<{ className?: string }>;
 }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-zinc-500">
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-border-light rounded text-xs font-medium text-primary-color">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
@@ -56,6 +76,8 @@ export default function RepoPage() {
   const [recipeRepoName, setRecipeRepoName] = useState<string | null>(null);
   const [recipeBranchName, setRecipeBranchName] = useState<string | null>(null);
 
+  const [additionalContextDialogOpen, setAdditionalContextDialogOpen] =
+    useState(false);
   const [state, setState] = useState<RepoPageState>({
     pageState: "generating",
     questions: [],
@@ -68,24 +90,50 @@ export default function RepoPage() {
     skippedQuestions: new Set(),
     unansweredQuestionIds: new Set(),
     isGenerating: false,
+    attachmentIds: [],
+    attachmentUploading: false,
   });
 
-  // Fetch recipe details when recipeId is available
+  // Fetch recipe details when recipeId is available (same priority as spec: API then localStorage)
   useEffect(() => {
     const fetchRecipeDetails = async () => {
       if (!recipeId) return;
+
+      let fromStorage: { repo_name?: string; branch_name?: string } | null = null;
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem(`recipe_${recipeId}`);
+          if (raw) fromStorage = JSON.parse(raw);
+        } catch {
+          fromStorage = null;
+        }
+      }
 
       try {
         console.log("[Repo Page] Fetching recipe details for:", recipeId);
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
         console.log("[Repo Page] Recipe details received:", recipeDetails);
 
-        // Set repo and branch from recipe details
-        setRecipeRepoName(recipeDetails.repo_name ?? null);
-        setRecipeBranchName(recipeDetails.branch_name ?? null);
+        // Same as spec: API first, then localStorage, then fallbacks
+        const repo =
+          recipeDetails.repo_name?.trim() ||
+          fromStorage?.repo_name?.trim() ||
+          null;
+        const branch =
+          recipeDetails.branch_name?.trim() ||
+          fromStorage?.branch_name?.trim() ||
+          null;
+        setRecipeRepoName(repo);
+        setRecipeBranchName(branch ?? "main");
       } catch (error: any) {
         console.error("[Repo Page] Failed to fetch recipe details:", error);
-        // Keep null values on error - will fall back to URL params or projectData
+        // On error, use localStorage so repo/branch can still show (same as spec)
+        setRecipeRepoName(
+          fromStorage?.repo_name?.trim() || null
+        );
+        setRecipeBranchName(
+          fromStorage?.branch_name?.trim() || "main"
+        );
       }
     };
 
@@ -344,22 +392,14 @@ export default function RepoPage() {
     enabled: !!projectId,
   });
 
-  // Extract project info - prioritize Recipe Details API, then URL params, then project data
-  let repoName =
+  // Same as spec: repo = owner/repo (full slug), branch = branch name. Do not split owner/repo.
+  const repoName =
     recipeRepoName ||
     repoNameFromUrl ||
     projectData?.repo_name ||
     "Unknown Repository";
-  let branchName = recipeBranchName || projectData?.branch_name || "";
-
-  // Split repoName if it contains "/" (format: reponame/branchname) and no branch is set
-  if (repoName.includes("/") && !branchName) {
-    const parts = repoName.split("/");
-    if (parts.length >= 2) {
-      repoName = parts[0];
-      branchName = parts.slice(1).join("/"); // Handle cases where branch name might contain "/"
-    }
-  }
+  const branchName =
+    recipeBranchName || projectData?.branch_name || "main";
 
   // Parse feature idea from properties if not in URL
   let featureIdea: string | null = featureIdeaFromUrl || null;
@@ -824,7 +864,7 @@ export default function RepoPage() {
       await SpecService.submitAnswers(activeRecipeId, answersPayload);
       return await SpecService.triggerSpecGeneration(activeRecipeId);
     },
-    onSuccess: (response: TriggerSpecGenerationResponse) => {
+    onSuccess: () => {
       toast.success("Spec generation started successfully");
       const activeRecipeId = recipeId || recipeIdFromUrl;
       if (!activeRecipeId) {
@@ -920,6 +960,43 @@ export default function RepoPage() {
     generatePlanMutation.mutate();
   };
 
+  const handleAttachmentChange = async (
+    files: File[],
+    removedIndex?: number
+  ) => {
+    const idsAfterRemove =
+      removedIndex !== undefined
+        ? state.attachmentIds.filter((_, i) => i !== removedIndex)
+        : [...state.attachmentIds];
+    if (files.length <= idsAfterRemove.length) {
+      setState((prev) => ({ ...prev, attachmentIds: idsAfterRemove }));
+      return;
+    }
+    setState((prev) => ({ ...prev, attachmentUploading: true }));
+    try {
+      const newIds: string[] = [];
+      for (let i = idsAfterRemove.length; i < files.length; i++) {
+        const result = await MediaService.uploadFile(files[i]);
+        newIds.push(result.id);
+      }
+      setState((prev) => ({
+        ...prev,
+        attachmentIds: idsAfterRemove.concat(newIds),
+        attachmentUploading: false,
+      }));
+    } catch (err: unknown) {
+      setState((prev) => ({ ...prev, attachmentUploading: false }));
+      const message =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data
+              ?.detail
+          : null;
+      toast.error(
+        typeof message === "string" ? message : "Failed to upload attachment."
+      );
+    }
+  };
+
   // Count answered questions (excluding skipped ones)
   const answeredCount = Array.from(state.answers.entries()).filter(
     ([qId, a]) => {
@@ -972,6 +1049,16 @@ export default function RepoPage() {
     // Note: setRepoAndBranchForTask removed - not needed for current flow
   }, [recipeId, repoName, branchName, projectId]);
 
+  // Figma: flat list for right sidebar
+  const sortedSections = getSortedSections(state.sections.keys());
+  const questionsInOrder = sortedSections.flatMap(
+    (s) => state.sections.get(s) || []
+  ).filter((q) => state.visibleQuestions.has(q.id));
+  const focusedQuestion =
+    (state.hoveredQuestion &&
+      questionsInOrder.find((q) => q.id === state.hoveredQuestion)) ||
+    questionsInOrder[0];
+
   // Allow either projectId (old flow) or recipeId (new recipe codegen flow)
   if (!projectId && !recipeId && !recipeIdFromUrl) {
     return (
@@ -982,36 +1069,23 @@ export default function RepoPage() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Content */}
-        <div className="mt-6 flex-1 overflow-y-auto px-6 py-8">
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="flex justify-between items-start mb-10">
-              <div className="flex-1">
-                <h1 className="text-2xl font-bold text-primary mb-3">
-                  Clarifying Questions
-                </h1>
-                {featureIdea && (
-                  <p className="text-sm text-zinc-600 leading-relaxed max-w-2xl">
-                    {featureIdea}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-4">
-                <div className="flex items-center gap-3">
-                  <Badge icon={Github}>{repoName}</Badge>
-                  {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
-                </div>
-                {/* <QuestionProgress
-                  total={activeQuestionCount}
-                  answered={answeredCount}
-                  skipped={skippedCount}
-                /> */}
-              </div>
-            </div>
-            {state.pageState === "questions" && <AIAnalysisBanner />}
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans antialiased">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Left: questions area — same structure as spec chat */}
+        <div
+          className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
+          style={{ backgroundColor: "#FAF8F7" }}
+        >
+          {/* Chat-style header: title only (repo/branch moved to right panel top) */}
+          <div className="flex justify-between items-center px-6 pt-6 pb-4 shrink-0">
+            <h1 className="text-lg font-bold text-primary-color truncate capitalize">
+              {featureIdea?.slice(0, 50) || "Clarifying Questions"}
+              {(featureIdea?.length ?? 0) > 50 ? "…" : ""}
+            </h1>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+            <div className="max-w-3xl mx-auto space-y-6">
+              {state.pageState === "questions" && <AIAnalysisBanner />}
             {/* Loading State - Only show if we don't have questions yet */}
             {(questionsLoading ||
               (questionsPolling && state.questions.length === 0)) && (
@@ -1026,34 +1100,11 @@ export default function RepoPage() {
                 </div>
               </div>
             )}
-            {/* Question Sections */}
             {state.pageState === "questions" &&
               (() => {
-                const allSections = Array.from(state.sections.keys());
-
-                // Sort sections: prioritize DEFAULT_SECTION_ORDER, then alphabetically
-                const sortedSections = allSections.sort((a, b) => {
-                  const aIndex = DEFAULT_SECTION_ORDER.findIndex(
-                    (s) =>
-                      a.toLowerCase().includes(s.toLowerCase()) ||
-                      s.toLowerCase().includes(a.toLowerCase())
-                  );
-                  const bIndex = DEFAULT_SECTION_ORDER.findIndex(
-                    (s) =>
-                      b.toLowerCase().includes(s.toLowerCase()) ||
-                      s.toLowerCase().includes(b.toLowerCase())
-                  );
-
-                  if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-                  if (aIndex !== -1) return -1;
-                  if (bIndex !== -1) return 1;
-                  return a.localeCompare(b);
-                });
-
                 return sortedSections.map((section) => {
                   const sectionQuestions = state.sections.get(section) || [];
                   if (sectionQuestions.length === 0) return null;
-
                   return (
                     <QuestionSection
                       key={section}
@@ -1085,6 +1136,8 @@ export default function RepoPage() {
               })()}
             {state.pageState === "questions" && (
               <AdditionalContextSection
+                open={additionalContextDialogOpen}
+                onOpenChange={setAdditionalContextDialogOpen}
                 context={state.additionalContext}
                 onContextChange={(context) =>
                   setState((prev) => ({ ...prev, additionalContext: context }))
@@ -1092,15 +1145,62 @@ export default function RepoPage() {
                 onGeneratePlan={handleGeneratePlan}
                 isGenerating={state.isGenerating}
                 recipeId={recipeId}
-                unansweredCount={unansweredCount}
+                onAttachmentChange={handleAttachmentChange}
+                attachmentUploading={state.attachmentUploading}
               />
             )}
-             
             <div ref={questionsEndRef} />
+          </div>
           </div>
         </div>
 
-        {/* Additional Context Section */}
+        {/* Right: question list — half-and-half like spec */}
+        {state.pageState === "questions" && questionsInOrder.length > 0 && (
+          <div
+            className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
+            style={{ backgroundColor: "#FAF8F7" }}
+          >
+            <aside className="h-full w-full min-w-[280px] flex flex-col overflow-hidden min-h-0">
+              <div className="px-10 py-3 flex items-center gap-2 flex-wrap shrink-0 justify-end">
+                {repoName && <Badge icon={Github}>{repoName}</Badge>}
+                {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0 py-3 pl-6 pr-8">
+                <h2 className="text-sm font-bold mb-2 text-left text-primary-color">
+                  Clarifying Questions
+                </h2>
+                <ul className="space-y-0.5">
+                  {questionsInOrder.map((q) => {
+                    const isFocused = q.id === focusedQuestion?.id;
+                    return (
+                      <li key={q.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setState((prev) => ({
+                              ...prev,
+                              hoveredQuestion: q.id,
+                            }));
+                            const el = document.getElementById(`question-${q.id}`);
+                            el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className={`w-full text-left text-xs leading-relaxed py-1.5 pl-3 pr-2 rounded-r border-l-2 flex items-start gap-2 cursor-pointer transition-colors hover:opacity-90 ${isFocused ? "font-medium" : "font-normal"}`}
+                          style={{
+                            color: isFocused ? "#000000" : "#506561",
+                            backgroundColor: isFocused ? "#B6E3431A" : "transparent",
+                            borderLeftColor: isFocused ? "#B6E343" : "#E4E4E4",
+                          }}
+                        >
+                          <span className="flex-1">{q.question}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </aside>
+          </div>
+        )}
       </div>
     </div>
   );

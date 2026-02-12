@@ -2743,6 +2743,7 @@ export default function VerticalTaskExecution() {
           planItem.id
         );
         const response = await TaskSplittingService.submitTaskSplitting({
+          recipe_id: recipeId,
           plan_item_id: planItem.id,
         });
         console.log("[Code Page] Task splitting submitted:", response);

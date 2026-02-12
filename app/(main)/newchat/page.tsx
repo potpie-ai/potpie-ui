@@ -275,9 +275,12 @@ export default function NewChatPage() {
           : undefined,
       });
       const recipeId = recipeResponse.recipe.id;
-      await SpecService.triggerQuestionGeneration(recipeId, {
+      SpecService.triggerQuestionGeneration(recipeId, {
         user_prompt: data.userPrompt,
         additional_links: data.additionalLinks,
+      }).catch((err) => {
+        console.error("[newchat] triggerQuestionGeneration failed", { recipeId, userPrompt: data.userPrompt, error: err });
+        toast.error("Question generation could not be started. You can continue to the repo page; questions may load later.");
       });
       return recipeResponse;
     },
@@ -872,11 +875,11 @@ export default function NewChatPage() {
   };
 
   return (
-    <div
-      className="min-h-screen flex flex-col relative"
+          <div
+      className="h-full flex flex-col overflow-hidden relative"
       style={{ backgroundColor: "#FAF8F7" }}
-    >
-      <div
+          >
+            <div
         className="absolute inset-0 pointer-events-none z-0"
         style={{
           backgroundImage: "url('/images/Mesh.svg')",
@@ -886,8 +889,8 @@ export default function NewChatPage() {
           opacity: 0.75,
         }}
       />
-      <div className="flex-1 flex flex-col items-center justify-start px-4 pt-40 pb-4 relative z-10">
-        <div className="w-full max-w-4xl space-y-4">
+      <div className="flex-1 flex flex-col items-center justify-start min-h-0 overflow-hidden px-4 pt-40 pb-4 relative z-10">
+        <div className="w-full max-w-4xl space-y-4 shrink-0">
           <div className="flex flex-col items-center space-y-3">
             <div className="w-16 h-16 flex items-center justify-center">
               <Image

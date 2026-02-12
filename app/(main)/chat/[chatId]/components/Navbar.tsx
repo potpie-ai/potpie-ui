@@ -277,8 +277,16 @@ const Navbar = ({
   }, [isDialogOpen]);
 
   if (hidden) return null;
+  const isNewChat = pathname?.endsWith("/newchat") ?? false;
   return (
-    <header className="sticky top-0 z-50 bg-[#FFFDFC] border-b border-[#E3E3E3]">
+    <header
+      className={
+        isNewChat
+          ? "sticky top-0 z-50 border-b border-border-light"
+          : "sticky top-0 z-50 bg-[#FFFDFC] border-b border-[#E3E3E3]"
+      }
+      style={isNewChat ? { backgroundColor: "#FAF8F7" } : undefined}
+    >
       {showTitle && (
         <div className="flex h-[52px] w-full">
           <div className="flex items-center justify-between w-full px-4 lg:px-6">

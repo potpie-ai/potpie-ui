@@ -14,6 +14,8 @@ interface QuestionCardProps {
   isExpanded: boolean;
   isSkipped: boolean;
   isUnanswered?: boolean;
+  /** Root element id for scroll-into-view (e.g. `question-${question.id}`). */
+  id?: string;
   onHover: () => void;
   onHoverLeave: () => void;
   onAnswerChange: (answer: Partial<QuestionAnswer>) => void;
@@ -39,6 +41,7 @@ export default function QuestionCard({
   isExpanded,
   isSkipped,
   isUnanswered = false,
+  id: idProp,
   onHover,
   onHoverLeave,
   onAnswerChange,
@@ -68,11 +71,11 @@ export default function QuestionCard({
       question.answerRecommendationIdx < 0);
 
   const cardClasses = [
-    "p-4 rounded-xl border transition-all duration-200",
-    isSkipped && "bg-zinc-50/50 border-zinc-200 opacity-50",
-    !isSkipped && "bg-background border-[#D3E5E5]",
+    "p-4 rounded-xl border transition-all duration-200 relative",
+    isSkipped && "bg-neutral-100/60 border-neutral-200 opacity-50",
+    !isSkipped && "bg-neutral-100 border-neutral-200",
     isUnanswered && !isSkipped && "ring-2 ring-amber-400/60 border-amber-300",
-    isHovered && !isSkipped && "border-[#D3E5E5]",
+    isHovered && !isSkipped && "border-neutral-300",
   ]
     .filter(Boolean)
     .join(" ");
@@ -146,7 +149,7 @@ export default function QuestionCard({
   const handleFreeTextChange = (value: string) => {
     if (isSkipped) return;
     onAnswerChange({
-      textAnswer: value.trim() || undefined,
+      textAnswer: value,
       isOther: false,
       selectedOptionIdx: undefined,
       selectedOptionIndices: undefined,
@@ -160,42 +163,39 @@ export default function QuestionCard({
 
   return (
     <div
+      id={idProp}
       className={cardClasses}
       onMouseEnter={onHover}
       onMouseLeave={onHoverLeave}
     >
-      <div className="space-y-3">
-        {/* Question Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 space-y-2">
-            <div className="flex items-start gap-2 flex-wrap">
-              <p
-                className={`text-sm font-medium leading-relaxed flex-1 ${
-                  isSkipped ? "text-zinc-400 line-through" : "text-primary"
-                }`}
-              >
-                {question.question}
+      <div className="space-y-4">
+        {/* Question */}
+        <div className="flex items-start gap-4">
+          <div className="flex-1 min-w-0 space-y-1 pr-20">
+            <p
+              className={`text-sm font-bold leading-relaxed ${
+                isSkipped ? "text-zinc-400 line-through" : "text-primary-color"
+              }`}
+            >
+              {question.question}
+            </p>
+            {question.multipleChoice && options.length > 0 && !isSkipped && (
+              <p className="text-xs text-muted-foreground">
+                (Select all that apply)
               </p>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {isSkipped && (
-                  <span className="px-1.5 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                    Skipped
-                  </span>
-                )}
-                {!isSkipped && needsInput && (
-                  <span className="px-1.5 py-0.5 bg-accent/20 border border-accent/40 rounded text-[10px] font-bold uppercase tracking-wider text-accent-foreground">
-                    Input needed
-                  </span>
-                )}
-              </div>
-            </div>
-            {!isSkipped && question.reasoning && (
-              <div className="bg-zinc-50/50 rounded-lg p-3 border-l-2 border-zinc-200">
-                <p className="text-xs text-zinc-500 leading-relaxed">
-                  {question.reasoning}
-                </p>
-              </div>
             )}
+            <div className="flex items-center gap-1.5 flex-shrink-0 absolute top-4 right-4">
+              {isSkipped && (
+                <span className="px-1.5 py-0.5 bg-zinc-200 border border-zinc-300 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  Skipped
+                </span>
+              )}
+              {!isSkipped && needsInput && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider text-primary-color" style={{ backgroundColor: "#e6ffe6" }}>
+                  INPUT NEEDED
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -216,21 +216,19 @@ export default function QuestionCard({
         {options.length > 0 && (
           <>
             {isMultipleChoice ? (
-              // Multiple choice with checkboxes
-              <div className="space-y-1.5">
+              // Multiple choice: each option in its own white pill-style box
+              <div className="space-y-2">
                 {options.map((opt, index) => {
                   const label = typeof opt === "string" ? opt : opt.label;
-                  const description =
-                    typeof opt === "string" ? undefined : opt.description;
                   const isSelected = selectedIndices.includes(index);
 
                   return (
                     <div
                       key={index}
-                      className={`flex items-start gap-3 text-xs p-2.5 rounded-lg transition-all cursor-pointer ${
+                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
                         isSelected
-                          ? "bg-primary/10 border border-primary/30"
-                          : "text-zinc-600 bg-background border border-zinc-200 hover:border-zinc-300"
+                          ? "bg-white border-neutral-300 shadow-sm text-primary-color"
+                          : "bg-white border-neutral-200 hover:border-neutral-300 text-foreground"
                       } ${isSkipped ? "cursor-default" : ""}`}
                       onClick={() => !isSkipped && handleSelectOption(index)}
                     >
@@ -241,60 +239,47 @@ export default function QuestionCard({
                         className="mt-0.5 shrink-0"
                         disabled={isSkipped}
                       />
-                      <Label
-                        htmlFor={`${question.id ?? "q"}-opt-${index}`}
-                        className="flex-1 cursor-pointer font-normal"
-                      >
+                      <span className="text-sm font-normal flex-1">
                         {label}
-                        {description && (
-                          <span className="block mt-1 text-zinc-500 font-normal">
-                            {description}
-                          </span>
-                        )}
-                      </Label>
+                      </span>
                     </div>
                   );
                 })}
 
                 {/* Other (specify your own) */}
-                <div className="pt-2 border-t border-zinc-200">
-                  <div
-                    className={`flex flex-col gap-2 text-xs p-2.5 rounded-lg transition-all ${
-                      isOther
-                        ? "bg-primary/10 border border-primary/30"
-                        : "text-zinc-600 bg-background border border-zinc-200 hover:border-zinc-300"
-                    } ${!isSkipped ? "cursor-pointer" : "cursor-default"}`}
-                    onClick={(e) => {
-                      if (!isSkipped && !(e.target instanceof HTMLInputElement))
-                        handleSelectOther();
-                    }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={isOther}
-                        onCheckedChange={() => !isSkipped && handleSelectOther()}
-                        id={`${question.id ?? "q"}-opt-other`}
-                        className="mt-0.5 shrink-0"
-                        disabled={isSkipped}
-                      />
-                      <Label
-                        htmlFor={`${question.id ?? "q"}-opt-other`}
-                        className="flex-1 cursor-pointer font-normal"
-                      >
-                        Other (specify your own)
-                      </Label>
-                    </div>
-                    {isOther && (
-                      <Input
-                        value={otherText}
-                        onChange={(e) => handleOtherTextChange(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        placeholder="Enter your preferred option..."
-                        className="min-h-[36px] min-w-0 max-w-full text-xs border-zinc-200 focus:border-zinc-300 rounded-lg ml-7 w-[calc(100%-1.75rem)]"
-                        disabled={isSkipped}
-                      />
-                    )}
+                <div
+                  className={`flex flex-col gap-2 p-3 rounded-xl border transition-all ${
+                    isOther
+                      ? "bg-white border-neutral-300 shadow-sm text-primary-color"
+                      : "bg-white border-neutral-200 hover:border-neutral-300 text-foreground"
+                  } ${!isSkipped ? "cursor-pointer" : "cursor-default"}`}
+                  onClick={(e) => {
+                    if (!isSkipped && !(e.target instanceof HTMLInputElement))
+                      handleSelectOther();
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={isOther}
+                      onCheckedChange={() => !isSkipped && handleSelectOther()}
+                      id={`${question.id ?? "q"}-opt-other`}
+                      className="mt-0.5 shrink-0"
+                      disabled={isSkipped}
+                    />
+                    <span className="text-sm font-normal">
+                      Other (specify your own)
+                    </span>
                   </div>
+                  {isOther && (
+                    <Input
+                      value={otherText}
+                      onChange={(e) => handleOtherTextChange(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="Enter your preferred option..."
+                      className="min-h-[36px] min-w-0 max-w-full text-sm border-neutral-200 focus:border-primary rounded-lg ml-7 w-[calc(100%-1.75rem)]"
+                      disabled={isSkipped}
+                    />
+                  )}
                 </div>
               </div>
             ) : (
@@ -316,21 +301,19 @@ export default function QuestionCard({
                     if (!Number.isNaN(idx)) handleSelectOption(idx);
                   }
                 }}
-                className="space-y-1.5"
+                className="space-y-2"
                 disabled={isSkipped}
               >
                 {options.map((opt, index) => {
                   const label = typeof opt === "string" ? opt : opt.label;
-                  const description =
-                    typeof opt === "string" ? undefined : opt.description;
 
                   return (
                     <div
                       key={index}
-                      className={`flex items-start gap-3 text-xs p-2.5 rounded-lg transition-all cursor-pointer ${
+                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
                         !isOther && selectedIdx === index
-                          ? "bg-primary/10 border border-primary/30"
-                          : "text-zinc-600 bg-background border border-zinc-200 hover:border-zinc-300"
+                          ? "bg-white border-neutral-300 shadow-sm text-primary-color"
+                          : "bg-white border-neutral-200 hover:border-neutral-300 text-foreground"
                       } ${isSkipped ? "cursor-default" : ""}`}
                       onClick={() => !isSkipped && handleSelectOption(index)}
                     >
@@ -341,56 +324,46 @@ export default function QuestionCard({
                       />
                       <Label
                         htmlFor={`${question.id ?? "q"}-opt-${index}`}
-                        className="flex-1 cursor-pointer font-normal"
+                        className="text-sm font-normal cursor-pointer flex-1"
                       >
                         {label}
-                        {description && (
-                          <span className="block mt-1 text-zinc-500 font-normal">
-                            {description}
-                          </span>
-                        )}
                       </Label>
                     </div>
                   );
                 })}
 
                 {/* Other (specify your own) */}
-                <div className="pt-2 border-t border-zinc-200">
-                  <div
-                    className={`flex flex-col gap-2 text-xs p-2.5 rounded-lg transition-all ${
-                      isOther
-                        ? "bg-primary/10 border border-primary/30"
-                        : "text-zinc-600 bg-background border border-zinc-200 hover:border-zinc-300"
-                    } ${!isSkipped ? "cursor-pointer" : "cursor-default"}`}
-                    onClick={(e) => {
-                      if (!isSkipped && !(e.target instanceof HTMLInputElement))
-                        handleSelectOther();
-                    }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <RadioGroupItem
-                        value="other"
-                        id={`${question.id ?? "q"}-opt-other`}
-                        className="mt-0.5 shrink-0"
-                      />
-                      <Label
-                        htmlFor={`${question.id ?? "q"}-opt-other`}
-                        className="flex-1 cursor-pointer font-normal"
-                      >
-                        Other (specify your own)
-                      </Label>
-                    </div>
-                    {isOther && (
-                      <Input
-                        value={otherText}
-                        onChange={(e) => handleOtherTextChange(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        placeholder="Enter your preferred option..."
-                        className="min-h-[36px] min-w-0 max-w-full text-xs border-zinc-200 focus:border-zinc-300 rounded-lg ml-7 w-[calc(100%-1.75rem)]"
-                        disabled={isSkipped}
-                      />
-                    )}
+                <div
+                  className={`flex flex-col gap-2 p-3 rounded-xl border transition-all ${
+                    isOther
+                      ? "bg-white border-neutral-300 shadow-sm text-primary-color"
+                      : "bg-white border-neutral-200 hover:border-neutral-300 text-foreground"
+                  } ${!isSkipped ? "cursor-pointer" : "cursor-default"}`}
+                  onClick={(e) => {
+                    if (!isSkipped && !(e.target instanceof HTMLInputElement))
+                      handleSelectOther();
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <RadioGroupItem
+                      value="other"
+                      id={`${question.id ?? "q"}-opt-other`}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <span className="text-sm font-normal">
+                      Other (specify your own)
+                    </span>
                   </div>
+                  {isOther && (
+                    <Input
+                      value={otherText}
+                      onChange={(e) => handleOtherTextChange(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="Enter your preferred option..."
+                      className="min-h-[36px] min-w-0 max-w-full text-sm border-neutral-200 focus:border-primary rounded-lg ml-7 w-[calc(100%-1.75rem)]"
+                      disabled={isSkipped}
+                    />
+                  )}
                 </div>
               </RadioGroup>
             )}

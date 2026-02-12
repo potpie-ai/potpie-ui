@@ -65,6 +65,7 @@ const config = {
   			'primary-color': 'var(--primary-color)',
   			'foreground-color': 'var(--foreground-color)',
   			'muted-text': 'var(--muted-text)',
+  			'border-light': 'var(--border-light)',
   			sidebar: {
   				DEFAULT: 'hsl(var(--sidebar-background))',
   				foreground: 'hsl(var(--sidebar-foreground))',

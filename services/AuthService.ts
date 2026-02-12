@@ -17,6 +17,7 @@ interface SignupPayload {
 interface SignupResponse {
   exists: boolean;
   token?: string;
+  customToken?: string;
   needs_github_linking?: boolean;
 }
 
@@ -33,7 +34,7 @@ export default class AuthService {
    */
   static async signupWithEmailPassword(user: User): Promise<SignupResponse> {
     const headers = await getHeaders();
-    
+
     const payload: SignupPayload = {
       uid: user.uid,
       email: user.email,
@@ -54,16 +55,16 @@ export default class AuthService {
       const response = await axios.post<SignupResponse>(
         `${this.baseUrl}/api/v1/signup`,
         payload,
-        { headers }
+        { headers },
       );
       return response.data;
     } catch (error: any) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV !== "production") {
         console.error("Signup API error:", error);
       }
       // Check for 409 Conflict (GitHub already linked) or other errors
       const errorMessage =
-        error.response?.data?.error || 
+        error.response?.data?.error ||
         error.response?.data?.details ||
         error.message ||
         "Signup call unsuccessful";
@@ -78,7 +79,7 @@ export default class AuthService {
   static async signupWithGitHub(
     user: User,
     accessToken: string,
-    providerUsername: string
+    providerUsername: string,
   ): Promise<SignupResponse> {
     const headers = await getHeaders();
 
@@ -102,20 +103,46 @@ export default class AuthService {
       const response = await axios.post<SignupResponse>(
         `${this.baseUrl}/api/v1/signup`,
         payload,
-        { headers }
+        { headers },
       );
       return response.data;
     } catch (error: any) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV !== "production") {
         console.error("GitHub signup API error:", error);
       }
       // Check for 409 Conflict (GitHub already linked) or other errors
       const errorMessage =
-        error.response?.data?.error || 
+        error.response?.data?.error ||
         error.response?.data?.details ||
         error.message ||
         "Sign-in unsuccessful";
       throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Fetch a Firebase custom token for the current user.
+   * Used by the VS Code extension to establish a Firebase session for silent token refresh.
+   * Backend must implement POST /api/v1/auth/custom-token (validates Bearer token, returns customToken).
+   */
+  static async getCustomToken(): Promise<string | null> {
+    const headers = await getHeaders();
+    if (!headers.Authorization) return null;
+    try {
+      const response = await axios.post<{ customToken: string }>(
+        `${this.baseUrl}/api/v1/auth/custom-token`,
+        {},
+        { headers },
+      );
+      return response.data?.customToken ?? null;
+    } catch (error: any) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          "AuthService: getCustomToken failed (endpoint may not exist):",
+          error?.response?.status ?? error?.message,
+        );
+      }
+      return null;
     }
   }
 
@@ -127,15 +154,14 @@ export default class AuthService {
     try {
       const response = await axios.get<CheckEmailResponse>(
         `${this.baseUrl}/api/v1/account/check-email?email=${encodeURIComponent(email)}`,
-        { validateStatus: () => true } // Don't throw on any status
+        { validateStatus: () => true }, // Don't throw on any status
       );
       return response.data;
     } catch (error: any) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV !== "production") {
         console.error("Error checking SSO status:", error);
       }
       throw error;
     }
   }
 }
-

@@ -81,7 +81,7 @@ export default class ChatService {
       }
 
       const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/`,
+        `${baseUrl}/api/v1/conversations`,
         requestBody,
         { headers }
       );

@@ -67,7 +67,7 @@ interface NodeOption {
   relevance: number;
 }
 
-const free_models = ["openai/gpt-4.1", "openai/gpt-4o", "openai/gpt-4.1-mini"];
+const free_models = ["openai/gpt-5-mini", "openrouter/moonshotai/kimi-k2.5"];
 
 const MessageComposer = ({
   projectId,

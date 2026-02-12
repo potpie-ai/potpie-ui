@@ -128,7 +128,7 @@ export default function Signin() {
           } else if (finalAgent_id) {
             handleExternalRedirect("");
           } else {
-            router.push("/idea");
+            router.push("/newchat");
           }
 
           toast.success(
@@ -167,13 +167,17 @@ export default function Signin() {
 
           // Log deletion failure for monitoring (caller can act on result if needed)
           if (!deletionSucceeded) {
-            console.error(
-              "[ERROR] Failed to delete blocked GitHub signup user:",
-              {
-                userId: result.user?.uid,
-                email: result.user?.email,
-              },
-            );
+            if (process.env.NODE_ENV !== "production") {
+              console.error(
+                "[ERROR] Failed to delete blocked GitHub signup user:",
+                { userId: result.user?.uid, email: result.user?.email },
+              );
+            } else {
+              console.error(
+                "[ERROR] Failed to delete blocked GitHub signup user (uid only)",
+                { userId: result.user?.uid },
+              );
+            }
           }
 
           // Show concise error message
@@ -269,7 +273,7 @@ export default function Signin() {
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
-              window.location.href = "/idea";
+              window.location.href = "/newchat";
             }
 
             toast.success(
@@ -386,7 +390,7 @@ export default function Signin() {
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
-              window.location.href = "/idea";
+              window.location.href = "/newchat";
             }
 
             toast.success(
@@ -407,11 +411,11 @@ export default function Signin() {
 
   const handleSSOLinked = () => {
     if (source === "vscode") {
-      router.push("/idea");
+      router.push("/newchat");
     } else if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push("/idea");
+      router.push("/newchat");
     }
   };
 

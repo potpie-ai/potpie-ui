@@ -14,8 +14,9 @@
     --card-foreground: 179 91% 9%;
     --popover: 30 25% 98%;
     --popover-foreground: 179 91% 9%;
-    --primary: 179 91% 9%;
-    --primary-foreground: 23 100% 98%;
+    /* Primary = button colour #295245, button text #B6E343 */
+    --primary: 161 33% 24%;
+    --primary-foreground: 77 74% 58%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 179 91% 9%;
     --muted: 23 100% 98%;

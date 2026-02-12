@@ -121,29 +121,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         href: "/all-agents",
         disabled: false,
       },
-    ],
-  },
-  {
-    title: "Idea",
-    links: [
-      {
-        icons: (
-          <Image
-            src="/images/Idea.svg"
-            alt="Idea"
-            width={20}
-            height={20}
-          />
-        ),
-        title: "Idea",
-        href: "/idea",
-        disabled: false,
-      },
-    ],
-  },
-  {
-    title: "Workflows",
-    links: [
       {
         icons: (
           <Image
@@ -157,11 +134,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         href: "/workflows",
         disabled: false,
       },
-    ],
-  },
-  {
-    title: "Integrations",
-    links: [
       {
         icons: (
           <Image
@@ -178,25 +150,7 @@ export const SidebarItems: { title: string; links: any[] }[] = [
     ],
   },
   {
-    title: "Knowledge Base",
-    links: [
-      {
-        icons: (
-          <Image
-            src="/images/Repositories.svg"
-            alt="Repositories"
-            width={20}
-            height={20}
-          />
-        ),
-        title: "Repositories",
-        href: "/repositories",
-        disabled: false,
-      }
-    ],
-  },
-  {
-    title: "Extensions",
+    title: "Support",
     links: [
       {
         icons: (
@@ -211,11 +165,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         href: "https://marketplace.visualstudio.com/items?itemName=PotpieAI.potpie-vscode-extension",
         disabled: false,
       },
-    ],
-  },
-  {
-    title: "Support",
-    links: [
       {
         icons: (
           <Image

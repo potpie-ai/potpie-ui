@@ -3,7 +3,7 @@
  */
 
 export const SpecFlowRoutes = {
-  idea: () => "/idea",
+  idea: () => "/newchat",
   repo: (projectId: string, recipeId?: string) => {
     const params = new URLSearchParams({ projectId });
     if (recipeId) params.set("recipeId", recipeId);

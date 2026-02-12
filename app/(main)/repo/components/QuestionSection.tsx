@@ -11,6 +11,7 @@ interface QuestionSectionProps {
   hoveredQuestion: string | null;
   expandedOptions: Set<string>;
   skippedQuestions: Set<string>;
+  unansweredQuestionIds?: Set<string>;
   onHover: (questionId: string | null) => void;
   onAnswerChange: (questionId: string, answer: Partial<QuestionAnswer>) => void;
   onSave: (questionId: string) => void;
@@ -26,6 +27,7 @@ export default function QuestionSection({
   hoveredQuestion,
   expandedOptions,
   skippedQuestions,
+  unansweredQuestionIds: _unansweredQuestionIds,
   onHover,
   onAnswerChange,
   onSave,

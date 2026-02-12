@@ -58,6 +58,7 @@ const RepoAndBranchSlice = createSlice({
       };
       state.repoName = repoName;
       state.branchName = branchName;
+      state.commitId = ""; // Clear commitId to maintain branch/commit mutual exclusivity
     },
     clearRepoAndBranchForTask: (state, action: PayloadAction<string>) => {
       if (state.byTaskId) {

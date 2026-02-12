@@ -21,19 +21,25 @@ export default function AuthLayout({
     if (user) {
       // Handle VSCode authentication flow
       if (source === "vscode") {
-        Promise.all([user.getIdToken(), AuthService.getCustomToken()]).then(
-          ([token, customToken]) => {
+        Promise.all([user.getIdToken(), AuthService.getCustomToken()])
+          .then(([token, customToken]) => {
             if (process.env.NODE_ENV === "development") {
               console.log(
-                "token",
-                token,
+                "VSCode auth: token",
+                token ? "present" : "absent",
                 "customToken",
                 customToken ? "present" : "absent",
               );
             }
             window.location.href = buildVSCodeCallbackUrl(token, customToken);
-          },
-        );
+          })
+          .catch((err) => {
+            console.error(
+              "VSCode auth: token fetch failed (getIdToken or getCustomToken)",
+              err,
+            );
+            router.push("/sign-in?source=vscode&error=auth_failed");
+          });
         return;
       }
 

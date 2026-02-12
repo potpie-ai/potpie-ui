@@ -92,7 +92,7 @@ const getRepoIdentifier = (repo: RepoIdentifier) => {
 
 const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
   const { repoName, branchName, commitId } = useSelector(
-    (state: RootState) => state.RepoAndBranch
+    (state: RootState) => state.RepoAndBranch,
   );
 
   const dispatch = useDispatch();
@@ -118,6 +118,18 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
   const [branchOpen, setBranchOpen] = useState(false);
   const [useCommitId, setUseCommitId] = useState(false);
   const [commitIdInput, setCommitIdInput] = useState("");
+  const commitIdDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const COMMIT_ID_DEBOUNCE_MS = 400;
+
+  useEffect(() => {
+    return () => {
+      if (commitIdDebounceRef.current) {
+        clearTimeout(commitIdDebounceRef.current);
+      }
+    };
+  }, []);
 
   const searchParams = useSearchParams();
 
@@ -133,14 +145,14 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     popupRef.current = window.open(
       githubAppUrl,
       "_blank",
-      "width=1000,height=700"
+      "width=1000,height=700",
     );
   };
 
   const parseRepo = async (
     repo_name: string,
     branch_name?: string,
-    commit_id?: string
+    commit_id?: string,
   ) => {
     setParsingStatus("loading");
 
@@ -149,7 +161,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         repo_name,
         branch_name,
         filters,
-        commit_id
+        commit_id,
       );
       const projectId = parseResponse.project_id;
       const initialStatus = parseResponse.status;
@@ -168,7 +180,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         projectId,
         initialStatus,
         setParsingStatus,
-        setChatStep
+        setChatStep,
       );
     } catch (err) {
       console.error("Error during parsing:", err);
@@ -179,7 +191,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
   const parseLocalRepo = async (
     repo_path: string,
     branch_name?: string,
-    commit_id?: string
+    commit_id?: string,
   ) => {
     setParsingStatus("loading");
 
@@ -204,7 +216,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
       const parseResponse = await axios.post(
         `${baseUrl}/api/v1/parse`,
         payload,
-        { headers }
+        { headers },
       );
 
       const projectId = parseResponse.data.project_id;
@@ -224,7 +236,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         projectId,
         initialStatus,
         setParsingStatus,
-        setChatStep
+        setChatStep,
       );
     } catch (error) {
       console.error("Error during parsing local repo:", error);
@@ -252,16 +264,16 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                 });
                 dispatch(
                   setRepoName(
-                    matchingRepo ? decodeURIComponent(defaultRepo) : ""
-                  )
+                    matchingRepo ? decodeURIComponent(defaultRepo) : "",
+                  ),
                 );
               }
               return data;
-            }
+            },
           );
         return repos;
       },
-    }
+    },
   );
 
   const { data: UserBranch, isLoading: UserBranchLoading } = useQuery({
@@ -283,12 +295,12 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
           const matchingBranch = data.find(
             (branch: string) =>
               branch.toLowerCase() ===
-              decodeURIComponent(defaultBranch).toLowerCase()
+              decodeURIComponent(defaultBranch).toLowerCase(),
           );
           dispatch(
             setBranchName(
-              matchingBranch ? decodeURIComponent(defaultBranch) : ""
-            )
+              matchingBranch ? decodeURIComponent(defaultBranch) : "",
+            ),
           );
         }
         return data;
@@ -306,7 +318,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     queryFn: async () => {
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = inputValue.match(regex);
-    
+
       if (!match) {
         setLinkedRepoName(null);
         setIsValidLink(false);
@@ -314,9 +326,9 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         toast.error("Invalid repository URL. Please try again.");
         return "Invalid repository URL.";
       }
-    
+
       const ownerRepo = `${match[1]}/${match[2]}`;
-    
+
       const repoExistsPublic = async (repo: string) => {
         try {
           const res = await fetch(`https://api.github.com/repos/${repo}`);
@@ -325,19 +337,20 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
           return false;
         }
       };
-    
+
       try {
         if (linkedRepoName === ownerRepo) {
           handleSetPublicRepoDialog(false);
           setIsValidLink(true);
           return "Repo is public";
         }
-    
-        const response = await BranchAndRepositoryService.check_public_repo(ownerRepo);
+
+        const response =
+          await BranchAndRepositoryService.check_public_repo(ownerRepo);
         console.log("Public repo check response:", response);
-    
+
         let isPublic = false;
-    
+
         // Handle response formats: boolean / string / object
         if (typeof response === "boolean") {
           isPublic = response;
@@ -349,7 +362,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
             response.isPublic === true ||
             response.public === true;
         }
-    
+
         if (isPublic) {
           setIsValidLink(true);
           setLinkedRepoName(ownerRepo);
@@ -357,7 +370,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
           handleSetPublicRepoDialog(false);
           return response;
         }
-    
+
         // Not public based on response: show popup ONLY if explicitly private
         const isExplicitlyPrivate =
           response === false ||
@@ -368,66 +381,72 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
             (response.is_public === false ||
               response.isPublic === false ||
               response.public === false));
-    
+
         setIsValidLink(false);
         setLinkedRepoName(null);
         handleSetPublicRepoDialog(false);
-    
+
         if (isExplicitlyPrivate) {
-          toast.error("This repository is private. Please link it through GitHub to import it.");
+          toast.error(
+            "This repository is private. Please link it through GitHub to import it.",
+          );
           openPopup();
         } else {
-          toast.error("Unable to verify repository visibility. Please try again.");
+          toast.error(
+            "Unable to verify repository visibility. Please try again.",
+          );
         }
-    
+
         return response;
       } catch (error: any) {
         setLinkedRepoName(null);
         handleSetPublicRepoDialog(false);
-    
+
         const statusCode = error?.response?.status;
         const errorMessage = error?.response?.data?.message || error?.message;
-    
+
         console.error("Error checking public repo:", {
           statusCode,
           errorMessage,
           error: error?.response?.data,
           ownerRepo,
         });
-    
+
         // Fix: 404 can be invalid repo OR private repo
         if (statusCode === 404) {
           const exists = await repoExistsPublic(ownerRepo);
-    
+
           if (!exists) {
             toast.error("Repository does not exist. Please check the URL.");
             return false;
           }
-    
-          toast.error("Repository is private or not accessible. Please link it through GitHub.");
+
+          toast.error(
+            "Repository is private or not accessible. Please link it through GitHub.",
+          );
           openPopup();
           return false;
         }
-    
+
         if (statusCode === 401) {
           toast.error(
-            "Backend is not authenticated with GitHub (401). This does not mean the repo is private. Configure GitHub auth and retry."
+            "Backend is not authenticated with GitHub (401). This does not mean the repo is private. Configure GitHub auth and retry.",
           );
           return false;
         }
-    
+
         if (statusCode === 403) {
           toast.error(
-            "GitHub API forbidden or rate-limited (403). This does not mean the repo is private. Try again later."
+            "GitHub API forbidden or rate-limited (403). This does not mean the repo is private. Try again later.",
           );
           return false;
         }
-    
+
         toast.error("Unable to verify repository right now. Please try again.");
         return false;
       }
     },
-    
+
     enabled: false,
     retry: false,
   });
@@ -452,7 +471,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
 
   useEffect(() => {
     setIsParseDisabled(
-      !repoName || (!branchName && !commitId) || parsingStatus !== ""
+      !repoName || (!branchName && !commitId) || parsingStatus !== "",
     );
   }, [repoName, branchName, commitId, parsingStatus, inputValue, isValidLink]);
 
@@ -474,7 +493,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
               repoName,
               branchName,
               undefined,
-              commitId
+              commitId,
             );
           if (statusResponse?.current_filters) {
             const existingFilters = statusResponse.current_filters;
@@ -531,66 +550,82 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
           <Skeleton className="flex-1 h-10" />
         ) : (
           <>
-          <Popover open={repoOpen} onOpenChange={setRepoOpen}>
-            <PopoverTrigger asChild className="flex-1">
-              {UserRepositorys?.length === 0 || !repoName ? (
-                <Button
-                  className="flex gap-3 items-center font-semibold justify-start"
-                  variant="outline"
-                >
-                  <Github
-                    className="h-4 w-4 text-[#7A7A7A]"
-                    strokeWidth={1.5}
-                  />
-                  Select Repository
-                </Button>
-              ) : (
-                <Button
-                  className="flex gap-3 items-center font-semibold justify-start"
-                  variant="outline"
-                >
-                  {repoName.startsWith('/') || repoName.includes(':\\') || repoName.includes(':/') ? (
-                    <Folder
-                      className="h-4 w-4 text-[#7A7A7A]"
-                      strokeWidth={1.5}
-                    />
-                  ) : (
+            <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+              <PopoverTrigger asChild className="flex-1">
+                {UserRepositorys?.length === 0 || !repoName ? (
+                  <Button
+                    className="flex gap-3 items-center font-semibold justify-start"
+                    variant="outline"
+                  >
                     <Github
                       className="h-4 w-4 text-[#7A7A7A]"
                       strokeWidth={1.5}
                     />
-                  )}
-                  <span className="truncate text-ellipsis whitespace-nowrap">
-                    {repoName}
-                  </span>
-                </Button>
-              )}
-            </PopoverTrigger>
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-              <Command defaultValue={defaultRepo ?? undefined}>
-                <CommandInput
-                  value={searchValue}
-                  onValueChange={(e) => {
-                    setSearchValue(e);
-                  }}
-                  placeholder="Search repo or paste local path (e.g., /Users/...)"
-                />
-                <CommandList>
-                  <CommandEmpty>
-                    {searchValue.startsWith("https://github.com/") && !process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
-                      <Button
-                        onClick={() => {handleSetPublicRepoDialog(true);setInputValue(searchValue)}}
-                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-background hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
-                      >
+                    Select Repository
+                  </Button>
+                ) : (
+                  <Button
+                    className="flex gap-3 items-center font-semibold justify-start"
+                    variant="outline"
+                  >
+                    {repoName.startsWith("/") ||
+                    repoName.includes(":\\") ||
+                    repoName.includes(":/") ? (
+                      <Folder
+                        className="h-4 w-4 text-[#7A7A7A]"
+                        strokeWidth={1.5}
+                      />
+                    ) : (
+                      <Github
+                        className="h-4 w-4 text-[#7A7A7A]"
+                        strokeWidth={1.5}
+                      />
+                    )}
+                    <span className="truncate text-ellipsis whitespace-nowrap">
+                      {repoName}
+                    </span>
+                  </Button>
+                )}
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                <Command defaultValue={defaultRepo ?? undefined}>
+                  <CommandInput
+                    value={searchValue}
+                    onValueChange={(e) => {
+                      setSearchValue(e);
+                    }}
+                    placeholder="Search repo or paste local path (e.g., /Users/...)"
+                  />
+                  <CommandList>
+                    <CommandEmpty>
+                      {searchValue.startsWith("https://github.com/") &&
+                      !process.env.NEXT_PUBLIC_BASE_URL?.includes(
+                        "localhost",
+                      ) ? (
+                        <Button
+                          onClick={() => {
+                            handleSetPublicRepoDialog(true);
+                            setInputValue(searchValue);
+                          }}
+                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-background hover:bg-primary text-accent-foreground w-full justify-start gap-2"
+                        >
                           <Plus className="size-4" /> <p> Public Repository</p>
-                      </Button>
-                    ) : searchValue && searchValue.trim() !== "" && 
-                        (searchValue.startsWith('/') || searchValue.includes(':\\') || searchValue.includes(':/')) && 
-                        process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost') ? (
-                      <Button
-                        onClick={() => {setIsLocalRepoDailog(true);setLocalRepoPath(searchValue)}}
-                        className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-background hover:bg-primary text-accent-foreground w-full justify-start gap-2" 
-                      >
+                        </Button>
+                      ) : searchValue &&
+                        searchValue.trim() !== "" &&
+                        (searchValue.startsWith("/") ||
+                          searchValue.includes(":\\") ||
+                          searchValue.includes(":/")) &&
+                        process.env.NEXT_PUBLIC_BASE_URL?.includes(
+                          "localhost",
+                        ) ? (
+                        <Button
+                          onClick={() => {
+                            setIsLocalRepoDailog(true);
+                            setLocalRepoPath(searchValue);
+                          }}
+                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1 h-8 text-sm outline-none bg-background hover:bg-primary text-accent-foreground w-full justify-start gap-2"
+                        >
                           <Plus className="size-4" /> <p> Local Repository</p>
                         </Button>
                       ) : searchValue && searchValue.trim() !== "" ? (
@@ -639,7 +674,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                     </CommandItem>
                     <CommandSeparator className="my-1" />
                     {process.env.NEXT_PUBLIC_BASE_URL?.includes(
-                      "localhost"
+                      "localhost",
                     ) && (
                       <>
                         <CommandItem
@@ -761,7 +796,13 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                 onChange={(e) => {
                   const value = e.target.value;
                   setCommitIdInput(value);
-                  dispatch(setCommitId(value));
+                  if (commitIdDebounceRef.current) {
+                    clearTimeout(commitIdDebounceRef.current);
+                  }
+                  commitIdDebounceRef.current = setTimeout(() => {
+                    dispatch(setCommitId(value));
+                    commitIdDebounceRef.current = null;
+                  }, COMMIT_ID_DEBOUNCE_MS);
                 }}
               />
             )}
@@ -903,7 +944,13 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                 className="col-span-3"
                 value={localBranchName}
                 placeholder="main"
-                onChange={(e) => setLocalBranchName(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setLocalBranchName(value);
+                  if (value) {
+                    setLocalCommitId("");
+                  }
+                }}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -933,7 +980,7 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                   parseLocalRepo(
                     localRepoPath,
                     localBranchName || undefined,
-                    localCommitId || undefined
+                    localCommitId || undefined,
                   );
                   setIsLocalRepoDailog(false);
                 }

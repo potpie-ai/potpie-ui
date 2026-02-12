@@ -14,6 +14,7 @@ export default function AuthLayout({
   const searchParams = useSearchParams();
   const source = searchParams.get("source");
   const redirectUrl = searchParams.get("redirect");
+  const redirect_uri = searchParams.get("redirect_uri");
   const agent_id = searchParams.get("agent_id");
   const router = useRouter();
 
@@ -21,7 +22,11 @@ export default function AuthLayout({
     if (user) {
       // Handle VSCode authentication flow
       if (source === "vscode") {
-        Promise.all([user.getIdToken(), AuthService.getCustomToken()])
+        const fetchCustomTokenWithRetry = (): Promise<string | null> =>
+          AuthService.getCustomToken().then((t) =>
+            t != null ? t : new Promise((r) => setTimeout(r, 500)).then(() => AuthService.getCustomToken()),
+          );
+        Promise.all([user.getIdToken(), fetchCustomTokenWithRetry()])
           .then(([token, customToken]) => {
             if (process.env.NODE_ENV === "development") {
               console.log(
@@ -30,15 +35,29 @@ export default function AuthLayout({
                 "customToken",
                 customToken ? "present" : "absent",
               );
+              if (!customToken) {
+                console.warn(
+                  "VSCode auth: customToken missing — ensure backend POST /api/v1/auth/custom-token is implemented and returns { customToken }.",
+                );
+              }
             }
-            window.location.href = buildVSCodeCallbackUrl(token, customToken);
+            window.location.href = buildVSCodeCallbackUrl(
+              token,
+              customToken ?? undefined,
+              redirect_uri ?? undefined,
+            );
           })
           .catch((err) => {
             console.error(
               "VSCode auth: token fetch failed (getIdToken or getCustomToken)",
               err,
             );
-            router.push("/sign-in?source=vscode&error=auth_failed");
+            const errorParams = new URLSearchParams({
+              source: "vscode",
+              error: "auth_failed",
+            });
+            if (redirect_uri) errorParams.set("redirect_uri", redirect_uri);
+            router.push(`/sign-in?${errorParams.toString()}`);
           });
         return;
       }
@@ -64,7 +83,7 @@ export default function AuthLayout({
         router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
       }
     }
-  }, [user, source, redirectUrl, agent_id, router]);
+  }, [user, source, redirectUrl, redirect_uri, agent_id, router]);
 
   return (
     <div className="min-h-screen w-full grid place-items-center">

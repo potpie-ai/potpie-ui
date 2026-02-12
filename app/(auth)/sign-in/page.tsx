@@ -32,6 +32,7 @@ export default function Signin() {
   const source = searchParams.get("source");
   const agent_id = searchParams.get("agent_id");
   const redirectUrl = searchParams.get("redirect");
+  const redirect_uri = searchParams.get("redirect_uri");
 
   // SSO state
   const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(
@@ -84,7 +85,11 @@ export default function Signin() {
     if (finalAgent_id) {
       window.location.href = `/shared-agent?agent_id=${finalAgent_id}`;
     } else if (source === "vscode") {
-      window.location.href = buildVSCodeCallbackUrl(token, customToken);
+      window.location.href = buildVSCodeCallbackUrl(
+        token,
+        customToken,
+        redirect_uri ?? undefined,
+      );
     }
   };
 
@@ -411,8 +416,23 @@ export default function Signin() {
 
   const handleSSOLinked = () => {
     if (source === "vscode") {
-      router.push("/newchat");
-    } else if (finalAgent_id) {
+      const user = auth.currentUser;
+      if (!user) {
+        router.push("/newchat");
+        return;
+      }
+      Promise.all([user.getIdToken(), AuthService.getCustomToken()])
+        .then(([token, customToken]) => {
+          window.location.href = buildVSCodeCallbackUrl(
+            token,
+            customToken,
+            redirect_uri ?? undefined,
+          );
+        })
+        .catch(() => router.push("/newchat"));
+      return;
+    }
+    if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
       router.push("/newchat");

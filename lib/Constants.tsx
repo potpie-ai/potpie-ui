@@ -176,19 +176,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
       {
         icons: (
           <Image
-            src="/images/VS Code.svg"
-            alt="VS Code"
-            width={20}
-            height={20}
-          />
-        ),
-        title: "VS Code",
-        href: "https://marketplace.visualstudio.com/items?itemName=PotpieAI.potpie-vscode-extension",
-        disabled: false,
-      },
-      {
-        icons: (
-          <Image
             src="/images/Documentation.svg"
             alt="Documentation"
             width={20}

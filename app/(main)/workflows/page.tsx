@@ -43,8 +43,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
 import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
-import { ProFeatureError } from "@/lib/hooks/useProFeatureError";
 import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
+import { toast } from "sonner";
+import { parseApiError } from "@/lib/utils";
 
 interface Agent {
   id: string;
@@ -264,7 +265,18 @@ const Workflows = () => {
           );
         })
         .catch((error) => {
-          handleError(error);
+          const wasHandled = handleError(error);
+          if (!wasHandled) {
+            // Non-pro feature error - surface to user
+            console.error("Error deleting workflow:", error);
+            const errorMessage = parseApiError(error);
+            toast.error(
+              `Failed to delete workflow "${workflow.title}" (${workflow.id})`,
+              {
+                description: errorMessage,
+              }
+            );
+          }
         });
     }
   };
@@ -283,7 +295,21 @@ const Workflows = () => {
 
       setWorkflows(updatedWorkflows);
     } catch (error) {
-      handleError(error);
+      const wasHandled = handleError(error);
+      if (!wasHandled) {
+        // Non-pro feature error - surface to user
+        console.error("Error pausing/resuming workflow:", error);
+        const errorMessage = parseApiError(error);
+        const action = workflow.is_paused ? "resume" : "pause";
+        toast.error(
+          `Failed to ${action} workflow "${workflow.title}" (${workflow.id})`,
+          {
+            description: errorMessage,
+          }
+        );
+      }
+      // Re-throw error for upstream handling if needed
+      throw error;
     }
   };
 

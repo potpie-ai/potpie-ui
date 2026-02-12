@@ -48,6 +48,27 @@ export function isProFeatureError(error: unknown): boolean {
 }
 
 /**
+ * Helper function to check if an error indicates a pro feature is not available
+ * and throw ProFeatureError if matched.
+ * Checks for 404/500 status codes and network error codes (ERR_NETWORK, ERR_FAILED, ECONNREFUSED).
+ * 
+ * @param error - The error object to check
+ * @param message - The error message to throw if matched
+ * @throws ProFeatureError if the error matches pro feature error conditions
+ */
+export function throwIfProFeatureError(error: any, message: string): void {
+  // Check for 404/500 status errors (backend exists but endpoint not available)
+  if (error?.response?.status === 404 || error?.response?.status === 500) {
+    throw new ProFeatureError(message);
+  }
+  
+  // Check for network errors (CORS, connection refused, etc.) - backend not accessible
+  if (!error.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
+    throw new ProFeatureError(message);
+  }
+}
+
+/**
  * Hook to handle Pro Feature errors and show the ProFeatureModal
  */
 export function useProFeatureError() {

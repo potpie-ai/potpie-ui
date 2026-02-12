@@ -308,8 +308,7 @@ const Workflows = () => {
           }
         );
       }
-      // Re-throw error for upstream handling if needed
-      throw error;
+      // Error has been handled and displayed to user, no need to re-throw
     }
   };
 

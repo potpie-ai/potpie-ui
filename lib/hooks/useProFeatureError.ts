@@ -57,13 +57,18 @@ export function isProFeatureError(error: unknown): boolean {
  * @throws ProFeatureError if the error matches pro feature error conditions
  */
 export function throwIfProFeatureError(error: any, message: string): void {
+  // Guard against nullish error
+  if (!error) {
+    return;
+  }
+  
   // Check for 404/500 status errors (backend exists but endpoint not available)
   if (error?.response?.status === 404 || error?.response?.status === 500) {
     throw new ProFeatureError(message);
   }
   
   // Check for network errors (CORS, connection refused, etc.) - backend not accessible
-  if (!error.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
+  if (!error?.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
     throw new ProFeatureError(message);
   }
 }

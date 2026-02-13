@@ -1,6 +1,6 @@
 import { auth } from "@/configs/Firebase-config";
 import formbricksApp from "@formbricks/js";
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, Code2 } from "lucide-react";
 import Image from "next/image";
 
 const user = auth.currentUser || ("" as any);
@@ -147,11 +147,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         href: "/integrations",
         disabled: false,
       },
-    ],
-  },
-  {
-    title: "Support",
-    links: [
       {
         icons: (
           <Image
@@ -162,9 +157,22 @@ export const SidebarItems: { title: string; links: any[] }[] = [
           />
         ),
         title: "VS Code",
-        href: "https://marketplace.visualstudio.com/items?itemName=PotpieAI.potpie-vscode-extension",
+        href: "#",
         disabled: false,
+        showProModal: true,
       },
+      {
+        icons: <Code2 size={20} strokeWidth={1.5} />,
+        title: "JetBrains",
+        href: "#",
+        disabled: false,
+        showProModal: true,
+      },
+    ],
+  },
+  {
+    title: "Support",
+    links: [
       {
         icons: (
           <Image

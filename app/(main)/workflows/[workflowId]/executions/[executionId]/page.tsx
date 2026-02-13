@@ -27,6 +27,9 @@ import {
   parseApiError,
 } from "@/lib/utils";
 import { ExecutionTreeVisualizer } from "@/app/(main)/workflows/components/execution-tree/ExecutionTreeVisualizer";
+import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
+import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
+import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 
 export default function ExecutionDetailPage() {
   const params: { workflowId: string; executionId: string } = useParams();
@@ -39,9 +42,40 @@ export default function ExecutionDetailPage() {
   >();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [backendAccessible, setBackendAccessible] = useState<boolean | null>(null);
+  const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
+
+  // Check backend accessibility on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const accessible = await isWorkflowsBackendAccessible();
+      setBackendAccessible(accessible);
+      if (!accessible) {
+        // Backend not accessible, show modal immediately
+        setIsModalOpen(true);
+      }
+    };
+    checkBackend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  const handleModalCancel = () => {
+    // Redirect away from workflows if backend is not accessible
+    if (backendAccessible === false) {
+      router.push("/");
+    }
+  };
 
   useEffect(() => {
     async function fetchData() {
+      // Check if backend is accessible before fetching
+      const accessible = await isWorkflowsBackendAccessible();
+      if (!accessible) {
+        // Backend not accessible, don't fetch
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         // Fetch workflow details
@@ -73,6 +107,10 @@ export default function ExecutionDetailPage() {
         }
       } catch (error) {
         console.error("Error fetching data:", error);
+        if (handleError(error)) {
+          // Pro feature error was handled, modal is shown
+          return;
+        }
         const errorMessage = parseApiError(error);
         toast.error(errorMessage);
       } finally {
@@ -158,14 +196,21 @@ export default function ExecutionDetailPage() {
 
   if (!workflow || !execution) {
     return (
-      <div className="flex w-full h-svh items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Execution not found</h2>
-          <p className="text-gray-600">
-            The execution you&apos;re looking for doesn&apos;t exist.
-          </p>
+      <>
+        <div className="flex w-full h-svh items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold mb-2">Execution not found</h2>
+            <p className="text-gray-600">
+              The execution you&apos;re looking for doesn&apos;t exist.
+            </p>
+          </div>
         </div>
-      </div>
+        <ProFeatureModal 
+          open={isModalOpen} 
+          onOpenChange={setIsModalOpen}
+          onCancel={handleModalCancel}
+        />
+      </>
     );
   }
 
@@ -286,6 +331,11 @@ export default function ExecutionDetailPage() {
           </CardContent>
         </Card>
       )}
+      <ProFeatureModal 
+        open={isModalOpen} 
+        onOpenChange={setIsModalOpen}
+        onCancel={handleModalCancel}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { parseApiError } from "@/lib/utils";
+import { throwIfProFeatureError } from "@/lib/hooks/useProFeatureError";
 import {
   SpecPlanRequest,
   SpecPlanSubmitResponse,
@@ -126,6 +127,9 @@ export default class SpecService {
       return response.data;
     } catch (error: any) {
       console.error("[SpecService] Error creating recipe:", error);
+      
+      throwIfProFeatureError(error, "Build a feature is not available");
+      
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }
@@ -151,6 +155,9 @@ export default class SpecService {
       return response.data;
     } catch (error: any) {
       console.error("[SpecService] Error triggering question generation:", error);
+      
+      throwIfProFeatureError(error, "Build a feature is not available");
+      
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }

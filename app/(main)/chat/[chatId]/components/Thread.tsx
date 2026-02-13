@@ -214,7 +214,7 @@ const ThreadWelcome: FC<{ showSuggestions: boolean }> = ({
       <div className="flex w-full h-full max-w-[var(--thread-max-width)] flex-grow flex-col">
         <div className="flex w-full flex-grow flex-col items-center justify-center">
           <Avatar className="rounded-none">
-            <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
+            <AvatarImage src="/images/logo.svg" alt="Agent" />
             <AvatarFallback className="bg-transparent">P</AvatarFallback>
           </Avatar>
           <p className="mt-4 font-medium">How can I help you today?</p>
@@ -702,7 +702,7 @@ const AssistantMessage: FC = () => {
     >
       <MessagePrimitive.Root className="w-11/12 grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative">
         <Avatar className="mr-4 rounded-none bg-transparent">
-          <AvatarImage src="/images/potpie-blue.svg" alt="Agent" />
+          <AvatarImage src="/images/logo.svg" alt="Agent" />
           <AvatarFallback className="bg-gray-400 text-white">P</AvatarFallback>
         </Avatar>
 

@@ -1,6 +1,7 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { parseApiError } from "@/lib/utils";
+import { ProFeatureError } from "@/lib/hooks/useProFeatureError";
 import {
   PlanGenerationRequest,
   PlanSubmitResponse,
@@ -37,6 +38,17 @@ export default class PlanService {
       return response.data;
     } catch (error: any) {
       console.error("Error submitting plan generation:", error);
+      
+      // Check for 404/500 status errors (backend exists but endpoint not available)
+      if (error?.response?.status === 404 || error?.response?.status === 500) {
+        throw new ProFeatureError("Build a feature is not available");
+      }
+      
+      // Check for network errors (CORS, connection refused, etc.) - backend not accessible
+      if (!error.response && (error?.code === 'ERR_NETWORK' || error?.code === 'ERR_FAILED' || error?.code === 'ECONNREFUSED')) {
+        throw new ProFeatureError("Build a feature is not available");
+      }
+      
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }

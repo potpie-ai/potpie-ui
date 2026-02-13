@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import {
   Play,
   Check,
@@ -21,7 +20,7 @@ import {
   ArrowRight,
   TerminalSquare,
   Sidebar,
-  X,
+
   FileDiff,
   TestTube,
   ScrollText,
@@ -35,1724 +34,109 @@ import {
   ArrowLeft,
   Github,
   Sparkles,
+  Info,
+  Plus,
+  Pencil,
+  Trash2,
+  Undo2,
+  RefreshCw,
+  SendHorizonal,
+  FolderTree,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import TaskSplittingService from "@/services/TaskSplittingService";
 import PlanService from "@/services/PlanService";
+import SpecService from "@/services/SpecService";
 import { useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import {
   TaskSplittingStatusResponse,
   TaskSplittingItemsResponse,
   TaskLayer,
   PlanItem,
 } from "@/lib/types/spec";
+import Image from "next/image";
+import { TreeView, TreeNode } from "@/components/ui/tree-view";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 /**
- * VERTICAL TASK EXECUTION ENGINE
- * Uses mock data for plan items with test_diff and codegen_diff support
- * - Displays tasks ordered by plan_item
- * - Shows test_diff first to user
- * - Streams codegen_diff when user presses Code Gen button
+ * Code / implementation page: plan slices from API, task splitting (codegen), layers and tasks from getTaskSplittingItems.
  */
 
-// Mock Data Types
-interface MockTask {
-  title: string;
-  file: string;
-  test_code: string;
-  test_diff: string;
-  codegen_diff: string;
-  test_results: any[];
-  tests_total: number;
-  tests_passed: number;
-  order: number;
+/** Build a tree of TreeNode from file paths (e.g. ["src/foo/bar.ts", "src/baz.ts"]). */
+function buildFileTree(paths: string[]): TreeNode[] {
+  const seen = new Set<string>();
+  const root: Record<string, { node: TreeNode; children: Record<string, unknown> }> = {};
+
+  for (const path of paths) {
+    const trimmed = path.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+
+    const parts = trimmed.split("/").filter(Boolean);
+    if (parts.length === 0) continue;
+
+    let current = root;
+    let pathSoFar = "";
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const isFile = i === parts.length - 1;
+      pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part;
+      const id = pathSoFar;
+
+      if (!current[part]) {
+        current[part] = {
+          node: {
+            id,
+            label: part,
+            children: isFile ? undefined : [],
+          },
+          children: {},
+        };
+      }
+
+      if (isFile) {
+        (current[part].node as TreeNode).children = undefined;
+      }
+      current = current[part].children as Record<string, { node: TreeNode; children: Record<string, unknown> }>;
+    }
+  }
+
+  function toChildren(obj: Record<string, { node: TreeNode; children: Record<string, unknown> }>): TreeNode[] {
+    return Object.values(obj)
+      .map(({ node, children }) => ({
+        ...node,
+        children: node.children === undefined ? undefined : toChildren(children as Record<string, { node: TreeNode; children: Record<string, unknown> }>),
+      }))
+      .sort((a, b) => {
+        const aIsDir = (a.children?.length ?? 0) > 0;
+        const bIsDir = (b.children?.length ?? 0) > 0;
+        if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+        return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+      });
+  }
+
+  return toChildren(root);
 }
 
-interface MockPlanItemPhase {
-  title: string;
-  order: number;
-  tasks: MockTask[];
+function getAllNodeIds(nodes: TreeNode[]): string[] {
+  const ids: string[] = [];
+  function walk(ns: TreeNode[]) {
+    for (const n of ns) {
+      ids.push(n.id);
+      if (n.children?.length) walk(n.children);
+    }
+  }
+  walk(nodes);
+  return ids;
 }
-
-interface MockPlanData {
-  [key: string]: MockPlanItemPhase[];
-}
-
-// Mock Data from the provided JSON
-const MOCK_PLAN_DATA: MockPlanData = {
-  plan_item_0: [
-    {
-      title: "Phase 1: Foundation - Database Schema & Core Types",
-      order: 0,
-      tasks: [
-        {
-          title:
-            "Add AiChatInteractionStatus enum (SUCCESS, ERROR, RATE_LIMITED, TIMEOUT)",
-          file: "packages/prisma/schema.prisma",
-          test_code:
-            "function test_plan_item_0_0() {\n  const fs = require('fs');\n  const schema = fs.readFileSync('packages/prisma/schema.prisma', 'utf8');\n  const hasEnum = schema.includes('enum AiChatInteractionStatus');\n  const hasSuccess = schema.includes('SUCCESS');\n  const hasError = schema.includes('ERROR');\n  const hasRateLimited = schema.includes('RATE_LIMITED');\n  const hasTimeout = schema.includes('TIMEOUT');\n  \n  if (hasEnum && hasSuccess && hasError && hasRateLimited && hasTimeout) {\n    console.log('✅ AiChatInteractionStatus enum added with all required values');\n    return true;\n  }\n  console.log('❌ AiChatInteractionStatus enum not found or incomplete');\n  return false;\n}",
-          test_diff:
-            '+enum AiChatInteractionStatus {\n+  SUCCESS     @map("success")\n+  ERROR       @map("error")\n+  RATE_LIMITED @map("rate_limited")\n+  TIMEOUT     @map("timeout")\n+}',
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Add AiChatInteraction model to packages/prisma/schema.prisma with fields for metadata (userId, profileId, teamId, orgId, model, tokens, latency, status, createdAt)",
-          file: "packages/prisma/schema.prisma",
-          test_code:
-            "function test_plan_item_0_1() {\n  const fs = require('fs');\n  const schema = fs.readFileSync('packages/prisma/schema.prisma', 'utf8');\n  const hasModel = schema.includes('model AiChatInteraction');\n  const hasUserId = schema.includes('userId');\n  const hasProfileId = schema.includes('profileId');\n  const hasTeamId = schema.includes('teamId');\n  const hasOrgId = schema.includes('orgId');\n  const hasModelField = schema.includes('model');\n  const hasInputTokens = schema.includes('inputTokens');\n  const hasOutputTokens = schema.includes('outputTokens');\n  const hasTotalTokens = schema.includes('totalTokens');\n  const hasLatency = schema.includes('latency');\n  const hasStatus = schema.includes('status');\n  const hasCreatedAt = schema.includes('createdAt');\n  \n  if (hasModel && hasUserId && hasProfileId && hasTeamId && hasOrgId &&\n      hasModelField && hasInputTokens && hasOutputTokens && hasTotalTokens &&\n      hasLatency && hasStatus && hasCreatedAt) {\n    console.log('✅ AiChatInteraction model added with all required fields');\n    return true;\n  }\n  console.log('❌ AiChatInteraction model not found or incomplete');\n  return false;\n}",
-          test_diff:
-            "+model AiChatInteraction {\n+  id              Int                          @id @default(autoincrement())\n+  userId          Int?\n+  profileId       Int?\n+  teamId          Int?\n+  orgId           Int?\n+  model           String\n+  inputTokens     Int\n+  outputTokens    Int\n+  totalTokens     Int\n+  latency         Int                          @default(0)\n+  status          AiChatInteractionStatus      @default(SUCCESS)\n+  createdAt       DateTime                    @default(now())\n+",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Add indexes for efficient querying: [userId], [profileId], [teamId], [orgId], [createdAt]",
-          file: "packages/prisma/schema.prisma",
-          test_code:
-            "function test_plan_item_0_2() {\n  const fs = require('fs');\n  const schema = fs.readFileSync('packages/prisma/schema.prisma', 'utf8');\n  const hasUserIdIndex = schema.includes('@@index([userId])');\n  const hasProfileIdIndex = schema.includes('@@index([profileId])');\n  const hasTeamIdIndex = schema.includes('@@index([teamId])');\n  const hasOrgIdIndex = schema.includes('@@index([orgId])');\n  const hasCreatedAtIndex = schema.includes('@@index([createdAt])');\n  \n  if (hasUserIdIndex && hasProfileIdIndex && hasTeamIdIndex &&\n      hasOrgIdIndex && hasCreatedAtIndex) {\n    console.log('✅ All indexes added for efficient querying');\n    return true;\n  }\n  console.log('❌ Some indexes missing');\n  return false;\n}",
-          test_diff:
-            "  @@index([userId])\n+  @@index([profileId])\n+  @@index([teamId])\n+  @@index([orgId])\n+  @@index([createdAt])\n+}",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Run migration: yarn workspace @calcom/prisma db-migrate",
-          file: "packages/prisma/migrations/",
-          test_code:
-            "function test_plan_item_0_3() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const migrationsDir = 'packages/prisma/migrations';\n  if (!fs.existsSync(migrationsDir)) {\n    console.log('❌ Migrations directory does not exist yet');\n    return false;\n  }\n  \n  const files = fs.readdirSync(migrationsDir);\n  const aiChatMigrations = files.filter(f => f.includes('ai_chat_interaction') || f.includes('AiChatInteraction'));\n  \n  if (aiChatMigrations.length > 0) {\n    console.log(`✅ Found ${aiChatMigrations.length} AI chat migration(s)`);\n    return true;\n  }\n  console.log('⏳ Migration not yet run - needs user execution');\n  return false;\n}",
-          test_diff: "",
-          codegen_diff:
-            "CREATED: packages/prisma/migrations/[timestamp]_create_ai_chat_interaction.sql\n  -- Execute CREATE TYPE and CREATE TABLE statements for AiChatInteraction model",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Generate Prisma types: yarn prisma generate",
-          file: "packages/prisma/generated/prisma/client/",
-          test_code:
-            "function test_plan_item_0_4() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const generatedPath = 'packages/prisma/generated/prisma/client';\n  if (!fs.existsSync(generatedPath)) {\n    console.log('⏳ Generated Prisma client not yet created - needs user execution');\n    return false;\n  }\n  \n  const indexFile = fs.readFileSync(path.join(generatedPath, 'index.js'), 'utf8');\n  const hasAiChatInteraction = indexFile.includes('AiChatInteraction');\n  const hasAiChatInteractionStatus = indexFile.includes('AiChatInteractionStatus');\n  \n  if (hasAiChatInteraction && hasAiChatInteractionStatus) {\n    console.log('✅ Prisma types generated for AiChatInteraction model');\n    return true;\n  }\n  console.log('⏳ Types not yet generated or incomplete - needs user execution');\n  return false;\n}",
-          test_diff:
-            "CREATED: packages/prisma/generated/prisma/client/index.d.ts\n  -- Generated TypeScript types for AiChatInteraction model and AiChatInteractionStatus enum\n  -- Exported types can be imported as: import type { AiChatInteraction, AiChatInteractionStatus } from '@calcom/prisma/client'",
-          codegen_diff:
-            "GENERATED:\n  export type AiChatInteraction = {\n    id: number;\n    userId: number | null;\n    profileId: number | null;\n    teamId: number | null;\n    orgId: number | null;\n    model: string;\n    inputTokens: number;\n    outputTokens: number;\n    totalTokens: number;\n    latency: number;\n    status: AiChatInteractionStatus;\n    createdAt: Date;\n  }\n  \n  export enum AiChatInteractionStatus {\n    SUCCESS = 'success'\n    ERROR = 'error'\n    RATE_LIMITED = 'rate_limited'\n    TIMEOUT = 'timeout'\n  }",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/lib/types.ts with shared types",
-          file: "packages/features/ai-chat/lib/types.ts",
-          test_code:
-            "function test_plan_item_0_5() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const typesFile = 'packages/features/ai-chat/lib/types.ts';\n  if (!fs.existsSync(typesFile)) {\n    console.log('❌ types.ts does not exist');\n    return false;\n  }\n  \n  const content = fs.readFileSync(typesFile, 'utf8');\n  \n  const hasChatMessageRole = content.includes('export type ChatMessageRole');\n  const hasChatMessage = content.includes('export interface ChatMessage');\n  const hasTokenUsage = content.includes('export interface TokenUsage');\n  const hasAIProviderResponse = content.includes('export interface AIProviderResponse');\n  const hasAiChatContext = content.includes('export interface AiChatContext');\n  \n  if (hasChatMessageRole && hasChatMessage && hasTokenUsage &&\n      hasAIProviderResponse && hasAiChatContext) {\n    console.log('✅ All core types defined correctly');\n    return true;\n  }\n  console.log('❌ Some types missing from types.ts');\n  return false;\n}",
-          test_diff:
-            'CREATED: packages/features/ai-chat/lib/types.ts\n\nexport type ChatMessageRole = "user" | "assistant" | "system";\n\nexport interface ChatMessage {\n  role: ChatMessageRole;\n  content: string;\n  timestamp?: Date;\n}\n\nexport interface TokenUsage {\n  inputTokens: number;\n  outputTokens: number;\n  totalTokens: number;\n}\n\nexport interface AIProviderResponse {\n  content: string;\n  model: string;\n  usage: TokenUsage;\n  latency: number;\n}\n\nexport interface AiChatContext {\n  userId?: number | null;\n  profileId?: number | null;\n  teamId?: number | null;\n  orgId?: number | null;\n}',
-          codegen_diff:
-            "GENERATED:\n  -- Core TypeScript types for AI chat feature\n  -- Framework-agnostic, no Next.js/tRPC dependencies\n  -- Type-safe interfaces for messages, tokens, responses, and multi-tenancy context",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/lib/dto/ChatMessage.dto.ts, ChatResponse.dto.ts, AiChatInteractionLogDTO.ts",
-          file: "packages/features/ai-chat/lib/dto/",
-          test_code:
-            "function test_plan_item_0_6() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const dtoDir = 'packages/features/ai-chat/lib/dto';\n  if (!fs.existsSync(dtoDir)) {\n    console.log('❌ DTO directory does not exist');\n    return false;\n  }\n  \n  const dtoFiles = fs.readdirSync(dtoDir);\n  const hasChatMessageDTO = dtoFiles.includes('ChatMessage.dto.ts');\n  const hasChatResponseDTO = dtoFiles.includes('ChatResponse.dto.ts');\n  const hasAiChatInteractionLogDTO = dtoFiles.includes('AiChatInteractionLogDTO.ts');\n  const hasIndex = dtoFiles.includes('index.ts');\n  \n  const chatMessageContent = fs.readFileSync(path.join(dtoDir, 'ChatMessage.dto.ts'), 'utf8');\n  const hasChatMessageImport = chatMessageContent.includes('import type { ChatMessage }');\n  \n  const chatResponseContent = fs.readFileSync(path.join(dtoDir, 'ChatResponse.dto.ts'), 'utf8');\n  const hasTokenUsageExport = chatResponseContent.includes('export interface TokenUsage');\n  \n  const aiChatLogContent = fs.readFileSync(path.join(dtoDir, 'AiChatInteractionLogDTO.ts'), 'utf8');\n  const hasAiChatInteractionStatusImport = aiChatLogContent.includes('import type { AiChatInteractionStatus }');\n  \n  const indexContent = fs.readFileSync(path.join(dtoDir, 'index.ts'), 'utf8');\n  const hasAllExports = indexContent.includes('export * from \"./AiChatInteractionLogDTO\"') &&\n                      indexContent.includes('export * from \"./ChatMessage.dto\"') &&\n                      indexContent.includes('export * from \"./ChatResponse.dto\"');\n  \n  if (hasChatMessageDTO && hasChatResponseDTO && hasAiChatInteractionLogDTO &&\n      hasIndex && hasAllExports && hasChatMessageImport &&\n      hasTokenUsageExport && hasAiChatInteractionStatusImport) {\n    console.log('✅ All DTOs created with proper exports');\n    return true;\n  }\n  console.log('❌ Some DTOs missing or incomplete');\n  return false;\n}",
-          test_diff:
-            'CREATED: packages/features/ai-chat/lib/dto/ChatMessage.dto.ts\n+import type { ChatMessage } from "../types";\n+\n+export interface ChatMessageDTO {\n+  role: ChatMessage["role"];\n+  content: ChatMessage["content"];\n+}\n\nCREATED: packages/features/ai-chat/lib/dto/ChatResponse.dto.ts\n+import type { TokenUsage } from "../types";\n+\n+export interface ChatResponseDTO {\n+  success: boolean;\n+  data?: {\n+    content: string;\n+    model: string;\n+    usage: TokenUsage;\n+    latency: number;\n+  };\n+  error?: {\n+    code: string;\n+    message: string;\n+  };\n+}\n\nCREATED: packages/features/ai-chat/lib/dto/AiChatInteractionLogDTO.ts\n+import type { AiChatInteractionStatus } from "@calcom/prisma/client";\n+\n+export interface AiChatInteractionLogDTO {\n+  id: number;\n+  userId: number | null;\n+  profileId: number | null;\n+  teamId: number | null;\n+  orgId: number | null;\n+  model: string;\n+  inputTokens: number;\n+  outputTokens: number;\n+  totalTokens: number;\n+  latency: number;\n+  status: AiChatInteractionStatus;\n+  createdAt: Date;\n+}\n\nCREATED: packages/features/ai-chat/lib/dto/index.ts\n+export * from "./AiChatInteractionLogDTO";\n+export * from "./ChatMessage.dto";\n+export * from "./ChatResponse.dto";\n+',
-          codegen_diff:
-            "GENERATED:\n  -- Data Transfer Objects for API layer\n  -- ChatMessageDTO: Request/response message format\n  -- ChatResponseDTO: API response with success/error handling\n  -- AiChatInteractionLogDTO: Log DTO matching database schema\n  -- All DTOs follow Cal.com patterns",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/lib/providers/AIProvider.interface.ts defining to provider contract",
-          file: "packages/features/ai-chat/lib/providers/AIProvider.interface.ts",
-          test_code:
-            "function test_plan_item_0_7() {\n  const fs = require('fs');\n  const path = require('path');\n  \n  const providerFile = 'packages/features/ai-chat/lib/providers/AIProvider.interface.ts';\n  if (!fs.existsSync(providerFile)) {\n    console.log('❌ AIProvider.interface.ts does not exist');\n    return false;\n  }\n  \n  const content = fs.readFileSync(providerFile, 'utf8');\n  \n  const hasGenerateResponse = content.includes('generateResponse(');\n  const hasChatMessageParam = content.includes('messages: ChatMessage[]');\n  const hasSystemPromptParam = content.includes('systemPrompt?: string');\n  const hasAIProviderResponse = content.includes('Promise<AIProviderResponse>');\n  const hasInterfaceKeyword = content.includes('export interface AIProvider');\n  \n  if (hasInterfaceKeyword && hasGenerateResponse && hasChatMessageParam &&\n      hasSystemPromptParam && hasAIProviderResponse) {\n    console.log('✅ AIProvider interface defined correctly');\n    return true;\n  }\n  console.log('❌ AIProvider.interface.ts incomplete');\n  return false;\n}",
-          test_diff:
-            'CREATED: packages/features/ai-chat/lib/providers/AIProvider.interface.ts\n+import type { AIProviderResponse, ChatMessage } from "../types";\n+\n+export interface AIProvider {\n+  generateResponse(messages: ChatMessage[], systemPrompt?: string): Promise<AIProviderResponse>;\n+}\n\nCREATED: packages/features/ai-chat/lib/index.ts\n+export * from "./dto";\n+export * from "./types";\n+',
-          codegen_diff:
-            "GENERATED:\n  -- Provider abstraction interface for AI implementations\n  -- Framework-agnostic, no Next.js/tRPC dependencies\n  -- Enables provider swapping (OpenAI, Anthropic, custom)\n  -- Single method contract: generateResponse(messages, systemPrompt?)",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-      ],
-    },
-  ],
-  plan_item_1: [
-    {
-      title: "Phase 2: Provider Infrastructure",
-      order: 1,
-      tasks: [
-        {
-          title:
-            "Implement OpenAI provider in packages/features/ai-chat/lib/providers/openai.ts with generateResponse() method",
-          file: "packages/features/ai-chat/lib/providers/openai.ts",
-          test_code: "test_plan_item_1_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Handle OpenAI-specific errors: rate limits (429), provider errors (5xx), timeouts",
-          file: "packages/features/ai-chat/lib/providers/NoOpProvider.ts",
-          test_code: "test_plan_item_1_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Calculate and return latency metrics in response",
-          file: "packages/features/ai-chat/lib/prompts/systemPrompt.ts",
-          test_code: "test_plan_item_1_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Implement NoOp provider in packages/features/ai-chat/lib/providers/NoOpProvider.ts with configurable mock responses",
-          file: "packages/features/ai-chat/lib/providers/index.ts",
-          test_code: "test_plan_item_1_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Support throwing configurable errors for testing edge cases",
-          file: ".env.example",
-          test_code: "test_plan_item_1_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Create system prompt template in packages/features/ai-chat/lib/prompts/systemPrompt.ts",
-          file: "TBD",
-          test_code: "test_plan_item_1_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Define assistant role, capabilities (setup, integrations, features), constraints (no data access, no resource modification), and safety guidelines",
-          file: "TBD",
-          test_code: "test_plan_item_1_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Export providers and prompt as getAiChatProvider() factory function (environment-based selection)",
-          file: "TBD",
-          test_code: "test_plan_item_1_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-      ],
-    },
-  ],
-  plan_item_2: [
-    {
-      title: "Phase 3: Data Access & Rate Limiting",
-      order: 2,
-      tasks: [
-        {
-          title:
-            "Create packages/features/ai-chat/repositories/IAiChatInteractionRepository.ts interface",
-          file: "packages/features/ai-chat/repositories/IAiChatInteractionRepository.ts",
-          test_code: "test_plan_item_2_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Implement PrismaAiChatInteractionRepository with logInteraction(), getUsageByUser(), getUsageByTeam(), getUsageByOrg()",
-          file: "packages/features/ai-chat/repositories/PrismaAiChatInteractionRepository.ts",
-          test_code: "test_plan_item_2_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Use Prisma select statements (never include) for all queries",
-          file: "packages/features/ai-chat/lib/rateLimiter/IRateLimiter.ts",
-          test_code: "test_plan_item_2_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Export DTOs from repository methods",
-          file: "packages/features/ai-chat/lib/rateLimiter/PerUserRateLimiter.ts",
-          test_code: "test_plan_item_2_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Handle database errors with ErrorWithCode",
-          file: ".env.example",
-          test_code: "test_plan_item_2_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/lib/rateLimiter/IRateLimiter.ts interface",
-          file: "TBD",
-          test_code: "test_plan_item_2_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title: "Implement PerUserRateLimiter with Redis counters",
-          file: "TBD",
-          test_code: "test_plan_item_2_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title: "Implement checkLimit() to throw error when exceeded",
-          file: "TBD",
-          test_code: "test_plan_item_2_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Implement recordUsage() to increment counter and set expiry",
-          file: "TBD",
-          test_code: "test_plan_item_2_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Handle Redis failures gracefully (fail-open to not block users)",
-          file: "TBD",
-          test_code: "test_plan_item_2_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title: "Support configurable limits via environment variables",
-          file: "TBD",
-          test_code: "test_plan_item_2_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-      ],
-    },
-  ],
-  plan_item_3: [
-    {
-      title: "Phase 4: Domain Service Orchestration",
-      order: 3,
-      tasks: [
-        {
-          title:
-            "Create packages/features/ai-chat/lib/AiChatService.ts implementing IAiChatService",
-          file: "packages/features/ai-chat/lib/AiChatService.ts",
-          test_code: "test_plan_item_3_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Define sendMessage() method taking userId, profileId, teamId, orgId, and conversation history",
-          file: "packages/features/ai-chat/lib/IAiChatService.ts",
-          test_code: "test_plan_item_3_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Implement orchestration: rateLimiter.checkLimit() → validateMessages() → prepare conversation with system prompt → provider.generateResponse() → repository.logInteraction()",
-          file: "packages/features/ai-chat/di/AiChatService.container.ts",
-          test_code: "test_plan_item_3_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Add retry logic with exponential backoff for transient failures (max 3 attempts)",
-          file: "packages/features/ai-chat/lib/zod/schemas.ts",
-          test_code: "test_plan_item_3_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Add timeout handling (30 seconds default)",
-          file: "TBD",
-          test_code: "test_plan_item_3_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title: "Convert all errors to ErrorWithCode with appropriate codes",
-          file: "TBD",
-          test_code: "test_plan_item_3_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Add comprehensive logging for request start, success, failures, latency, and token usage",
-          file: "TBD",
-          test_code: "test_plan_item_3_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/di/AiChatService.container.ts factory function",
-          file: "TBD",
-          test_code: "test_plan_item_3_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Resolve provider based on environment (OpenAI or NoOp)",
-          file: "TBD",
-          test_code: "test_plan_item_3_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title: "Resolve rate limiter and repository instances",
-          file: "TBD",
-          test_code: "test_plan_item_3_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title: "Handle missing environment variables with clear errors",
-          file: "TBD",
-          test_code: "test_plan_item_3_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-      ],
-    },
-  ],
-  plan_item_4: [
-    {
-      title: "Phase 5: API Layer with tRPC",
-      order: 4,
-      tasks: [
-        {
-          title:
-            "Create packages/trpc/server/routers/viewer/loggedInViewer/aiChat/_router.ts",
-          file: "packages/trpc/server/routers/viewer/loggedInViewer/aiChat/_router.ts",
-          test_code: "test_plan_item_4_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title: "Import router, protectedProcedure from @calcom/trpc/server",
-          file: "packages/trpc/server/routers/viewer/loggedInViewer/_router.ts",
-          test_code: "test_plan_item_4_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Import getAiChatService() from @calcom/features/ai-chat",
-          file: "TBD",
-          test_code: "test_plan_item_4_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Import sendMessageInputSchema and chatResponseSchema from Zod",
-          file: "TBD",
-          test_code: "test_plan_item_4_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Define aiChatRouter with sendMessage mutation",
-          file: "TBD",
-          test_code: "test_plan_item_4_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "In mutation handler: extract userId from ctx.user, get profileId/teamId/orgId from user context (nullable), call aiChatService.sendMessage()",
-          file: "TBD",
-          test_code: "test_plan_item_4_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title: "Wrap service call in try/catch to handle all error types",
-          file: "TBD",
-          test_code: "test_plan_item_4_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Convert ErrorWithCode to TRPCError with matching codes and messages",
-          file: "TBD",
-          test_code: "test_plan_item_4_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Return ChatResponseDTO with success flag and data structure",
-          file: "TBD",
-          test_code: "test_plan_item_4_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Integrate aiChatRouter into viewer.loggedInViewer parent router",
-          file: "TBD",
-          test_code: "test_plan_item_4_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-      ],
-    },
-  ],
-  plan_item_5: [
-    {
-      title: "Phase 6: UI Components - Message, Input, Welcome",
-      order: 5,
-      tasks: [
-        {
-          title:
-            "Create apps/web/app/(use-page-wrapper)/ai-chat/components/ChatMessage.tsx",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/ChatMessage.tsx",
-          test_code: "test_plan_item_5_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Implement role-based styling (user: blue background right-aligned, assistant: gray background left-aligned)",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/ChatInput.tsx",
-          test_code: "test_plan_item_5_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Integrate react-markdown for assistant content rendering",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/WelcomeMessage.tsx",
-          test_code: "test_plan_item_5_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Add syntax highlighting for code blocks",
-          file: "apps/web/public/static/locales/en/common.json",
-          test_code: "test_plan_item_5_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Add copy button for code snippets",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/*.test.tsx",
-          test_code: "test_plan_item_5_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Create apps/web/app/(use-page-wrapper)/ai-chat/components/ChatInput.tsx",
-          file: "TBD",
-          test_code: "test_plan_item_5_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Implement auto-resize textarea with character counter (X/4000)",
-          file: "TBD",
-          test_code: "test_plan_item_5_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title: "Add send button (Enter submits, Shift+Enter for newline)",
-          file: "TBD",
-          test_code: "test_plan_item_5_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Add rate limit indicator showing current usage/limit",
-          file: "TBD",
-          test_code: "test_plan_item_5_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title: "Handle disabled state and countdown timer",
-          file: "TBD",
-          test_code: "test_plan_item_5_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title:
-            "Create apps/web/app/(use-page-wrapper)/ai-chat/components/WelcomeMessage.tsx",
-          file: "TBD",
-          test_code: "test_plan_item_5_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title: "Display welcome header with capabilities list",
-          file: "TBD",
-          test_code: "test_plan_item_5_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-        {
-          title:
-            "Add clickable example questions that trigger onExampleClick callback",
-          file: "TBD",
-          test_code: "test_plan_item_5_12()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 12,
-        },
-        {
-          title: "Add privacy notice about data access limitations",
-          file: "TBD",
-          test_code: "test_plan_item_5_13()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 13,
-        },
-        {
-          title:
-            "Add all i18n strings to apps/web/public/static/locales/en/common.json under ai_chat namespace",
-          file: "TBD",
-          test_code: "test_plan_item_5_14()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 14,
-        },
-        {
-          title:
-            "Write unit tests for each component using React Testing Library",
-          file: "TBD",
-          test_code: "test_plan_item_5_15()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 15,
-        },
-      ],
-    },
-  ],
-  plan_item_6: [
-    {
-      title: "Phase 7: Chat Container & Page Integration",
-      order: 6,
-      tasks: [
-        {
-          title:
-            "Create apps/web/app/(use-page-wrapper)/ai-chat/components/ChatContainer.tsx",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/ChatContainer.tsx",
-          test_code: "test_plan_item_6_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Implement React state: messages array, isLoading boolean, error string|null, rateLimit object",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/components/ChatContainer.test.tsx",
-          test_code: "test_plan_item_6_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Integrate trpc.viewer.loggedInViewer.aiChat.sendMessage.useMutation()",
-          file: "apps/web/app/(use-page-wrapper)/ai-chat/page.tsx",
-          test_code: "test_plan_item_6_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Render WelcomeMessage when messages.length === 0",
-          file: "apps/web/app/(use-page-wrapper)/components/Sidebar.tsx or equivalent",
-          test_code: "test_plan_item_6_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title: "Render messages array mapping each to ChatMessage component",
-          file: "TBD",
-          test_code: "test_plan_item_6_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title: "Integrate ChatInput at bottom with onSubmit handler",
-          file: "TBD",
-          test_code: "test_plan_item_6_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Implement handleSendMessage() with validation, state updates, API call, and error handling",
-          file: "TBD",
-          test_code: "test_plan_item_6_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title: "Add auto-scroll to bottom on new messages",
-          file: "TBD",
-          test_code: "test_plan_item_6_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title: "Show loading indicator and error banner as appropriate",
-          file: "TBD",
-          test_code: "test_plan_item_6_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Handle rate limit state by disabling input and showing countdown",
-          file: "TBD",
-          test_code: "test_plan_item_6_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title: "Create apps/web/app/(use-page-wrapper)/ai-chat/page.tsx",
-          file: "TBD",
-          test_code: "test_plan_item_6_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title: "Set page metadata (title, description, OpenGraph tags)",
-          file: "TBD",
-          test_code: "test_plan_item_6_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-        {
-          title:
-            "Use dashboard layout wrapper (existing (use-page-wrapper) layout)",
-          file: "TBD",
-          test_code: "test_plan_item_6_12()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 12,
-        },
-        {
-          title: "Render ChatContainer as main content",
-          file: "TBD",
-          test_code: "test_plan_item_6_13()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 13,
-        },
-        {
-          title: "Import and use useTranslations hook from next-intl",
-          file: "TBD",
-          test_code: "test_plan_item_6_14()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 14,
-        },
-        {
-          title: "Add page header with title",
-          file: "TBD",
-          test_code: "test_plan_item_6_15()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 15,
-        },
-        {
-          title:
-            "Locate sidebar/navigation component and add 'AI Assistant' link under Help & Support section",
-          file: "TBD",
-          test_code: "test_plan_item_6_16()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 16,
-        },
-        {
-          title: "Test navigation from sidebar to chat page works",
-          file: "TBD",
-          test_code: "test_plan_item_6_17()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 17,
-        },
-      ],
-    },
-  ],
-  plan_item_7: [
-    {
-      title: "Phase 8: Unit & Integration Testing",
-      order: 7,
-      tasks: [
-        {
-          title:
-            "Write unit tests for AiChatService covering: happy path, rate limit, invalid input, provider errors (all types), retry logic, and metadata logging",
-          file: "packages/features/ai-chat/**/*.test.ts",
-          test_code: "test_plan_item_7_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Write unit tests for PrismaAiChatInteractionRepository covering: logInteraction(), usage queries, and error handling",
-          file: "packages/features/ai-chat/**/*.integration-test.ts",
-          test_code: "test_plan_item_7_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Write unit tests for PerUserRateLimiter covering: checkLimit(), recordUsage(), counter expiry, and Redis failures",
-          file: "TBD",
-          test_code: "test_plan_item_7_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Write unit tests for OpenAIProvider covering: generateResponse(), error handling, and latency calculation",
-          file: "TBD",
-          test_code: "test_plan_item_7_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title:
-            "Write unit tests for NoOpProvider covering: mock responses and error throwing",
-          file: "TBD",
-          test_code: "test_plan_item_7_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Write unit tests for ChatMessage covering: user/assistant rendering, markdown, copy button, and accessibility",
-          file: "TBD",
-          test_code: "test_plan_item_7_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Write unit tests for ChatInput covering: input validation, character counting, send behavior, and rate limit display",
-          file: "TBD",
-          test_code: "test_plan_item_7_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Write unit tests for WelcomeMessage covering: rendering and example clicking",
-          file: "TBD",
-          test_code: "test_plan_item_7_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title:
-            "Write integration tests for AiChatService with test database and test Redis",
-          file: "TBD",
-          test_code: "test_plan_item_7_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Run vitest with coverage: yarn vitest run packages/features/ai-chat --coverage",
-          file: "TBD",
-          test_code: "test_plan_item_7_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title: "Review coverage report and add tests for uncovered code",
-          file: "TBD",
-          test_code: "test_plan_item_7_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-      ],
-    },
-  ],
-  plan_item_8: [
-    {
-      title: "Phase 9: E2E Testing with Playwright",
-      order: 8,
-      tasks: [
-        {
-          title: "Create apps/web/e2e/ai-chat.e2e.ts",
-          file: "apps/web/e2e/ai-chat.e2e.ts",
-          test_code: "test_plan_item_8_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title: "Setup test fixture with authenticated user login",
-          file: "TBD",
-          test_code: "test_plan_item_8_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title:
-            "Write test: 'user navigates to AI chat page and sees welcome message'",
-          file: "TBD",
-          test_code: "test_plan_item_8_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Write test: 'user clicks example question and it populates input'",
-          file: "TBD",
-          test_code: "test_plan_item_8_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title:
-            "Write test: 'user sends message and receives assistant response'",
-          file: "TBD",
-          test_code: "test_plan_item_8_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Write test: 'user sees loading state while waiting for response'",
-          file: "TBD",
-          test_code: "test_plan_item_8_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Write test: 'user sees error message when provider fails and can retry'",
-          file: "TBD",
-          test_code: "test_plan_item_8_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Write test: 'user is rate limited after sending too many messages'",
-          file: "TBD",
-          test_code: "test_plan_item_8_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title:
-            "Write test: 'user can send another message after rate limit expires'",
-          file: "TBD",
-          test_code: "test_plan_item_8_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Write test: 'accessibility - keyboard navigation works for all interactions'",
-          file: "TBD",
-          test_code: "test_plan_item_8_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title:
-            "Write test: 'accessibility - screen reader announces new messages'",
-          file: "TBD",
-          test_code: "test_plan_item_8_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title: "Add test.describe() to group related tests",
-          file: "TBD",
-          test_code: "test_plan_item_8_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-        {
-          title: "Use data-testid attributes for stable selectors",
-          file: "TBD",
-          test_code: "test_plan_item_8_12()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 12,
-        },
-        {
-          title: "Add cleanup in afterEach() if needed",
-          file: "TBD",
-          test_code: "test_plan_item_8_13()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 13,
-        },
-        {
-          title: "Configure test to run with PLAYWRIGHT_HEADLESS=1",
-          file: "TBD",
-          test_code: "test_plan_item_8_14()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 14,
-        },
-      ],
-    },
-  ],
-  plan_item_9: [
-    {
-      title: "Phase 10: Infrastructure, Monitoring & Documentation",
-      order: 9,
-      tasks: [
-        {
-          title: "Add logging statements in AiChatService using criticalLogger",
-          file: "packages/features/ai-chat/lib/AiChatService.ts",
-          test_code: "test_plan_item_9_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title:
-            "Log structured JSON: {timestamp, level, service, requestId, userId (hashed), event, data: {...}}",
-          file: ".env.example",
-          test_code: "test_plan_item_9_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Ensure all message content is redacted from logs",
-          file: "turbo.json",
-          test_code: "test_plan_item_9_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title:
-            "Emit metrics for: token usage (input, output, total) and latency on every response",
-          file: "packages/features/ai-chat/README.md",
-          test_code: "test_plan_item_9_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title:
-            "Configure alert rules: error rate >5% (5 min), p95 latency >12s (10 min), provider outage >50% error rate (2 min), and unusual usage spikes",
-          file: "agents/ai-chat-architecture.md",
-          test_code: "test_plan_item_9_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Update .env.example with all AI_CHAT_* and OPENAI_* variables with descriptions",
-          file: "agents/ai-chat-development.md",
-          test_code: "test_plan_item_9_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title:
-            "Update turbo.json globalEnv array with new environment variables",
-          file: "agents/ai-chat-operations.md",
-          test_code: "test_plan_item_9_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title:
-            "Create packages/features/ai-chat/README.md with: architecture, file structure, usage guide, environment variables, testing, and troubleshooting",
-          file: "agents/AGENTS.md",
-          test_code: "test_plan_item_9_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title:
-            "Create agents/ai-chat-architecture.md with diagrams and data flow",
-          file: "TBD",
-          test_code: "test_plan_item_9_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title: "Create agents/ai-chat-development.md with extension guides",
-          file: "TBD",
-          test_code: "test_plan_item_9_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title:
-            "Create agents/ai-chat-operations.md with runbooks and alerting procedures",
-          file: "TBD",
-          test_code: "test_plan_item_9_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title: "Update AGENTS.md to reference new AI chat documentation",
-          file: "TBD",
-          test_code: "test_plan_item_9_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-      ],
-    },
-  ],
-  plan_item_10: [
-    {
-      title: "Phase 11: Validation & Launch Preparation",
-      order: 10,
-      tasks: [
-        {
-          title:
-            "Run type checking: yarn type-check:ci --force packages/features/ai-chat",
-          file: "packages/features/ai-chat/**/*",
-          test_code: "test_plan_item_10_0()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 0,
-        },
-        {
-          title: "Run type checking: yarn type-check:ci --force packages/trpc",
-          file: "packages/trpc/**/*",
-          test_code: "test_plan_item_10_1()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 1,
-        },
-        {
-          title: "Run type checking: yarn type-check:ci --force apps/web",
-          file: "apps/web/**/*",
-          test_code: "test_plan_item_10_2()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 2,
-        },
-        {
-          title: "Fix all type errors before proceeding",
-          file: "TBD",
-          test_code: "test_plan_item_10_3()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 3,
-        },
-        {
-          title:
-            "Run linting: yarn biome check --write packages/features/ai-chat",
-          file: "TBD",
-          test_code: "test_plan_item_10_4()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 4,
-        },
-        {
-          title:
-            "Run linting: yarn biome check --write apps/web/app/(use-page-wrapper)/ai-chat",
-          file: "TBD",
-          test_code: "test_plan_item_10_5()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 5,
-        },
-        {
-          title: "Fix all linting warnings and errors",
-          file: "TBD",
-          test_code: "test_plan_item_10_6()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 6,
-        },
-        {
-          title: "Verify Biome formatting applied correctly",
-          file: "TBD",
-          test_code: "test_plan_item_10_7()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 7,
-        },
-        {
-          title:
-            "Run full unit test suite: yarn vitest run packages/features/ai-chat --coverage",
-          file: "TBD",
-          test_code: "test_plan_item_10_8()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 8,
-        },
-        {
-          title:
-            "Run full integration test suite: yarn test packages/features/ai-chat -- --integrationTestsOnly",
-          file: "TBD",
-          test_code: "test_plan_item_10_9()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 9,
-        },
-        {
-          title:
-            "Run full E2E test suite: PLAYWRIGHT_HEADLESS=1 yarn e2e ai-chat.e2e.ts",
-          file: "TBD",
-          test_code: "test_plan_item_10_10()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 10,
-        },
-        {
-          title:
-            "Validate against success criteria: 10% MAU adoption (can't verify yet), median response <3s (can't verify yet), error rate <1% (can't verify yet), tests pass, code quality gates pass",
-          file: "TBD",
-          test_code: "test_plan_item_10_11()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 11,
-        },
-        {
-          title: "Document any known issues or limitations in README",
-          file: "TBD",
-          test_code: "test_plan_item_10_12()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 12,
-        },
-        {
-          title: "Prepare deployment notes and rollback plan if needed",
-          file: "TBD",
-          test_code: "test_plan_item_10_13()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 13,
-        },
-        {
-          title:
-            "Confirm all environment variables are set for production environment",
-          file: "TBD",
-          test_code: "test_plan_item_10_14()",
-          test_diff: "",
-          codegen_diff: "",
-          test_results: [],
-          tests_total: 1,
-          tests_passed: 1,
-          order: 14,
-        },
-      ],
-    },
-  ],
-};
 
 // --- Sub-components ---
 
@@ -1762,6 +146,14 @@ const StatusBadge = ({ status, tests }: { status: string; tests: any }) => {
       <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold border border-emerald-100">
         <CheckCircle2 className="w-3 h-3" />
         <span>PASS</span>
+      </div>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[9px] font-bold border border-amber-200">
+        <Info className="w-3 h-3" />
+        <span>REVIEW</span>
       </div>
     );
   }
@@ -1777,6 +169,90 @@ const StatusBadge = ({ status, tests }: { status: string; tests: any }) => {
     <div className="flex items-center gap-1.5 px-2 py-0.5 bg-zinc-50 text-primary-color rounded text-[9px] font-bold border border-zinc-100">
       <Circle className="w-3 h-3" />
       <span>WAITING</span>
+    </div>
+  );
+};
+
+// Renders file diff content (used in CodeFileCard and in Changed files slider)
+const FileDiffView = ({
+  change,
+}: {
+  change: { path: string; lang: string; content: string };
+}) => {
+  const lines = change.content?.split("\n") || [];
+  return (
+    <div className="min-w-0 overflow-x-auto" style={{ contain: "inline-size" }}>
+      <table className="w-full border-collapse min-w-max">
+        <tbody>
+          {lines.map((line, idx) => {
+            const isAddition = line.startsWith("+") && !line.startsWith("+++");
+            const isRemoval = line.startsWith("-") && !line.startsWith("---");
+            const isHunkHeader = line.startsWith("@@");
+            const isFileHeader = line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("+++") || line.startsWith("---");
+            const lineNum = idx + 1;
+            let rowBg = "";
+            if (isAddition) rowBg = "bg-emerald-50/50";
+            else if (isRemoval) rowBg = "bg-red-50/50";
+            else if (isHunkHeader) rowBg = "bg-blue-50/50";
+            else if (isFileHeader) rowBg = "bg-zinc-50/30";
+            let textClass = "text-[#022019]";
+            if (isAddition) textClass = "text-emerald-700";
+            else if (isRemoval) textClass = "text-red-700";
+            else if (isHunkHeader) textClass = "text-blue-600 font-medium";
+            else if (isFileHeader) textClass = "text-zinc-400 italic";
+            return (
+              <tr key={idx} className={rowBg}>
+                <td className="select-none text-right pr-4 pl-4 py-0.5 w-12 bg-[#FAFAFA] border-r border-gray-100">
+                  <span className="text-[11px] text-zinc-400 font-mono">
+                    {lineNum.toString().padStart(2, "0")}
+                  </span>
+                </td>
+                <td className="pl-4 py-0.5 font-mono text-[11px] whitespace-pre">
+                  <span className={textClass}>{line || " "}</span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// Code File Card Component with collapsible sections
+const CodeFileCard = ({
+  change,
+}: {
+  change: {
+    layerTitle: string;
+    taskTitle: string;
+    path: string;
+    lang: string;
+    content: string;
+    status: string;
+  };
+}) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-4 py-3 bg-[#F5F5F5] border-b border-gray-200 flex items-center justify-between gap-3 hover:bg-[#EEEEEE] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <ChevronDown
+            className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${
+              isExpanded ? "" : "-rotate-90"
+            }`}
+          />
+          <span className="text-xs font-medium text-[#022019] truncate">
+            {change.path}
+          </span>
+        </div>
+      </button>
+      {isExpanded && (
+        <FileDiffView change={{ path: change.path, lang: change.lang, content: change.content }} />
+      )}
     </div>
   );
 };
@@ -1893,411 +369,7 @@ const mapApiStatusToUI = (apiStatus: string): string => {
   return statusMap[apiStatus] || apiStatus.toLowerCase();
 };
 
-// New MockTaskCard component handling inline expansion with test_diff and codegen_diff
-const MockTaskCard = ({
-  task,
-  isExpanded,
-  onToggle,
-  taskIndex,
-  phaseIndex,
-}: {
-  task: MockTask;
-  isExpanded: boolean;
-  onToggle: () => void;
-  taskIndex: number;
-  phaseIndex: number;
-}) => {
-  const [activeTab, setActiveTab] = React.useState<
-    "test_diff" | "codegen" | "test_code"
-  >("test_diff");
-  const [isGeneratingCode, setIsGeneratingCode] = React.useState(false);
-  const [streamedCode, setStreamedCode] = React.useState("");
-  const [codeGenComplete, setCodeGenComplete] = React.useState(false);
-
-  const hasTestDiff = task.test_diff && task.test_diff.length > 0;
-  const hasCodegenDiff = task.codegen_diff && task.codegen_diff.length > 0;
-
-  // Streaming code generation simulation
-  const handleCodeGen = useCallback(() => {
-    if (!hasTestDiff || isGeneratingCode) return;
-
-    setIsGeneratingCode(true);
-    setStreamedCode("");
-    setActiveTab("codegen");
-
-    // Use codegen_diff if available, otherwise generate placeholder based on test_diff
-    const codeToStream = hasCodegenDiff 
-      ? task.codegen_diff 
-      : `// Generated implementation for:\n// ${task.title}\n// File: ${task.file}\n\n// Implementation based on test requirements:\n${task.test_diff}`;
-    
-    let currentIndex = 0;
-    const charsPerTick = 3; // Characters to add per tick
-    const tickInterval = 20; // Milliseconds between ticks
-
-    const streamInterval = setInterval(() => {
-      if (currentIndex < codeToStream.length) {
-        const nextChunk = codeToStream.slice(
-          currentIndex,
-          currentIndex + charsPerTick
-        );
-        setStreamedCode((prev) => prev + nextChunk);
-        currentIndex += charsPerTick;
-      } else {
-        clearInterval(streamInterval);
-        setIsGeneratingCode(false);
-        setCodeGenComplete(true);
-      }
-    }, tickInterval);
-
-    return () => clearInterval(streamInterval);
-  }, [hasTestDiff, hasCodegenDiff, isGeneratingCode, task.codegen_diff, task.test_diff, task.title, task.file]);
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard!");
-  };
-
-  return (
-    <div
-      className={`
-      bg-background border rounded-xl transition-all duration-300 overflow-hidden
-      ${isExpanded ? "ring-1 ring-zinc-900 border-zinc-900 shadow-md" : "border-zinc-200 hover:border-zinc-300"}
-    `}
-    >
-      {/* Header (Clickable for toggle) */}
-      <div
-        onClick={onToggle}
-        className="p-4 cursor-pointer flex flex-col gap-3 relative"
-      >
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className={`p-1.5 rounded-md ${codeGenComplete ? "bg-emerald-50 text-emerald-600" : "bg-zinc-100 text-primary-color"}`}
-            >
-              <Code2 className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-primary-color">
-                {task.title}
-              </div>
-              <div className="text-[10px] font-mono text-primary-color">
-                {task.file}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold border ${
-                codeGenComplete
-                  ? "bg-emerald-100 text-emerald-700 border-emerald-100"
-                  : isGeneratingCode
-                    ? "bg-blue-100 text-blue-700 border-blue-100"
-                    : "bg-zinc-50 text-primary-color border-zinc-100"
-              }`}
-            >
-              {codeGenComplete ? (
-                <>
-                  <CheckCircle2 className="w-3 h-3" />
-                  <span>COMPLETE</span>
-                </>
-              ) : isGeneratingCode ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>GENERATING</span>
-                </>
-              ) : (
-                <>
-                  <Circle className="w-3 h-3" />
-                  <span>
-                    {task.tests_passed}/{task.tests_total} TESTS
-                  </span>
-                </>
-              )}
-            </div>
-            <ChevronDown
-              className={`w-4 h-4 text-primary-color transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
-            />
-          </div>
-        </div>
-
-        {/* Progress bar when generating */}
-        {isGeneratingCode && (
-          <div className="w-full h-1 bg-zinc-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 transition-all duration-300 ease-out"
-              style={{
-                width: `${(streamedCode.length / (task.codegen_diff?.length || 1)) * 100}%`,
-              }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Expanded Content Area */}
-      {isExpanded && (
-        <div className="border-t border-zinc-100 bg-zinc-50/50 animate-in slide-in-from-top-2 duration-200">
-          {/* Tabs */}
-          <div className="flex items-center justify-between px-4 border-b border-zinc-100 bg-background">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTab("test_diff");
-                }}
-                className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "test_diff" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
-              >
-                <TestTube className="w-3 h-3" />
-                Test Diff
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTab("test_code");
-                }}
-                className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "test_code" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
-              >
-                <ShieldCheck className="w-3 h-3" />
-                Test Code
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTab("codegen");
-                }}
-                className={`flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold border-b-2 transition-colors ${activeTab === "codegen" ? "border-primary-color text-primary-color" : "border-transparent text-primary-color hover:text-primary-color"}`}
-              >
-                <FileDiff className="w-3 h-3" />
-                Code Gen
-                {codeGenComplete && (
-                  <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[9px]">
-                    ✓
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Code Gen Button */}
-            {activeTab === "codegen" && !codeGenComplete && hasTestDiff && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCodeGen();
-                }}
-                disabled={isGeneratingCode}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${
-                  isGeneratingCode
-                    ? "bg-blue-100 text-blue-700 cursor-not-allowed"
-                    : "bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color"
-                }`}
-              >
-                {isGeneratingCode ? (
-                  <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3 h-3" />
-                    Generate Code
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-
-          {/* Tab Views */}
-          <div className="p-4 min-h-[200px]">
-            {/* Test Diff Tab */}
-            {activeTab === "test_diff" && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <TestTube className="w-3.5 h-3.5 text-primary-color" />
-                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
-                      Expected Test Changes
-                    </span>
-                  </div>
-                  {hasTestDiff && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(task.test_diff);
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-primary-color hover:bg-zinc-100 rounded transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copy
-                    </button>
-                  )}
-                </div>
-
-                {hasTestDiff ? (
-                  <div className="bg-background rounded-lg border border-zinc-200 overflow-hidden">
-                    <div className="px-3 py-2 bg-zinc-50/80 border-b border-zinc-100 flex items-center gap-2">
-                      <FileText className="w-3 h-3 text-primary-color" />
-                      <span className="text-[10px] font-mono font-medium text-primary-color">
-                        {task.file}
-                      </span>
-                    </div>
-                    <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed bg-background max-h-[300px] overflow-y-auto">
-                      {task.test_diff
-                        .split("\n")
-                        .map((line: string, i: number) => (
-                          <div
-                            key={i}
-                            className={`${
-                              line.startsWith("+")
-                                ? "bg-emerald-50 text-emerald-900 -mx-3 px-3"
-                                : line.startsWith("-")
-                                  ? "bg-red-50 text-red-900 -mx-3 px-3"
-                                  : "text-primary-color"
-                            }`}
-                          >
-                            <span className="inline-block w-6 text-primary-color select-none text-right mr-3 border-r border-zinc-100 pr-2">
-                              {i + 1}
-                            </span>
-                            {line}
-                          </div>
-                        ))}
-                    </pre>
-                  </div>
-                ) : (
-                  <div className="h-32 flex flex-col items-center justify-center text-primary-color border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
-                    <TestTube className="w-6 h-6 mb-3 opacity-50" />
-                    <p className="text-xs font-bold">No test diff available</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Test Code Tab */}
-            {activeTab === "test_code" && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-primary-color" />
-                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
-                      Test Code Definition
-                    </span>
-                  </div>
-                  {task.test_code && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(task.test_code);
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-primary-color hover:bg-zinc-100 rounded transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copy
-                    </button>
-                  )}
-                </div>
-
-                <div className="bg-background rounded-lg border border-zinc-200 overflow-hidden">
-                  <div className="p-4 overflow-x-auto max-h-[300px] overflow-y-auto">
-                    <SimpleCodeBlock code={task.test_code || ""} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Code Gen Tab */}
-            {activeTab === "codegen" && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileDiff className="w-3.5 h-3.5 text-primary-color" />
-                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
-                      Generated Code
-                    </span>
-                    {isGeneratingCode && (
-                      <span className="text-[9px] text-blue-600 animate-pulse">
-                        Streaming...
-                      </span>
-                    )}
-                  </div>
-                  {(streamedCode || codeGenComplete) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(task.codegen_diff);
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-primary-color hover:bg-zinc-100 rounded transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copy
-                    </button>
-                  )}
-                </div>
-
-                {!streamedCode && !isGeneratingCode && !codeGenComplete ? (
-                  <div className="h-40 flex flex-col items-center justify-center text-primary-color border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
-                    <Sparkles className="w-8 h-8 mb-3 opacity-50 text-primary-color" />
-                    {hasTestDiff ? (
-                      <>
-                        <p className="text-xs font-bold text-primary-color">
-                          Ready to generate code
-                        </p>
-                        <p className="text-[10px] text-primary-color mt-1">
-                          Click &quot;Generate Code&quot; button to start
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs font-bold text-primary-color">
-                          No code generation available
-                        </p>
-                        <p className="text-[10px] text-primary-color mt-1">
-                          This task doesn&apos;t have test diff defined
-                        </p>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="bg-zinc-900 rounded-lg border border-zinc-700 overflow-hidden">
-                    <div className="px-3 py-2 bg-zinc-800 border-b border-zinc-700 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3 h-3 text-zinc-400" />
-                        <span className="text-[10px] font-mono font-medium text-zinc-300">
-                          {task.file}
-                        </span>
-                      </div>
-                      {codeGenComplete && (
-                        <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Complete
-                        </span>
-                      )}
-                    </div>
-                    <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed text-zinc-100 max-h-[300px] overflow-y-auto">
-                      {(streamedCode || "")
-                        .split("\n")
-                        .map((line: string, i: number) => (
-                          <div key={i} className="text-zinc-100">
-                            <span className="inline-block w-6 text-zinc-500 select-none text-right mr-3 border-r border-zinc-700 pr-2">
-                              {i + 1}
-                            </span>
-                            {line}
-                          </div>
-                        ))}
-                      {isGeneratingCode && (
-                        <span className="inline-block w-2 h-4 bg-zinc-100 animate-pulse ml-1" />
-                      )}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Legacy TaskCard component for API data (kept for backward compatibility)
+// TaskCard for API task items (layers from getTaskSplittingItems)
 const TaskCard = ({
   task,
   isExpanded,
@@ -2351,7 +423,7 @@ const TaskCard = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <StatusBadge status={uiStatus} tests={task.tests} />
+            <StatusBadge status={uiStatus} tests={task.tests ?? { total: 0, passed: 0 }} />
             <ChevronDown
               className={`w-4 h-4 text-primary-color transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
             />
@@ -2364,7 +436,7 @@ const TaskCard = ({
             <div
               className="h-full bg-black transition-all duration-300 ease-out"
               style={{
-                width: `${(task.tests.passed / (task.tests.total || 1)) * 100}%`,
+                width: `${((task.tests?.passed ?? 0) / ((task.tests?.total ?? 0) || 1)) * 100}%`,
               }}
             />
           </div>
@@ -2402,7 +474,7 @@ const TaskCard = ({
               Verification
               {uiStatus === "completed" && (
                 <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[9px]">
-                  {task.tests.passed}/{task.tests.total}
+                  {task.tests?.passed ?? 0}/{task.tests?.total ?? 0}
                 </span>
               )}
             </button>
@@ -2455,24 +527,51 @@ const TaskCard = ({
                             <span className="text-[9px] font-bold text-primary-color uppercase">
                               {change.lang}
                             </span>
-                            <Copy className="w-3 h-3 text-primary-color cursor-pointer hover:text-primary-color" />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(change.content || "").then(
+                                  () => toast.success("Copied to clipboard"),
+                                  () => toast.error("Failed to copy")
+                                );
+                              }}
+                              className="p-0.5 rounded hover:bg-zinc-100"
+                              title="Copy file content"
+                            >
+                              <Copy className="w-3 h-3 text-primary-color cursor-pointer" />
+                            </button>
                           </div>
                         </div>
                         {change.content ? (
                           <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed bg-background">
                             {change.content
                               .split("\n")
-                              .map((line: string, i: number) => (
-                                <div
-                                  key={i}
-                                  className={`${line.startsWith("+") ? "bg-emerald-50 text-emerald-900 w-full block -mx-3 px-3" : "text-primary-color"}`}
-                                >
-                                  <span className="inline-block w-6 text-primary-color select-none text-right mr-3 border-r border-zinc-100 pr-2">
-                                    {i + 1}
-                                  </span>
-                                  {line}
-                                </div>
-                              ))}
+                              .map((line: string, i: number) => {
+                                // Determine line styling based on diff content
+                                let lineClass = "text-primary-color";
+                                if (line.startsWith("+") && !line.startsWith("+++")) {
+                                  // Added line (not file header)
+                                  lineClass = "bg-emerald-50 text-emerald-900 w-full block -mx-3 px-3";
+                                } else if (line.startsWith("-") && !line.startsWith("---")) {
+                                  // Removed line (not file header)
+                                  lineClass = "bg-red-50 text-red-900 w-full block -mx-3 px-3";
+                                } else if (line.startsWith("@@")) {
+                                  // Hunk header
+                                  lineClass = "bg-blue-50 text-blue-700 w-full block -mx-3 px-3 font-medium";
+                                } else if (line.startsWith("diff --git") || line.startsWith("index ")) {
+                                  // Git metadata
+                                  lineClass = "text-zinc-400 italic";
+                                }
+                                return (
+                                  <div key={i} className={lineClass}>
+                                    <span className="inline-block w-6 text-zinc-400 select-none text-right mr-3 border-r border-zinc-100 pr-2">
+                                      {i + 1}
+                                    </span>
+                                    {line}
+                                  </div>
+                                );
+                              })}
                           </pre>
                         ) : (
                           <div className="p-4 text-center text-[10px] font-mono text-primary-color italic bg-background flex flex-col items-center gap-2">
@@ -2603,13 +702,6 @@ export default function VerticalTaskExecution() {
   const itemNumberFromUrl = searchParams.get("itemNumber");
   const taskSplittingIdFromUrl = searchParams.get("taskSplittingId");
 
-  // Use mock data mode - set to true to use mock data
-  const [useMockData, setUseMockData] = useState(true);
-  const [activePlanItemKey, setActivePlanItemKey] = useState("plan_item_0");
-  const [expandedMockTaskKey, setExpandedMockTaskKey] = useState<string | null>(
-    null
-  );
-
   const [activeSliceId, setActiveSliceId] = useState(
     itemNumberFromUrl ? parseInt(itemNumberFromUrl) : 1
   );
@@ -2637,26 +729,232 @@ export default function VerticalTaskExecution() {
   const [globalLogs, setGlobalLogs] = useState<string[]>([]);
   const [showGlobalLogs, setShowGlobalLogs] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [isCreatingPR, setIsCreatingPR] = useState(false);
+  const [changedFilesSliderOpen, setChangedFilesSliderOpen] = useState(false);
+  const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<string | null>(null);
+  const hasShownFailedToastRef = useRef(false);
+  
+  // Refs for polling optimization - avoid dependency array issues while accessing current values
+  const allLayersRef = useRef<TaskLayer[]>([]);
+  const taskSplittingStatusRef = useRef<TaskSplittingStatusResponse | null>(null);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    allLayersRef.current = allLayers;
+  }, [allLayers]);
+  
+  useEffect(() => {
+    taskSplittingStatusRef.current = taskSplittingStatus;
+  }, [taskSplittingStatus]);
+
+  // --- UI-only: recipe/project info for the left header ---
+  const [recipePrompt, setRecipePrompt] = useState<string>("");
+  const [repoName, setRepoName] = useState<string>("Unknown Repository");
+  const [branchName, setBranchName] = useState<string>("main");
+
+  // --- UI-only: plan phases for the "Generated Plan" card (keep backend intact) ---
+  const [planPhases, setPlanPhases] = useState<Array<{ name: string; total: number }>>(
+    []
+  );
+
+  // --- Selected phase and task for code display ---
+  const [selectedPhaseIndex, setSelectedPhaseIndex] = useState<number>(0);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([0]));
+
+  // --- UI-only: chat messages (visual only; backend chat wiring can come later) ---
+  type ChatMessage = { role: "user" | "assistant"; content: string };
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const terminalRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const prevLayerCountRef = useRef<number>(0);
 
-  // Get mock plan items for sidebar
-  const mockPlanItemKeys = Object.keys(MOCK_PLAN_DATA).sort((a, b) => {
-    const orderA = MOCK_PLAN_DATA[a]?.[0]?.order || 0;
-    const orderB = MOCK_PLAN_DATA[b]?.[0]?.order || 0;
-    return orderA - orderB;
-  });
+  // Collect all changed file paths from layers and build tree for "Changed files" modal
+  const changedFilesTreeData = useMemo(() => {
+    const paths: string[] = [];
+    for (const layer of allLayers) {
+      for (const task of layer.tasks ?? []) {
+        if (task.file?.trim()) paths.push(task.file.trim());
+        for (const change of task.changes ?? []) {
+          if (change.path?.trim()) paths.push(change.path.trim());
+        }
+      }
+    }
+    const unique = Array.from(new Set(paths));
+    return buildFileTree(unique);
+  }, [allLayers]);
 
-  const activeMockPhase = MOCK_PLAN_DATA[activePlanItemKey]?.[0];
+  // Map file path -> change content for the slider detail view (first occurrence per path)
+  const pathToChange = useMemo(() => {
+    const map: Record<string, { path: string; lang: string; content: string }> = {};
+    for (const layer of allLayers) {
+      for (const task of layer.tasks ?? []) {
+        for (const change of task.changes ?? []) {
+          if (change.path?.trim() && !map[change.path.trim()]) {
+            map[change.path.trim()] = {
+              path: change.path.trim(),
+              lang: change.lang ?? "text",
+              content: change.content ?? "",
+            };
+          }
+        }
+        if (task.file?.trim() && !map[task.file.trim()]) {
+          const fromChange = task.changes?.find((c) => c.path?.trim() === task.file.trim());
+          map[task.file.trim()] = {
+            path: task.file.trim(),
+            lang: fromChange?.lang ?? "text",
+            content: fromChange?.content ?? "",
+          };
+        }
+      }
+    }
+    return map;
+  }, [allLayers]);
+
+  // Fetch recipe details (prompt + repo/branch) for the left header.
+  useEffect(() => {
+    if (!recipeId) return;
+    let mounted = true;
+    const fromStorage = (() => {
+      if (typeof window === "undefined") return null;
+      try {
+        const raw = localStorage.getItem(`recipe_${recipeId}`);
+        return raw ? (JSON.parse(raw) as any) : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const run = async () => {
+      try {
+        const details = await SpecService.getRecipeDetails(recipeId);
+        if (!mounted) return;
+        const prompt = (details.user_prompt || "").trim();
+        setRecipePrompt(prompt);
+        setRepoName(details.repo_name?.trim() || fromStorage?.repo_name?.trim() || "Unknown Repository");
+        setBranchName(details.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main");
+      } catch (e) {
+        if (!mounted) return;
+        setRecipePrompt(fromStorage?.user_prompt || "");
+        setRepoName(fromStorage?.repo_name?.trim() || "Unknown Repository");
+        setBranchName(fromStorage?.branch_name?.trim() || "main");
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, [recipeId]);
+
+  // Initialize the left "chat" with the prompt + a codegen helper message.
+  useEffect(() => {
+    if (!recipeId) return;
+    if (chatMessages.length > 0) return;
+    const prompt = recipePrompt?.trim() || "Can you implement this feature?";
+    setChatMessages([
+      { role: "user", content: prompt },
+      {
+        role: "assistant",
+        content:
+          "I've generated a granular specification for the AI Chat Metadata logging. Review the goals below before we proceed to implementation.",
+      },
+    ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeId, recipePrompt]);
+
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [chatMessages.length]);
+
+  // Notify when a new phase layer arrives (non-streaming "real time" progress)
+  useEffect(() => {
+    if (allLayers.length <= prevLayerCountRef.current) return;
+    const newLayers = allLayers.slice(prevLayerCountRef.current);
+    for (const layer of newLayers) {
+      toast.success(`Phase completed: ${layer.title}`);
+    }
+    prevLayerCountRef.current = allLayers.length;
+  }, [allLayers]);
+
+  // Reset local PR creation spinner if backend state updates
+  useEffect(() => {
+    if (taskSplittingStatus?.pr_status !== "IN_PROGRESS") {
+      setIsCreatingPR(false);
+    }
+  }, [taskSplittingStatus?.pr_status]);
+
+  // Poll for PR status after user clicks "Create PR".
+  // The main polling effects stop once codegen completes, so we need a
+  // dedicated poller that runs while pr_status is IN_PROGRESS.
+  useEffect(() => {
+    if (!taskSplittingId) return;
+    const prStatus = taskSplittingStatus?.pr_status;
+    if (prStatus !== "IN_PROGRESS" && !isCreatingPR) return;
+
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const status =
+          await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
+        if (!mounted) return;
+        // Only update if status changed
+        setTaskSplittingStatus((prev) => {
+          if (!prev) return status;
+          if (
+            prev.status === status.status &&
+            prev.codegen_status === status.codegen_status &&
+            prev.pr_status === status.pr_status &&
+            prev.pr_url === status.pr_url
+          ) {
+            return prev;
+          }
+          return status;
+        });
+
+        if (status.pr_url) {
+          toast.success("Pull request created!");
+        } else if (status.pr_status === "FAILED") {
+          toast.error(status.pr_error_message || "PR creation failed");
+        }
+      } catch (e) {
+        console.error("[Code Page] PR status poll error:", e);
+      }
+    };
+
+    const interval = setInterval(poll, 3000);
+    // Also poll immediately
+    poll();
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [taskSplittingId, taskSplittingStatus?.pr_status, isCreatingPR]);
 
   // Fetch plan by recipeId (new API: plan items come from getPlanStatusByRecipeId)
   useEffect(() => {
     if (!recipeId || planItems.length > 0) return;
     setIsLoadingPlanItems(true);
-    PlanService.getPlanStatusByRecipeId(recipeId)
-      .then((status) => {
+      PlanService.getPlanStatusByRecipeId(recipeId)
+        .then((status) => {
         if (status.plan) {
+          // Keep phase-level meta for "Generated Plan" card
+          try {
+            const phases = Array.isArray(status.plan.phases) ? status.plan.phases : [];
+            setPlanPhases(
+              phases.map((p: any, i: number) => ({
+                name: String(p?.name || `PHASE ${i + 1}`),
+                total: Array.isArray(p?.plan_items) ? p.plan_items.length : 0,
+              }))
+            );
+          } catch {
+            setPlanPhases([]);
+          }
           const items: PlanItem[] = [];
           let itemNumber = 1;
           status.plan.phases.forEach((phase) => {
@@ -2679,18 +977,18 @@ export default function VerticalTaskExecution() {
           });
           setPlanItems(items);
           setPlanId(recipeId);
-          const params = new URLSearchParams(searchParams.toString());
+            const params = new URLSearchParams(searchParams.toString());
           params.set("planId", recipeId);
           if (!params.get("itemNumber")) params.set("itemNumber", "1");
-          router.replace(`/task/${recipeId}/code?${params.toString()}`);
-        }
-      })
-      .catch((error) => {
-        console.error("Error fetching plan status:", error);
+            router.replace(`/task/${recipeId}/code?${params.toString()}`);
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching plan status:", error);
       })
       .finally(() => {
         setIsLoadingPlanItems(false);
-      });
+        });
   }, [recipeId, planItems.length]);
 
   // Submit task splitting when we have planId and itemNumber but no taskSplittingId
@@ -2702,6 +1000,7 @@ export default function VerticalTaskExecution() {
     // Priority 1: Check URL parameter
     if (taskSplittingIdFromUrl) {
       setTaskSplittingId(taskSplittingIdFromUrl);
+      setIsRunning(true); // Ensure codegen polling runs for this job
       localStorage.setItem(
         `task_splitting_${planId}_${activeSliceId}`,
         taskSplittingIdFromUrl
@@ -2715,6 +1014,7 @@ export default function VerticalTaskExecution() {
     );
     if (storedTaskSplittingId) {
       setTaskSplittingId(storedTaskSplittingId);
+      setIsRunning(true); // Ensure codegen polling runs when revisiting
       return;
     }
 
@@ -2748,6 +1048,7 @@ export default function VerticalTaskExecution() {
         });
         console.log("[Code Page] Task splitting submitted:", response);
         setTaskSplittingId(response.task_splitting_id);
+        setIsRunning(true); // Start codegen polling for live updates
         localStorage.setItem(
           `task_splitting_${planId}_${activeSliceId}`,
           response.task_splitting_id
@@ -2784,6 +1085,7 @@ export default function VerticalTaskExecution() {
     if (!completedSlices.includes(activeSliceId)) {
       setCurrentDag([]);
       setAllLayers([]);
+      prevLayerCountRef.current = 0;
       setGlobalLogs([]);
       setGraphLoadIndex(0);
       setIsRunning(false);
@@ -2810,17 +1112,26 @@ export default function VerticalTaskExecution() {
     }
   }, [activeSliceId, planId]);
 
-  // 2. Poll for task splitting status and fetch layers
+  // 2. UNIFIED poll for task splitting status, layers, and codegen status
+  // This consolidates what was previously 2 separate polling effects to avoid duplicate API calls
   useEffect(() => {
     if (!taskSplittingId) return;
 
     let mounted = true;
     let pollInterval: NodeJS.Timeout;
 
+    // Prevent concurrent fetches
+    let isFetchingLayers = false;
+    
     // Fetch layers with pagination
-    const fetchLayersWithPagination = async () => {
+    const fetchLayersWithPagination = async (): Promise<TaskLayer[]> => {
+      // Skip if already fetching (prevents pile-up during slow connections)
+      if (isFetchingLayers) {
+        return allLayersRef.current;
+      }
+      
+      isFetchingLayers = true;
       try {
-        console.log("[Code Page] Fetching layers with pagination");
         let allLayersData: TaskLayer[] = [];
         let start = 0;
         let hasMore = true;
@@ -2831,12 +1142,6 @@ export default function VerticalTaskExecution() {
             start,
             10
           );
-          console.log(
-            "[Code Page] Fetched layers:",
-            response.layers.length,
-            "next_layer_order:",
-            response.next_layer_order
-          );
           allLayersData = [...allLayersData, ...response.layers];
 
           if (response.next_layer_order === null) {
@@ -2846,148 +1151,117 @@ export default function VerticalTaskExecution() {
           }
         }
 
-        if (!mounted) return;
+        if (!mounted) return [];
 
-        setAllLayers(allLayersData);
+        // Only update if layers actually changed - use efficient comparison
+        setAllLayers((prev) => {
+          // Quick length check first
+          if (prev.length !== allLayersData.length) return allLayersData;
+          
+          // Compare by checking task statuses and changes (avoids full JSON.stringify)
+          const hasChanged = allLayersData.some((layer, idx) => {
+            const prevLayer = prev[idx];
+            if (!prevLayer) return true;
+            if (layer.status !== prevLayer.status) return true;
+            if (layer.tasks?.length !== prevLayer.tasks?.length) return true;
+            // Check if any task status or changes changed
+            return layer.tasks?.some((task, tIdx) => {
+              const prevTask = prevLayer.tasks?.[tIdx];
+              if (!prevTask) return true;
+              if (task.status !== prevTask.status) return true;
+              // Also check if changes were added (task completed)
+              const hasNewChanges = (task.changes?.length ?? 0) !== (prevTask.changes?.length ?? 0);
+              return hasNewChanges;
+            });
+          });
+          
+          return hasChanged ? allLayersData : prev;
+        });
         setNextLayerOrder(null);
 
-        // Update current DAG for display
+        // Update current DAG only when layers are newly added (not on every status change)
         if (allLayersData.length > 0) {
-          setCurrentDag(allLayersData);
-          setGraphLoadIndex(allLayersData.length);
+          setCurrentDag((prev) => {
+            // Only update DAG when new layers are added, not when existing ones change status
+            if (prev.length < allLayersData.length) {
+              return allLayersData;
+            }
+            return prev; // Keep existing DAG to avoid re-renders
+          });
+          setGraphLoadIndex((prev) =>
+            prev < allLayersData.length ? allLayersData.length : prev
+          );
         }
+        return allLayersData;
       } catch (error) {
         console.error("[Code Page] Error fetching layers:", error);
+        return allLayersRef.current; // Return cached on error
+      } finally {
+        isFetchingLayers = false;
       }
     };
 
     const fetchStatusAndLayers = async () => {
       try {
-        console.log(
-          "[Code Page] Polling task splitting status for:",
-          taskSplittingId
-        );
         const status =
           await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
 
         if (!mounted) return;
 
-        console.log("[Code Page] Task splitting status:", status);
-        setTaskSplittingStatus(status);
+        // Only update state if status actually changed - avoid unnecessary re-renders
+        setTaskSplittingStatus((prev) => {
+          if (!prev) return status;
+          
+          // Compare key fields to avoid unnecessary re-renders
+          const statusChanged = 
+            prev.status !== status.status ||
+            prev.codegen_status !== status.codegen_status ||
+            prev.current_step !== status.current_step ||
+            prev.pr_status !== status.pr_status ||
+            prev.pr_url !== status.pr_url ||
+            prev.error_message !== status.error_message;
+          
+          // Only compare activity length, not full content (content shown separately)
+          const activityChanged = 
+            (prev.agent_activity?.length ?? 0) !== (status.agent_activity?.length ?? 0);
+          
+          if (!statusChanged && !activityChanged) {
+            return prev; // No change, return same reference to prevent re-render
+          }
+          
+          return status;
+        });
 
-        // Always fetch layers if available (even during IN_PROGRESS)
-        if (status.status === "COMPLETED" || status.status === "IN_PROGRESS") {
-          await fetchLayersWithPagination();
+        // Only fetch layers when:
+        // 1. We don't have any layers yet, OR
+        // 2. Codegen is actively running (IN_PROGRESS), OR
+        // 3. Current phase changed (new layer might be available), OR
+        // 4. Codegen just completed (refetch so tasks have final "changes" for Changed files view)
+        // Use refs to access current values without causing dependency issues
+        let fetchedLayers: TaskLayer[] = [];
+        const cachedLayers = allLayersRef.current;
+        const prevStatus = taskSplittingStatusRef.current;
+        
+        const codegenJustCompleted =
+          status.codegen_status === "COMPLETED" && prevStatus?.codegen_status !== "COMPLETED";
+
+        const shouldFetchLayers =
+          (status.status === "COMPLETED" || status.status === "IN_PROGRESS") &&
+          (cachedLayers.length === 0 ||
+            status.codegen_status === "IN_PROGRESS" ||
+            status.current_step !== prevStatus?.current_step ||
+            codegenJustCompleted);
+
+        if (shouldFetchLayers) {
+          fetchedLayers = await fetchLayersWithPagination();
+        } else {
+          fetchedLayers = cachedLayers; // Use cached layers - no API call needed
         }
 
-        // Stop polling if task splitting is done
-        if (status.status === "COMPLETED" || status.status === "FAILED") {
-          if (pollInterval) clearInterval(pollInterval);
-
-          if (status.status === "COMPLETED") {
-            setIsGraphLoading(false);
-          }
-        }
-      } catch (error) {
-        console.error(
-          "[Code Page] Error polling task splitting status:",
-          error
-        );
-      }
-    };
-
-    // Initial fetch
-    fetchStatusAndLayers();
-
-    // Set up polling every 2 seconds
-    pollInterval = setInterval(fetchStatusAndLayers, 2000);
-
-    return () => {
-      mounted = false;
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [taskSplittingId]);
-
-  // 3. Step-by-Step Graph Discovery (Loading Phase) - progressive reveal
-  useEffect(() => {
-    if (!isGraphLoading) return;
-
-    // Wait for task splitting to complete and layers to be fetched
-    if (taskSplittingStatus?.status !== "COMPLETED" || allLayers.length === 0) {
-      return;
-    }
-
-    // Load layers progressively
-    if (graphLoadIndex < allLayers.length) {
-      const timer = setTimeout(() => {
-        const nextLayer = allLayers[graphLoadIndex];
-        setCurrentDag((prev) => [...prev, nextLayer]);
-        setGraphLoadIndex((prev) => prev + 1);
-      }, 600); // 600ms delay between levels appearing
-
-      return () => clearTimeout(timer);
-    } else {
-      // Done loading graph
-      setIsGraphLoading(false);
-    }
-  }, [
-    isGraphLoading,
-    graphLoadIndex,
-    activeSliceId,
-    allLayers,
-    taskSplittingStatus,
-  ]);
-
-  // 4. Poll for codegen updates (when running)
-  useEffect(() => {
-    if (!taskSplittingId || !isRunning) return;
-
-    let mounted = true;
-
-    const pollCodegenStatus = async () => {
-      try {
-        const status =
-          await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
-
-        if (!mounted) return;
-
-        setTaskSplittingStatus(status);
-
-        // If codegen is in progress or completed, fetch updated layers
-        if (
-          status.codegen_status === "IN_PROGRESS" ||
-          status.codegen_status === "COMPLETED"
-        ) {
-          // Fetch all layers to get updated task statuses
-          let allLayersData: TaskLayer[] = [];
-          let start = 0;
-          let hasMore = true;
-
-          try {
-            while (hasMore) {
-              const response = await TaskSplittingService.getTaskSplittingItems(
-                taskSplittingId,
-                start,
-                10
-              );
-              allLayersData = [...allLayersData, ...response.layers];
-              if (response.next_layer_order === null) {
-                hasMore = false;
-              } else {
-                start = response.next_layer_order;
-              }
-            }
-
-            if (!mounted) return;
-
-            setAllLayers(allLayersData);
-            setCurrentDag(allLayersData);
-          } catch (layerError) {
-            console.error("[Code Page] Error fetching layers:", layerError);
-          }
-
-          // Check if all tasks are completed
-          const allCompleted = allLayersData.every((layer) => {
+        // Handle codegen completion/failure logic (previously in separate effect)
+        if (status.codegen_status === "IN_PROGRESS" || status.codegen_status === "COMPLETED") {
+          // Check if all tasks are completed for auto-advance logic
+          const allCompleted = fetchedLayers.length > 0 && fetchedLayers.every((layer) => {
             const layerStatus = mapApiStatusToUI(layer.status);
             return (
               layerStatus === "completed" ||
@@ -3019,24 +1293,96 @@ export default function VerticalTaskExecution() {
           }
         }
 
-        if (
-          status.codegen_status === "COMPLETED" ||
-          status.codegen_status === "FAILED"
-        ) {
+        // Stop polling and update state when codegen completes or fails
+        if (status.codegen_status === "COMPLETED" || status.codegen_status === "FAILED") {
           setIsRunning(false);
         }
+
+        // Stop polling if task splitting is done (but codegen may still be running)
+        if (status.status === "COMPLETED" || status.status === "FAILED") {
+          // Only stop polling if codegen is also done
+          if (status.codegen_status === "COMPLETED" || status.codegen_status === "FAILED" || !status.codegen_status) {
+            if (pollInterval) clearInterval(pollInterval);
+          }
+          if (status.status === "COMPLETED") {
+            setIsGraphLoading(false);
+          }
+        }
+
+        // Show toast when job fails (only once)
+        if (status.codegen_status === "FAILED" && !hasShownFailedToastRef.current) {
+          hasShownFailedToastRef.current = true;
+          toast.error("Code generation failed. Please try again.", { title: "Error" });
+        }
+        
+        // Show warning toast when completed with errors (only once)
+        if (
+          status.codegen_status === "COMPLETED" && 
+          status.error_message && 
+          !hasShownFailedToastRef.current
+        ) {
+          hasShownFailedToastRef.current = true;
+          toast.warning(
+            status.error_message || "Code generation completed with some errors. Review the results.",
+            { title: "Completed with Errors" }
+          );
+        }
+
+        // Reset toast flag when job recovers or is reset
+        if (status.codegen_status !== "FAILED" && !status.error_message && hasShownFailedToastRef.current) {
+          hasShownFailedToastRef.current = false;
+        }
       } catch (error) {
-        console.error("[Code Page] Error polling codegen status:", error);
+        console.error(
+          "[Code Page] Error polling task splitting status:",
+          error
+        );
       }
     };
 
-    const pollInterval = setInterval(pollCodegenStatus, 2000);
+    // Initial fetch
+    fetchStatusAndLayers();
+
+    // Set up polling every 2 seconds (single unified poll)
+    pollInterval = setInterval(fetchStatusAndLayers, 2000);
 
     return () => {
       mounted = false;
-      clearInterval(pollInterval);
+      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [taskSplittingId, isRunning, activeSliceId, completedSlices, planItems]);
+  }, [taskSplittingId, activeSliceId, completedSlices, planItems]);
+
+  // 3. Step-by-Step Graph Discovery (Loading Phase) - progressive reveal
+  useEffect(() => {
+    if (!isGraphLoading) return;
+
+    // Wait for task splitting to complete and layers to be fetched
+    if (taskSplittingStatus?.status !== "COMPLETED" || allLayers.length === 0) {
+      return;
+    }
+
+    // Load layers progressively
+    if (graphLoadIndex < allLayers.length) {
+      const timer = setTimeout(() => {
+        const nextLayer = allLayers[graphLoadIndex];
+        setCurrentDag((prev) => [...prev, nextLayer]);
+        setGraphLoadIndex((prev) => prev + 1);
+      }, 600); // 600ms delay between levels appearing
+
+      return () => clearTimeout(timer);
+    } else {
+      // Done loading graph
+      setIsGraphLoading(false);
+    }
+  }, [
+    isGraphLoading,
+    graphLoadIndex,
+    activeSliceId,
+    allLayers,
+    taskSplittingStatus,
+  ]);
+
+  // 4. NOTE: Codegen polling was consolidated into effect #2 above to avoid duplicate API calls
 
   // Auto-scroll logic
   useEffect(() => {
@@ -3072,8 +1418,48 @@ export default function VerticalTaskExecution() {
     router.replace(`/task/${recipeId}/code?${params.toString()}`);
   };
 
-  // Show loading if we don't have planId or recipeId
-  if (!planId && !recipeId) {
+  // Build a simple feed of file diffs/contents from layers->tasks->changes
+  // Include phase index for filtering - memoized to prevent re-renders
+  // MUST be before any early returns (React hooks rule)
+  const changeFeedAll = useMemo(
+    () =>
+      allLayers.flatMap((layer, layerIdx) =>
+        layer.tasks.flatMap((t) =>
+          (t.changes || []).map((c) => ({
+            layerTitle: layer.title,
+            layerIdx,
+            taskTitle: t.title,
+            path: c.path,
+            lang: c.lang,
+            content: c.content,
+            status: t.status,
+          }))
+        )
+      ),
+    [allLayers]
+  );
+
+  // Filter change feed by selected phase - memoized
+  // MUST be before any early returns (React hooks rule)
+  const changeFeed = useMemo(
+    () => changeFeedAll.filter((c) => c.layerIdx === selectedPhaseIndex),
+    [changeFeedAll, selectedPhaseIndex]
+  );
+
+  // Invalid route: missing task/recipe id
+  if (!recipeId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-primary-color font-medium">Invalid task.</p>
+          <p className="text-sm text-primary-color mt-2">Go back and open a task from the plan.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if we don't have planId yet (plan items loading)
+  if (!planId && isLoadingPlanItems) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -3091,556 +1477,685 @@ export default function VerticalTaskExecution() {
   //       <div className="text-center">
   //         <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
   //         <p className="text-primary-color">Starting task splitting...</p>
-  //         <p className="text-sm text-primary-color mt-2">Preparing execution plan for Slice {String(activeSliceId).padStart(2, '0')}</p>
+  //         <p className="text-sm text-primary-color mt-2">Preparing code generation for Slice {String(activeSliceId).padStart(2, '0')}</p>
   //       </div>
   //     </div>
   //   );
   // }
 
-  // Show loading if task splitting is in progress and no layers yet
-  if (taskSplittingStatus?.status === "IN_PROGRESS" && allLayers.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
-          <p className="text-primary-color">
-            Generating task execution plan...
-          </p>
-          <p className="text-sm text-primary-color mt-2">
-            Step {taskSplittingStatus.current_step + 1}/2
-          </p>
-        </div>
+  const Badge = ({
+    children,
+    icon: Icon,
+  }: {
+    children: React.ReactNode;
+    icon?: React.ComponentType<{ className?: string }>;
+  }) => (
+    <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color bg-white">
+      {Icon && <Icon className="w-3.5 h-3.5" />}
+      <span className="truncate">{children}</span>
       </div>
     );
-  }
 
-  // Show loading if task splitting is submitted and waiting
-  if (taskSplittingStatus?.status === "SUBMITTED" && allLayers.length === 0) {
+  const handleSendChatMessage = () => {
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatMessages((prev) => [...prev, { role: "user", content: text }]);
+    setChatInput("");
+    toast.info("Chat editing is UI-only for now.", { title: "Info" });
+  };
+
+  const handleChatAction = (_action: "add" | "modify" | "remove" | "undo") => {
+    toast.info("These actions are UI-only for now.");
+  };
+
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
-          <p className="text-primary-color">
-            Task splitting submitted, waiting to start...
-          </p>
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Left: Chat + plan */}
+        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7]">
+          {/* Header */}
+          <div className="flex justify-between items-center px-6 py-4 shrink-0">
+            <h1 className="text-lg font-bold text-primary-color truncate capitalize">
+              {(recipePrompt || "Chat Name").slice(0, 50)}
+              {(recipePrompt || "").length > 50 ? "…" : ""}
+            </h1>
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge icon={Github}>{repoName}</Badge>
+              <Badge icon={GitBranch}>{branchName}</Badge>
         </div>
       </div>
-    );
-  }
 
-  // Render Mock Data View
-  if (useMockData) {
-    return (
-      <div className="h-screen bg-[#FFF9F5] text-primary-color font-sans flex flex-col md:flex-row overflow-hidden relative">
-        {/* --- SIDEBAR: Plan Items Timeline --- */}
-        <aside className="w-80 bg-[#FFF9F5] border-r border-zinc-200 flex flex-col z-20 shrink-0">
-          <div className="h-16 flex items-center justify-between px-6 border-b border-zinc-100 bg-zinc-50/80 backdrop-blur-sm sticky top-0">
-            <h2 className="text-base font-bold text-primary-color">
-              Plan Phases
-            </h2>
+          {/* Messages */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+            {chatMessages.map((msg, i) => (
+              <React.Fragment key={i}>
+                <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "assistant" && (
+                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
+                      <Image
+                        src="/images/logo.svg"
+                        width={24}
+                        height={24}
+                        alt="Potpie Logo"
+                        className="w-6 h-6"
+                      />
           </div>
-
-          <div ref={sidebarRef} className="flex-1 overflow-y-auto p-6 relative">
-            {/* Continuous Vertical Line */}
-            <div className="absolute left-[35px] top-6 bottom-6 w-[1px] bg-zinc-200 z-0" />
-
-            <div className="space-y-8 relative z-10">
-              {mockPlanItemKeys.map((planItemKey, idx) => {
-                const phase = MOCK_PLAN_DATA[planItemKey]?.[0];
-                if (!phase) return null;
-
-                const isActive = activePlanItemKey === planItemKey;
-                const taskCount = phase.tasks.length;
-
-                return (
+                  )}
                   <div
-                    key={planItemKey}
-                    data-active={isActive}
-                    className="group flex gap-4 cursor-pointer"
-                    onClick={() => setActivePlanItemKey(planItemKey)}
+                    className={`max-w-[85%] text-sm ${
+                      msg.role === "user"
+                        ? "rounded-t-xl rounded-bl-xl px-4 py-3 bg-white border border-gray-200 text-gray-900"
+                        : "px-4 py-3 text-gray-900"
+                    }`}
                   >
-                    {/* Timeline Node */}
-                    <div
-                      className={`
-                        w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 bg-background relative z-10
-                        ${
-                          isActive
-                            ? "border-primary-color text-primary-color scale-110 shadow-sm"
-                            : "border-zinc-200 text-primary-color"
-                        }
-                      `}
-                    >
-                      <span className="text-[10px] font-bold">
-                        {phase.order + 1}
-                      </span>
+                    {msg.content}
+                  </div>
                     </div>
 
-                    {/* Text Content */}
-                    <div
-                      className={`flex-1 pt-0.5 transition-all duration-300 ${isActive ? "translate-x-1" : ""}`}
-                    >
-                      <h3
-                        className={`text-xs font-bold leading-tight ${isActive ? "text-primary-color" : "text-primary-color group-hover:text-primary-color"}`}
-                      >
-                        {phase.title}
-                      </h3>
-                      <p className="text-[10px] text-primary-color leading-relaxed mt-1">
-                        {taskCount} task{taskCount !== 1 ? "s" : ""}
-                      </p>
+                {/* Spec Generation Completed card - separate */}
+                {i === 1 && (
+                  <div className="flex justify-start ml-[3.25rem]">
+                    <div className="max-w-[85%] w-full space-y-3">
+                      {/* Spec Generation Status - separate card */}
+                      <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <Check className="w-5 h-5 text-[#022D2C] shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-[#00291C]">Spec Generation Completed</p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">STATUS: 100% COMPLETED</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        </aside>
-
-        {/* --- MAIN CONTENT: Tasks --- */}
-        <main className="flex-1 flex flex-col h-full min-w-0 bg-background">
-          {/* Header */}
-          <header className="h-16 flex items-center justify-between px-8 border-b border-zinc-100">
-            <div>
-              <h1 className="text-lg font-bold text-primary-color tracking-tight">
-                {activeMockPhase?.title || "Select a Phase"}
-              </h1>
-              <p className="text-[10px] text-primary-color font-medium uppercase tracking-widest">
-                {activeMockPhase?.tasks.length || 0} Tasks in this phase
-              </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowGlobalLogs(!showGlobalLogs)}
-                className={`
-                  flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border
-                  ${
-                    showGlobalLogs
-                      ? "bg-zinc-100 border-zinc-200 text-primary-color"
-                      : "bg-background border-zinc-200 text-primary-color hover:bg-[#006B66] hover:text-accent-color"
-                  }
-                `}
-              >
-                <TerminalSquare className="w-3.5 h-3.5" />
-                {showGlobalLogs ? "Hide Logs" : "Show Logs"}
-              </button>
+                      {/* Generated Plan - separate card with expandable phases and tasks */}
+                      <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FileText className="w-3.5 h-3.5 text-[#00291C]" />
+                          <p className="text-xs font-bold text-[#00291C]">Generated Plan</p>
             </div>
-          </header>
-
-          {/* Content Area */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* Tasks List */}
-            <div className="flex-1 overflow-y-auto p-8 bg-zinc-50/30">
-              {activeMockPhase ? (
-                <div className="max-w-2xl mx-auto space-y-4 pb-12">
-                  {activeMockPhase.tasks.map((task, taskIdx) => {
-                    const taskKey = `${activePlanItemKey}_task_${taskIdx}`;
+                        <div className="space-y-1">
+                          {(planPhases.length > 0 ? planPhases : []).map((p, idx) => {
+                            // Get tasks from planItems (pre-populated from plan API)
+                            const phasePlanItems = planItems.filter((item) => {
+                              // Find which phase this item belongs to based on order
+                              const itemPhaseIndex = planPhases.findIndex((ph, i) => {
+                                const prevTotal = planPhases
+                                  .slice(0, i)
+                                  .reduce((sum, ph) => sum + (ph.total || 0), 0);
+                                const itemIdx = item.item_number - 1;
+                                return itemIdx >= prevTotal && itemIdx < prevTotal + (ph.total || 0);
+                              });
+                              return itemPhaseIndex === idx;
+                            });
+                            
+                            // Get runtime status from allLayers (codegen)
+                            const layer = allLayers[idx];
+                            const runtimeTasks = layer?.tasks || [];
+                            
+                            // Merge plan items with runtime status
+                            const tasks = phasePlanItems.map((planItem, i) => {
+                              const runtimeTask = runtimeTasks[i];
+                              return {
+                                id: planItem.id,
+                                title: planItem.title,
+                                status: runtimeTask?.status || "PENDING",
+                              };
+                            });
+                            
+                            const total = p.total || 0;
+                            const done = tasks.filter((t) => t.status === "COMPLETED").length;
+                            const isActiveCodegen =
+                              taskSplittingStatus?.current_step === idx &&
+                              (taskSplittingStatus?.status === "IN_PROGRESS" ||
+                                taskSplittingStatus?.codegen_status === "IN_PROGRESS");
+                            const isCompleted = done >= total && total > 0;
+                            const isExpanded = expandedPhases.has(idx);
+                            
                     return (
-                      <MockTaskCard
-                        key={taskKey}
-                        task={task}
-                        isExpanded={expandedMockTaskKey === taskKey}
-                        onToggle={() =>
-                          setExpandedMockTaskKey(
-                            expandedMockTaskKey === taskKey ? null : taskKey
-                          )
-                        }
-                        taskIndex={taskIdx}
-                        phaseIndex={activeMockPhase.order}
-                      />
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full opacity-50">
-                  <List className="w-12 h-12 mb-4 text-primary-color" />
-                  <p className="text-sm text-primary-color font-medium">
-                    Select a phase to view tasks
+                              <div key={`${p.name}-${idx}`} className="">
+                                {/* Phase header */}
+                                <button
+                                  onClick={() => {
+                                    setSelectedPhaseIndex(idx);
+                                    setSelectedTaskId(null); // Clear selected task when clicking phase
+                                    setExpandedPhases((prev) => {
+                                      const newSet = new Set(prev);
+                                      if (newSet.has(idx)) {
+                                        newSet.delete(idx);
+                                      } else {
+                                        newSet.add(idx);
+                                      }
+                                      return newSet;
+                                    });
+                                  }}
+                                  className={`w-full flex items-center justify-between gap-3 py-1.5 transition-colors text-left rounded px-2 ${
+                                    selectedPhaseIndex === idx && !selectedTaskId ? "bg-zinc-100" : "hover:bg-zinc-50"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <ChevronDown
+                                      className={`w-3 h-3 text-zinc-400 transition-transform ${
+                                        isExpanded ? "" : "-rotate-90"
+                                      }`}
+                                    />
+                                    <p className="text-xs truncate" style={{ color: "#022D2C" }}>
+                                      <span className="text-zinc-400">PHASE {idx + 1}:</span>{" "}
+                                      <span className={isCompleted ? "text-zinc-400" : ""}>{p.name}</span>
                   </p>
                 </div>
-              )}
-            </div>
-
-            {/* Terminal */}
-            {showGlobalLogs && (
-              <div className="w-80 border-l border-zinc-200 bg-background flex flex-col shrink-0 animate-in slide-in-from-right duration-300">
-                <div className="h-10 border-b border-zinc-100 flex items-center justify-between px-4 bg-zinc-50/50">
-                  <div className="flex items-center gap-2">
-                    <TerminalSquare className="w-3.5 h-3.5 text-primary-color" />
-                    <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
-                      Activity Log
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {isActiveCodegen && (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#022D2C]" />
+                                    )}
+                                    <span className={`text-xs font-medium ${isCompleted ? "text-zinc-400" : "text-zinc-600"}`}>
+                                      {`${done}/${Math.max(total, 0)}`}
                     </span>
                   </div>
-                </div>
-
-                <div
-                  ref={terminalRef}
-                  className="flex-1 p-4 overflow-y-auto font-mono text-[10px] space-y-2 bg-background"
-                >
-                  <div className="text-primary-color">
-                    <span className="text-zinc-400 select-none">{">"}</span>{" "}
-                    Mock data mode active
+                                </button>
+                                
+                                {/* Task list from plan items */}
+                                {isExpanded && tasks.length > 0 && (
+                                  <div className="ml-4 pl-3 border-l border-zinc-200 mt-1 space-y-1">
+                                    {tasks.map((task, taskIdx) => {
+                                      const isTaskCompleted = task.status === "COMPLETED";
+                                      const isTaskRunning = task.status === "IN_PROGRESS";
+                                      const isTaskFailed = task.status === "FAILED";
+                                      const isTaskSelected = selectedTaskId === task.id;
+                                      
+                                      return (
+                                        <button
+                                          key={task.id || taskIdx}
+                                          onClick={() => {
+                                            setSelectedTaskId(task.id);
+                                            setSelectedPhaseIndex(idx);
+                                          }}
+                                          className={`w-full flex items-center gap-2 py-1.5 px-2 rounded text-left transition-colors ${
+                                            isTaskSelected ? "bg-zinc-100" : "hover:bg-zinc-50"
+                                          }`}
+                                          title={isTaskFailed ? (task as any).error || "Task failed" : undefined}
+                                        >
+                                          {isTaskCompleted ? (
+                                            <Check className="w-3 h-3 text-green-500 shrink-0" />
+                                          ) : isTaskFailed ? (
+                                            <Info className="w-3 h-3 text-amber-500 shrink-0" />
+                                          ) : isTaskRunning ? (
+                                            <Loader2 className="w-3 h-3 animate-spin text-[#022D2C] shrink-0" />
+                                          ) : (
+                                            <Circle className="w-3 h-3 text-zinc-300 shrink-0" />
+                                          )}
+                                          <span className={`text-[11px] truncate ${
+                                            isTaskCompleted ? "text-zinc-400" : isTaskFailed ? "text-amber-600" : "text-[#022D2C]"
+                                          }`}>
+                                            {task.title || `Task ${taskIdx + 1}`}
+                                            {isTaskFailed && " (review patch)"}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                    </div>
+                            );
+                          })}
+                          {planPhases.length === 0 && (
+                            <p className="text-xs text-zinc-500">
+                              Loading phases…
+                            </p>
+                          )}
+                    </div>
                   </div>
-                  <div className="text-primary-color">
-                    <span className="text-zinc-400 select-none">{">"}</span>{" "}
-                    Viewing: {activeMockPhase?.title || "No phase selected"}
-                  </div>
-                  <div className="text-emerald-600">
-                    <span className="text-zinc-400 select-none">{">"}</span>{" "}
-                    Tasks loaded: {activeMockPhase?.tasks.length || 0}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </main>
-      </div>
-    );
-  }
 
-  // Original API-based view
-  return (
-    <div className="h-screen bg-[#FFF9F5] text-primary-color font-sans flex flex-col md:flex-row overflow-hidden relative">
-      {/* --- SIDEBAR: Timeline --- */}
-      <aside className="w-80 bg-[#FFF9F5] border-r border-zinc-200 flex flex-col z-20 shrink-0">
-        <div className="h-16 flex items-center px-6 border-b border-zinc-100 bg-zinc-50/80 backdrop-blur-sm sticky top-0">
-          <h2 className="text-base font-bold text-primary-color">Slices</h2>
-        </div>
-
-        <div ref={sidebarRef} className="flex-1 overflow-y-auto p-6 relative">
-          {/* Continuous Vertical Line */}
-          <div className="absolute left-[35px] top-6 bottom-6 w-[1px] bg-zinc-200 z-0" />
-
-          <div className="space-y-8 relative z-10">
-            {planItems.length > 0 ? (
-              planItems.map((slice: PlanItem, idx: number) => {
-                const sliceId = slice.item_number;
-                const isCompleted = completedSlices.includes(sliceId);
-                const isLocked =
-                  idx > 0 &&
-                  !completedSlices.includes(planItems[idx - 1]?.item_number);
-                const isActive = activeSliceId === sliceId;
-
-                return (
-                  <div
-                    key={slice.id}
-                    data-active={isActive}
-                    className={`group flex gap-4 ${isLocked ? " pointer-events-none" : "cursor-pointer"}`}
-                    onClick={() =>
-                      !isLocked && handleManualSliceChange(sliceId)
-                    }
-                  >
-                    {/* Timeline Node */}
-                    <div
-                      className={`
-                      w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 bg-background relative z-10
-                      ${
-                        isCompleted
-                          ? "border-emerald-500 text-emerald-500"
-                          : isActive
-                            ? "border-primary-color text-primary-color scale-110 shadow-sm"
-                            : "border-zinc-200 text-primary-color"
-                      }
-                    `}
-                    >
-                      {isCompleted ? (
-                        <Check className="w-3.5 h-3.5" />
-                      ) : (
-                        <span className="text-[10px] font-bold">
-                          {slice.item_number}
-                        </span>
+                      {/* Agent Activity - tool calls during codegen */}
+                      {(taskSplittingId &&
+                        (taskSplittingStatus?.status === "IN_PROGRESS" ||
+                          taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
+                          (taskSplittingStatus?.agent_activity?.length ?? 0) > 0)) && (
+                        <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4 mt-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <TerminalSquare className="w-3.5 h-3.5 text-[#00291C]" />
+                            <p className="text-xs font-bold text-[#00291C]">
+                              Agent Activity
+                              {(taskSplittingStatus?.status === "IN_PROGRESS" ||
+                                taskSplittingStatus?.codegen_status === "IN_PROGRESS") && (
+                                <Loader2 className="w-3 h-3 animate-spin inline-block ml-1.5" />
+                              )}
+                            </p>
+                          </div>
+                          <div className="max-h-[200px] overflow-y-auto font-mono text-[10px] space-y-1.5 bg-zinc-900 rounded-lg p-3 text-zinc-300">
+                            {(() => {
+                              const activity = taskSplittingStatus?.agent_activity ?? [];
+                              if (activity.length > 0) {
+                                return [...activity]
+                                  .reverse()
+                                  .slice(0, 30)
+                                  .map((evt, i) => {
+                                    // Helper to get display text for tool params
+                                    const getParamDisplay = () => {
+                                      const params = evt.params || {};
+                                      const tool = evt.tool || "";
+                                      
+                                      // Handle truncated params
+                                      if (params._truncated) {
+                                        return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
+                                      }
+                                      
+                                      // Tool-specific param display
+                                      switch (tool) {
+                                        case "read":
+                                          const filePath = params.file_path || params.path || "";
+                                          // Show last 3 path segments for readability
+                                          const segments = String(filePath).split("/").filter(Boolean);
+                                          return segments.length > 3 
+                                            ? "…/" + segments.slice(-3).join("/")
+                                            : filePath;
+                                        case "grep":
+                                        case "search":
+                                        case "ripgrep":
+                                          const pattern = params.pattern || params.query || "";
+                                          const patternStr = String(pattern);
+                                          return `"${patternStr.slice(0, 40)}${patternStr.length > 40 ? "…" : ""}"`;
+                                        case "glob":
+                                        case "find":
+                                          return params.pattern || params.glob || "";
+                                        case "edit":
+                                        case "write":
+                                        case "str_replace":
+                                          const editPath = params.file_path || params.path || "";
+                                          const editSegments = String(editPath).split("/").filter(Boolean);
+                                          return editSegments.length > 3
+                                            ? "…/" + editSegments.slice(-3).join("/")
+                                            : editPath;
+                                        case "bash":
+                                        case "shell":
+                                        case "run":
+                                          const cmd = params.command || params.cmd || "";
+                                          return String(cmd).slice(0, 40) + (String(cmd).length > 40 ? "…" : "");
+                                        case "list_dir":
+                                        case "ls":
+                                          return params.path || params.directory || ".";
+                                        default:
+                                          // Generic: show first string param or empty
+                                          const firstVal = Object.values(params).find(v => typeof v === "string");
+                                          if (firstVal) {
+                                            const s = String(firstVal);
+                                            return s.slice(0, 40) + (s.length > 40 ? "…" : "");
+                                          }
+                                          return "";
+                                      }
+                                    };
+                                    
+                                    const paramDisplay = getParamDisplay();
+                                    
+                                    return (
+                                      <div key={i} className="flex flex-col gap-0.5 py-1 border-b border-zinc-700 last:border-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[#B6E343] font-semibold">
+                                            {evt.tool || "unknown"}
+                                          </span>
+                                          {evt.phase != null && (
+                                            <span className="text-zinc-500">
+                                              P{evt.phase + 1}.T{(evt.task ?? 0) + 1}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {paramDisplay && (
+                                          <div className="text-zinc-400 truncate max-w-full" title={paramDisplay}>
+                                            {paramDisplay}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  });
+                              }
+                              // Empty state - show context-aware message
+                              if (taskSplittingStatus?.codegen_status === "COMPLETED") {
+                                return <div className="text-zinc-500 italic">No activity recorded</div>;
+                              }
+                              if (taskSplittingStatus?.codegen_status === "FAILED") {
+                                return <div className="text-zinc-500 italic">Codegen failed</div>;
+                              }
+                              return <div className="text-zinc-500 italic">Waiting for agent to start…</div>;
+                            })()}
+                          </div>
+                        </div>
                       )}
                     </div>
-
-                    {/* Text Content */}
-                    <div
-                      className={`flex-1 pt-0.5 transition-all duration-300 ${isActive ? "translate-x-1" : ""}`}
-                    >
-                      <h3
-                        className={`text-xs font-bold leading-tight ${isActive ? "text-primary-color" : "text-primary-color group-hover:text-primary-color"}`}
-                      >
-                        {slice.title}
-                      </h3>
-                      <p className="text-[10px] text-primary-color leading-relaxed mt-1 line-clamp-2">
-                        {slice.description}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-center py-8 text-primary-color text-sm">
-                {isLoadingPlanItems
-                  ? "Loading plan items..."
-                  : "No plan items available"}
               </div>
             )}
+              </React.Fragment>
+            ))}
+            <div ref={chatEndRef} />
           </div>
-        </div>
-      </aside>
 
-      {/* --- MAIN CONTENT: Right Part --- */}
-      <main className="flex-1 flex flex-col h-full min-w-0 bg-background">
-        {/* Header */}
-        <header className="h-16 flex items-center justify-between px-8 border-b border-zinc-100">
-          <div>
-            <h1 className="text-lg font-bold text-primary-color tracking-tight">
-              {activeSliceMeta?.title || `Slice ${activeSliceId}`}
-            </h1>
-            <div className="flex items-center gap-2">
-              <p className="text-[10px] text-primary-color font-medium uppercase tracking-widest">
-                Execution Graph
-              </p>
-              {isGraphLoading && (
-                <Loader2 className="w-3 h-3 animate-spin text-primary-color" />
-              )}
+          {/* Action buttons */}
+          <div className="px-6 py-2 flex flex-wrap gap-2 shrink-0">
+            {[
+              { id: "add" as const, label: "Add Item", icon: Plus },
+              { id: "modify" as const, label: "Modify", icon: Pencil },
+              { id: "remove" as const, label: "Remove", icon: Trash2 },
+              { id: "undo" as const, label: "Undo", icon: Undo2 },
+            ].map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => handleChatAction(id)}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-800 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50 transition-colors"
+              >
+                <Icon className="w-3.5 h-3.5 text-[#00291C]" />
+                {label}
+              </button>
+            ))}
+        </div>
+
+          {/* Chat input */}
+          <div className="p-4 shrink-0">
+            <div className="relative">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendChatMessage();
+                  }
+                }}
+                placeholder="Describe any change that you want...."
+                rows={3}
+                className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-[#FFFDFC] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#102C2C]/20 focus:border-[#102C2C] resize-none"
+              />
+              <button
+                type="button"
+                onClick={handleSendChatMessage}
+                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity"
+              >
+                <SendHorizonal className="w-5 h-5" />
+              </button>
+            </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+        {/* Right: Code generation */}
+        <div className="overflow-hidden flex-none flex flex-col w-1/2 min-w-0">
+          <aside className="h-full w-full min-w-[320px] flex flex-col border-l border-[#D3E5E5]">
+            <div className="p-6 border-b border-[#D3E5E5] bg-white">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0" style={{ color: "#022019" }}>
+                    Code generation
+                  </h2>
             <button
-              onClick={() => setShowGlobalLogs(!showGlobalLogs)}
-              className={`
-                  flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border
-                  ${
-                    showGlobalLogs
-                      ? "bg-zinc-100 border-zinc-200 text-primary-color"
-                      : "bg-background border-zinc-200 text-primary-color hover:bg-[#006B66] hover:text-accent-color"
-                  }
-                `}
-            >
-              <TerminalSquare className="w-3.5 h-3.5" />
-              {showGlobalLogs ? "Hide Logs" : "Show Logs"}
+                    type="button"
+                    className="p-1 rounded-full hover:bg-[#CCD3CF]/30 transition-colors shrink-0"
+                    aria-label="Code generation info"
+                    title="See patches as phases complete; click MAKE PR when done."
+                  >
+                    <Info className="w-4 h-4" style={{ color: "#022019" }} />
             </button>
-
-            {isSliceComplete ? (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 text-primary-color rounded-md border border-zinc-100 text-xs font-bold">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Verified
               </div>
+
+                <div className="flex items-center gap-4">
+                {/* Changed files (slider with tree + diff) — before MAKE PR */}
+                {taskSplittingId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedChangedFilePath(null);
+                      setChangedFilesSliderOpen(true);
+                    }}
+                    className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#D3E5E5] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
+                    title="View all changed files and diffs"
+                  >
+                    <FolderTree className="w-3.5 h-3.5" />
+                    Changed files
+                  </button>
+                )}
+
+                {/* MAKE PR / VIEW PR */}
+                {taskSplittingId && (
+                  <>
+                    {taskSplittingStatus?.pr_url ? (
+                      <a
+                        href={taskSplittingStatus.pr_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 px-5 py-2 rounded-lg font-semibold text-xs bg-[#022019] text-[#B4D13F] hover:opacity-90"
+                      >
+                        VIEW PR
+                      </a>
             ) : (
               <button
-                onClick={() => setIsRunning(!isRunning)}
-                disabled={isGraphLoading}
-                className={`
-                   flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-bold transition-all
-                   ${
-                     isGraphLoading
+                        type="button"
+                        disabled={
+                          !taskSplittingStatus ||
+                          taskSplittingStatus.codegen_status !== "COMPLETED" ||
+                          isCreatingPR ||
+                          taskSplittingStatus.pr_status === "IN_PROGRESS"
+                        }
+                        onClick={async () => {
+                          if (!taskSplittingId) return;
+                          try {
+                            setIsCreatingPR(true);
+                            await TaskSplittingService.createPullRequest(taskSplittingId);
+                            toast.success("PR creation started", { title: "Success" });
+                          } catch (e: any) {
+                            setIsCreatingPR(false);
+                            toast.error(e?.message || "Failed to start PR creation", { title: "Error" });
+                          }
+                        }}
+                        className={`shrink-0 px-5 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 ${
+                          !taskSplittingStatus ||
+                          taskSplittingStatus.codegen_status !== "COMPLETED" ||
+                          isCreatingPR ||
+                          taskSplittingStatus.pr_status === "IN_PROGRESS"
                        ? "bg-zinc-100 text-primary-color cursor-not-allowed"
-                       : isRunning
-                         ? "bg-background border border-zinc-200 text-primary-color hover:bg-[#006B66] hover:text-accent-color"
-                         : "bg-accent-color text-primary-color hover:bg-[#006B66] hover:text-accent-color shadow-sm"
-                   }
-                 `}
-              >
-                {isGraphLoading ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-color" />{" "}
-                    Loading Plan...
-                  </>
-                ) : isRunning ? (
-                  <>
-                    <Pause className="w-3.5 h-3.5 fill-current" /> Pause
+                            : "bg-[#022019] text-[#B4D13F] hover:opacity-90"
+                        }`}
+                        title={
+                          taskSplittingStatus?.codegen_status !== "COMPLETED"
+                            ? "Finish code generation before creating a PR"
+                            : taskSplittingStatus?.pr_status === "FAILED"
+                              ? taskSplittingStatus?.pr_error_message || "PR creation failed"
+                              : "Create a PR from completed changes"
+                        }
+                      >
+                        {isCreatingPR || taskSplittingStatus?.pr_status === "IN_PROGRESS" ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            MAKING PR…
                   </>
                 ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 fill-current" /> Start Codegen
-                  </>
+                          "MAKE PR"
                 )}
               </button>
+                    )}
+                  </>
+                  
             )}
-          </div>
-        </header>
-
-        {/* Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* DAG Visualization (Fills available space) */}
-          <div className="flex-1 overflow-y-auto p-8 bg-zinc-50/30">
-            {/* If loading graph, show simple indicator */}
-            {currentDag.length === 0 && isGraphLoading && (
-              <div className="flex flex-col items-center justify-center h-full opacity-50 space-y-4">
-                <div className="flex gap-2">
-                  <div className="w-2 h-2 bg-primary-color rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-2 h-2 bg-primary-color rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                  <div className="w-2 h-2 bg-primary-color rounded-full animate-bounce"></div>
-                </div>
-                <p className="text-xs text-primary-color font-mono">
-                  Discovering dependencies...
-                </p>
-              </div>
-            )}
-
-            {currentDag.length > 0 && (
-              <div className="max-w-2xl mx-auto space-y-8 pb-12">
-                {currentDag.map((level, idx) => {
-                  // Map API status to UI status
-                  const levelStatus = mapApiStatusToUI(level.status);
-                  const isActive =
-                    levelStatus === "running" || level.status === "IN_PROGRESS";
-                  const isDone =
-                    levelStatus === "completed" || level.status === "COMPLETED";
-
-                  return (
-                    <div
-                      key={idx}
-                      className="relative animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out"
-                    >
-                      {/* Level Connector */}
-                      {idx !== currentDag.length - 1 && (
-                        <div className="absolute left-[19px] top-10 bottom-[-32px] w-[2px] bg-zinc-100" />
-                      )}
-
-                      <div className="flex items-start gap-6">
-                        {/* Level Icon */}
-                        <div
-                          className={`
-                              w-10 h-10 rounded-xl flex items-center justify-center border-2 shrink-0 z-10 bg-background transition-colors duration-300
-                              ${isActive ? "border-primary-color text-primary-color shadow-md" : isDone ? "border-emerald-500 text-emerald-600" : "border-zinc-200 text-primary-color"}
-                            `}
-                        >
-                          {isDone ? (
-                            <Check className="w-5 h-5" />
-                          ) : isActive ? (
-                            <Loader2 className="w-5 h-5 animate-spin text-primary-color" />
-                          ) : (
-                            <GitBranch className="w-5 h-5" />
-                          )}
-                        </div>
-
-                        {/* Level Content */}
-                        <div className="flex-1 pt-1">
-                          <div className="flex items-center justify-between mb-3">
-                            <h3
-                              className={`text-sm font-bold ${isActive ? "text-primary-color" : "text-primary-color"}`}
-                            >
-                              {level.title}
-                            </h3>
-                            <span className="text-[9px] uppercase font-bold text-primary-color">
-                              {isDone
-                                ? "Completed"
-                                : isActive
-                                  ? "Processing..."
-                                  : "Pending"}
-                            </span>
-                          </div>
-
-                          {/* Tasks Grid */}
-                          <div className="grid grid-cols-1 gap-3">
-                            {level.tasks.map((task) => (
-                              <TaskCard
-                                key={task.id}
-                                task={task}
-                                isExpanded={expandedTaskId === task.id}
-                                onToggle={() =>
-                                  setExpandedTaskId(
-                                    expandedTaskId === task.id ? null : task.id
-                                  )
-                                }
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Completion Banner */}
-                {isSliceComplete && activeSliceMeta && (
-                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pl-16">
-                    <div className="bg-background rounded-xl border border-emerald-100 shadow-sm overflow-hidden">
-                      <div className="bg-emerald-50/50 px-6 py-4 border-b border-emerald-100 flex items-center gap-3">
-                        <div className="bg-emerald-100 p-2 rounded-full">
-                          <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-emerald-900">
-                            Slice Verified
-                          </h3>
-                          <p className="text-xs text-emerald-700">
-                            Ready for integration
-                          </p>
-                        </div>
-                      </div>
-                      <div className="p-6 space-y-4">
-                        <div>
-                          <h4 className="text-[10px] font-bold text-primary-color uppercase tracking-wider mb-2">
-                            What was done
-                          </h4>
-                          <p className="text-sm text-primary-color leading-relaxed">
-                            {activeSliceMeta?.detailed_objective ||
-                              "Slice completed successfully"}
-                          </p>
-                        </div>
-                        <div className="bg-zinc-50 rounded-lg p-4 border border-zinc-100">
-                          <h4 className="text-[10px] font-bold text-primary-color uppercase tracking-wider mb-2 flex items-center gap-2">
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            How to Verify
-                          </h4>
-                          <p className="text-xs font-mono text-primary-color">
-                            {activeSliceMeta?.verification_criteria ||
-                              "All tests passed"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Terminal */}
-          {showGlobalLogs && (
-            <div className="w-80 border-l border-zinc-200 bg-background flex flex-col shrink-0 animate-in slide-in-from-right duration-300">
-              <div className="h-10 border-b border-zinc-100 flex items-center justify-between px-4 bg-zinc-50/50">
-                <div className="flex items-center gap-2">
-                  <TerminalSquare className="w-3.5 h-3.5 text-primary-color" />
-                  <span className="text-[10px] font-bold text-primary-color uppercase tracking-wider">
-                    Live Logs
-                  </span>
-                </div>
-                <div
-                  className={`w-2 h-2 rounded-full ${isRunning ? "bg-emerald-500 animate-pulse" : "bg-zinc-300"}`}
-                />
-              </div>
-
-              <div
-                ref={terminalRef}
-                className="flex-1 p-4 overflow-y-auto font-mono text-[10px] space-y-2 bg-background"
-              >
-                {globalLogs.length === 0 && (
-                  <div className="text-primary-color italic text-center mt-10">
-                    Ready to execute.
-                    <br />
-                    Logs will appear here.
-                  </div>
-                )}
-                {globalLogs.map((log, i) => (
-                  <div
-                    key={i}
-                    className="flex gap-2 animate-in slide-in-from-left-1 duration-200"
-                  >
-                    <span className="text-primary-color select-none">
-                      {">"}
-                    </span>
-                    <span
-                      className={`break-words leading-relaxed ${
-                        log.includes("SUCCESS")
-                          ? "text-emerald-600 font-bold"
-                          : log.includes("Starting")
-                            ? "text-blue-600"
-                            : "text-primary-color"
-                      }`}
-                    >
-                      {log}
-                    </span>
-                  </div>
-                ))}
-              </div>
             </div>
-          )}
-        </div>
-      </main>
+          </div>
+                </div>
+
+            <div className="flex-1 overflow-y-auto p-6 bg-[#FAFAFA]">
+              <div className="space-y-4 max-w-3xl mx-auto">
+                {/* Show selected task details or all phase files */}
+                {(() => {
+                  const currentLayer = allLayers[selectedPhaseIndex];
+                  const tasks = currentLayer?.tasks || [];
+                  
+                  // If a specific task is selected, show its details
+                  if (selectedTaskId) {
+                    const selectedTask = tasks.find((t) => t.id === selectedTaskId);
+                    if (selectedTask) {
+                      const taskChanges = selectedTask.changes || [];
+                  return (
+                        <>
+                          {/* Task header */}
+                          <div className="rounded-lg border border-gray-200 bg-white p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              {selectedTask.status === "COMPLETED" ? (
+                                <Check className="w-4 h-4 text-green-500" />
+                              ) : selectedTask.status === "IN_PROGRESS" ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-[#022D2C]" />
+                              ) : (
+                                <Circle className="w-4 h-4 text-zinc-300" />
+                              )}
+                              <h3 className="text-sm font-semibold text-[#022019]">
+                                {selectedTask.title}
+                            </h3>
+                            </div>
+                            <p className="text-xs text-zinc-500">
+                              {selectedTask.file && (
+                                <span className="font-mono text-zinc-400">{selectedTask.file}</span>
+                              )}
+                            </p>
+                          </div>
+
+                          {/* Task file changes */}
+                          {taskChanges.length > 0 ? (
+                            taskChanges.map((change: any, i: number) => (
+                              <CodeFileCard
+                                key={i}
+                                change={{
+                                  layerTitle: currentLayer?.title || "",
+                                  taskTitle: selectedTask.title,
+                                  path: change.path,
+                                  lang: change.lang,
+                                  content: change.content,
+                                  status: selectedTask.status,
+                                }}
+                              />
+                            ))
+                          ) : (
+                            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
+                              <Loader2 className="w-6 h-6 animate-spin text-[#022D2C] mx-auto mb-2" />
+                              <p className="text-sm text-zinc-600">Generating code...</p>
+                          </div>
+                          )}
+                        </>
+                      );
+                    }
+                  }
+                  
+                  // Otherwise show all files from the phase
+                  return (
+                    <>
+                      {/* Phase header */}
+                      <div className="rounded-lg border border-gray-200 bg-white p-4 mb-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-[#022019]">
+                            Phase {selectedPhaseIndex + 1}: {currentLayer?.title || planPhases[selectedPhaseIndex]?.name}
+                          </h3>
+                          <span className="text-xs text-zinc-500">
+                            {tasks.filter((t) => t.status === "COMPLETED").length}/{tasks.length} tasks
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* All file changes from phase */}
+                      {changeFeed.length > 0 ? (
+                        changeFeed.map((c, i) => <CodeFileCard key={`${c.path}-${i}`} change={c} />)
+                      ) : isRunning ? (
+                        // Skeleton loading
+                        <>
+                          {[0, 1, 2].map((k) => (
+                            <div key={k} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                              <div className="px-4 py-2.5 border-b border-gray-200">
+                                <div className="h-3 w-52 bg-zinc-200 rounded animate-pulse" />
+                        </div>
+                              <div className="bg-zinc-50 px-4 py-3 space-y-2">
+                                <div className="h-3 w-full bg-zinc-200 rounded animate-pulse" />
+                                <div className="h-3 w-5/6 bg-zinc-200 rounded animate-pulse" />
+                                <div className="h-3 w-3/4 bg-zinc-200 rounded animate-pulse" />
+                        </div>
+                      </div>
+                          ))}
+                        </>
+                      ) : (
+                        // Empty state
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                          <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-4">
+                            <FileText className="w-6 h-6 text-zinc-400" />
+                    </div>
+                          <p className="text-sm font-medium text-zinc-600">
+                            No code generated yet for Phase {selectedPhaseIndex + 1}
+                          </p>
+                          <p className="text-xs text-zinc-400 mt-1">
+                            Code will appear here once this phase starts generating
+                          </p>
+                  </div>
+                )}
+                    </>
+                  );
+                })()}
+              </div>
+          </div>
+          </aside>
+                </div>
+              </div>
+
+      {/* Changed files slider: tree + file diff */}
+      <Sheet open={changedFilesSliderOpen} onOpenChange={setChangedFilesSliderOpen}>
+        <SheetContent
+          side="right"
+          className="w-full max-w-[90vw] sm:max-w-6xl flex flex-col gap-0 p-0 overflow-hidden bg-white"
+        >
+          <SheetHeader className="px-6 py-4 shrink-0 border-b border-[#E5E7EB]">
+            <SheetTitle className="text-base font-semibold text-[#022019] flex items-center gap-2">
+              <FolderTree className="w-4 h-4" />
+              Changed files
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            {/* Left: file tree */}
+            <div className="w-[280px] shrink-0 border-r border-[#E5E7EB] flex flex-col overflow-hidden">
+              {changedFilesTreeData.length > 0 ? (
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto p-2">
+                  <TreeView
+                    data={changedFilesTreeData}
+                    showLines
+                    showIcons
+                    selectable
+                    selectedIds={selectedChangedFilePath ? [selectedChangedFilePath] : []}
+                    onSelectionChange={(ids) => setSelectedChangedFilePath(ids[0] ?? null)}
+                    onNodeClick={(node) => {
+                      const hasChildren = (node.children?.length ?? 0) > 0;
+                      if (!hasChildren) setSelectedChangedFilePath(node.id);
+                    }}
+                    defaultExpandedIds={getAllNodeIds(changedFilesTreeData)}
+                    animateExpand
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-zinc-500">
+                  <FileText className="w-10 h-10 mb-3 opacity-50" />
+                  <p className="text-sm font-medium">No changed files yet</p>
+                  <p className="text-xs mt-1">Files will appear here as code generation runs</p>
+                </div>
+              )}
+            </div>
+            {/* Right: file diff — constrain width so content scrolls inside panel */}
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-white">
+              {selectedChangedFilePath && pathToChange[selectedChangedFilePath] ? (
+                <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+                  <div className="px-4 py-2 border-b border-[#E5E7EB] bg-white shrink-0">
+                    <p className="text-xs font-medium text-[#022019] truncate" title={selectedChangedFilePath}>
+                      {selectedChangedFilePath}
+                    </p>
+                  </div>
+                  <div className="flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto">
+                    <FileDiffView change={pathToChange[selectedChangedFilePath]} />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 p-6">
+                  <FileDiff className="w-10 h-10 mb-3 opacity-50" />
+                  <p className="text-sm font-medium">Select a file</p>
+                  <p className="text-xs mt-1">Click a file in the tree to view its changes</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

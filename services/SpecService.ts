@@ -18,6 +18,8 @@ import {
   TriggerSpecGenerationResponse,
   SpecStatusResponse,
   RecipeDetailsResponse,
+  SpecChatRequest,
+  SpecChatResponse,
 } from "@/lib/types/spec";
 
 export default class SpecService {
@@ -279,22 +281,240 @@ export default class SpecService {
   }
 
   /**
+   * Start spec generation with SSE streaming.
+   * POST /api/v1/recipes/{recipe_id}/spec/generate-stream
+   * Returns run_id from X-Run-Id header; consumes stream and calls onEvent for each SSE event.
+   */
+  static async startSpecGenerationStream(
+    recipeId: string,
+    options: {
+      streamTokens?: boolean;
+      /** If false, only start the task and return runId without consuming the stream (e.g. for redirect to spec page). */
+      consumeStream?: boolean;
+      onEvent?: (eventType: string, data: Record<string, unknown>) => void;
+      onError?: (error: string) => void;
+      signal?: AbortSignal;
+    }
+  ): Promise<{ runId: string }> {
+    const headers = await getHeaders();
+    const url = `${this.API_BASE}/${recipeId}/spec/generate-stream${options.streamTokens ? "?stream_tokens=true" : ""}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { ...headers, Accept: "text/event-stream" },
+      credentials: "include",
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(errText || `Spec stream failed: ${response.status}`);
+    }
+    // Prefer X-Run-Id (case-insensitive per HTTP); some proxies normalize to lowercase
+    let runId =
+      response.headers.get("X-Run-Id")?.trim() ||
+      response.headers.get("x-run-id")?.trim() ||
+      "";
+    // Fallback: some backends send run_id in the first SSE event instead of header
+    if (!runId && response.body && (options.consumeStream === false || !options.onEvent)) {
+      try {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (let i = 0; i < 8; i++) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          // Match data: {...} (single line) or multi-line JSON
+          const dataMatch = buffer.match(/data:\s*(\{[^]*?\})\s*\n/);
+          if (dataMatch) {
+            const data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
+            const fromData =
+              typeof data.run_id === "string"
+                ? data.run_id
+                : data.data && typeof (data.data as Record<string, unknown>).run_id === "string"
+                  ? (data.data as Record<string, unknown>).run_id
+                  : "";
+            if (fromData) runId = String(fromData).trim();
+            break;
+          }
+        }
+        reader.cancel();
+      } catch {
+        // ignore parse errors
+      }
+    }
+    if (options.consumeStream === false || !options.onEvent) {
+      return { runId };
+    }
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (reader && options.onEvent) {
+      (async () => {
+        let buffer = "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+            for (const block of lines) {
+              if (!block.trim()) continue;
+              let eventType = "message";
+              let eventId: string | undefined;
+              let data: Record<string, unknown> = {};
+              for (const line of block.split("\n")) {
+                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
+                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
+                if (line.startsWith("data:")) {
+                  try {
+                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
+                  } catch {
+                    data = { raw: line.replace(/^data:\s*/, "").trim() };
+                  }
+                }
+              }
+              if (eventId) data.eventId = eventId;
+              options.onEvent?.(eventType, data);
+              if (eventType === "end" || eventType === "error") return;
+            }
+          }
+        } catch (e) {
+          options.onError?.(e instanceof Error ? e.message : String(e));
+        }
+      })();
+    }
+    return { runId };
+  }
+
+  /**
+   * Reconnect to an existing spec stream (e.g. after page refresh).
+   * GET /api/v1/recipes/{recipe_id}/spec/stream?run_id=...&cursor=...
+   */
+  static connectSpecStream(
+    recipeId: string,
+    runId: string,
+    options: {
+      cursor?: string | null;
+      onEvent?: (eventType: string, data: Record<string, unknown>) => void;
+      onError?: (error: string) => void;
+      signal?: AbortSignal;
+    }
+  ): void {
+    const url = `${this.API_BASE}/${recipeId}/spec/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
+    getHeaders().then((headers) => {
+      fetch(url, {
+        method: "GET",
+        headers: { ...headers, Accept: "text/event-stream" },
+        credentials: "include",
+        signal: options.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          if (!reader || !options.onEvent) return;
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+            for (const block of lines) {
+              if (!block.trim()) continue;
+              let eventType = "message";
+              let eventId: string | undefined;
+              let data: Record<string, unknown> = {};
+              for (const line of block.split("\n")) {
+                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
+                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
+                if (line.startsWith("data:")) {
+                  try {
+                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
+                  } catch {
+                    data = { raw: line.replace(/^data:\s*/, "").trim() };
+                  }
+                }
+              }
+              if (eventId) data.eventId = eventId;
+              options.onEvent?.(eventType, data);
+              if (eventType === "end" || eventType === "error") return;
+            }
+          }
+        })
+        .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
+    });
+  }
+
+  /**
+   * Spec chat - send message to Spec Editor Agent
+   * POST /api/v1/recipes/{recipe_id}/edit?edit_type=spec
+   * Backend builds edit history from DB; we only send user_message.
+   */
+  static async specChat(
+    recipeId: string,
+    request: SpecChatRequest,
+  ): Promise<SpecChatResponse> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post<{
+        edit_type: string;
+        intent: string;
+        change_percentage?: number;
+        requires_regeneration?: boolean;
+        target_agent?: string;
+        updated_spec?: Record<string, unknown>;
+        explanation: string;
+        edits?: unknown[];
+        task_id?: string;
+      }>(
+        `${this.API_BASE}/${recipeId}/edit?edit_type=spec`,
+        { user_message: request.message },
+        { headers },
+      );
+      const d = response.data;
+      return {
+        intent: (d.intent ?? "clarify") as SpecChatResponse["intent"],
+        message: d.explanation,
+        explanation: d.explanation,
+        spec_output: (d.updated_spec ?? { add: [], modify: [], fix: [] }) as unknown as SpecChatResponse["spec_output"],
+        undo_token: "",
+        next_actions: [],
+        regenerate_triggered: d.requires_regeneration ?? false,
+      };
+    } catch (error: any) {
+      console.error("[SpecService] Spec chat error:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
    * Get comprehensive recipe details including repo and branch information
    * GET /api/v1/recipes/{recipe_id}/details
+   * On 404 returns a minimal response so callers can use localStorage/fallbacks instead of throwing.
    */
   static async getRecipeDetails(
     recipeId: string,
   ): Promise<RecipeDetailsResponse> {
     try {
-      console.log("[SpecService] Fetching recipe details for:", recipeId);
       const headers = await getHeaders();
       const response = await axios.get<RecipeDetailsResponse>(
         `${this.API_BASE}/${recipeId}/details`,
         { headers },
       );
-      console.log("[SpecService] Recipe details response:", response.data);
       return response.data;
     } catch (error: any) {
+      if (error?.response?.status === 404) {
+        return {
+          recipe_id: recipeId,
+          project_id: "",
+          user_prompt: "Implementation plan generation",
+          repo_name: null,
+          branch_name: null,
+          questions_and_answers: [],
+        };
+      }
       console.error("[SpecService] Error fetching recipe details:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);

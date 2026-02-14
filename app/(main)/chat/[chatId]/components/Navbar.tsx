@@ -19,7 +19,7 @@ import { setChat } from "@/lib/state/Reducers/chat";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { usePathname } from "next/navigation";
 import { z } from "zod";
 import { ClipboardCheck, Share2, X } from "lucide-react";
@@ -153,12 +153,7 @@ const Navbar = ({
       const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`;
       navigator.clipboard.writeText(shareUrl);
 
-      toast.message(
-        <div className="flex flex-col gap-1">
-          <p className="text-primary font-semibold">URL copied to clipboard</p>
-          <p className="text-sm text-muted">{shareUrl}</p>
-        </div>
-      );
+      toast.success("URL copied to clipboard");
 
       return res;
     },
@@ -193,12 +188,7 @@ const Navbar = ({
   const handleCopyLink = () => {
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`;
     navigator.clipboard.writeText(shareUrl);
-    toast.message(
-      <div className="flex flex-col gap-1">
-        <p className="text-primary font-semibold">URL copied to clipboard</p>
-        <p className="text-sm text-muted">{shareUrl}</p>
-      </div>
-    );
+    toast.success("URL copied to clipboard");
   };
 
   const isShareDisabled = () => {

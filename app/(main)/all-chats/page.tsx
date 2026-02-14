@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LucideEdit, LucideTrash } from "lucide-react";
 import ChatService from "@/services/ChatService";
@@ -87,13 +87,61 @@ const AllChats = () => {
     dispatch(setChat({ agentId: chat.agent_id, temporaryContext: { branch: chat.branch, repo: chat.repository, projectId: chat.project_ids[0] }, selectedNodes: [], title: chat.title, chatFlow: "EXISTING_CHAT" }));
   };
 
+  // Get redirect URL for recipe based on status
+  const getRecipeRedirectUrl = (recipe: any): string => {
+    const recipeId = recipe.id || recipe.recipe_id;
+    const status = (recipe.status || '').toUpperCase();
+    
+    // Check if status contains "QUESTIONS" (e.g., PENDING_QUESTIONS, QUESTIONS_READY)
+    // This matches patterns like "QUESTIONS*" as requested
+    if (status.includes('QUESTIONS')) {
+      const params = new URLSearchParams();
+      if (recipe.project_id) {
+        params.set('projectId', recipe.project_id);
+      }
+      if (recipeId) {
+        params.set('recipeId', recipeId);
+      }
+      return `/repo?${params.toString()}`;
+    }
+    
+    // Check if status contains "SPEC" (e.g., SPEC_IN_PROGRESS, SPEC_READY, ANSWERS_SUBMITTED)
+    // This matches patterns like "SPEC*" as requested
+    if (status.includes('SPEC') || status === 'ANSWERS_SUBMITTED') {
+      return `/task/${recipeId}/spec`;
+    }
+    
+    // Check if status contains "PLAN" (e.g., PLAN_IN_PROGRESS, PLAN_READY)
+    // This matches patterns like "PLAN*" as requested
+    if (status.includes('PLAN')) {
+      return `/task/${recipeId}/plan`;
+    }
+    
+    // Default: redirect to repo page for questions (for initial states)
+    const params = new URLSearchParams();
+    if (recipe.project_id) {
+      params.set('projectId', recipe.project_id);
+    }
+    if (recipeId) {
+      params.set('recipeId', recipeId);
+    }
+    return `/repo?${params.toString()}`;
+  };
+
   // Combine chats and recipes into a single list
   const allItems = React.useMemo(() => {
     const items: any[] = [];
 
-    // Add chats
+    // Add chats (excluding those that have a recipe_id, as they're already shown as recipes)
     if (Array.isArray(data) && data.length > 0) {
       data.forEach((chat: any) => {
+        // Skip conversations that have a recipe_id - they're already shown as recipes
+        // Check for both recipe_id and recipeId field names
+        const chatRecipeId = chat.recipe_id || chat.recipeId;
+        if (chatRecipeId) {
+          return; // Skip this conversation as it's already represented by a recipe
+        }
+        
         items.push({
           ...chat,
           type: 'chat',
@@ -108,13 +156,14 @@ const AllChats = () => {
       recipes.forEach((recipe: any) => {
         items.push({
           ...recipe,
-          id: recipe.recipe_id,
+          id: recipe.id || recipe.recipe_id,
           type: 'recipe',
           title: recipe.user_prompt,
           created_at: recipe.created_at,
           status: recipe.status,
           repository: recipe.repo_name,
           branch: recipe.branch_name,
+          project_id: recipe.project_id,
         });
       });
     }
@@ -191,7 +240,7 @@ const AllChats = () => {
                       {item.title}
                     </Link>
                   ) : (
-                    <Link href={`/build/${item.id}`}>
+                    <Link href={getRecipeRedirectUrl(item)}>
                       {item.title.length > 50 ? item.title.substring(0, 50) + '...' : item.title}
                     </Link>
                   )}
@@ -202,7 +251,9 @@ const AllChats = () => {
                       {item.agent_id ? item.agent_id.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'N/A'}
                     </Link>
                   ) : (
-                    <span className="text-sm">{item.status || 'N/A'}</span>
+                    <Link href={getRecipeRedirectUrl(item)}>
+                      <span className="text-sm">{item.status || 'N/A'}</span>
+                    </Link>
                   )}
                 </TableCell>
                 <TableCell>
@@ -211,7 +262,7 @@ const AllChats = () => {
                       {item?.repository || 'N/A'}
                     </Link>
                   ) : (
-                    <Link href={`/build/${item.id}`}>
+                    <Link href={getRecipeRedirectUrl(item)}>
                       {item?.repository || 'N/A'}
                     </Link>
                   )}
@@ -222,7 +273,7 @@ const AllChats = () => {
                       {item?.branch || 'N/A'}
                     </Link>
                   ) : (
-                    <Link href={`/build/${item.id}`}>
+                    <Link href={getRecipeRedirectUrl(item)}>
                       {item?.branch || 'N/A'}
                     </Link>
                   )}
@@ -234,7 +285,9 @@ const AllChats = () => {
                         {new Date(item.created_at).toLocaleString()}
                       </Link>
                     ) : (
-                      <span>{new Date(item.created_at).toLocaleString()}</span>
+                      <Link href={getRecipeRedirectUrl(item)}>
+                        {new Date(item.created_at).toLocaleString()}
+                      </Link>
                     )
                   ) : (
                     <span className="text-gray-500">N/A</span>
@@ -283,9 +336,11 @@ const AllChats = () => {
                         </Button>
                       </>
                     ) : (
-                      <Button variant="outline" className="configure-button hover:bg-gray-200">
-                        View Build
-                      </Button>
+                      <Link href={getRecipeRedirectUrl(item)}>
+                        <Button variant="outline" className="configure-button hover:bg-gray-200">
+                          View Build
+                        </Button>
+                      </Link>
                     )}
                   </div>
                 </TableCell>

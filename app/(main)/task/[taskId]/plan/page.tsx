@@ -300,17 +300,25 @@ const PlanPage = () => {
       }
       try {
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
-        setRepoName(recipeDetails.repo_name ?? fromStorage?.repo_name ?? "Unknown Repository");
-        setBranchName(recipeDetails.branch_name ?? fromStorage?.branch_name ?? "main");
+        // Repo/branch: API first, then localStorage, so we don't show "Unknown" when API omits them
+        const repoName =
+          recipeDetails.repo_name?.trim() ||
+          fromStorage?.repo_name?.trim() ||
+          "Unknown Repository";
+        const branchName =
+          recipeDetails.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main";
+        setRepoName(repoName);
+        setBranchName(branchName);
         setUserPrompt(
           (recipeDetails.user_prompt && recipeDetails.user_prompt.trim()) ||
             fromStorage?.user_prompt ||
             "Implementation plan generation"
         );
       } catch {
-        setRepoName(fromStorage?.repo_name ?? "Unknown Repository");
-        setBranchName(fromStorage?.branch_name ?? "main");
-        setUserPrompt(fromStorage?.user_prompt ?? "Implementation plan generation");
+        // On error, use localStorage if available so repo/branch/prompt can still show
+        setRepoName(fromStorage?.repo_name?.trim() || "Unknown Repository");
+        setBranchName(fromStorage?.branch_name?.trim() || "main");
+        setUserPrompt(fromStorage?.user_prompt || "Implementation plan generation");
       }
     };
     fetchRecipeDetails();

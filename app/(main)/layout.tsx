@@ -17,7 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { authClient } from "@/lib/sso/unified-auth";
 import type { UserAccount } from "@/types/auth";
 import { auth } from "@/configs/Firebase-config";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 export default function RootLayout({
   children,

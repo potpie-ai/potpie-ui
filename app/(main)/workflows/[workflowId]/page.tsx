@@ -3,7 +3,7 @@
 import { Workflow } from "@/services/WorkflowService";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { LucideLoader2, History } from "lucide-react";
 import WorkflowService from "@/services/WorkflowService";
 import { WorkflowEditor } from "../components/editor";

@@ -19,7 +19,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
 import React, { useRef } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 const LinkGithub = () => {
   const githubAppUrl =

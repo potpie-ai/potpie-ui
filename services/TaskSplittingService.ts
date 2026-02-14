@@ -4,6 +4,7 @@ import { parseApiError } from "@/lib/utils";
 import {
   SubmitTaskSplittingRequest,
   SubmitTaskSplittingResponse,
+  CreatePullRequestResponse,
   TaskSplittingStatusResponse,
   TaskSplittingItemsResponse,
 } from "@/lib/types/spec";
@@ -29,6 +30,19 @@ export default class TaskSplittingService {
       );
       return response.data;
     } catch (error: any) {
+      // Backend may return 409 with an existing task_splitting_id (idempotency).
+      // Treat that as a successful "submission" so callers can proceed to polling.
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+      if (
+        status === 409 &&
+        data &&
+        typeof data === "object" &&
+        typeof data.task_splitting_id === "string"
+      ) {
+        return data as SubmitTaskSplittingResponse;
+      }
+
       console.error("Error submitting task splitting:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
@@ -58,27 +72,6 @@ export default class TaskSplittingService {
   }
 
   /**
-   * Create a pull request from completed codegen changes
-   * @param taskSplittingId - Task splitting UUID
-   * @returns Create PR response (202 Accepted - PR creation is async)
-   */
-  static async createPullRequest(taskSplittingId: string): Promise<{ task_splitting_id: string; status: string; message?: string; pr_url?: string }> {
-    try {
-      const headers = await getHeaders();
-      const response = await axios.post<{ task_splitting_id: string; status: string; message?: string; pr_url?: string }>(
-        `${this.API_BASE}/${taskSplittingId}/create-pr`,
-        {},
-        { headers }
-      );
-      return response.data;
-    } catch (error: any) {
-      console.error("Error creating pull request:", error);
-      const errorMessage = parseApiError(error);
-      throw new Error(errorMessage);
-    }
-  }
-
-  /**
    * Fetch task splitting items (task DAG layers) with pagination
    * @param taskSplittingId - Task splitting UUID
    * @param start - Starting layer order (default: 0)
@@ -102,6 +95,50 @@ export default class TaskSplittingService {
       return response.data;
     } catch (error: any) {
       console.error("Error fetching task splitting items:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * User-triggered: create PR from completed codegen job
+   */
+  static async createPullRequest(
+    taskSplittingId: string
+  ): Promise<CreatePullRequestResponse> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post<CreatePullRequestResponse>(
+        `${this.API_BASE}/${taskSplittingId}/create-pr`,
+        {},
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("Error creating PR:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Retry a failed codegen job (manual retry)
+   * @param taskSplittingId - Task splitting UUID
+   * @returns Retry submission response
+   */
+  static async retryTaskSplitting(
+    taskSplittingId: string
+  ): Promise<{ task_splitting_id: string; status: string; message: string }> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post(
+        `${this.API_BASE}/${taskSplittingId}/retry`,
+        {},
+        { headers }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("Error retrying task splitting:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }

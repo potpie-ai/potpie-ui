@@ -20,32 +20,36 @@ function MyCodeBlock({ code, language }: MyCodeBlockProps) {
   };
 
   return (
-    <div className="relative bg-gray-100 rounded-lg shadow-lg mt-4">
+    <div className="relative bg-gray-100 rounded-lg shadow-lg mt-4 max-w-full overflow-hidden">
       <div className="flex justify-between items-center bg-gray-300 px-4 py-1 rounded-t-lg">
-        <span className="text-sm font-semibold text-gray-800">{language}</span>
+        <span className="text-sm font-semibold text-gray-800 truncate">{language}</span>
         <Button
           variant="secondary"
           size="sm"
           onClick={handleCopy}
-          className="text-xs font-semibold px-2 py-1 h-6 rounded text-gray-800"
+          className="text-xs font-semibold px-2 py-1 h-6 rounded text-gray-800 shrink-0"
         >
           {copied ? <div className="flex gap-2 items-center"> <LucideCopyCheck className="size-4"/> Copied! </div> : <div className="flex gap-2 items-center"> <LucideCopy className="size-4"/> Copy</div>}
         </Button>
       </div>
-      <SyntaxHighlighter 
-        language={language.toLowerCase()}
-        style={oneLight}
-        customStyle={{
-          backgroundColor: 'hsl(var(--muted))',
-          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Liberation Mono", Consolas, monospace',
-          fontFeatureSettings: 'normal',
-          fontSize: '0.8rem',
-          fontVariationSettings: 'normal',
-          fontWeight: '500',
-        }}
-      >
-        {code}
-      </SyntaxHighlighter>
+      <div className="overflow-x-auto max-w-full">
+        <SyntaxHighlighter 
+          language={language.toLowerCase()}
+          style={oneLight}
+          customStyle={{
+            backgroundColor: 'hsl(var(--muted))',
+            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Liberation Mono", Consolas, monospace',
+            fontFeatureSettings: 'normal',
+            fontSize: '0.8rem',
+            fontVariationSettings: 'normal',
+            fontWeight: '500',
+            margin: 0,
+          }}
+          wrapLongLines
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
     </div>
   );
 }

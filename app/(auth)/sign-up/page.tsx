@@ -4,7 +4,7 @@ import { Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import { testimonials } from "@/lib/utils/testimonials";
 import { useRouter, useSearchParams } from "next/navigation";

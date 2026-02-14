@@ -14,7 +14,7 @@ import AgentService from "@/services/AgentService";
 import ChatService from "@/services/ChatService";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Loader, Bot, Code, GitBranch, GitCommit, MessageCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import NodeSelector from "@/components/NodeSelectorChatForm/NodeSelector";
 import { setChat, setPendingMessage } from "@/lib/state/Reducers/chat";

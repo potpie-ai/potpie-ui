@@ -6,6 +6,8 @@ import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { ThemeProvider } from "next-themes";
 import { AuthContextProvider } from "@/contexts/AuthContext";
+import { NavigationProgressProvider } from "@/contexts/NavigationProgressContext";
+import { NavigationProgressBar } from "@/components/NavigationProgressBar";
 import posthog from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -48,12 +50,15 @@ const LayoutProviders = ({ children }: { children: React.ReactNode }) => {
           disableTransitionOnChange
         >
           <AuthContextProvider>
-            <FormbricksProvider />
-            <PersistGate loading={<Loading />} persistor={persistor}>
-              <Provider store={store}>
-                <TooltipProvider>{children}</TooltipProvider>
-              </Provider>
-            </PersistGate>
+            <NavigationProgressProvider>
+              <NavigationProgressBar />
+              <FormbricksProvider />
+              <PersistGate loading={<Loading />} persistor={persistor}>
+                <Provider store={store}>
+                  <TooltipProvider>{children}</TooltipProvider>
+                </Provider>
+              </PersistGate>
+            </NavigationProgressProvider>
           </AuthContextProvider>
         </ThemeProvider>
       </QueryClientProvider>

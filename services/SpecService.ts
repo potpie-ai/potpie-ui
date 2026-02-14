@@ -477,7 +477,7 @@ export default class SpecService {
         intent: (d.intent ?? "clarify") as SpecChatResponse["intent"],
         message: d.explanation,
         explanation: d.explanation,
-        spec_output: (d.updated_spec ?? { add: [], modify: [], fix: [] }) as SpecChatResponse["spec_output"],
+        spec_output: (d.updated_spec ?? { add: [], modify: [], fix: [] }) as unknown as SpecChatResponse["spec_output"],
         undo_token: "",
         next_actions: [],
         regenerate_triggered: d.requires_regeneration ?? false,

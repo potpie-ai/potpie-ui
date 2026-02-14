@@ -1798,7 +1798,7 @@ export default function VerticalTaskExecution() {
                                             </span>
                                           )}
                                         </div>
-                                        {paramDisplay && (
+                                        {paramDisplay && typeof paramDisplay === "string" && (
                                           <div className="text-zinc-400 truncate max-w-full" title={paramDisplay}>
                                             {paramDisplay}
                                           </div>

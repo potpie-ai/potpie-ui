@@ -324,7 +324,7 @@ const PlanPage = () => {
       {
         role: "assistant",
         content:
-          "Your implementation plan is ready. Review the phases below and tell me what you'd like to change—we'll nail it before moving to code.",
+          "Your implementation plan is ready. Review the phases below and tell me what you&apos;d like to change—we&apos;ll nail it before moving to code.",
       },
     ]);
   }, [userPrompt]);
@@ -647,7 +647,7 @@ const PlanPage = () => {
                         <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                       </div>
                       <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
-                        Your implementation plan is ready. Review the phases below and tell me what you'd like to change—we'll nail it before moving to code.
+                        Your implementation plan is ready. Review the phases below and tell me what you&apos;d like to change—we&apos;ll nail it before moving to code.
                       </div>
                     </div>
                     <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>

@@ -618,7 +618,7 @@ const SpecPage = () => {
       {
         role: "assistant",
         content:
-          "Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they're ready, we can refine them together.",
+          "Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they&apos;re ready, we can refine them together.",
       },
     ]);
   }, [recipeData?.user_prompt]);
@@ -1106,7 +1106,7 @@ const SpecPage = () => {
                         <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                       </div>
                       <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
-                        Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they're ready, we can refine them together.
+                        Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they&apos;re ready, we can refine them together.
                       </div>
                     </div>
                     {/* Thinking: label, status, markdown, and stream events (left side) */}

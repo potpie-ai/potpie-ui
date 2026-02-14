@@ -859,7 +859,7 @@ export default function VerticalTaskExecution() {
       {
         role: "assistant",
         content:
-          "I've generated a granular specification for the AI Chat Metadata logging. Review the goals below before we proceed to implementation.",
+          "Your implementation plan is ready. Review the tasks below and tell me what you'd like to change—we'll get it right before we start building.",
       },
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps

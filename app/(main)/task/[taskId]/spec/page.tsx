@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Github,
   GitBranch,
@@ -11,11 +11,7 @@ import {
   X,
   FileCode,
   Zap,
-  Search,
   Layers,
-  Wand2,
-  ShieldCheck,
-  Flag,
   FileText,
   Package,
   Link2,
@@ -31,16 +27,17 @@ import {
   RefreshCcw,
   RotateCcw,
   RotateCw,
+  Maximize2,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
+import { useNavigationProgress } from "@/contexts/NavigationProgressContext";
 import {
   SpecPlanStatusResponse,
   SpecStatusResponse,
   SpecOutput,
   SpecificationOutput,
-  StepStatusValue,
 } from "@/lib/types/spec";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
@@ -52,6 +49,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
+import { LiveOutputModal } from "@/components/chat/LiveOutputModal";
+import { normalizeMarkdownForPreview } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Tooltip,
@@ -61,44 +61,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import Image from "next/image";
-
-const PLAN_CHAPTERS = [
-  {
-    id: 1,
-    title: "Analyzing codebase",
-    icon: Search,
-    description: "Scanning repository structure and dependencies.",
-    progressThreshold: 20,
-  },
-  {
-    id: 2,
-    title: "Identifying dependencies",
-    icon: Layers,
-    description: "Mapping module relationships and imports.",
-    progressThreshold: 40,
-  },
-  {
-    id: 3,
-    title: "Generating implementation steps",
-    icon: Wand2,
-    description: "Creating detailed action items for the plan.",
-    progressThreshold: 60,
-  },
-  {
-    id: 4,
-    title: "Validating plan",
-    icon: ShieldCheck,
-    description: "Checking feasibility and completeness.",
-    progressThreshold: 80,
-  },
-  {
-    id: 5,
-    title: "Finalizing",
-    icon: Flag,
-    description: "Preparing the final implementation plan.",
-    progressThreshold: 100,
-  },
-];
 
 interface FileItem {
   path: string;
@@ -572,6 +534,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
 const SpecPage = () => {
   const params = useParams();
   const router = useRouter();
+  const { startNavigation } = useNavigationProgress();
   const dispatch = useDispatch<AppDispatch>();
   // Note: taskId in URL is actually recipeId now
   const recipeId = params?.taskId as string;
@@ -605,20 +568,46 @@ const SpecPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
-  const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
   const [isRegeneratingSpec, setIsRegeneratingSpec] = useState(false);
   const [regenerateSpecKey, setRegenerateSpecKey] = useState(0);
+  /** Live streaming progress when using spec generate-stream (step + message). */
+  const [streamProgress, setStreamProgress] = useState<{ step: string; message: string } | null>(null);
+  /** Accumulated streaming text (chunk events) from workflows backend. */
+  const [streamChunks, setStreamChunks] = useState("");
+  /** Recent stream events (tool_call_start/end, subagent_start/end) for left-pane activity. */
+  const [streamEvents, setStreamEvents] = useState<{ id: string; type: string; label: string }[]>([]);
+  /** Output segments: one per tool_call_end (content streamed since previous tool end). */
+  const [streamSegments, setStreamSegments] = useState<{ id: string; label: string; content: string }[]>([]);
+  const [liveOutputModalOpen, setLiveOutputModalOpen] = useState(false);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const streamEventIdRef = useRef(0);
+  const streamChunksRef = useRef("");
+  const searchParams = useSearchParams();
+  const runIdFromUrl = searchParams.get("run_id");
 
-  // Chat UI state (first message = new chat input; backend for chat to be wired later)
+  // Chat UI state (first message = new chat input; wired to spec chat API)
   type ChatMessage = { role: "user" | "assistant"; content: string };
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const planContentRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedRef = useRef(false);
   const hasSpecPollStartedRef = useRef(false);
   const hasChatInitializedRef = useRef(false);
+  const hasAppliedRunIdFromApiRef = useRef(false);
+
+  // If backend includes run_id in GET spec response, attach to stream by adding run_id to URL (once)
+  useEffect(() => {
+    if (!recipeId || runIdFromUrl || hasAppliedRunIdFromApiRef.current || !specProgress) return;
+    // Only SpecStatusResponse has run_id; check if it exists
+    const runIdFromApi = "run_id" in specProgress ? specProgress.run_id : undefined;
+    if (typeof runIdFromApi === "string" && runIdFromApi.trim()) {
+      hasAppliedRunIdFromApiRef.current = true;
+      router.replace(`/task/${recipeId}/spec?run_id=${encodeURIComponent(runIdFromApi.trim())}`, { scroll: false });
+    }
+  }, [recipeId, runIdFromUrl, specProgress, router]);
 
   // Initialize chat with user prompt (from new chat page) and assistant response
   useEffect(() => {
@@ -629,18 +618,39 @@ const SpecPage = () => {
       {
         role: "assistant",
         content:
-          "I'm generating a granular specification for your request. Review the goals in the Specification panel once ready before we proceed to implementation.",
+          "Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they're ready, we can refine them together.",
       },
     ]);
   }, [recipeData?.user_prompt]);
 
-  // Placeholder: send chat message (backend to be wired later)
-  const handleSendChatMessage = () => {
+  // Send spec chat message via Spec Editor Agent (POST /{recipe_id}/edit?edit_type=spec)
+  const handleSendChatMessage = async () => {
     const text = chatInput.trim();
-    if (!text) return;
+    if (!text || !recipeId || chatLoading) return;
     setChatMessages((prev) => [...prev, { role: "user", content: text }]);
     setChatInput("");
-    // TODO: call spec chat API when backend is ready; then append assistant response
+    setChatLoading(true);
+    try {
+      const res = await SpecService.specChat(recipeId, { message: text });
+      const assistantContent = res.explanation || res.message || "Done.";
+      setChatMessages((prev) => [...prev, { role: "assistant", content: assistantContent }]);
+      // Update right pane when spec_output changed
+      if (res.spec_output) {
+        setSpecProgress((prev: any) => ({
+          ...(prev || {}),
+          recipe_id: recipeId,
+          generation_status: "completed",
+          specification: res.spec_output,
+          spec_output: res.spec_output,
+        }));
+      }
+    } catch (err: any) {
+      const msg = err?.message ?? "Spec chat failed.";
+      setChatMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg}` }]);
+      toast.error(msg);
+    } finally {
+      setChatLoading(false);
+    }
   };
   const handleChatAction = (_action: "add" | "modify" | "remove" | "undo" | "regenerate") => {
     // Placeholder: will be connected when spec chat API is ready
@@ -758,9 +768,157 @@ const SpecPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeId]);
 
+  // When we have run_id in URL, show spec page immediately (streaming UI); don't wait for initial poll
+  useEffect(() => {
+    if (recipeId && runIdFromUrl) setIsLoading(false);
+  }, [recipeId, runIdFromUrl]);
+
+  // When navigated from repo with run_id, connect to SSE stream (potpie-workflows events)
+  // First check if spec is already completed before attempting stream connection
+  useEffect(() => {
+    if (!recipeId || !runIdFromUrl) return;
+
+    let cancelled = false;
+
+    const tryConnectStream = async () => {
+      // First check spec status - if already completed/failed, skip streaming
+      try {
+        const currentStatus = await SpecService.getSpecProgressByRecipeId(recipeId);
+        if (cancelled) return;
+        
+        const genStatus = "generation_status" in currentStatus ? currentStatus.generation_status : null;
+        if (genStatus === "completed" || genStatus === "failed") {
+          // Spec is already done, no need to stream - just update state and clear run_id from URL
+          setSpecProgress(currentStatus);
+          router.replace(`/task/${recipeId}/spec`, { scroll: false });
+          return;
+        }
+      } catch {
+        // If status check fails, still try to connect to stream
+      }
+
+      if (cancelled) return;
+
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = new AbortController();
+      setStreamProgress({ step: "Connecting…", message: "Opening live stream" });
+      setStreamChunks("");
+      setStreamSegments([]);
+      setStreamEvents([]);
+      streamChunksRef.current = "";
+
+      SpecService.connectSpecStream(recipeId, runIdFromUrl, {
+        signal: streamAbortRef.current.signal,
+        onEvent: (eventType, data) => {
+          const payload = (data?.data as Record<string, unknown>) ?? data;
+          // queued: task queued
+          if (eventType === "queued") {
+            setStreamProgress({ step: "Queued", message: (payload?.message as string) ?? "Task queued for processing" });
+          }
+          // start: pipeline started
+          if (eventType === "start") {
+            setStreamProgress({ step: "Starting", message: (payload?.message as string) ?? "Starting spec generation" });
+          }
+          // progress: step + message from backend
+          if (eventType === "progress" && payload) {
+            setStreamProgress({
+              step: (payload.step as string) ?? "Processing",
+              message: (payload.message as string) ?? "",
+            });
+          }
+          // chunk: streaming text (thinking/tokens)
+          if (eventType === "chunk" && payload?.content) {
+            const content = String(payload.content);
+            setStreamChunks((prev) => {
+              const next = prev + content;
+              streamChunksRef.current = next;
+              return next;
+            });
+          }
+          // tool_call_start / tool_call_end: show in activity list; on tool_call_end push current chunks as a segment
+          if (eventType === "tool_call_start" && payload?.tool) {
+            const id = `tool-start-${++streamEventIdRef.current}`;
+            setStreamEvents((prev) => [...prev.slice(-29), { id, type: "tool_start", label: `Running ${String(payload.tool)}` }]);
+          }
+          if (eventType === "tool_call_end" && payload?.tool) {
+            const id = `tool-end-${++streamEventIdRef.current}`;
+            const duration = payload.duration_ms != null ? ` (${payload.duration_ms}ms)` : "";
+            const label = String(payload.tool);
+            const contentToPush = streamChunksRef.current;
+            if (contentToPush) {
+              setStreamSegments((prev) => [...prev, { id: `seg-${id}`, label, content: contentToPush }]);
+            }
+            setStreamChunks("");
+            streamChunksRef.current = "";
+            setStreamEvents((prev) => [...prev.slice(-29), { id, type: "tool_end", label: `Completed ${label}${duration}` }]);
+          }
+          if (eventType === "subagent_start" && payload?.agent) {
+            const id = `subagent-start-${++streamEventIdRef.current}`;
+            setStreamEvents((prev) => [...prev.slice(-29), { id, type: "subagent_start", label: `Agent: ${String(payload.agent)}` }]);
+          }
+          if (eventType === "subagent_end" && payload?.agent) {
+            const id = `subagent-end-${++streamEventIdRef.current}`;
+            const duration = payload.duration_ms != null ? ` (${payload.duration_ms}ms)` : "";
+            setStreamEvents((prev) => [...prev.slice(-29), { id, type: "subagent_end", label: `Done ${String(payload.agent)}${duration}` }]);
+          }
+          // end: stream finished successfully — keep tool calls and preview on left, just stop progress
+          if (eventType === "end") {
+            setStreamProgress(null);
+            setRegenerateSpecKey((k) => k + 1);
+            SpecService.getSpecProgressByRecipeId(recipeId).then(setSpecProgress).catch(() => {});
+            router.replace(`/task/${recipeId}/spec`, { scroll: false });
+          }
+          // error: clear stream state and refetch
+          if (eventType === "error") {
+            setStreamProgress(null);
+            setStreamChunks("");
+            setStreamSegments([]);
+            setStreamEvents([]);
+            streamChunksRef.current = "";
+            setRegenerateSpecKey((k) => k + 1);
+            SpecService.getSpecProgressByRecipeId(recipeId).then(setSpecProgress).catch(() => {});
+            router.replace(`/task/${recipeId}/spec`, { scroll: false });
+          }
+        },
+        onError: async (msg) => {
+          // On stream error, check if spec is already completed - if so, don't show error toast
+          try {
+            const fallbackStatus = await SpecService.getSpecProgressByRecipeId(recipeId);
+            const genStatus = "generation_status" in fallbackStatus ? fallbackStatus.generation_status : null;
+            setSpecProgress(fallbackStatus);
+            if (genStatus === "completed" || genStatus === "failed") {
+              // Spec finished, stream just wasn't available - no error to show
+              setStreamProgress(null);
+              router.replace(`/task/${recipeId}/spec`, { scroll: false });
+              return;
+            }
+          } catch {
+            // Status check failed, show error
+          }
+          setStreamProgress(null);
+          setStreamChunks("");
+          setStreamSegments([]);
+          setStreamEvents([]);
+          streamChunksRef.current = "";
+          setError(msg);
+          toast.error("Live stream failed. Showing progress by polling.");
+          router.replace(`/task/${recipeId}/spec`, { scroll: false });
+        },
+      });
+    };
+
+    tryConnectStream();
+
+    return () => {
+      cancelled = true;
+      streamAbortRef.current?.abort();
+    };
+  }, [recipeId, runIdFromUrl]);
+
   // Poll for spec progress (re-runs when regenerateSpecKey changes so we can restart after regenerate)
   useEffect(() => {
     if (!recipeId) return;
+    if (runIdFromUrl) return; // When streaming, skip poll until stream ends
     if (hasSpecPollStartedRef.current) return;
     hasSpecPollStartedRef.current = true;
 
@@ -831,28 +989,15 @@ const SpecPage = () => {
       hasSpecPollStartedRef.current = false; // Reset so effect can run again on re-mount or after regenerate
       if (interval) clearInterval(interval);
     };
-  }, [recipeId, regenerateSpecKey]);
+  }, [recipeId, regenerateSpecKey, runIdFromUrl]);
 
-  // Calculate progress and status (support new API: generation_status, and legacy formats)
-  const planProgress = specProgress 
-    ? (('progress_percent' in specProgress && specProgress.progress_percent !== null) 
-        ? specProgress.progress_percent 
-        : ('generation_status' in specProgress && (specProgress as any).generation_status === 'completed' ? 100 : 0)) ?? 0
-    : 0;
+  // Calculate status (support new API: generation_status, and legacy formats)
   const status = (specProgress 
     ? ('generation_status' in specProgress
         ? ((specProgress as any).generation_status === 'completed' ? 'COMPLETED' : (specProgress as any).generation_status === 'failed' ? 'FAILED' : (specProgress as any).generation_status === 'processing' || (specProgress as any).generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
         : ('spec_gen_status' in specProgress ? specProgress.spec_gen_status : ('spec_generation_step_status' in specProgress ? specProgress.spec_generation_step_status : null)))
     : null) as 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null;
   const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
-  const currentStep = specProgress 
-    ? (('step_index' in specProgress && specProgress.step_index !== null) ? specProgress.step_index : 0) ?? 0
-    : 0;
-  const stepStatuses: Record<string | number, { status: StepStatusValue; message: string }> | Record<number, { status: StepStatusValue; message: string }> | null = specProgress 
-    ? ('step_statuses' in specProgress ? (specProgress as any).step_statuses : null) ?? {}
-    : {};
-  // GET /api/v1/recipes/{id}/spec returns only generation_status + specification (no step_statuses)
-  const hasStepLevelProgress = specProgress != null && 'step_statuses' in specProgress && (specProgress as any).step_statuses != null && Object.keys((specProgress as any).step_statuses).length > 0;
   const errorMessageFromApi = specProgress && typeof (specProgress as any).error_message === 'string' ? (specProgress as any).error_message : null;
 
   // Normalize spec from potpie-workflows GET /api/v1/recipes/{id}/spec
@@ -871,7 +1016,29 @@ const SpecPage = () => {
     }
   }, [status]);
 
-  if (recipeId && isLoading && !specProgress) {
+  // Show spec failure as toast (instead of inline banner)
+  const failedToastShownRef = useRef(false);
+  useEffect(() => {
+    if (status !== "FAILED" && !error) {
+      failedToastShownRef.current = false;
+      return;
+    }
+    if (failedToastShownRef.current) return;
+    failedToastShownRef.current = true;
+    const message =
+      status === "FAILED"
+        ? (errorMessageFromApi || "The spec generation process encountered an error. Please try again.")
+        : error || "Something went wrong.";
+    const title = status === "FAILED" ? "Spec Generation Failed" : "Error";
+    toast.error(message, {
+      title,
+      duration: 8000,
+      action: { label: "Retry", onClick: () => window.location.reload() },
+    });
+  }, [status, error, errorMessageFromApi]);
+
+  // When we have run_id we go straight to spec page and show streaming; no loading screen
+  if (recipeId && isLoading && !specProgress && !runIdFromUrl) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
         <Loader2 className="w-6 h-6 animate-spin text-primary-color" />
@@ -901,30 +1068,9 @@ const SpecPage = () => {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      {/* Error / Failed global banners */}
-      {error && (
-        <div className="mx-4 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-700">{error}</p>
-          <button onClick={() => window.location.reload()} className="mt-2 text-xs text-red-600 underline">
-            Retry
-          </button>
-        </div>
-      )}
-      {status === "FAILED" && (
-        <div className="mx-4 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-red-900">Spec Generation Failed</h3>
-            <p className="text-sm text-red-700 mt-1">{errorMessageFromApi || "The spec generation process encountered an error. Please try again."}</p>
-          </div>
-          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
-            Retry
-          </button>
-        </div>
-      )}
-
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
-        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7]">
+        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7] chat-panel-contained">
           {/* Chat header */}
           <div className="flex justify-between items-center px-6 py-4 shrink-0">
             <h1 className="text-lg font-bold text-primary-color truncate capitalize">
@@ -940,41 +1086,107 @@ const SpecPage = () => {
           </div>
 
           {/* Messages — only this section scrolls */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
             {chatMessages.map((msg, i) => (
               <React.Fragment key={i}>
-                <div
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  {msg.role === "assistant" && (
+                {/* User message */}
+                {msg.role === "user" && (
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%] text-sm rounded-t-xl rounded-bl-xl px-4 py-3 bg-white border border-gray-200 text-gray-900">
+                      {msg.content}
+                    </div>
+                  </div>
+                )}
+                {/* After first user message: assistant intro, then "Thinking" heading + thinking content */}
+                {msg.role === "user" && i === 0 && (
+                  <>
+                    {/* Assistant intro message (above thinking) */}
+                    <div className="flex justify-start">
+                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start">
+                        <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
+                      </div>
+                      <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+                        Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they're ready, we can refine them together.
+                      </div>
+                    </div>
+                    {/* Thinking: label, status, markdown, and stream events (left side) */}
+                    <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
+                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                      <div className="min-w-0 space-y-2 overflow-hidden" style={{ width: "calc(100% - 52px)", maxWidth: "600px" }}>
+                        <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Thinking</p>
+                        {(streamProgress || isGenerating) && !streamChunks && (
+                          <p className="text-xs text-zinc-500 flex items-center gap-2">
+                            <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
+                            {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating specification…"}
+                          </p>
+                        )}
+                        {streamEvents.length > 0 && (
+                          <ul className="space-y-0.5 text-xs text-zinc-600 font-mono break-words">
+                            {streamEvents.map((ev) => (
+                              <li key={ev.id} className="truncate">{ev.type === "tool_start" ? "▶ " : "✓ "}{ev.label}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {/* Output segments (one per tool_call_end) + current chunk, shown right after tool list */}
+                        {(streamSegments.length > 0 || streamChunks || (streamProgress || isGenerating)) && (
+                          <div className="mt-2 space-y-2 min-w-0 overflow-hidden">
+                            {streamSegments.map((seg) => (
+                              <div key={seg.id} className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0">
+                                <p className="text-[10px] font-semibold text-[#022D2C] uppercase tracking-wide mb-1.5">{seg.label}</p>
+                                <SharedMarkdown content={normalizeMarkdownForPreview(seg.content)} />
+                              </div>
+                            ))}
+                            {(streamChunks || (streamProgress || isGenerating)) && (
+                              <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[100px] overflow-y-auto overflow-x-hidden min-w-0">
+                                <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks || "")} />
+                              </div>
+                            )}
+                            {(streamSegments.some((s) => s.content.length > 0) || (streamChunks?.length ?? 0) > 0) && (
+                              <>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => setLiveOutputModalOpen(true)}
+                                        className="h-8 w-8 shrink-0"
+                                        aria-label="View full output"
+                                      >
+                                        <Maximize2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipPortal>
+                                      <TooltipContent>View full output</TooltipContent>
+                                    </TooltipPortal>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <LiveOutputModal
+                                  open={liveOutputModalOpen}
+                                  onOpenChange={setLiveOutputModalOpen}
+                                  content={streamSegments.map((s) => s.content).join("\n\n") + (streamChunks ? "\n\n" + streamChunks : "")}
+                                  segments={streamSegments.map((s) => ({ label: s.label, content: s.content })).concat(streamChunks ? [{ label: "Current", content: streamChunks }] : [])}
+                                  title="Live spec output"
+                                />
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {/* Assistant message (skip i===1 — already shown above thinking block) */}
+                {msg.role === "assistant" && i !== 1 && (
+                  <div className="flex justify-start">
                     <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
                       <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                     </div>
-                  )}
-                  <div
-                    className={`max-w-[85%] text-sm ${
-                      msg.role === "user"
-                        ? "rounded-t-xl rounded-bl-xl px-4 py-3 bg-white border border-gray-200 text-gray-900"
-                        : "px-4 py-3 text-gray-900"
-                    }`}
-                  >
-                    {msg.role === "assistant" && msg.content.length > 400
-                      ? `${msg.content.slice(0, 400).trim()}… View the full specification in the panel on the right.`
-                      : msg.content}
-                  </div>
-                </div>
-                {/* Spec bar: heading + spinner/check only — align with agent message content (after icon) */}
-                {i === 1 && (
-                  <div className="flex justify-start ml-[3.25rem]">
-                    <div className="max-w-[85%] w-full rounded-lg border border-gray-200 bg-white px-4 py-3 flex items-center gap-3">
-                      {planProgress >= 100 ? (
-                        <Check className="w-5 h-5 shrink-0" style={{ color: "#022D2C" }} />
-                      ) : (
-                        <div className="w-5 h-5 shrink-0 rounded-full border-2 border-primary-color border-t-transparent animate-spin" />
-                      )}
-                      <p className="text-sm font-bold text-[#00291C]">
-                        {status === "COMPLETED" ? "Spec generated" : "Generating spec ..."}
-                      </p>
+                    <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+                      {msg.content.length > 400
+                        ? `${msg.content.slice(0, 400).trim()}… View the full specification in the panel on the right.`
+                        : msg.content}
                     </div>
                   </div>
                 )}
@@ -1022,19 +1234,20 @@ const SpecPage = () => {
               <button
                 type="button"
                 onClick={handleSendChatMessage}
-                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity"
+                disabled={chatLoading}
+                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <SendHorizonal className="w-5 h-5" />
+                {chatLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <SendHorizonal className="w-5 h-5" />}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Right: Specification panel - hidden until spec is being generated, then slides in from right */}
+        {/* Right: Specification panel - show 50% when streaming or when spec is ready (never full-page left) */}
         <div
-          className="overflow-hidden flex-none flex flex-col"
+          className="overflow-hidden flex-none flex flex-col max-w-[50%]"
           style={{
-            width: specProgress != null ? "50%" : "0",
+            width: (specProgress != null || runIdFromUrl || streamProgress || isGenerating || !!streamChunks) ? "50%" : "0",
             minWidth: 0,
             transition: "width 0.35s ease-out",
           }}
@@ -1077,11 +1290,29 @@ const SpecPage = () => {
                       if (!recipeId || isRegeneratingSpec) return;
                       setIsRegeneratingSpec(true);
                       try {
+                        // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
-                        setSpecProgress(null);
-                        setError(null);
-                        setRegenerateSpecKey((k) => k + 1);
+                        // Then try to start streaming to get run_id for live updates
+                        let runId = "";
+                        try {
+                          const result = await SpecService.startSpecGenerationStream(recipeId, {
+                            consumeStream: false,
+                          });
+                          runId = result.runId;
+                        } catch {
+                          // Streaming endpoint failed - backend may not support it after regenerate
+                          // Fall back to polling
+                        }
                         toast.success("Spec regeneration started");
+                        if (!runId) {
+                          // No run_id - fall back to polling
+                          setSpecProgress(null);
+                          setError(null);
+                          setRegenerateSpecKey((k) => k + 1);
+                        } else {
+                          // Navigate with run_id for streaming
+                          router.push(`/task/${recipeId}/spec?run_id=${encodeURIComponent(runId)}`);
+                        }
                       } catch (err: any) {
                         console.error("Error regenerating spec:", err);
                         toast.error(err?.message ?? "Failed to regenerate spec");
@@ -1102,35 +1333,18 @@ const SpecPage = () => {
                 </div>
                 {status === "COMPLETED" && !isCancelled && hasSpecContent && (
                   <button
-                    onClick={async () => {
-                      if (isSubmittingPlan) return;
-                      setIsSubmittingPlan(true);
-                      try {
-                        await PlanService.submitPlanGeneration({ recipe_id: recipeId });
-                        toast.success("Plan generation started successfully");
-                        router.push(`/task/${recipeId}/plan`);
-                      } catch (err: any) {
-                        console.error("Error submitting plan generation:", err);
-                        toast.error(err.message || "Failed to start plan generation");
-                        setIsSubmittingPlan(false);
-                      }
+                    onClick={() => {
+                      startNavigation();
+                      router.push(`/task/${recipeId}/plan`);
                     }}
-                    disabled={isSubmittingPlan}
-                    className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-[#022019] text-white hover:opacity-90"
+                    className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm flex items-center gap-2 bg-[#022019] text-white hover:opacity-90"
                   >
-                    {isSubmittingPlan ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Starting Plan Generation...
-                      </>
-                    ) : (
-                      "GENERATE PLAN"
-                    )}
+                    GENERATE PLAN
                   </button>
                 )}
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6">
             {status === "COMPLETED" && !isCancelled && hasSpecContent ? (
               <div ref={planContentRef}>
                 {normalizedPlan ? (
@@ -1139,65 +1353,24 @@ const SpecPage = () => {
                   <SpecFallbackView spec={rawSpecification} />
                 ) : null}
               </div>
-            ) : (
-              /* Always show timeline on the right when not yet showing spec content (no duplicate "Generating specification" message) */
-              <div className="bg-background rounded-xl overflow-hidden">
-                <div className="relative px-4 pb-6 pt-2">
-                  <div className="absolute left-8 top-6 bottom-6 w-[2px] rounded-full" style={{ backgroundColor: "#B4D13F" }} />
-                  <div className="space-y-6 relative">
-                    {PLAN_CHAPTERS.map((step, idx) => {
-                      const stepStatus = hasStepLevelProgress && stepStatuses
-                        ? (typeof stepStatuses[idx] !== "undefined" ? stepStatuses[idx] : (stepStatuses as any)[idx.toString()])
-                        : undefined;
-                      const isDone = stepStatus?.status === "COMPLETED" || planProgress >= step.progressThreshold;
-                      const isActive = stepStatus?.status === "IN_PROGRESS" || (!isDone && (idx === 0 || planProgress >= PLAN_CHAPTERS[idx - 1].progressThreshold));
-                      const isFailed = stepStatus?.status === "FAILED";
-                      const isPending = !isDone && !isActive && !isFailed;
-                      const Icon = step.icon;
-                      const isPlanComplete = planProgress >= 100;
-                      const boxStyle = isFailed
-                        ? undefined
-                        : isPending
-                          ? { borderColor: "rgba(16, 44, 44, 0.5)", backgroundColor: "rgba(16, 44, 44, 0.2)", color: "#B4D13F" }
-                          : { borderColor: "#102C2C", backgroundColor: "#102C2C", color: "#B4D13F" };
-                      const liveMessage = stepStatus?.message ?? step.description;
-                      return (
-                        <div
-                          key={step.id}
-                          className={`flex items-start gap-4 ${isPlanComplete ? "opacity-90" : isPending ? "opacity-50" : ""}`}
-                        >
-                          <div
-                            className={`relative z-10 w-8 h-8 flex items-center justify-center rounded border-2 shrink-0 transition-colors ${
-                              isFailed ? "border-red-500 bg-red-50 text-red-500" : ""
-                            }`}
-                            style={boxStyle}
-                          >
-                            {isPlanComplete ? (
-                              <Icon className="w-3.5 h-3.5" />
-                            ) : isDone ? (
-                              <Check className="w-3.5 h-3.5" />
-                            ) : isFailed ? (
-                              <X className="w-3.5 h-3.5" />
-                            ) : (
-                              <Icon className="w-3.5 h-3.5" />
-                            )}
-                          </div>
-                          <div className="flex flex-col pt-0.5 min-w-0">
-                            <span className="text-xs font-bold uppercase tracking-wider text-zinc-800">
-                              {step.title}
-                            </span>
-                            {idx < PLAN_CHAPTERS.length - 1 && (
-                              <span className="text-xs text-zinc-500 mt-0.5">
-                                {liveMessage}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+            ) : (streamProgress || isGenerating || streamChunks) ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <div className="animate-spin-slow mb-4">
+                  <Image
+                    src="/images/logo.svg"
+                    width={48}
+                    height={48}
+                    alt="Loading"
+                    className="w-12 h-12"
+                  />
                 </div>
+                <p className="text-sm font-medium text-[#102C2C]">Cooking ingredients for spec</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Preparing specification…"}
+                </p>
               </div>
+            ) : (
+              <p className="text-sm text-zinc-500">Specification will appear here when ready.</p>
             )}
             </div>
           </aside>

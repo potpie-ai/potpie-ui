@@ -81,7 +81,7 @@ export default class ChatService {
       }
 
       const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/`,
+        `${baseUrl}/api/v1/conversations`,
         requestBody,
         { headers }
       );
@@ -293,8 +293,16 @@ export default class ChatService {
     try {
       const headers = await getHeaders();
 
+      // Build URL with cursor as query parameter
+      const url = new URL(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${chatId}/resume/${sessionId}`
+      );
+      if (cursor) {
+        url.searchParams.set("cursor", cursor);
+      }
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${chatId}/resume/${sessionId}?cursor=${cursor}`,
+        url.toString(),
         {
           method: "POST",
           headers: headers as HeadersInit,
@@ -446,7 +454,6 @@ export default class ChatService {
 
       formData.append("content", message);
       formData.append("node_ids", JSON.stringify(selectedNodes));
-      formData.append("session_id", currentSessionId);
 
       // Only process images if multimodal is enabled
       const enabledImages = isMultimodalEnabled() ? images : [];
@@ -454,8 +461,17 @@ export default class ChatService {
         formData.append("images", image);
       });
 
+      // Build URL with query parameters
+      const url = new URL(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message`
+      );
+      url.searchParams.set("stream", "true");
+      if (currentSessionId) {
+        url.searchParams.set("session_id", currentSessionId);
+      }
+
       const response = await this.streamWithRetry(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message/`,
+        url.toString(),
         {
           method: "POST",
           headers: headers as HeadersInit,
@@ -698,7 +714,7 @@ export default class ChatService {
   ) {
     const headers = await getHeaders();
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/messages/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/messages`,
       {
         headers,
         params: { start, limit },
@@ -729,7 +745,7 @@ export default class ChatService {
 
     try {
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/info/`,
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/info`,
         { headers }
       );
       return response.data;
@@ -791,8 +807,15 @@ export default class ChatService {
     try {
       const headers = await getHeaders();
 
+      // Build URL with query parameters
+      const url = new URL(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/regenerate`
+      );
+      url.searchParams.set("stream", "true");
+      url.searchParams.set("background", "true");
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/regenerate/`,
+        url.toString(),
         {
           method: "POST",
           headers: {
@@ -932,7 +955,7 @@ export default class ChatService {
       }
 
       const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/`,
+        `${baseUrl}/api/v1/conversations`,
         requestBody,
         { 
           headers: headers,
@@ -949,7 +972,7 @@ export default class ChatService {
   static async getAllChats() {
     const headers = await getHeaders();
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations`,
       {
         params: {
           start: 0,
@@ -964,7 +987,7 @@ export default class ChatService {
   static async renameChat(conversationId: string, title: string) {
     const headers = await getHeaders();
     const response = await axios.patch(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/rename/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/rename`,
       {
         title: title,
       },
@@ -976,7 +999,7 @@ export default class ChatService {
   static async deleteChat(conversationId: string) {
     const headers = await getHeaders();
     const response = await axios.delete(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}`,
       {
         headers,
       }
@@ -1066,11 +1089,17 @@ export default class ChatService {
     }
   }
 
-  static async stopMessage(conversationId: string): Promise<void> {
+  static async stopMessage(conversationId: string, sessionId?: string): Promise<void> {
     try {
       const headers = await getHeaders();
+      const url = new URL(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/stop`
+      );
+      if (sessionId) {
+        url.searchParams.set("session_id", sessionId);
+      }
       await axios.post(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/stop/`,
+        url.toString(),
         {},
         { headers }
       );

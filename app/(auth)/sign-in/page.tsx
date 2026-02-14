@@ -22,8 +22,9 @@ import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { useSearchParams, useRouter } from "next/navigation";
-import { LinkProviderDialog } from '@/components/auth/LinkProviderDialog';
-import type { SSOLoginResponse } from '@/types/auth';
+import { LinkProviderDialog } from "@/components/auth/LinkProviderDialog";
+import type { SSOLoginResponse } from "@/types/auth";
+import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
 
 export default function Signin() {
   const router = useRouter();
@@ -31,9 +32,12 @@ export default function Signin() {
   const source = searchParams.get("source");
   const agent_id = searchParams.get("agent_id");
   const redirectUrl = searchParams.get("redirect");
+  const redirect_uri = searchParams.get("redirect_uri");
 
   // SSO state
-  const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(null);
+  const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(
+    null,
+  );
   const [showLinkingDialog, setShowLinkingDialog] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
@@ -47,7 +51,7 @@ export default function Signin() {
       const url = new URL(redirectPath, window.location.origin);
       redirectAgent_id = url.searchParams.get("agent_id") || "";
     } catch (e) {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.error("Error parsing redirect URL:", e);
       }
     }
@@ -74,11 +78,18 @@ export default function Signin() {
 
   const googleProvider = new GoogleAuthProvider();
 
-  const handleExternalRedirect = async (token: string) => {
+  const handleExternalRedirect = (
+    token: string,
+    customToken?: string | null,
+  ) => {
     if (finalAgent_id) {
       window.location.href = `/shared-agent?agent_id=${finalAgent_id}`;
     } else if (source === "vscode") {
-      window.location.href = `http://localhost:54333/auth/callback?token=${token}`;
+      window.location.href = buildVSCodeCallbackUrl(
+        token,
+        customToken,
+        redirect_uri ?? undefined,
+      );
     }
   };
 
@@ -91,9 +102,13 @@ export default function Signin() {
           const userSignup = await AuthService.signupWithEmailPassword(user);
 
           if (userSignup.needs_github_linking) {
-            toast.info('Almost there! Link your GitHub to unlock the magic');
+            toast.info("Almost there! Link your GitHub to unlock the magic");
             const urlSearchParams = new URLSearchParams(window.location.search);
-            const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+            const plan = (
+              urlSearchParams.get("plan") ||
+              urlSearchParams.get("PLAN") ||
+              ""
+            ).toLowerCase();
             const prompt = urlSearchParams.get("prompt") || "";
 
             const onboardingParams = new URLSearchParams({
@@ -111,15 +126,21 @@ export default function Signin() {
 
           if (source === "vscode") {
             if (userSignup.token) {
-              handleExternalRedirect(userSignup.token);
+              const customToken =
+                userSignup.customToken ?? (await AuthService.getCustomToken());
+              handleExternalRedirect(userSignup.token, customToken);
             }
           } else if (finalAgent_id) {
             handleExternalRedirect("");
           } else {
-            router.push('/newchat');
+            router.push("/newchat");
           }
 
-          toast.success("Welcome back " + (user.displayName || user.email) + "! Ready to build?");
+          toast.success(
+            "Welcome back " +
+              (user.displayName || user.email) +
+              "! Ready to build?",
+          );
         } catch (error: any) {
           toast.error(error.message || "Signup call unsuccessful");
         }
@@ -135,34 +156,43 @@ export default function Signin() {
       .then(async (result) => {
         // VALIDATION CHECKPOINT: Block new GitHub signups
         const isNew = isNewUser(result);
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log('GitHub sign-in - Is New User:', isNew);
+
+        if (process.env.NODE_ENV === "development") {
+          console.log("GitHub sign-in - Is New User:", isNew);
         }
-        
+
         // Block all new GitHub signups
         if (isNew) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('Blocking new GitHub signup attempt');
+          if (process.env.NODE_ENV === "development") {
+            console.log("Blocking new GitHub signup attempt");
           }
-          
+
           // Delete Firebase user account and sign out
           const deletionSucceeded = await deleteUserAndSignOut(result.user);
-          
+
           // Log deletion failure for monitoring (caller can act on result if needed)
           if (!deletionSucceeded) {
-            console.error('[ERROR] Failed to delete blocked GitHub signup user:', {
-              userId: result.user?.uid,
-              email: result.user?.email,
-            });
+            if (process.env.NODE_ENV !== "production") {
+              console.error(
+                "[ERROR] Failed to delete blocked GitHub signup user:",
+                { userId: result.user?.uid, email: result.user?.email },
+              );
+            } else {
+              console.error(
+                "[ERROR] Failed to delete blocked GitHub signup user (uid only)",
+                { userId: result.user?.uid },
+              );
+            }
           }
-          
+
           // Show concise error message
-          toast.error('GitHub sign-ups are no longer supported — please sign in with Google.');
-          
+          toast.error(
+            "GitHub sign-ups are no longer supported — please sign in with Google.",
+          );
+
           return; // Don't proceed to backend
         }
-        
+
         // Existing users can proceed
         const credential = GithubAuthProvider.credentialFromResult(result);
         if (credential && credential.accessToken) {
@@ -170,7 +200,7 @@ export default function Signin() {
             const userSignup = await AuthService.signupWithGitHub(
               result.user,
               credential.accessToken,
-              (result as any)._tokenResponse.screenName
+              (result as any)._tokenResponse.screenName,
             );
 
             posthog.identify(result.user.uid, {
@@ -179,36 +209,60 @@ export default function Signin() {
             });
 
             if (userSignup.needs_github_linking) {
-              toast.info('Almost there! Link your GitHub to unlock the magic');
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              toast.info("Almost there! Link your GitHub to unlock the magic");
+              const urlSearchParams = new URLSearchParams(
+                window.location.search,
+              );
+              const plan = (
+                urlSearchParams.get("plan") ||
+                urlSearchParams.get("PLAN") ||
+                ""
+              ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
               const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+              if (result.user.uid)
+                onboardingParams.append("uid", result.user.uid);
+              if (result.user.email)
+                onboardingParams.append("email", result.user.email);
+              if (result.user.displayName)
+                onboardingParams.append("name", result.user.displayName);
+              if (plan) onboardingParams.append("plan", plan);
+              if (prompt) onboardingParams.append("prompt", prompt);
+              if (finalAgent_id)
+                onboardingParams.append("agent_id", finalAgent_id);
 
               window.location.href = `/onboarding?${onboardingParams.toString()}`;
               return;
             }
 
             if (!userSignup.exists) {
-              toast.success("Welcome aboard " + result.user.displayName + "! Let's get started");
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              toast.success(
+                "Welcome aboard " +
+                  result.user.displayName +
+                  "! Let's get started",
+              );
+              const urlSearchParams = new URLSearchParams(
+                window.location.search,
+              );
+              const plan = (
+                urlSearchParams.get("plan") ||
+                urlSearchParams.get("PLAN") ||
+                ""
+              ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
               const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+              if (result.user.uid)
+                onboardingParams.append("uid", result.user.uid);
+              if (result.user.email)
+                onboardingParams.append("email", result.user.email);
+              if (result.user.displayName)
+                onboardingParams.append("name", result.user.displayName);
+              if (plan) onboardingParams.append("plan", plan);
+              if (prompt) onboardingParams.append("prompt", prompt);
+              if (finalAgent_id)
+                onboardingParams.append("agent_id", finalAgent_id);
 
               window.location.href = `/onboarding?${onboardingParams.toString()}`;
               return;
@@ -216,7 +270,10 @@ export default function Signin() {
 
             if (source === "vscode") {
               if (userSignup.token) {
-                handleExternalRedirect(userSignup.token);
+                const customToken =
+                  userSignup.customToken ??
+                  (await AuthService.getCustomToken());
+                handleExternalRedirect(userSignup.token, customToken);
               }
             } else if (finalAgent_id) {
               handleExternalRedirect("");
@@ -224,7 +281,11 @@ export default function Signin() {
               window.location.href = "/newchat";
             }
 
-            toast.success("Welcome back " + result.user.displayName + "! Let's build something amazing");
+            toast.success(
+              "Welcome back " +
+                result.user.displayName +
+                "! Let's build something amazing",
+            );
           } catch (e: any) {
             toast.error(e.message || "Sign-in unsuccessful");
           }
@@ -232,11 +293,14 @@ export default function Signin() {
       })
       .catch((error) => {
         // Handle user cancellation - don't show error
-        if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        if (
+          error.code === "auth/popup-closed-by-user" ||
+          error.code === "auth/cancelled-popup-request"
+        ) {
           // User cancelled, don't show error
           return;
         }
-        
+
         const errorCode = error.code;
         const errorMessage = error.message;
         const email = error.customData?.email;
@@ -252,7 +316,9 @@ export default function Signin() {
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential) {
           try {
-            const userSignup = await AuthService.signupWithEmailPassword(result.user);
+            const userSignup = await AuthService.signupWithEmailPassword(
+              result.user,
+            );
 
             posthog.identify(result.user.uid, {
               email: result.user.email,
@@ -260,36 +326,60 @@ export default function Signin() {
             });
 
             if (userSignup.needs_github_linking) {
-              toast.info('Almost there! Link your GitHub to unlock the magic');
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              toast.info("Almost there! Link your GitHub to unlock the magic");
+              const urlSearchParams = new URLSearchParams(
+                window.location.search,
+              );
+              const plan = (
+                urlSearchParams.get("plan") ||
+                urlSearchParams.get("PLAN") ||
+                ""
+              ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
               const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+              if (result.user.uid)
+                onboardingParams.append("uid", result.user.uid);
+              if (result.user.email)
+                onboardingParams.append("email", result.user.email);
+              if (result.user.displayName)
+                onboardingParams.append("name", result.user.displayName);
+              if (plan) onboardingParams.append("plan", plan);
+              if (prompt) onboardingParams.append("prompt", prompt);
+              if (finalAgent_id)
+                onboardingParams.append("agent_id", finalAgent_id);
 
               window.location.href = `/onboarding?${onboardingParams.toString()}`;
               return;
             }
 
             if (!userSignup.exists) {
-              toast.success("Welcome aboard " + result.user.displayName + "! Let's get started");
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              toast.success(
+                "Welcome aboard " +
+                  result.user.displayName +
+                  "! Let's get started",
+              );
+              const urlSearchParams = new URLSearchParams(
+                window.location.search,
+              );
+              const plan = (
+                urlSearchParams.get("plan") ||
+                urlSearchParams.get("PLAN") ||
+                ""
+              ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
               const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+              if (result.user.uid)
+                onboardingParams.append("uid", result.user.uid);
+              if (result.user.email)
+                onboardingParams.append("email", result.user.email);
+              if (result.user.displayName)
+                onboardingParams.append("name", result.user.displayName);
+              if (plan) onboardingParams.append("plan", plan);
+              if (prompt) onboardingParams.append("prompt", prompt);
+              if (finalAgent_id)
+                onboardingParams.append("agent_id", finalAgent_id);
 
               window.location.href = `/onboarding?${onboardingParams.toString()}`;
               return;
@@ -297,7 +387,10 @@ export default function Signin() {
 
             if (source === "vscode") {
               if (userSignup.token) {
-                handleExternalRedirect(userSignup.token);
+                const customToken =
+                  userSignup.customToken ??
+                  (await AuthService.getCustomToken());
+                handleExternalRedirect(userSignup.token, customToken);
               }
             } else if (finalAgent_id) {
               handleExternalRedirect("");
@@ -305,7 +398,11 @@ export default function Signin() {
               window.location.href = "/newchat";
             }
 
-            toast.success("Welcome back " + result.user.displayName + "! Let's build something amazing");
+            toast.success(
+              "Welcome back " +
+                result.user.displayName +
+                "! Let's build something amazing",
+            );
           } catch (e: any) {
             toast.error(e.message || "Sign-in unsuccessful");
           }
@@ -319,11 +416,26 @@ export default function Signin() {
 
   const handleSSOLinked = () => {
     if (source === "vscode") {
-      router.push('/newchat');
-    } else if (finalAgent_id) {
+      const user = auth.currentUser;
+      if (!user) {
+        router.push("/newchat");
+        return;
+      }
+      Promise.all([user.getIdToken(), AuthService.getCustomToken()])
+        .then(([token, customToken]) => {
+          window.location.href = buildVSCodeCallbackUrl(
+            token,
+            customToken,
+            redirect_uri ?? undefined,
+          );
+        })
+        .catch(() => router.push("/newchat"));
+      return;
+    }
+    if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push('/newchat');
+      router.push("/newchat");
     }
   };
 
@@ -390,137 +502,158 @@ export default function Signin() {
             <div className="flex flex-1 items-center justify-center px-8 pb-8">
               <div className="w-full max-w-[392px]">
                 <div className="flex flex-col items-center gap-3">
-                <Image
-                  src="/images/figma/auth/auth-signin-icon.svg"
-                  alt=""
-                  width={80}
-                  height={80}
-                  priority
-                />
-                <h1 className="text-center text-2xl font-medium text-[#022D2C]">
-                  Sign in to your account
-                </h1>
-                </div>
-
-              {/* Social buttons (interactive, styled to match) */}
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={onGithub}
-                  className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
-                  aria-label="Continue with GitHub"
-                >
-                  <LucideGithub className="h-5 w-5 text-black" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onGoogle}
-                  className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
-                  aria-label="Continue with Google"
-                >
                   <Image
-                    src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-                    width={20}
-                    height={20}
-                    alt="Google"
+                    src="/images/figma/auth/auth-signin-icon.svg"
+                    alt=""
+                    width={80}
+                    height={80}
+                    priority
                   />
-                </button>
-              </div>
+                  <h1 className="text-center text-2xl font-medium text-[#022D2C]">
+                    Sign in to your account
+                  </h1>
+                </div>
 
-              {/* Divider */}
-              <div className="mt-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-[#EBEBEB]" />
-                <span className="text-[11px] font-medium tracking-[0.02em] text-[#A3A3A3]">
-                  OR
-                </span>
-                <div className="h-px flex-1 bg-[#EBEBEB]" />
-              </div>
-
-              {/* Email/Pass Form */}
-              <form onSubmit={form.handleSubmit(onSubmit)} className="mt-5 space-y-4">
-                <div className="space-y-1">
-                  <label className="block text-sm font-medium text-[#022D2C]">
-                    Email Address<span className="ml-0.5">*</span>
-                  </label>
-                  <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
+                {/* Social buttons (interactive, styled to match) */}
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={onGithub}
+                    className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
+                    aria-label="Continue with GitHub"
+                  >
+                    <LucideGithub className="h-5 w-5 text-black" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onGoogle}
+                    className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
+                    aria-label="Continue with Google"
+                  >
                     <Image
-                      src="/images/figma/auth/auth-signin-mail.svg"
-                      alt=""
+                      src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
                       width={20}
                       height={20}
+                      alt="Google"
                     />
-                    <input
-                      type="email"
-                      placeholder="hello@potpie.com"
-                      {...form.register("email")}
-                      className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
-                    />
-                  </div>
-                  {form.formState.errors.email && (
-                    <p className="text-sm text-red-600">{form.formState.errors.email.message}</p>
-                  )}
+                  </button>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="block text-sm font-medium text-[#022D2C]">
-                    Password<span className="ml-0.5">*</span>
-                  </label>
-                  <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
-                    <Image
-                      src="/images/figma/auth/auth-signin-lock.svg"
-                      alt=""
-                      width={20}
-                      height={20}
-                    />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••••"
-                      {...form.register("password")}
-                      className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-[#656969] hover:text-[#022D2C] transition-colors"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                  {form.formState.errors.password && (
-                    <p className="text-sm text-red-600">{form.formState.errors.password.message}</p>
-                  )}
+                {/* Divider */}
+                <div className="mt-5 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-[#EBEBEB]" />
+                  <span className="text-[11px] font-medium tracking-[0.02em] text-[#A3A3A3]">
+                    OR
+                  </span>
+                  <div className="h-px flex-1 bg-[#EBEBEB]" />
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={keepLoggedIn}
-                      onChange={(e) => setKeepLoggedIn(e.target.checked)}
-                      className="h-4 w-4 rounded border border-[#EBEBEB] accent-[#B7F600]"
-                    />
-                    <span className="text-sm text-[#022D2C]">Keep me logged in</span>
-                  </label>
-                  <Link href="/forgot-password" className="text-sm font-medium text-[#656969] hover:text-[#022D2C]">
-                    Forgot password?
-                  </Link>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="mt-2 h-10 w-full rounded-lg bg-[#B7F600] text-[#00291C] hover:bg-[#a7e400] font-medium"
+                {/* Email/Pass Form */}
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="mt-5 space-y-4"
                 >
-                  Sign in
-                </Button>
-              </form>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-[#022D2C]">
+                      Email Address<span className="ml-0.5">*</span>
+                    </label>
+                    <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
+                      <Image
+                        src="/images/figma/auth/auth-signin-mail.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                      />
+                      <input
+                        type="email"
+                        placeholder="hello@potpie.com"
+                        {...form.register("email")}
+                        className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
+                      />
+                    </div>
+                    {form.formState.errors.email && (
+                      <p className="text-sm text-red-600">
+                        {form.formState.errors.email.message}
+                      </p>
+                    )}
+                  </div>
 
-              <p className="mt-4 text-center text-base font-medium text-[#656969]">
-                Don&apos;t have an account?{" "}
-                <Link href="/sign-up" className="text-[#656969] hover:text-[#022D2C] underline underline-offset-2">
-                  Sign up
-                </Link>
-              </p>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-[#022D2C]">
+                      Password<span className="ml-0.5">*</span>
+                    </label>
+                    <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
+                      <Image
+                        src="/images/figma/auth/auth-signin-lock.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                      />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••••"
+                        {...form.register("password")}
+                        className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-[#656969] hover:text-[#022D2C] transition-colors"
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
+                    {form.formState.errors.password && (
+                      <p className="text-sm text-red-600">
+                        {form.formState.errors.password.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={keepLoggedIn}
+                        onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                        className="h-4 w-4 rounded border border-[#EBEBEB] accent-[#B7F600]"
+                      />
+                      <span className="text-sm text-[#022D2C]">
+                        Keep me logged in
+                      </span>
+                    </label>
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm font-medium text-[#656969] hover:text-[#022D2C]"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="mt-2 h-10 w-full rounded-lg bg-[#B7F600] text-[#00291C] hover:bg-[#a7e400] font-medium"
+                  >
+                    Sign in
+                  </Button>
+                </form>
+
+                <p className="mt-4 text-center text-base font-medium text-[#656969]">
+                  Don&apos;t have an account?{" "}
+                  <Link
+                    href="/sign-up"
+                    className="text-[#656969] hover:text-[#022D2C] underline underline-offset-2"
+                  >
+                    Sign up
+                  </Link>
+                </p>
               </div>
             </div>
           </section>
@@ -541,7 +674,9 @@ export default function Signin() {
               </p>
 
               <div className="mt-7">
-                <p className="text-base font-medium text-[#FFF9F5]">{testimonials[currentTestimonial].name}</p>
+                <p className="text-base font-medium text-[#FFF9F5]">
+                  {testimonials[currentTestimonial].name}
+                </p>
                 <p className="mt-1 text-sm font-medium text-[rgba(255,249,245,0.72)]">
                   {testimonials[currentTestimonial].title}
                 </p>
@@ -560,7 +695,10 @@ export default function Signin() {
                       className="block h-1 rounded-full transition-all"
                       style={{
                         width: index === currentTestimonial ? 16 : 4,
-                        background: index === currentTestimonial ? "#FFF9F5" : "rgba(255,249,245,0.35)",
+                        background:
+                          index === currentTestimonial
+                            ? "#FFF9F5"
+                            : "rgba(255,249,245,0.35)",
                       }}
                     />
                   </button>

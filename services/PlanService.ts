@@ -6,12 +6,34 @@ import {
   PlanSubmitResponse,
   PlanStatusResponse,
   PlanItemsResponse,
+  PlanChatRequest,
+  PlanChatResponse,
 } from "@/lib/types/spec";
 
 export default class PlanService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
   /** New API base: /api/v1/recipes */
   private static readonly API_BASE = `${this.BASE_URL}/api/v1/recipes`;
+
+  /**
+   * Regenerate plan for a recipe (reset to SPEC_READY and trigger new plan generation).
+   * POST /api/v1/recipes/{recipe_id}/plan/regenerate → 202 Accepted.
+   */
+  static async regeneratePlan(recipeId: string): Promise<PlanSubmitResponse> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post<PlanSubmitResponse>(
+        `${this.API_BASE}/${recipeId}/plan/regenerate`,
+        {},
+        { headers },
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error("[PlanService] Error regenerating plan:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
 
   /**
    * Trigger plan generation for a recipe
@@ -79,6 +101,210 @@ export default class PlanService {
   static async getPlanStatusBySpecId(specId: string): Promise<PlanStatusResponse> {
     console.warn("[PlanService] getPlanStatusBySpecId is deprecated. The new API requires recipe_id.");
     throw new Error("getPlanStatusBySpecId is not supported in the new API. Use getPlanStatusByRecipeId instead.");
+  }
+
+  /**
+   * Start plan generation with SSE streaming.
+   * POST /api/v1/recipes/{recipe_id}/plan/generate-stream
+   * Returns run_id from X-Run-Id header; consumes stream and calls onEvent for each SSE event.
+   */
+  static async startPlanGenerationStream(
+    recipeId: string,
+    options: {
+      streamTokens?: boolean;
+      /** If false, only start the task and return runId without consuming the stream (e.g. for redirect to plan page). */
+      consumeStream?: boolean;
+      onEvent?: (eventType: string, data: Record<string, unknown>) => void;
+      onError?: (error: string) => void;
+      signal?: AbortSignal;
+    }
+  ): Promise<{ runId: string }> {
+    const headers = await getHeaders();
+    const url = `${this.API_BASE}/${recipeId}/plan/generate-stream${options.streamTokens !== false ? "?stream_tokens=true" : ""}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { ...headers, Accept: "text/event-stream" },
+      credentials: "include",
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(errText || `Plan stream failed: ${response.status}`);
+    }
+    let runId =
+      response.headers.get("X-Run-Id")?.trim() ||
+      response.headers.get("x-run-id")?.trim() ||
+      "";
+    if (!runId && response.body && (options.consumeStream === false || !options.onEvent)) {
+      try {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (let i = 0; i < 8; i++) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const dataMatch = buffer.match(/data:\s*(\{[^]*?\})\s*\n/);
+          if (dataMatch) {
+            const data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
+            const fromData =
+              typeof data.run_id === "string"
+                ? data.run_id
+                : data.data && typeof (data.data as Record<string, unknown>).run_id === "string"
+                  ? (data.data as Record<string, unknown>).run_id
+                  : "";
+            if (fromData) runId = String(fromData).trim();
+            break;
+          }
+        }
+        reader.cancel();
+      } catch {
+        // ignore
+      }
+    }
+    if (options.consumeStream === false || !options.onEvent) {
+      return { runId };
+    }
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (reader && options.onEvent) {
+      (async () => {
+        let buffer = "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+            for (const block of lines) {
+              if (!block.trim()) continue;
+              let eventType = "message";
+              let eventId: string | undefined;
+              let data: Record<string, unknown> = {};
+              for (const line of block.split("\n")) {
+                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
+                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
+                if (line.startsWith("data:")) {
+                  try {
+                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
+                  } catch {
+                    data = { raw: line.replace(/^data:\s*/, "").trim() };
+                  }
+                }
+              }
+              if (eventId) data.eventId = eventId;
+              options.onEvent?.(eventType, data);
+              if (eventType === "end" || eventType === "error") return;
+            }
+          }
+        } catch (e) {
+          options.onError?.(e instanceof Error ? e.message : String(e));
+        }
+      })();
+    }
+    return { runId };
+  }
+
+  /**
+   * Plan chat - send message to Plan Editor Agent
+   * POST /api/v1/recipes/{recipe_id}/edit?edit_type=plan
+   * Backend builds edit history from DB; we only send user_message.
+   */
+  static async planChat(
+    recipeId: string,
+    request: PlanChatRequest,
+  ): Promise<PlanChatResponse> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post<{
+        edit_type: string;
+        intent: string;
+        plan_edits?: unknown[];
+        explanation: string;
+        spec_sync_required?: boolean;
+        spec_impact?: Record<string, unknown>;
+        updated_plan?: Record<string, unknown>;
+        task_id?: string;
+      }>(
+        `${this.API_BASE}/${recipeId}/edit?edit_type=plan`,
+        { user_message: request.message },
+        { headers },
+      );
+      const d = response.data;
+      return {
+        intent: d.intent ?? "clarify",
+        message: d.explanation,
+        explanation: d.explanation,
+        plan_output: d.updated_plan ?? null,
+        undo_token: "",
+        next_actions: [],
+      };
+    } catch (error: any) {
+      console.error("[PlanService] Plan chat error:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Reconnect to an existing plan stream.
+   * GET /api/v1/recipes/{recipe_id}/plan/stream?run_id=...&cursor=...
+   */
+  static connectPlanStream(
+    recipeId: string,
+    runId: string,
+    options: {
+      cursor?: string | null;
+      onEvent?: (eventType: string, data: Record<string, unknown>) => void;
+      onError?: (error: string) => void;
+      signal?: AbortSignal;
+    }
+  ): void {
+    const url = `${this.API_BASE}/${recipeId}/plan/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
+    getHeaders().then((headers) => {
+      fetch(url, {
+        method: "GET",
+        headers: { ...headers, Accept: "text/event-stream" },
+        credentials: "include",
+        signal: options.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          if (!reader || !options.onEvent) return;
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+            for (const block of lines) {
+              if (!block.trim()) continue;
+              let eventType = "message";
+              let eventId: string | undefined;
+              let data: Record<string, unknown> = {};
+              for (const line of block.split("\n")) {
+                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
+                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
+                if (line.startsWith("data:")) {
+                  try {
+                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
+                  } catch {
+                    data = { raw: line.replace(/^data:\s*/, "").trim() };
+                  }
+                }
+              }
+              if (eventId) data.eventId = eventId;
+              options.onEvent?.(eventType, data);
+              if (eventType === "end" || eventType === "error") return;
+            }
+          }
+        })
+        .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
+    });
   }
 
   /**

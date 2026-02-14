@@ -101,7 +101,7 @@ const Navbar = ({
       const headers = await getHeaders();
       try {
         const response = await axios.patch(
-          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename/`,
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename`,
           { title: inputValue },
           { headers }
         );

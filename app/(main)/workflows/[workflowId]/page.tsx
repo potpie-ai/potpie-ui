@@ -8,6 +8,9 @@ import { LucideLoader2, History } from "lucide-react";
 import WorkflowService from "@/services/WorkflowService";
 import { WorkflowEditor } from "../components/editor";
 import { Button } from "@/components/ui/button";
+import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
+import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
+import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 
 export default function WorkflowPage() {
   const params: { workflowId: string } = useParams();
@@ -16,6 +19,29 @@ export default function WorkflowPage() {
 
   const [workflow, setWorkflow] = useState<Workflow | undefined>();
   const [loading, setLoading] = useState(true);
+  const [backendAccessible, setBackendAccessible] = useState<boolean | null>(null);
+  const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
+
+  // Check backend accessibility on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const accessible = await isWorkflowsBackendAccessible();
+      setBackendAccessible(accessible);
+      if (!accessible) {
+        // Backend not accessible, show modal immediately
+        setIsModalOpen(true);
+      }
+    };
+    checkBackend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  const handleModalCancel = () => {
+    // Redirect away from workflows if backend is not accessible
+    if (backendAccessible === false) {
+      router.push("/");
+    }
+  };
 
   // Get mode from URL search params, default to "view_only"
   const initialMode =
@@ -27,6 +53,14 @@ export default function WorkflowPage() {
 
   useEffect(() => {
     async function fetchWorkflow() {
+      // Check if backend is accessible before fetching
+      const accessible = await isWorkflowsBackendAccessible();
+      if (!accessible) {
+        // Backend not accessible, don't fetch
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         const _workflow = await WorkflowService.getWorkflowById(
@@ -39,6 +73,10 @@ export default function WorkflowPage() {
         setWorkflow(_workflow);
       } catch (error) {
         console.error("Error fetching workflow:", error);
+        if (handleError(error)) {
+          // Pro feature error was handled, modal is shown
+          return;
+        }
         toast.error("Error loading workflow. Please try again.");
       } finally {
         setLoading(false);
@@ -48,7 +86,7 @@ export default function WorkflowPage() {
     if (params.workflowId) {
       fetchWorkflow();
     }
-  }, [params.workflowId, router]);
+  }, [params.workflowId, router, handleError]);
 
   const handleSave = async (
     updatedWorkflow: Workflow,
@@ -105,18 +143,25 @@ export default function WorkflowPage() {
   }
 
   return (
-    <div className="h-[100vh] w-full overflow-hidden">
-      <WorkflowEditor
-        workflow={workflow}
-        mode={initialMode}
-        debugMode={false}
-        onSave={handleSave}
-        onCancel={handleCancel}
-        onModeChange={handleModeChange}
-        onExecutionsClick={() =>
-          router.push(`/workflows/${params.workflowId}/executions`)
-        }
+    <>
+      <div className="h-[100vh] w-full overflow-hidden">
+        <WorkflowEditor
+          workflow={workflow}
+          mode={initialMode}
+          debugMode={false}
+          onSave={handleSave}
+          onCancel={handleCancel}
+          onModeChange={handleModeChange}
+          onExecutionsClick={() =>
+            router.push(`/workflows/${params.workflowId}/executions`)
+          }
+        />
+      </div>
+      <ProFeatureModal 
+        open={isModalOpen} 
+        onOpenChange={setIsModalOpen}
+        onCancel={handleModalCancel}
       />
-    </div>
+    </>
   );
 }

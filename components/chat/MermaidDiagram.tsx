@@ -10,11 +10,21 @@ interface MermaidDiagramProps {
 }
 
 // Intelligent preprocessing to fix common mermaid syntax issues
+const MERMAID_DIAGRAM_TYPE =
+  /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart)/;
+
+/** Returns true if content looks like Mermaid diagram source (starts with a diagram type). */
+export const looksLikeMermaid = (content: string): boolean => {
+  const trimmed = (content || "").trim();
+  if (!trimmed) return false;
+  // Diff/code often starts with - or +
+  if (/^\s*[-+]/.test(trimmed) || trimmed.startsWith("}")) return false;
+  return MERMAID_DIAGRAM_TYPE.test(trimmed);
+};
+
 const preprocessMermaidChart = (chart: string): string => {
   try {
     let processedChart = chart;
-
-    console.log("Original chart:", chart);
 
     // Preserve the first line (diagram type) to avoid breaking type detection
     const lines = processedChart.split("\n");
@@ -238,6 +248,15 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
           return;
         }
 
+        const trimmedChart = chart.trim();
+        // Early guard: don't attempt render for non-Mermaid content (e.g. diff, code)
+        if (!looksLikeMermaid(trimmedChart)) {
+          if (isMounted) {
+            setError("Content is not a Mermaid diagram (use graph, flowchart, sequenceDiagram, etc.).");
+          }
+          return;
+        }
+
         // Dynamically import mermaid for code splitting
         const mermaid = (await import("mermaid")).default;
 
@@ -299,21 +318,6 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
 
         // Clean the chart content and apply intelligent fixes
         let cleanChart = chart.trim();
-
-        // First, validate basic mermaid syntax before attempting any preprocessing
-        if (
-          !cleanChart.match(
-            /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart)/,
-          )
-        ) {
-          console.error(
-            "Invalid diagram type found in:",
-            cleanChart.substring(0, 200),
-          );
-          throw new Error(
-            "Invalid mermaid diagram type. Must start with graph, flowchart, etc.",
-          );
-        }
 
         // Inject neo look and dagre layout for flowcharts and graphs
         if (cleanChart.match(/^(flowchart|graph)\s+/)) {
@@ -437,9 +441,10 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
           setError(null);
         }
       } catch (err) {
-        console.error("Mermaid render error:", err);
-        console.error("Chart content that failed:", chart);
-        console.error("Error type:", typeof err, err?.constructor?.name);
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Mermaid render error:", err instanceof Error ? err.message : err);
+          console.warn("Chart preview (first 120 chars):", chart.trim().slice(0, 120));
+        }
 
         if (isMounted) {
           let errorMessage = "Failed to render mermaid diagram";
@@ -607,19 +612,9 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
       // Use the same cleaned chart logic with preprocessing
       let cleanChart = preprocessMermaidChart(chart.trim());
 
-      // First validate basic mermaid syntax before any other processing
-      if (
-        !cleanChart.match(
-          /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart)/,
-        )
-      ) {
-        console.error(
-          "Invalid diagram type in modal:",
-          cleanChart.substring(0, 200),
-        );
-        throw new Error(
-          "Invalid mermaid diagram type. Must start with graph, flowchart, etc.",
-        );
+      // Validate before rendering in modal
+      if (!looksLikeMermaid(cleanChart)) {
+        throw new Error("Content is not a Mermaid diagram.");
       }
 
       // Inject neo look and dagre layout for flowcharts and graphs

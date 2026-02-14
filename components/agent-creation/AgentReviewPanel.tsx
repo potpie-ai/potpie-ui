@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import AgentService from "@/services/AgentService";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";

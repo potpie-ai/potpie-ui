@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import ChatService from "@/services/ChatService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { SessionInfo } from "@/lib/types/session";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import GlobalError from "@/app/error";
 import Navbar from "./components/Navbar";
 import { list_system_agents } from "@/lib/utils";

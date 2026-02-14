@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader, Bot, ChevronDown, SendHorizontalIcon } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import Image from "next/image";
 import ChatService from "@/services/ChatService";
 import ReactMarkdown from "react-markdown";

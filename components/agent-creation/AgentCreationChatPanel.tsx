@@ -9,7 +9,7 @@ import {
   Send,
   ChevronUp,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { useDispatch } from "react-redux";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { queryClient } from "@/app/utils/queryClient";

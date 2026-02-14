@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/sso/unified-auth';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import type { SSOLoginResponse } from '@/types/auth';
 import { getUserFriendlyError, getUserFriendlyProviderName } from '@/lib/utils/errorMessages';
 import { Zap, Check } from 'lucide-react';

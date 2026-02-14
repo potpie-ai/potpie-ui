@@ -7,7 +7,7 @@ import { auth } from "@/configs/Firebase-config";
 import { GithubAuthProvider, linkWithPopup } from "firebase/auth";
 import { LucideGithub, LucideCheck, LoaderCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import axios from "axios";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import { testimonials } from "@/lib/utils/testimonials";
 import Image from "next/image";

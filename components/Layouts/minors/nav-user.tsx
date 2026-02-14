@@ -32,7 +32,7 @@ import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import posthog from "posthog-js";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { useState } from "react";
 
 export function NavUser({

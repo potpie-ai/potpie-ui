@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useStepper } from "@/components/ui/stepper";
 import { Loader } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 const Footer: React.FC<{
   submitForm: () => void;

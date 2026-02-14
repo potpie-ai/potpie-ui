@@ -36,7 +36,7 @@ import {
 import { CommandSeparator } from "cmdk";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { z } from "zod";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { Dialog } from "@radix-ui/react-dialog";
 import {
   DialogClose,

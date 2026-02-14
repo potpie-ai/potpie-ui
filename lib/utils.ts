@@ -5,6 +5,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Normalize markdown content for safe preview display.
+ * Ensures string type and handles edge cases.
+ */
+export function normalizeMarkdownForPreview(content: string | undefined | null): string {
+  if (content == null) return "";
+  return typeof content === "string" ? content : String(content);
+}
+
 export const list_system_agents = [
   "codebase_qna_agent",
   "debugging_agent",

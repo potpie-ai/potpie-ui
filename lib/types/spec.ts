@@ -352,6 +352,11 @@ export interface TaskSplittingStatusResponse {
   status: "SUBMITTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
   current_step: number;
   codegen_status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+  pr_status?: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+  pr_url?: string;
+  pr_error_message?: string;
+  error_message?: string;
+  agent_activity?: Array<{ tool?: string; phase?: number; task?: number; params?: Record<string, unknown> }>;
 }
 
 export interface TaskTestResult {
@@ -452,4 +457,17 @@ export interface SpecUndoRequest {
 export interface SpecUndoResponse {
   spec_output: SpecOutput;
   message: string;
+}
+
+export interface PlanChatRequest {
+  message: string;
+}
+
+export interface PlanChatResponse {
+  intent: string;
+  message: string;
+  explanation: string;
+  plan_output: Record<string, unknown> | null;
+  undo_token: string;
+  next_actions: string[];
 }

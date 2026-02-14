@@ -491,7 +491,7 @@ export default class SpecService {
 
   /**
    * Get comprehensive recipe details including repo and branch information
-   * GET /api/v1/recipes/{recipe_id}/details
+   * GET /api/v1/recipes/{recipe_id}
    * On 404 returns a minimal response so callers can use localStorage/fallbacks instead of throwing.
    */
   static async getRecipeDetails(
@@ -499,11 +499,48 @@ export default class SpecService {
   ): Promise<RecipeDetailsResponse> {
     try {
       const headers = await getHeaders();
-      const response = await axios.get<RecipeDetailsResponse>(
-        `${this.API_BASE}/${recipeId}/details`,
+      // Use the new recipe API endpoint that returns { recipe: {...} }
+      const response = await axios.get<{ recipe: any }>(
+        `${this.API_BASE}/${recipeId}`,
         { headers },
       );
-      return response.data;
+      
+      const recipe = response.data.recipe;
+      
+      // Transform the response to match RecipeDetailsResponse format
+      // Also fetch questions if needed
+      let questionsAndAnswers: Array<{
+        question_id: string;
+        question: string;
+        answer: string | null;
+      }> = [];
+      
+      // Try to fetch questions if they exist
+      try {
+        const questionsResponse = await axios.get<RecipeQuestionsResponse>(
+          `${this.API_BASE}/${recipeId}/questions`,
+          { headers },
+        );
+        if (questionsResponse.data.questions) {
+          questionsAndAnswers = questionsResponse.data.questions.map((q) => ({
+            question_id: q.id,
+            question: q.question,
+            answer: null, // Answers are submitted separately and not returned in questions endpoint
+          }));
+        }
+      } catch (questionsError) {
+        // Questions might not be available yet, that's okay
+        console.log("[SpecService] Questions not available yet for recipe:", recipeId);
+      }
+      
+      return {
+        recipe_id: recipe.id || recipeId,
+        project_id: recipe.project_id || "",
+        user_prompt: recipe.user_prompt || "Implementation plan generation",
+        repo_name: recipe.repo_name || null,
+        branch_name: recipe.branch_name || null,
+        questions_and_answers: questionsAndAnswers,
+      };
     } catch (error: any) {
       if (error?.response?.status === 404) {
         return {

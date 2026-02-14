@@ -4,7 +4,7 @@ import { z } from "zod";
 import { WorkflowEditor } from "../components/editor/WorkflowEditor";
 import { Workflow } from "@/services/WorkflowService";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { LucideLoader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { parseApiError } from "@/lib/utils";

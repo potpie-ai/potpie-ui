@@ -34,7 +34,7 @@ import { Label } from "@radix-ui/react-label";
 import { Separator } from "@radix-ui/react-select";
 import { Eye, EyeOff, Trash, Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import getHeaders from "@/app/utils/headers.util";
 import ModelService from "@/services/ModelService";
 

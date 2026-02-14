@@ -10,7 +10,7 @@ import {
   GoogleAuthProvider,
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import { testimonials } from "@/lib/utils/testimonials";
 import { isNewUser, deleteUserAndSignOut } from "@/lib/utils/emailValidation";

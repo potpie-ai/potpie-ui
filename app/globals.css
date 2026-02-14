@@ -284,6 +284,20 @@
   animation: bounce-drop 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
+/* Slow spin animation for logo spinner */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
 .markdown p {
   margin: 0;
   line-height: 1.5;
@@ -300,11 +314,19 @@
 
 .markdown-content {
   color: #333;
+  /* Prevent content from contributing to parent intrinsic width */
+  contain: inline-size;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Paragraph styles */
 .markdown-content p {
   line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Heading styles */
@@ -327,6 +349,8 @@
 /* List item styles */
 .markdown-content li {
   margin-bottom: 8px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Bold text (e.g., for <strong> tags) */
@@ -338,12 +362,30 @@
 .markdown-content pre {
   border-radius: 4px;
   overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-all;
   margin-bottom: 16px;
 }
 
 .markdown-content code {
   padding: 2px 4px;
   border-radius: 4px;
+  word-break: break-all;
+}
+
+/* All direct children should respect parent bounds */
+.markdown-content > * {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Chat panel containment — prevents markdown from pushing layout */
+.chat-panel-contained {
+  contain: inline-size;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Mermaid diagram styling */

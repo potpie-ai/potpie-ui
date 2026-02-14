@@ -214,6 +214,8 @@ export interface SpecStatusResponse {
   specification: SpecificationOutput | null;
   generated_at: string | null;
   error_message: string | null;
+  /** When generation is in progress, backend includes run_id for SSE stream connection */
+  run_id?: string | null;
 }
 
 /** Context structure within specification */
@@ -304,6 +306,8 @@ export interface PlanStatusResponse {
   plan: PhasedPlan | null;
   generated_at: string | null;
   error_message: string | null;
+  /** When generation is in progress, backend includes run_id for SSE stream connection */
+  run_id?: string | null;
 }
 
 export interface FileReference {
@@ -348,15 +352,36 @@ export interface SubmitTaskSplittingResponse {
 
 export interface TaskSplittingStatusResponse {
   task_splitting_id: string;
-  plan_item_id: number;
+  /** @deprecated Backend runs full-plan codegen; optional for compat */
+  plan_item_id?: number;
   status: "SUBMITTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+  /** Current phase index (0-based); backend uses current_phase */
   current_step: number;
   codegen_status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
-  pr_status?: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
-  pr_url?: string;
-  pr_error_message?: string;
-  error_message?: string;
-  agent_activity?: Array<{ tool?: string; phase?: number; task?: number; params?: Record<string, unknown> }>;
+  error_message?: string | null;
+  // PR metadata (user-triggered PR creation)
+  pr_status?: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "PENDING" | null;
+  pr_error_message?: string | null;
+  pr_url?: string | null;
+  branch_name?: string | null;
+  base_branch?: string | null;
+  head_sha?: string | null;
+  pr_number?: number | null;
+  /** Recent agent activity (tool calls) for UI display */
+  agent_activity?: Array<{
+    tool?: string;
+    params?: Record<string, unknown>;
+    ts?: number;
+    phase?: number;
+    task?: number;
+  }>;
+}
+
+export interface CreatePullRequestResponse {
+  task_splitting_id: string;
+  status: "SUBMITTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+  message: string;
+  pr_url?: string | null;
 }
 
 export interface TaskTestResult {
@@ -459,15 +484,21 @@ export interface SpecUndoResponse {
   message: string;
 }
 
+export interface PlanChatEditHistoryItem {
+  message: string;
+  response: string;
+}
+
 export interface PlanChatRequest {
   message: string;
+  edit_history?: PlanChatEditHistoryItem[];
 }
 
 export interface PlanChatResponse {
   intent: string;
   message: string;
   explanation: string;
-  plan_output: Record<string, unknown> | null;
+  plan_output?: Record<string, unknown> | null;
   undo_token: string;
   next_actions: string[];
 }

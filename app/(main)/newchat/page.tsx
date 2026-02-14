@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import Image from "next/image";
 import IdeaInputCard from "../idea/components/IdeaInputCard";
 import ParsingStatusCard from "../idea/components/ParsingStatusCard";

@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, AlertCircle } from "lucide-react";
 import PlanService from "@/services/PlanService";
 import { PlanStatusResponse, PlanItem } from "@/lib/types/spec";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 export default function PlanPage() {
   const searchParams = useSearchParams();

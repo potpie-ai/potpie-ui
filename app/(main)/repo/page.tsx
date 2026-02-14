@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import QuestionService from "@/services/QuestionService";
 import SpecService from "@/services/SpecService";
@@ -24,6 +24,7 @@ import {
 import type {
   MCQQuestion,
   QuestionAnswer,
+  QuestionGenerationStatus,
   RepoPageState,
 } from "@/types/question";
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
@@ -62,6 +63,10 @@ const Badge = ({
   </div>
 );
 
+const RECIPE_ID_UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const REPO_RECIPE_STORAGE_PREFIX = "repo_recipe_";
+
 export default function RepoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -92,6 +97,8 @@ export default function RepoPage() {
     isGenerating: false,
     attachmentIds: [],
     attachmentUploading: false,
+    questionGenerationStatus: null,
+    questionGenerationError: null,
   });
 
   // Fetch recipe details when recipeId is available (same priority as spec: API then localStorage)
@@ -113,6 +120,23 @@ export default function RepoPage() {
         console.log("[Repo Page] Fetching recipe details for:", recipeId);
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
         console.log("[Repo Page] Recipe details received:", recipeDetails);
+
+        // Persist recipeId by project_id so we can restore when navigating back with only projectId
+        const projectIdFromRecipe =
+          (recipeDetails as { project_id?: string }).project_id;
+        if (
+          projectIdFromRecipe &&
+          typeof window !== "undefined"
+        ) {
+          try {
+            localStorage.setItem(
+              `${REPO_RECIPE_STORAGE_PREFIX}${projectIdFromRecipe}`,
+              recipeId
+            );
+          } catch {
+            // ignore
+          }
+        }
 
         // Same as spec: API first, then localStorage, then fallbacks
         const repo =
@@ -144,13 +168,20 @@ export default function RepoPage() {
   useEffect(() => {
     if (!recipeId) return;
 
+    const pollInterval = 3000;
+    const maxAttempts = 60;
+
     const fetchQuestions = async () => {
       setQuestionsPolling(true);
-      setState((prev) => ({ ...prev, pageState: "generating" }));
+      setState((prev) => ({
+        ...prev,
+        pageState: "generating",
+        questionGenerationStatus: null,
+        questionGenerationError: null,
+      }));
 
       try {
         // First, try a direct fetch to see if questions are already available
-        // This handles cases where status has moved to SPEC_IN_PROGRESS but questions exist
         let questionsData: RecipeQuestionsResponse;
         try {
           questionsData = await QuestionService.getRecipeQuestions(recipeId);
@@ -158,11 +189,26 @@ export default function RepoPage() {
           // If questions are available, use them immediately
           if (questionsData.questions && questionsData.questions.length > 0) {
             console.log(
-            "[Repo Page] Questions already available, status:",
-            questionsData.generation_status
+              "[Repo Page] Questions already available, status:",
+              questionsData.generation_status
             );
-            // Process questions immediately
             processQuestions(questionsData);
+            return;
+          }
+
+          // No questions yet: show status from API and poll
+          setState((prev) => ({
+            ...prev,
+            questionGenerationStatus:
+              questionsData.generation_status as QuestionGenerationStatus,
+            questionGenerationError: questionsData.error_message ?? null,
+          }));
+
+          if (questionsData.generation_status === "failed") {
+            toast.error(
+              questionsData.error_message || "Question generation failed"
+            );
+            setState((prev) => ({ ...prev, pageState: "questions" }));
             return;
           }
         } catch (error) {
@@ -172,10 +218,44 @@ export default function RepoPage() {
           );
         }
 
-        // If direct fetch didn't return questions, poll for them
-        console.log("[Repo Page] Polling for questions...");
-        questionsData = await QuestionService.pollRecipeQuestions(recipeId);
-        processQuestions(questionsData);
+        // Poll until we have questions or failed
+        let attempts = 0;
+        while (attempts < maxAttempts) {
+          await new Promise((r) => setTimeout(r, pollInterval));
+          attempts++;
+          try {
+            questionsData = await QuestionService.getRecipeQuestions(recipeId);
+            setState((prev) => ({
+              ...prev,
+              questionGenerationStatus:
+                questionsData.generation_status as QuestionGenerationStatus,
+              questionGenerationError:
+                questionsData.error_message ?? null,
+            }));
+
+            if (
+              questionsData.questions &&
+              questionsData.questions.length > 0
+            ) {
+              processQuestions(questionsData);
+              return;
+            }
+            if (questionsData.generation_status === "failed") {
+              toast.error(
+                questionsData.error_message || "Question generation failed"
+              );
+              setState((prev) => ({ ...prev, pageState: "questions" }));
+              return;
+            }
+          } catch (err: any) {
+            if (attempts >= maxAttempts - 1) {
+              throw err;
+            }
+          }
+        }
+
+        toast.error("Timeout waiting for questions");
+        setState((prev) => ({ ...prev, pageState: "questions" }));
       } catch (error: any) {
         console.error("Error fetching questions:", error);
         toast.error(error.message || "Failed to load questions");
@@ -424,29 +504,55 @@ export default function RepoPage() {
     }
   }, [questionsError]);
 
-  // Recover recipeId from URL (created in newchat page), or use mock recipe when workflow mock is on
+  // Recover recipeId from URL, or restore from localStorage (e.g. when navigating back from spec)
   useEffect(() => {
     if (recipeIdFromUrl) {
-      const uuidRegex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(recipeIdFromUrl)) {
+      if (RECIPE_ID_UUID_REGEX.test(recipeIdFromUrl)) {
         console.log(
           "[Repo Page] Recovered recipeId from URL:",
           recipeIdFromUrl
         );
         setRecipeId(recipeIdFromUrl);
+        // Persist so we can restore when coming back without recipeId in URL
+        if (projectId && typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              `${REPO_RECIPE_STORAGE_PREFIX}${projectId}`,
+              recipeIdFromUrl
+            );
+          } catch {
+            // ignore
+          }
+        }
       } else {
         console.warn(
           "[Repo Page] Invalid recipeId format in URL:",
           recipeIdFromUrl
         );
       }
-    } else {
-      console.warn(
-        "[Repo Page] No recipeId in URL - recipe should have been created in newchat page"
-      );
+      return;
     }
-  }, [recipeIdFromUrl, projectId]);
+    // No recipeId in URL: restore from localStorage when projectId is present (e.g. back from spec)
+    if (projectId && typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(
+          `${REPO_RECIPE_STORAGE_PREFIX}${projectId}`
+        );
+        if (stored && RECIPE_ID_UUID_REGEX.test(stored)) {
+          console.log(
+            "[Repo Page] Restored recipeId from localStorage for project:",
+            projectId
+          );
+          setRecipeId(stored);
+          const url = new URL(window.location.href);
+          url.searchParams.set("recipeId", stored);
+          router.replace(url.pathname + url.search, { scroll: false });
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [recipeIdFromUrl, projectId, router]);
 
   // Process questions when received (skip when in recipe flow - recipe has its own data source)
   useEffect(() => {
@@ -862,9 +968,12 @@ export default function RepoPage() {
       }
 
       await SpecService.submitAnswers(activeRecipeId, answersPayload);
-      return await SpecService.triggerSpecGeneration(activeRecipeId);
+      const { runId } = await SpecService.startSpecGenerationStream(activeRecipeId, {
+        consumeStream: false,
+      });
+      return { runId };
     },
-    onSuccess: () => {
+    onSuccess: (data: { runId?: string } | void) => {
       toast.success("Spec generation started successfully");
       const activeRecipeId = recipeId || recipeIdFromUrl;
       if (!activeRecipeId) {
@@ -872,7 +981,14 @@ export default function RepoPage() {
         toast.error("Navigation failed: Recipe ID missing");
         return;
       }
-      router.push(`/task/${activeRecipeId}/spec`);
+      const runId = data?.runId?.trim();
+      if (!runId) {
+        toast.info("Live streaming unavailable for this run. You’ll see progress by polling.");
+      }
+      const specPath = runId
+        ? `/task/${activeRecipeId}/spec?run_id=${encodeURIComponent(runId)}`
+        : `/task/${activeRecipeId}/spec`;
+      router.push(specPath);
     },
     onError: (error: Error) => {
       console.error("Error in generatePlanMutation:", error);
@@ -1086,17 +1202,43 @@ export default function RepoPage() {
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
             <div className="max-w-3xl mx-auto space-y-6">
               {state.pageState === "questions" && <AIAnalysisBanner />}
-            {/* Loading State - Only show if we don't have questions yet */}
+            {/* Status / loading: show backend status instead of generic spinner when we have recipeId */}
             {(questionsLoading ||
               (questionsPolling && state.questions.length === 0)) && (
               <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto mb-3" />
-                  <p className="text-xs text-zinc-500">
-                    {questionsPolling
-                      ? "Loading questions..."
-                      : "Generating questions..."}
-                  </p>
+                <div className="text-center max-w-md space-y-3">
+                  {!questionsLoading && state.questionGenerationStatus ? (
+                    <>
+                      {state.questionGenerationStatus !== "failed" && (
+                        <Loader2 className="w-5 h-5 animate-spin text-[#102C2C] mx-auto mb-2" />
+                      )}
+                      <p className="text-sm font-medium text-primary-color">
+                        {state.questionGenerationStatus === "pending" &&
+                          "Questions are queued for generation…"}
+                        {state.questionGenerationStatus === "processing" &&
+                          "Analyzing repository and generating questions…"}
+                        {state.questionGenerationStatus === "completed" &&
+                          "Preparing questions…"}
+                        {state.questionGenerationStatus === "failed" &&
+                          "Question generation failed"}
+                        {!state.questionGenerationStatus && "Loading…"}
+                      </p>
+                      {state.questionGenerationError && (
+                        <p className="text-xs text-red-600 mt-1">
+                          {state.questionGenerationError}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin text-[#102C2C] mx-auto mb-2" />
+                      <p className="text-sm text-zinc-600">
+                        {questionsLoading
+                          ? "Creating recipe and generating questions…"
+                          : "Loading…"}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             )}

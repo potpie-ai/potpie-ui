@@ -7,7 +7,7 @@ import {
 } from "@/services/WorkflowService";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import {
   LucideLoader2,
   ArrowLeft,

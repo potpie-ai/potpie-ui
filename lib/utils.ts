@@ -5,15 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * Normalize markdown content for safe preview display.
- * Ensures string type and handles edge cases.
- */
-export function normalizeMarkdownForPreview(content: string | undefined | null): string {
-  if (content == null) return "";
-  return typeof content === "string" ? content : String(content);
-}
-
 export const list_system_agents = [
   "codebase_qna_agent",
   "debugging_agent",
@@ -303,4 +294,35 @@ export function parseApiError(error: any): string {
 
   // Fallback error message
   return "An unexpected error occurred. Please try again.";
+}
+
+/**
+ * Normalize markdown content for preview to prevent width overflow.
+ * - Wraps long unbroken strings (URLs, paths, hashes) by inserting zero-width spaces
+ * - Limits extremely long lines
+ * @param content - Raw markdown string
+ * @param maxLineLength - Maximum unbroken segment length before inserting breaks (default: 80)
+ * @returns Normalized markdown string safe for constrained-width preview
+ */
+export function normalizeMarkdownForPreview(
+  content: string | undefined | null,
+  maxLineLength: number = 80
+): string {
+  if (content == null || typeof content !== "string") return "";
+  if (!content) return "";
+
+  // Insert zero-width space (\u200B) into long unbroken segments to allow wrapping
+  // This handles long URLs, file paths, hashes, etc.
+  return content.replace(
+    /(\S{40,})/g,
+    (match) => {
+      // Insert zero-width space every maxLineLength characters
+      let result = "";
+      for (let i = 0; i < match.length; i += maxLineLength) {
+        if (i > 0) result += "\u200B";
+        result += match.slice(i, i + maxLineLength);
+      }
+      return result;
+    }
+  );
 }

@@ -91,18 +91,89 @@ export default function NewChatPage() {
     attachmentUploading: false,
   });
 
+  const [repoSearchTerm, setRepoSearchTerm] = useState<string>("");
+  const [branchSearchTerm, setBranchSearchTerm] = useState<string>("");
+  const [debouncedRepoSearch, setDebouncedRepoSearch] = useState<string>("");
+  const [debouncedBranchSearch, setDebouncedBranchSearch] = useState<string>("");
+  const repoSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const branchSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const isDemoMode = searchParams.get("demo") === "true";
+
+  // Debounce repository search (300ms)
+  useEffect(() => {
+    if (repoSearchTimeoutRef.current) {
+      clearTimeout(repoSearchTimeoutRef.current);
+    }
+    
+    // If search is cleared, update debounced value immediately
+    const trimmedSearch = repoSearchTerm.trim();
+    if (trimmedSearch === "") {
+      setDebouncedRepoSearch("");
+      return;
+    }
+    
+    repoSearchTimeoutRef.current = setTimeout(() => {
+      setDebouncedRepoSearch(trimmedSearch);
+    }, 300);
+    
+    return () => {
+      if (repoSearchTimeoutRef.current) {
+        clearTimeout(repoSearchTimeoutRef.current);
+      }
+    };
+  }, [repoSearchTerm]);
+
+  // Debounce branch search (300ms)
+  useEffect(() => {
+    if (branchSearchTimeoutRef.current) {
+      clearTimeout(branchSearchTimeoutRef.current);
+    }
+    
+    // If search is cleared, update debounced value immediately
+    const trimmedSearch = branchSearchTerm.trim();
+    if (trimmedSearch === "") {
+      setDebouncedBranchSearch("");
+      return;
+    }
+    
+    branchSearchTimeoutRef.current = setTimeout(() => {
+      setDebouncedBranchSearch(trimmedSearch);
+    }, 300);
+    
+    return () => {
+      if (branchSearchTimeoutRef.current) {
+        clearTimeout(branchSearchTimeoutRef.current);
+      }
+    };
+  }, [branchSearchTerm]);
+
+  // Clear search terms when changing repo or branch
+  useEffect(() => {
+    setRepoSearchTerm("");
+    setDebouncedRepoSearch("");
+  }, [state.selectedRepo]);
+
+  useEffect(() => {
+    setBranchSearchTerm("");
+    setDebouncedBranchSearch("");
+  }, [state.selectedBranch]);
 
   const {
     data: allRepositories,
     isLoading: reposLoading,
     refetch: refetchRepos,
+    error: reposError,
   } = useQuery({
-    queryKey: ["user-repositories"],
+    queryKey: ["user-repositories", debouncedRepoSearch],
     queryFn: async () => {
-      const repos = await BranchAndRepositoryService.getUserRepositories();
+      const repos = await BranchAndRepositoryService.getUserRepositories(
+        debouncedRepoSearch || undefined
+      );
       return repos || [];
     },
+    retry: 1,
+    retryOnMount: false,
   });
 
   const repositories = useMemo(() => {
@@ -119,33 +190,37 @@ export default function NewChatPage() {
     return selectedRepoData.full_name || selectedRepoData.name || null;
   }, [state.selectedRepo, repositories]);
 
-  const { data: branches, isLoading: branchesLoading } = useQuery({
-    queryKey: ["user-branch", selectedRepoName],
+  const { data: branches, isLoading: branchesLoading, error: branchesError, refetch: refetchBranches } = useQuery({
+    queryKey: ["user-branch", selectedRepoName, debouncedBranchSearch],
     queryFn: () => {
       if (!selectedRepoName) return Promise.resolve([]);
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = selectedRepoName.match(regex);
       if (match) {
         const ownerRepo = `${match[1]}/${match[2]}`;
-        return BranchAndRepositoryService.getBranchList(ownerRepo).then(
-          (data) => {
-            if (data?.length === 1 && !state.selectedBranch) {
-              setState((prev) => ({ ...prev, selectedBranch: data[0] }));
-            }
-            return data;
-          }
-        );
-      }
-      return BranchAndRepositoryService.getBranchList(selectedRepoName).then(
-        (data) => {
+        return BranchAndRepositoryService.getBranchList(
+          ownerRepo,
+          debouncedBranchSearch || undefined
+        ).then((data) => {
           if (data?.length === 1 && !state.selectedBranch) {
             setState((prev) => ({ ...prev, selectedBranch: data[0] }));
           }
           return data;
+        });
+      }
+      return BranchAndRepositoryService.getBranchList(
+        selectedRepoName,
+        debouncedBranchSearch || undefined
+      ).then((data) => {
+        if (data?.length === 1 && !state.selectedBranch) {
+          setState((prev) => ({ ...prev, selectedBranch: data[0] }));
         }
-      );
+        return data;
+      });
     },
     enabled: !!selectedRepoName && selectedRepoName !== "",
+    retry: 1,
+    retryOnMount: false,
   });
 
   const { data: projects, refetch: refetchProjects } = useQuery({
@@ -931,15 +1006,23 @@ export default function NewChatPage() {
               onRepoSelect={handleRepoSelect}
               repositories={state.linkedRepos}
               reposLoading={reposLoading}
+              reposError={reposError}
+              onRetryRepos={refetchRepos}
               selectedBranch={state.selectedBranch}
               onBranchSelect={handleBranchSelect}
               branches={branches || []}
               branchesLoading={branchesLoading}
+              branchesError={branchesError}
+              onRetryBranches={refetchBranches}
               selectedAgent={state.selectedAgent}
               onAgentSelect={handleAgentSelect}
               onParseRepo={handleParseRepo}
               onAttachmentChange={handleAttachmentChange}
               attachmentUploading={state.attachmentUploading}
+              repoSearchTerm={repoSearchTerm}
+              onRepoSearchChange={setRepoSearchTerm}
+              branchSearchTerm={branchSearchTerm}
+              onBranchSearchChange={setBranchSearchTerm}
             />
             {state.parsing && (
               <ParsingStatusCard

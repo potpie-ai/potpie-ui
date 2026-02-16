@@ -22,6 +22,7 @@ import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
 import { ParsingStatusEnum } from "@/lib/Constants";
 import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
 import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
+import { useGithubAppPopup } from "../idea/hooks/useGithubAppPopup";
 
 interface Repo {
   id: string;
@@ -73,6 +74,10 @@ export default function NewChatPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useAuthContext();
   const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
+  const { openGithubPopup } = useGithubAppPopup(() => {
+    // Refetch repos when GitHub App installation is complete
+    refetchRepos();
+  });
 
   const [state, setState] = useState<NewChatPageState>({
     input: "",
@@ -639,20 +644,56 @@ export default function NewChatPage() {
   };
 
   const handleParseRepo = async () => {
-    if (!state.selectedRepo) {
-      toast.error("Please select a repository first");
+    let repoName: string = "";
+    let branchName: string = "main";
+
+    // If a repository is selected from the dropdown, use it
+    if (state.selectedRepo) {
+      const selectedRepoData = repositories.find(
+        (repo: Repo) => repo.id?.toString() === state.selectedRepo
+      );
+      if (!selectedRepoData) {
+        toast.error("Repository not found");
+        return;
+      }
+      repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+      branchName =
+        state.selectedBranch || selectedRepoData.default_branch || "main";
+    } 
+    // Otherwise, check if user has typed a repository URL in the search field
+    else if (debouncedRepoSearch && debouncedRepoSearch.trim()) {
+      const searchTerm = debouncedRepoSearch.trim();
+      
+      // Check if it's a GitHub URL (https://github.com/owner/repo or http://github.com/owner/repo)
+      const githubUrlRegex = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/.*)?$/;
+      const match = searchTerm.match(githubUrlRegex);
+      
+      if (match) {
+        // Extract owner/repo from URL
+        repoName = `${match[1]}/${match[2]}`;
+        branchName = state.selectedBranch || "main";
+      } 
+      // Check if it's already in owner/repo format
+      else if (/^[^\/]+\/[^\/]+$/.test(searchTerm)) {
+        repoName = searchTerm;
+        branchName = state.selectedBranch || "main";
+      } 
+      else {
+        toast.error("Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo) or select a repository from the list");
+        return;
+      }
+    } 
+    // No repository selected and no search term - open GitHub App installation popup
+    else {
+      openGithubPopup();
       return;
     }
-    const selectedRepoData = repositories.find(
-      (repo: Repo) => repo.id?.toString() === state.selectedRepo
-    );
-    if (!selectedRepoData) {
-      toast.error("Repository not found");
+
+    if (!repoName) {
+      toast.error("Repository name is required");
       return;
     }
-    const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
-    const branchName =
-      state.selectedBranch || selectedRepoData.default_branch || "main";
+
     await parseRepo(repoName, branchName);
   };
 

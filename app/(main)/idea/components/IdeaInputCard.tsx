@@ -28,7 +28,7 @@ const UPGRADE_DROPDOWN_PLACEHOLDER_MODELS = [
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal } from "lucide-react";
+import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal, ExternalLink } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,11 +39,21 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuthContext } from "@/contexts/AuthContext";
 import MinorService from "@/services/minorService";
 import ModelService from "@/services/ModelService";
 import { planTypesEnum } from "@/lib/Constants";
 import { useGithubAppPopup } from "../hooks/useGithubAppPopup";
+import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
+import { toast } from "@/components/ui/sonner";
 
 interface IdeaInputCardProps {
   input: string;
@@ -67,6 +77,8 @@ interface IdeaInputCardProps {
   selectedAgent: string | null;
   onAgentSelect: (agent: string) => void;
   onParseRepo?: () => void;
+  /** Parse repository with specific name and branch (for public repos) */
+  onParseRepoWithName?: (repoName: string, branchName: string) => void;
   /** Current list of attached files (controlled). If undefined, internal state is used. */
   attachedFiles?: File[];
   /** Called when the list changes. removedIndex is set when user removes the file at that index. */
@@ -105,6 +117,7 @@ export default function IdeaInputCard({
   selectedAgent,
   onAgentSelect,
   onParseRepo,
+  onParseRepoWithName,
   attachedFiles: controlledFiles,
   onAttachmentChange,
   attachmentUploading = false,
@@ -121,6 +134,9 @@ export default function IdeaInputCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localFiles, setLocalFiles] = useState<File[]>([]);
   const { openGithubPopup } = useGithubAppPopup();
+  const [publicRepoDialogOpen, setPublicRepoDialogOpen] = useState(false);
+  const [publicRepoInput, setPublicRepoInput] = useState("");
+  const [checkingPublicRepo, setCheckingPublicRepo] = useState(false);
 
   // Clear search terms when dropdowns close
   useEffect(() => {
@@ -248,6 +264,76 @@ export default function IdeaInputCard({
   const handleOpenGithubPopup = () => {
     setRepoDropdownOpen(false);
     openGithubPopup();
+  };
+
+  const handlePublicRepoClick = () => {
+    setRepoDropdownOpen(false);
+    setPublicRepoDialogOpen(true);
+    setPublicRepoInput("");
+  };
+
+  const handlePublicRepoSubmit = async () => {
+    const repoName = publicRepoInput.trim();
+    
+    // Validate format (owner/repo)
+    if (!repoName || !repoName.includes("/")) {
+      toast.error("Please enter a valid repository name in the format 'owner/repo' (e.g., facebook/react)");
+      return;
+    }
+
+    setCheckingPublicRepo(true);
+    try {
+      // Check if repository is public
+      const response = await BranchAndRepositoryService.check_public_repo(repoName);
+      
+      let isPublic = false;
+      // Handle different response formats
+      if (typeof response === "boolean") {
+        isPublic = response;
+      } else if (typeof response === "object" && response !== null) {
+        isPublic = response.is_public === true || response.isPublic === true || response.public === true;
+      }
+
+      if (isPublic) {
+        // Close dialog
+        setPublicRepoDialogOpen(false);
+        setPublicRepoInput("");
+        
+        // Parse repository directly with the repo name
+        // Use default branch "main" - user can select different branch later if needed
+        const branchName = selectedBranch || "main";
+        
+        if (onParseRepoWithName) {
+          // Direct parsing with repo name and branch
+          onParseRepoWithName(repoName, branchName);
+        } else if (onParseRepo) {
+          // Fallback: Set the repo in search term and trigger parse
+          // This is less reliable due to debounce timing
+          if (onRepoSearchChange) {
+            onRepoSearchChange(repoName);
+          }
+          setTimeout(() => {
+            onParseRepo();
+          }, 400);
+        }
+      } else {
+        // Repository is not public - show error but don't redirect to GitHub
+        toast.error("This repository is private or does not exist. Please link it through GitHub App to access private repositories.");
+      }
+    } catch (error: any) {
+      console.error("Error checking public repo:", error);
+      const statusCode = error?.response?.status;
+      
+      if (statusCode === 404) {
+        toast.error("Repository not found. Please check the repository name and try again.");
+      } else if (statusCode === 403) {
+        toast.error("This repository is private or access is forbidden. Please link it through GitHub App to access private repositories.");
+      } else {
+        toast.error("Unable to verify repository. Please try again.");
+      }
+    } finally {
+      setCheckingPublicRepo(false);
+    }
   };
 
   // Handle input changes - no agent text in textarea, only visual pill
@@ -428,21 +514,30 @@ export default function IdeaInputCard({
                   </div>
                 )}
               </div>
-              {(repositories.length > 0 || reposLoading) && (
-                <div className="sticky bottom-0 border-t border-zinc-100 bg-white p-2 pt-2.5">
-                  <DropdownMenuSeparator className="mb-2 bg-zinc-100" />
+              <div className="sticky bottom-0 border-t border-zinc-100 bg-white p-2 pt-2.5">
+                <DropdownMenuSeparator className="mb-2 bg-zinc-100" />
+                <div className="space-y-1.5">
                   <DropdownMenuItem
-                    onClick={() => {
-                      setRepoDropdownOpen(false);
-                      onParseRepo?.();
-                    }}
-                    className="flex items-center gap-2 px-2.5 py-2.5 cursor-pointer rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={handlePublicRepoClick}
+                    className="flex items-center gap-2 px-2.5 py-2.5 cursor-pointer rounded-lg border border-zinc-200 bg-white text-foreground hover:bg-zinc-50"
                   >
-                    <Plus className="h-3.5 w-3.5 font-semibold" />
-                    <span className="text-[10px] font-semibold">Parse New Repository</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-semibold">Public Repository</span>
                   </DropdownMenuItem>
+                  {(repositories.length > 0 || reposLoading) && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setRepoDropdownOpen(false);
+                        onParseRepo?.();
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-2.5 cursor-pointer rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      <Plus className="h-3.5 w-3.5 font-semibold" />
+                      <span className="text-[10px] font-semibold">Parse New Repository</span>
+                    </DropdownMenuItem>
+                  )}
                 </div>
-              )}
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -872,6 +967,59 @@ export default function IdeaInputCard({
       </div>
         );
       })()}
+      
+      {/* Public Repository Dialog */}
+      <Dialog open={publicRepoDialogOpen} onOpenChange={setPublicRepoDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Enter Public Repository</DialogTitle>
+            <DialogDescription>
+              Enter a public GitHub repository name in the format "owner/repo" (e.g., facebook/react)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Input
+                placeholder="owner/repo (e.g., facebook/react)"
+                value={publicRepoInput}
+                onChange={(e) => setPublicRepoInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !checkingPublicRepo) {
+                    handlePublicRepoSubmit();
+                  }
+                }}
+                disabled={checkingPublicRepo}
+                className="w-full"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPublicRepoDialogOpen(false);
+                setPublicRepoInput("");
+              }}
+              disabled={checkingPublicRepo}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePublicRepoSubmit}
+              disabled={checkingPublicRepo || !publicRepoInput.trim()}
+            >
+              {checkingPublicRepo ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Checking...
+                </>
+              ) : (
+                "Continue"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

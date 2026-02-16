@@ -1058,6 +1058,9 @@ export default function NewChatPage() {
               selectedAgent={state.selectedAgent}
               onAgentSelect={handleAgentSelect}
               onParseRepo={handleParseRepo}
+              onParseRepoWithName={(repoName: string, branchName: string) => {
+                parseRepo(repoName, branchName);
+              }}
               onAttachmentChange={handleAttachmentChange}
               attachmentUploading={state.attachmentUploading}
               repoSearchTerm={repoSearchTerm}

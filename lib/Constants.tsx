@@ -162,7 +162,14 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         showProModal: true,
       },
       {
-        icons: <Code2 size={20} strokeWidth={1.5} />,
+        icons: (
+          <Image
+            src="/images/Jet Brains.svg"
+            alt="JetBrains"
+            width={20}
+            height={20}
+          />
+        ),
         title: "JetBrains",
         href: "#",
         disabled: false,

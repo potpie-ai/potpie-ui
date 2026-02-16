@@ -323,10 +323,10 @@ export default function NewChatPage() {
               projectId: projectId || undefined,
             })
           );
-          const params = new URLSearchParams({ recipeId });
+          const params = new URLSearchParams();
           if (repoName) params.append("repoName", repoName);
           if (state.input) params.append("featureIdea", getCleanInput(state.input));
-          router.push(`/repo?${params.toString()}`);
+          router.push(`/task/${recipeId}/qna?${params.toString()}`);
         } else {
           toast.error("Repository data not found. Please try again.");
         }
@@ -688,10 +688,10 @@ export default function NewChatPage() {
           branchName,
         })
       );
-      const params = new URLSearchParams({ recipeId: state.recipeId });
+      const params = new URLSearchParams();
       if (repoName) params.append("repoName", repoName);
       if (state.input) params.append("featureIdea", getCleanInput(state.input));
-      router.push(`/repo?${params.toString()}`);
+      router.push(`/task/${state.recipeId}/qna?${params.toString()}`);
       return;
     }
     toast.error("Invalid agent selection");

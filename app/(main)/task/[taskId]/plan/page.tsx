@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MermaidDiagram, looksLikeMermaid } from "@/components/chat/MermaidDiagram";
 import {
@@ -31,13 +31,10 @@ import {
   ArrowRightLeft,
   Info,
   RefreshCw,
-  Pencil,
-  Trash2,
-  Undo2,
-  Plus,
   SendHorizonal,
   RotateCw,
   Maximize2,
+  Wrench,
 } from "lucide-react";
 import {
   Accordion,
@@ -271,6 +268,8 @@ const PlanPage = () => {
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamEventIdRef = useRef(0);
   const streamChunksRef = useRef("");
+  const streamOutputEndRef = useRef<HTMLDivElement>(null);
+  const streamChunkBoxRef = useRef<HTMLDivElement>(null);
 
   type ChatMessage = { role: "user" | "assistant"; content: string };
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -363,10 +362,6 @@ const PlanPage = () => {
     }
   };
 
-  const handleChatAction = (_action: "add" | "modify" | "remove" | "undo") => {
-    toast.info("Plan chat actions will be connected when the backend is ready.");
-  };
-
   const { data: statusData, isLoading: isLoadingStatus } = useQuery({
     queryKey: ["plan-status", recipeId],
     queryFn: async () => {
@@ -386,6 +381,11 @@ const PlanPage = () => {
       setIsLoading(false);
     }
   }, [statusData]);
+
+  // When we have run_id in URL, show plan page immediately (streaming UI); don't wait for initial poll (same as spec)
+  useEffect(() => {
+    if (recipeId && runIdFromUrl) setIsLoading(false);
+  }, [recipeId, runIdFromUrl]);
 
   // If backend includes run_id in GET plan response, attach to stream by adding run_id to URL (once)
   useEffect(() => {
@@ -533,25 +533,48 @@ const PlanPage = () => {
     };
   }, [recipeId, runIdFromUrl, queryClient, router]);
 
-  // When we land on the plan page with "not_started" status (no plan exists yet), start plan generation immediately (e.g. after clicking "GENERATE PLAN" on spec page)
+  // Interleave: for each tool show start + end together (Running → Completed), then its output box (same as spec/qna; backend sends call_id on both events)
+  type StreamBlock =
+    | { key: string; kind: "event"; event: (typeof streamEvents)[0] }
+    | { key: string; kind: "segment"; segment: (typeof streamSegments)[0] };
+  const mergedStreamBlocks = useMemo((): StreamBlock[] => {
+    const blocks: StreamBlock[] = [];
+    let segmentIdx = 0;
+    for (const ev of streamEvents) {
+      blocks.push({ key: ev.id, kind: "event", event: ev });
+      if (ev.type === "tool_end" && segmentIdx < streamSegments.length) {
+        const seg = streamSegments[segmentIdx];
+        blocks.push({ key: seg.id, kind: "segment", segment: seg });
+        segmentIdx++;
+      }
+    }
+    return blocks;
+  }, [streamEvents, streamSegments]);
+
+  // Auto-scroll tool output to bottom when new events/segments/chunks arrive
+  useEffect(() => {
+    if (mergedStreamBlocks.length > 0 || streamChunks) {
+      streamOutputEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [mergedStreamBlocks.length, streamChunks]);
+
+  // Auto-scroll inside the live chunk box when content grows
+  useEffect(() => {
+    if (streamChunks && streamChunkBoxRef.current) {
+      streamChunkBoxRef.current.scrollTo({ top: streamChunkBoxRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [streamChunks]);
+
+  // When we land on the plan page with "not_started" status, start plan generation (run_id comes from GET plan response, then we connect to stream)
   const hasTriggeredPlanGenRef = useRef(false);
   useEffect(() => {
-    // Don't start if:
-    // - no recipeId
-    // - still loading status
-    // - run_id already in URL (streaming already started)
-    // - already triggered generation in this session
     if (!recipeId || isLoadingStatus || runIdFromUrl || hasTriggeredPlanGenRef.current) return;
-    
-    // Only trigger if status is "not_started" (no plan generation has ever been triggered)
-    if (statusData?.generation_status === "not_started") {
-      hasTriggeredPlanGenRef.current = true;
-      PlanService.submitPlanGeneration({ recipe_id: recipeId })
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] });
-        })
-        .catch(() => {});
-    }
+    if (statusData?.generation_status !== "not_started") return;
+
+    hasTriggeredPlanGenRef.current = true;
+    PlanService.submitPlanGeneration({ recipe_id: recipeId })
+      .then(() => queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] }))
+      .catch(() => {});
   }, [recipeId, isLoadingStatus, statusData, runIdFromUrl, queryClient]);
 
   // Extract plan items from phases (new API)
@@ -630,18 +653,10 @@ const PlanPage = () => {
                     </div>
                   </div>
                 )}
-                {/* After first user message: static Spec card, then assistant intro, then Thinking block */}
+                {/* After first user message: assistant intro, then "Thinking" heading + thinking content */}
                 {msg.role === "user" && i === 0 && (
                   <>
-                    {/* Static spec generation dialog — no plan status */}
-                    <div className="flex justify-start flex-col gap-2 max-w-[85%] ml-[3.25rem]">
-                      <div className="rounded-lg border border-[#CCD3CF] px-4 py-3 flex flex-col gap-1 bg-[#FAF8F7]">
-                        <div className="flex items-center gap-3">
-                          <Check className="w-5 h-5 shrink-0 text-[#022D2C]" />
-                          <p className="text-sm font-bold text-[#022019]">Spec Generation Completed</p>
-                        </div>
-                      </div>
-                    </div>
+                    {/* Assistant intro message (above thinking) */}
                     <div className="flex justify-start">
                       <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start">
                         <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
@@ -650,6 +665,7 @@ const PlanPage = () => {
                         Your implementation plan is ready. Review the phases below and tell me what you&apos;d like to change—we&apos;ll nail it before moving to code.
                       </div>
                     </div>
+                    {/* Thinking: label, status, markdown, and stream events (left side) */}
                     <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
                       <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                       <div className="min-w-0 space-y-2 overflow-hidden" style={{ width: "calc(100% - 52px)", maxWidth: "600px" }}>
@@ -660,27 +676,47 @@ const PlanPage = () => {
                             {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating plan…"}
                           </p>
                         )}
-                        {streamEvents.length > 0 && (
-                          <ul className="space-y-0.5 text-xs text-zinc-600 font-mono break-words">
-                            {streamEvents.map((ev) => (
-                              <li key={ev.id} className="truncate">{ev.type === "tool_start" ? "▶ " : "✓ "}{ev.label}</li>
-                            ))}
-                          </ul>
-                        )}
-                        {/* Output segments (one per tool_call_end) + current chunk, shown right after tool list */}
-                        {(streamSegments.length > 0 || streamChunks || (streamProgress || isGenerating)) && (
-                          <div className="mt-2 space-y-2 min-w-0 overflow-hidden">
-                            {streamSegments.map((seg) => (
-                              <div key={seg.id} className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0">
-                                <p className="text-[10px] font-semibold text-[#022D2C] uppercase tracking-wide mb-1.5">{seg.label}</p>
-                                <SharedMarkdown content={normalizeMarkdownForPreview(seg.content)} />
-                              </div>
-                            ))}
-                            {(streamChunks || (streamProgress || isGenerating)) && (
-                              <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[100px] overflow-y-auto overflow-x-hidden min-w-0">
-                                <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks || "")} />
-                              </div>
+                        {/* Tool calls: single box per tool (icon | label, full output below) */}
+                        {mergedStreamBlocks.length > 0 && (
+                          <div className="space-y-3 min-w-0 overflow-hidden">
+                            {mergedStreamBlocks.map((block) =>
+                              block.kind === "event" ? (
+                                (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
+                                  <span key={block.key} className="hidden" aria-hidden />
+                                ) : (
+                                  <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
+                                    {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
+                                  </p>
+                                )
+                              ) : (
+                                <div key={block.key} className="rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden">
+                                  <div className="flex items-center gap-2 px-3 py-2 border-b border-[#CCD3CF]/60">
+                                    <Wrench className="w-4 h-4 shrink-0 text-zinc-500" aria-hidden />
+                                    <span className="text-xs font-medium text-zinc-800">{block.segment.label}</span>
+                                  </div>
+                                  <div
+                                    ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
+                                    className="p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                    style={{ msOverflowStyle: "none" }}
+                                  >
+                                    <SharedMarkdown content={normalizeMarkdownForPreview(block.segment.content)} />
+                                  </div>
+                                </div>
+                              )
                             )}
+                          </div>
+                        )}
+                        {/* Live streaming chunk + full screen button */}
+                        {(streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
+                          <div className="mt-2 space-y-2 min-w-0 overflow-hidden">
+                            {streamChunks ? (
+                              <div
+                                ref={streamChunkBoxRef}
+                                className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[100px] overflow-y-auto overflow-x-hidden min-w-0"
+                              >
+                                <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks)} />
+                              </div>
+                            ) : null}
                             {(streamSegments.some((s) => s.content.length > 0) || (streamChunks?.length ?? 0) > 0) && (
                               <>
                                 <TooltipProvider>
@@ -712,6 +748,9 @@ const PlanPage = () => {
                               </>
                             )}
                           </div>
+                        )}
+                        {(mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
+                          <div ref={streamOutputEndRef} aria-hidden />
                         )}
                       </div>
                     </div>
@@ -802,24 +841,6 @@ const PlanPage = () => {
               </div>
             )}
             <div ref={chatEndRef} />
-          </div>
-
-          <div className="px-6 py-2 flex flex-wrap gap-2 shrink-0">
-            {[
-              { id: "add" as const, label: "Add Item", icon: Plus },
-              { id: "modify" as const, label: "Modify", icon: Pencil },
-              { id: "remove" as const, label: "Remove", icon: Trash2 },
-              { id: "undo" as const, label: "Undo", icon: Undo2 },
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => handleChatAction(id)}
-                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-800 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50 transition-colors"
-              >
-                <Icon className="w-3.5 h-3.5 text-[#00291C]" />
-                {label}
-              </button>
-            ))}
           </div>
 
           <div className="p-4 shrink-0">
@@ -1042,14 +1063,43 @@ const PlanPage = () => {
                     </div>
                   </TabsContent>
                   <TabsContent value="architecture" className="mt-4 pt-2 pb-12 pr-4">
-                    <div className="py-5 pr-2">
+                    <div className="py-5 pr-2 space-y-6">
                       <div className="flex items-center gap-2 mb-3">
                         <Layout className="w-4 h-4 text-[#6B7280]" />
                         <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Architecture</span>
                       </div>
-                      <p className="text-sm text-[#374151] leading-relaxed">
-                        No architecture diagram available for this phase.
-                      </p>
+                      {phase.diagrams && phase.diagrams.length > 0 ? (
+                        phase.diagrams.map((d) => (
+                          <div
+                            key={d.diagram_id}
+                            className="border rounded-lg p-4 overflow-x-auto bg-[#FFFDFC]"
+                            style={{ borderColor: "#CCD3CF" }}
+                          >
+                            <h4 className="text-sm font-semibold text-[#022019] mb-1">{d.title}</h4>
+                            {d.description && (
+                              <p className="text-xs text-[#374151] mb-3 leading-relaxed">{d.description}</p>
+                            )}
+                            {d.mermaid_code ? (
+                              looksLikeMermaid(d.mermaid_code) ? (
+                                <MermaidDiagram chart={d.mermaid_code} />
+                              ) : (
+                                <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap break-words m-0 p-0">
+                                  {d.mermaid_code}
+                                </pre>
+                              )
+                            ) : (
+                              <p className="text-xs text-zinc-500 italic">No diagram content.</p>
+                            )}
+                            {d.validation_error && (
+                              <p className="text-xs text-amber-700 mt-2">Validation: {d.validation_error}</p>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-[#374151] leading-relaxed">
+                          No architecture diagram available for this phase.
+                        </p>
+                      )}
                     </div>
                   </TabsContent>
                 </Tabs>

@@ -42,6 +42,7 @@ import {
   RefreshCw,
   SendHorizonal,
   FolderTree,
+  Wrench,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -64,6 +65,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 /**
  * Code / implementation page: plan slices from API, task splitting (codegen), layers and tasks from getTaskSplittingItems.
@@ -733,10 +740,12 @@ export default function VerticalTaskExecution() {
   const [changedFilesSliderOpen, setChangedFilesSliderOpen] = useState(false);
   const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<string | null>(null);
   const hasShownFailedToastRef = useRef(false);
+  const thinkingListRef = useRef<HTMLDivElement>(null);
   
   // Refs for polling optimization - avoid dependency array issues while accessing current values
   const allLayersRef = useRef<TaskLayer[]>([]);
   const taskSplittingStatusRef = useRef<TaskSplittingStatusResponse | null>(null);
+  const planItemsRef = useRef<PlanItem[]>([]);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -746,6 +755,10 @@ export default function VerticalTaskExecution() {
   useEffect(() => {
     taskSplittingStatusRef.current = taskSplittingStatus;
   }, [taskSplittingStatus]);
+
+  useEffect(() => {
+    planItemsRef.current = planItems;
+  }, [planItems]);
 
   // --- UI-only: recipe/project info for the left header ---
   const [recipePrompt, setRecipePrompt] = useState<string>("");
@@ -761,6 +774,7 @@ export default function VerticalTaskExecution() {
   const [selectedPhaseIndex, setSelectedPhaseIndex] = useState<number>(0);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([0]));
+  const [thinkingAccordionValue, setThinkingAccordionValue] = useState<string>("");
 
   // --- UI-only: chat messages (visual only; backend chat wiring can come later) ---
   type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -871,8 +885,12 @@ export default function VerticalTaskExecution() {
     }
   }, [chatMessages.length]);
 
-  // Notify when a new phase layer arrives (non-streaming "real time" progress)
+  // Notify when a new phase layer arrives during this session (not on initial load)
   useEffect(() => {
+    if (prevLayerCountRef.current === 0 && allLayers.length > 0) {
+      prevLayerCountRef.current = allLayers.length;
+      return;
+    }
     if (allLayers.length <= prevLayerCountRef.current) return;
     const newLayers = allLayers.slice(prevLayerCountRef.current);
     for (const layer of newLayers) {
@@ -1280,7 +1298,7 @@ export default function VerticalTaskExecution() {
             ]);
 
             // Auto-advance to next slice if available
-            const nextSlice = planItems.find(
+            const nextSlice = planItemsRef.current.find(
               (item) => item.item_number > activeSliceId
             );
             if (nextSlice) {
@@ -1343,14 +1361,30 @@ export default function VerticalTaskExecution() {
     // Initial fetch
     fetchStatusAndLayers();
 
-    // Set up polling every 2 seconds (single unified poll)
-    pollInterval = setInterval(fetchStatusAndLayers, 2000);
+    // Set up polling every 3 seconds (single unified poll)
+    pollInterval = setInterval(fetchStatusAndLayers, 3000);
 
     return () => {
       mounted = false;
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [taskSplittingId, activeSliceId, completedSlices, planItems]);
+    // Intentionally omit completedSlices: updating it when codegen completes would
+    // re-run this effect and start a new interval; we only want to stop polling.
+    // Use planItems.length instead of planItems to avoid restarting when array ref changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskSplittingId, activeSliceId, planItems.length]);
+
+  // Auto-scroll Thinking list to latest tool call when expanded and activity updates
+  const activityLength = taskSplittingStatus?.agent_activity?.length ?? 0;
+  useEffect(() => {
+    if (thinkingAccordionValue !== "thinking" || activityLength === 0) return;
+    const el = thinkingListRef.current;
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }, [activityLength, thinkingAccordionValue]);
 
   // 3. Step-by-Step Graph Discovery (Loading Phase) - progressive reveal
   useEffect(() => {
@@ -1705,118 +1739,132 @@ export default function VerticalTaskExecution() {
                     </div>
                   </div>
 
-                      {/* Agent Activity - tool calls during codegen */}
+                      {/* Thinking / Agent Activity - accordion, same card size as Generated Plan when collapsed */}
                       {(taskSplittingId &&
                         (taskSplittingStatus?.status === "IN_PROGRESS" ||
                           taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
                           (taskSplittingStatus?.agent_activity?.length ?? 0) > 0)) && (
-                        <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4 mt-3">
-                          <div className="flex items-center gap-2 mb-3">
-                            <TerminalSquare className="w-3.5 h-3.5 text-[#00291C]" />
-                            <p className="text-xs font-bold text-[#00291C]">
-                              Agent Activity
-                              {(taskSplittingStatus?.status === "IN_PROGRESS" ||
-                                taskSplittingStatus?.codegen_status === "IN_PROGRESS") && (
-                                <Loader2 className="w-3 h-3 animate-spin inline-block ml-1.5" />
-                              )}
-                            </p>
-                          </div>
-                          <div className="max-h-[200px] overflow-y-auto font-mono text-[10px] space-y-1.5 bg-zinc-900 rounded-lg p-3 text-zinc-300">
-                            {(() => {
-                              const activity = taskSplittingStatus?.agent_activity ?? [];
-                              if (activity.length > 0) {
-                                return [...activity]
-                                  .reverse()
-                                  .slice(0, 30)
-                                  .map((evt, i) => {
-                                    // Helper to get display text for tool params
-                                    const getParamDisplay = () => {
-                                      const params = evt.params || {};
-                                      const tool = evt.tool || "";
-                                      
-                                      // Handle truncated params
-                                      if (params._truncated) {
-                                        return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
+                        <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4 min-w-0">
+                          <Accordion
+                            type="single"
+                            collapsible
+                            value={thinkingAccordionValue}
+                            onValueChange={setThinkingAccordionValue}
+                            className="w-full"
+                          >
+                            <AccordionItem value="thinking" className="border-none">
+                              <AccordionTrigger className="py-2 hover:no-underline [&[data-state=open]>svg]:rotate-180">
+                                <div className="flex items-center w-full gap-2">
+                                  <Wrench className="w-3.5 h-3.5 text-[#00291C] shrink-0" />
+                                  <p className="text-xs font-bold text-[#00291C]">Thinking</p>
+                                  {(taskSplittingStatus?.agent_activity?.length ?? 0) > 0 && (
+                                    <span className="text-xs text-zinc-500 font-normal">
+                                      ({(taskSplittingStatus?.agent_activity?.length ?? 0) >= 50
+                                        ? "50+"
+                                        : taskSplittingStatus?.agent_activity?.length}{" "}
+                                      tool calls)
+                                    </span>
+                                  )}
+                                  {(taskSplittingStatus?.status === "IN_PROGRESS" || taskSplittingStatus?.codegen_status === "IN_PROGRESS") && (
+                                    <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin shrink-0" aria-hidden />
+                                  )}
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent className="pt-3 pb-0 transition-all data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                                {(() => {
+                                  const activity = taskSplittingStatus?.agent_activity ?? [];
+                                  const getParamDisplay = (evt: { params?: Record<string, unknown>; tool?: string }): string => {
+                                    const params = evt.params || {};
+                                    const tool = evt.tool || "";
+                                    if (params._truncated) {
+                                      return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
+                                    }
+                                    switch (tool) {
+                                      case "read": {
+                                        const filePath = String(params.file_path ?? params.path ?? "");
+                                        const segments = filePath.split("/").filter(Boolean);
+                                        return segments.length > 3 ? "…/" + segments.slice(-3).join("/") : filePath;
                                       }
-                                      
-                                      // Tool-specific param display
-                                      switch (tool) {
-                                        case "read":
-                                          const filePath = params.file_path || params.path || "";
-                                          // Show last 3 path segments for readability
-                                          const segments = String(filePath).split("/").filter(Boolean);
-                                          return segments.length > 3 
-                                            ? "…/" + segments.slice(-3).join("/")
-                                            : filePath;
-                                        case "grep":
-                                        case "search":
-                                        case "ripgrep":
-                                          const pattern = params.pattern || params.query || "";
-                                          const patternStr = String(pattern);
-                                          return `"${patternStr.slice(0, 40)}${patternStr.length > 40 ? "…" : ""}"`;
-                                        case "glob":
-                                        case "find":
-                                          return params.pattern || params.glob || "";
-                                        case "edit":
-                                        case "write":
-                                        case "str_replace":
-                                          const editPath = params.file_path || params.path || "";
-                                          const editSegments = String(editPath).split("/").filter(Boolean);
-                                          return editSegments.length > 3
-                                            ? "…/" + editSegments.slice(-3).join("/")
-                                            : editPath;
-                                        case "bash":
-                                        case "shell":
-                                        case "run":
-                                          const cmd = params.command || params.cmd || "";
-                                          return String(cmd).slice(0, 40) + (String(cmd).length > 40 ? "…" : "");
-                                        case "list_dir":
-                                        case "ls":
-                                          return params.path || params.directory || ".";
-                                        default:
-                                          // Generic: show first string param or empty
-                                          const firstVal = Object.values(params).find(v => typeof v === "string");
-                                          if (firstVal) {
-                                            const s = String(firstVal);
-                                            return s.slice(0, 40) + (s.length > 40 ? "…" : "");
-                                          }
-                                          return "";
+                                      case "grep":
+                                      case "search":
+                                      case "ripgrep": {
+                                        const pattern = params.pattern || params.query || "";
+                                        const patternStr = String(pattern);
+                                        return `"${patternStr.slice(0, 40)}${patternStr.length > 40 ? "…" : ""}"`;
                                       }
-                                    };
-                                    
-                                    const paramDisplay = getParamDisplay();
-                                    
+                                      case "glob":
+                                      case "find":
+                                        return String(params.pattern ?? params.glob ?? "");
+                                      case "edit":
+                                      case "write":
+                                      case "str_replace": {
+                                        const editPath = String(params.file_path ?? params.path ?? "");
+                                        const editSegments = editPath.split("/").filter(Boolean);
+                                        return editSegments.length > 3 ? "…/" + editSegments.slice(-3).join("/") : editPath;
+                                      }
+                                      case "bash":
+                                      case "shell":
+                                      case "run": {
+                                        const cmd = params.command || params.cmd || "";
+                                        return String(cmd).slice(0, 40) + (String(cmd).length > 40 ? "…" : "");
+                                      }
+                                      case "list_dir":
+                                      case "ls":
+                                        return String(params.path ?? params.directory ?? ".");
+                                      default: {
+                                        const firstVal = Object.values(params).find((v) => typeof v === "string");
+                                        if (firstVal) {
+                                          const s = String(firstVal);
+                                          return s.slice(0, 40) + (s.length > 40 ? "…" : "");
+                                        }
+                                        return "";
+                                      }
+                                    }
+                                  };
+                                  if (activity.length > 0) {
                                     return (
-                                      <div key={i} className="flex flex-col gap-0.5 py-1 border-b border-zinc-700 last:border-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[#B6E343] font-semibold">
-                                            {evt.tool || "unknown"}
-                                          </span>
-                                          {evt.phase != null && (
-                                            <span className="text-zinc-500">
-                                              P{evt.phase + 1}.T{(evt.task ?? 0) + 1}
-                                            </span>
-                                          )}
-                                        </div>
-                                        {paramDisplay && typeof paramDisplay === "string" && (
-                                          <div className="text-zinc-400 truncate max-w-full" title={paramDisplay}>
-                                            {paramDisplay}
-                                          </div>
-                                        )}
+                                      <div
+                                        ref={thinkingListRef}
+                                        className="space-y-3 min-w-0 overflow-y-auto overflow-x-hidden max-h-[420px] pr-1"
+                                      >
+                                        {activity.map((evt, i) => {
+                                          const paramDisplay = getParamDisplay(evt);
+                                          const toolLabel = evt.tool || "unknown";
+                                          const phaseTask = evt.phase != null ? `P${evt.phase + 1}.T${(evt.task ?? 0) + 1}` : "";
+                                          const oneLine = [toolLabel, paramDisplay ? (paramDisplay.length > 60 ? paramDisplay.slice(0, 60) + "…" : paramDisplay) : "", phaseTask].filter(Boolean).join(" · ");
+                                          return (
+                                            <div key={i} className="rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden shrink-0">
+                                              <div className="flex items-center gap-2 px-3 py-2 border-b border-[#CCD3CF]/60 min-w-0">
+                                                <Wrench className="w-4 h-4 shrink-0 text-zinc-500" aria-hidden />
+                                                <span className="text-xs font-medium text-zinc-800 truncate min-w-0" title={oneLine}>{oneLine}</span>
+                                              </div>
+                                              {paramDisplay && paramDisplay.length > 60 ? (
+                                                <div className="p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700">
+                                                  <pre className="whitespace-pre-wrap break-words font-mono text-inherit">{String(paramDisplay)}</pre>
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
                                     );
-                                  });
-                              }
-                              // Empty state - show context-aware message
-                              if (taskSplittingStatus?.codegen_status === "COMPLETED") {
-                                return <div className="text-zinc-500 italic">No activity recorded</div>;
-                              }
-                              if (taskSplittingStatus?.codegen_status === "FAILED") {
-                                return <div className="text-zinc-500 italic">Codegen failed</div>;
-                              }
-                              return <div className="text-zinc-500 italic">Waiting for agent to start…</div>;
-                            })()}
-                          </div>
+                                  }
+                                  if (taskSplittingStatus?.codegen_status === "COMPLETED") {
+                                    return <p className="text-xs text-zinc-500 italic">No activity recorded</p>;
+                                  }
+                                  if (taskSplittingStatus?.codegen_status === "FAILED") {
+                                    return <p className="text-xs text-zinc-500 italic">Codegen failed</p>;
+                                  }
+                                  return (
+                                    <p className="text-xs text-zinc-500 flex items-center gap-2">
+                                      <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
+                                      Generating code…
+                                    </p>
+                                  );
+                                })()}
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
                         </div>
                       )}
                     </div>

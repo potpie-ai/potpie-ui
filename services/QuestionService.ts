@@ -279,4 +279,146 @@ export default class QuestionService {
       throw new Error(this.getErrorMessage(error, "Failed to fetch questions"));
     }
   }
+
+  /**
+   * Start question generation with SSE streaming.
+   * POST /api/v1/recipes/{recipe_id}/questions/generate-stream
+   * Returns run_id from X-Run-Id header; optionally consumes stream and calls onEvent.
+   */
+  static async startQuestionsGenerationStream(
+    recipeId: string,
+    options: {
+      streamTokens?: boolean;
+      consumeStream?: boolean;
+      onEvent?: (eventType: string, data: Record<string, unknown>) => void;
+      onError?: (error: string) => void;
+      signal?: AbortSignal;
+    }
+  ): Promise<{ runId: string }> {
+    const headers = await getHeaders();
+    const url = `${this.RECIPES_URL}/${recipeId}/questions/generate-stream${options.streamTokens ? "?stream_tokens=true" : ""}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { ...headers, Accept: "text/event-stream" },
+      credentials: "include",
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(errText || `Questions stream failed: ${response.status}`);
+    }
+    const runId =
+      response.headers.get("X-Run-Id")?.trim() ||
+      response.headers.get("x-run-id")?.trim() ||
+      "";
+    if (options.consumeStream === false || !options.onEvent) {
+      response.body?.cancel?.();
+      return { runId };
+    }
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (reader && options.onEvent) {
+      (async () => {
+        let buffer = "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+            for (const block of lines) {
+              if (!block.trim()) continue;
+              let eventType = "message";
+              let eventId: string | undefined;
+              let data: Record<string, unknown> = {};
+              for (const line of block.split("\n")) {
+                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
+                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
+                if (line.startsWith("data:")) {
+                  try {
+                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
+                  } catch {
+                    data = { raw: line.replace(/^data:\s*/, "").trim() };
+                  }
+                }
+              }
+              if (eventId) data.eventId = eventId;
+              options.onEvent?.(eventType, data);
+              if (eventType === "end" || eventType === "error") return;
+            }
+          }
+        } catch (e) {
+          options.onError?.(e instanceof Error ? e.message : String(e));
+        }
+      })();
+    }
+    return { runId };
+  }
+
+  /**
+   * Reconnect to an existing questions stream.
+   * GET /api/v1/recipes/{recipe_id}/questions/stream?run_id=...&cursor=...
+   */
+  static connectQuestionsStream(
+    recipeId: string,
+    runId: string,
+    options: {
+      cursor?: string | null;
+      onEvent?: (eventType: string, data: Record<string, unknown>) => void;
+      onError?: (error: string) => void;
+      signal?: AbortSignal;
+    }
+  ): void {
+    const url = `${this.RECIPES_URL}/${recipeId}/questions/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
+    console.log("[QuestionService.connectQuestionsStream] Connecting to:", url);
+    getHeaders().then((headers) => {
+      fetch(url, {
+        method: "GET",
+        headers: { ...headers, Accept: "text/event-stream" },
+        credentials: "include",
+        signal: options.signal,
+      })
+        .then(async (response) => {
+          console.log("[QuestionService.connectQuestionsStream] Response status:", response.status);
+          if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          if (!reader || !options.onEvent) return;
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+            for (const block of lines) {
+              if (!block.trim()) continue;
+              let eventType = "message";
+              let eventId: string | undefined;
+              let data: Record<string, unknown> = {};
+              for (const line of block.split("\n")) {
+                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
+                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
+                if (line.startsWith("data:")) {
+                  try {
+                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
+                  } catch {
+                    data = { raw: line.replace(/^data:\s*/, "").trim() };
+                  }
+                }
+              }
+              if (eventId) data.eventId = eventId;
+              console.log("[QuestionService.connectQuestionsStream] Parsed event:", eventType, data);
+              options.onEvent?.(eventType, data);
+              if (eventType === "end" || eventType === "error") return;
+            }
+          }
+        })
+        .catch((e) => {
+          console.error("[QuestionService.connectQuestionsStream] Error:", e);
+          options.onError?.(e instanceof Error ? e.message : String(e));
+        });
+    });
+  }
 }

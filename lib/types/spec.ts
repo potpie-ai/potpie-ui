@@ -277,6 +277,18 @@ export interface PhasedPlanItem {
   created_at: string;
 }
 
+/** Diagram from plan API (phase.diagrams); matches backend PhaseDiagram */
+export interface PhaseDiagram {
+  diagram_id: string;
+  type: string;
+  title: string;
+  description: string;
+  mermaid_code: string;
+  validated?: boolean;
+  validation_error?: string | null;
+  generated_at: string;
+}
+
 /** New API phase structure */
 export interface PlanPhase {
   phase_id: string;
@@ -287,6 +299,8 @@ export interface PlanPhase {
   dependencies: string[];
   is_final: boolean;
   iteration: number;
+  /** Mermaid diagrams for this phase (architecture, class, etc.) */
+  diagrams?: PhaseDiagram[];
 }
 
 /** New API plan structure */

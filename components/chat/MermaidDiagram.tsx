@@ -11,7 +11,7 @@ interface MermaidDiagramProps {
 
 // Intelligent preprocessing to fix common mermaid syntax issues
 const MERMAID_DIAGRAM_TYPE =
-  /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart)/;
+  /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitgraph|requirement|mindmap|timeline|quadrantChart|architecture-beta|architecture)(?:\s|$)/;
 
 /** Returns true if content looks like Mermaid diagram source (starts with a diagram type). */
 export const looksLikeMermaid = (content: string): boolean => {
@@ -22,6 +22,38 @@ export const looksLikeMermaid = (content: string): boolean => {
   return MERMAID_DIAGRAM_TYPE.test(trimmed);
 };
 
+/** Sanitize architecture diagram labels: parser breaks on ., -, :, / inside [...] */
+function sanitizeArchitectureLabels(chart: string): string {
+  const lines = chart.split("\n");
+  const firstLine = lines[0] || "";
+  if (!/^architecture(-beta)?\s*$/.test(firstLine.trim())) return chart;
+  return lines
+    .map((line, i) => {
+      if (i === 0) return line;
+      return line.replace(/\[([^\]]*)\]/g, (_, label) => {
+        const sanitized = label.replace(/[.:\-/]/g, " ").replace(/\s+/g, " ").trim();
+        return `[${sanitized}]`;
+      });
+    })
+    .join("\n");
+}
+
+/** More aggressive: only allow letters, numbers, spaces in architecture labels (for retry after parse failure). */
+function sanitizeArchitectureLabelsStrict(chart: string): string {
+  const lines = chart.split("\n");
+  const firstLine = lines[0] || "";
+  if (!/^architecture(-beta)?\s*$/.test(firstLine.trim())) return chart;
+  return lines
+    .map((line, i) => {
+      if (i === 0) return line;
+      return line.replace(/\[([^\]]*)\]/g, (_, label) => {
+        const sanitized = label.replace(/[^a-zA-Z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+        return `[${sanitized}]`;
+      });
+    })
+    .join("\n");
+}
+
 const preprocessMermaidChart = (chart: string): string => {
   try {
     let processedChart = chart;
@@ -29,6 +61,11 @@ const preprocessMermaidChart = (chart: string): string => {
     // Preserve the first line (diagram type) to avoid breaking type detection
     const lines = processedChart.split("\n");
     const firstLine = lines[0] || "";
+
+    // Architecture diagrams use different syntax (group/service/edges); skip flowchart preprocessing
+    if (/^architecture(-beta)?\s*$/.test(firstLine.trim())) {
+      return processedChart;
+    }
 
     // Extract all defined nodes and subgraphs more comprehensively
     const definedNodes = new Set<string>();
@@ -319,6 +356,11 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
         // Clean the chart content and apply intelligent fixes
         let cleanChart = chart.trim();
 
+        // Architecture diagrams: sanitize labels (parser breaks on ., -, :, / inside [...])
+        if (cleanChart.match(/^architecture(-beta)?\s/)) {
+          cleanChart = sanitizeArchitectureLabels(cleanChart);
+        }
+
         // Inject neo look and dagre layout for flowcharts and graphs
         if (cleanChart.match(/^(flowchart|graph)\s+/)) {
           // Check if already has layout directive
@@ -340,16 +382,26 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
         // Apply intelligent preprocessing to fix common syntax issues
         cleanChart = preprocessMermaidChart(cleanChart);
 
-        // Use the modern render API with better error handling
-        const renderResult = await mermaid.render(simpleId, cleanChart);
+        const isArchitecture = cleanChart.match(/^architecture(-beta)?\s/);
+        let lastError: Error | null = null;
 
-        if (!renderResult || !renderResult.svg) {
-          throw new Error("Mermaid render returned empty result");
-        }
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const chartToRender = attempt === 1 && isArchitecture
+            ? sanitizeArchitectureLabelsStrict(chart.trim())
+            : cleanChart;
+          if (attempt === 1 && chartToRender === cleanChart) break;
 
-        if (isMounted) {
-          // Clean up any problematic elements in the SVG but preserve colors
-          const cleanedSvg = renderResult.svg
+          const renderId = attempt === 1 ? `${simpleId}-retry` : simpleId;
+          try {
+            const renderResult = await mermaid.render(renderId, chartToRender);
+
+            if (!renderResult || !renderResult.svg) {
+              throw new Error("Mermaid render returned empty result");
+            }
+
+            if (isMounted) {
+              // Clean up any problematic elements in the SVG but preserve colors
+              const cleanedSvg = renderResult.svg
             .replace(/<a[^>]*>/g, "<span>")
             .replace(/<\/a>/g, "</span>")
             .replace(/onclick="[^"]*"/g, "")
@@ -439,56 +491,50 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
 
           setSvg(safeSvg);
           setError(null);
-        }
-      } catch (err) {
-        if (process.env.NODE_ENV === "development") {
-          console.warn("Mermaid render error:", err instanceof Error ? err.message : err);
-          console.warn("Chart preview (first 120 chars):", chart.trim().slice(0, 120));
-        }
-
-        if (isMounted) {
-          let errorMessage = "Failed to render mermaid diagram";
-          let detailedError = "";
-
-          if (err instanceof Error) {
-            detailedError = err.message;
-
-            // Handle specific Mermaid parsing errors more gracefully
-            if (
-              err.message.includes("Parse error") ||
-              err.message.includes("Syntax error")
-            ) {
-              errorMessage =
-                "Invalid mermaid syntax - check node references and connections";
-            } else if (
-              err.message.includes("Cannot read properties of null") ||
-              err.message.includes("Cannot read properties of undefined")
-            ) {
-              errorMessage =
-                "Mermaid parsing error - likely undefined node or edge reference";
-            } else if (err.message.includes("Invalid mermaid diagram type")) {
-              errorMessage =
-                "Diagram must start with: graph, flowchart, sequenceDiagram, etc.";
-            } else if (
-              err.message.includes("Rendered result is not a valid SVG")
-            ) {
-              errorMessage = "Mermaid failed to generate valid SVG output";
-            } else if (
-              err.message.includes("Mermaid render returned empty result")
-            ) {
-              errorMessage =
-                "Mermaid returned empty result - check diagram syntax";
-            } else {
-              errorMessage = `Mermaid error: ${err.message}`;
             }
-          } else {
-            // Handle non-Error objects
-            errorMessage = "Unknown mermaid rendering error";
-            detailedError = String(err);
+            return;
+          } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err));
+            if (attempt === 0 && isArchitecture) continue;
+            break;
+          }
+        }
+
+        if (lastError && isMounted) {
+          const err = lastError;
+          if (process.env.NODE_ENV === "development") {
+            console.warn("Mermaid render error:", err.message);
+            console.warn("Chart preview (first 120 chars):", chart.trim().slice(0, 120));
           }
 
-          console.warn("Setting error state:", errorMessage);
+          let errorMessage: string;
+          if (
+            err.message.includes("Parsing failed") ||
+            err.message.includes("Parse error") ||
+            err.message.includes("Syntax error") ||
+            err.message.includes("unexpected character")
+          ) {
+            errorMessage = "This diagram couldn't be rendered. Copy the source below or try removing special characters (e.g. periods, hyphens) from labels.";
+          } else if (
+            err.message.includes("Cannot read properties of null") ||
+            err.message.includes("Cannot read properties of undefined")
+          ) {
+            errorMessage = "Mermaid parsing error — likely undefined node or edge reference. Copy the source below.";
+          } else if (err.message.includes("Invalid mermaid diagram type")) {
+            errorMessage = "Diagram must start with: graph, flowchart, sequenceDiagram, architecture-beta, etc.";
+          } else if (err.message.includes("Rendered result is not a valid SVG")) {
+            errorMessage = "Mermaid failed to generate valid SVG. Copy the source below.";
+          } else if (err.message.includes("Mermaid render returned empty result")) {
+            errorMessage = "Mermaid returned empty result. Copy the source below and check syntax.";
+          } else {
+            errorMessage = "This diagram couldn't be rendered. Copy the source below.";
+          }
+
           setError(errorMessage);
+        }
+      } catch (outerErr) {
+        if (isMounted) {
+          setError("Failed to render diagram.");
         }
       }
     };
@@ -611,6 +657,9 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
 
       // Use the same cleaned chart logic with preprocessing
       let cleanChart = preprocessMermaidChart(chart.trim());
+      if (cleanChart.match(/^architecture(-beta)?\s/)) {
+        cleanChart = sanitizeArchitectureLabels(cleanChart);
+      }
 
       // Validate before rendering in modal
       if (!looksLikeMermaid(cleanChart)) {
@@ -736,49 +785,31 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
 
   if (error) {
     return (
-      <div className="relative bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-yellow-800">
-            Mermaid Diagram - Fallback View
-          </span>
+      <div className="relative bg-zinc-50 border border-zinc-200 rounded-lg mt-4 overflow-hidden">
+        {/* Header */}
+        <div className="flex justify-between items-center px-4 py-2 bg-zinc-100 border-b border-zinc-200">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+            </svg>
+            <span className="text-sm font-medium text-zinc-700">Diagram Source</span>
+            <span className="text-xs text-zinc-400">(preview unavailable)</span>
+          </div>
           <button
             onClick={(e) => {
               e.stopPropagation();
               handleCopy();
             }}
-            className="text-xs font-semibold px-2 py-1 h-6 rounded bg-secondary hover:bg-secondary/80 cursor-pointer flex items-center transition-colors"
+            className="text-xs font-medium px-2 py-1 h-6 rounded bg-white hover:bg-zinc-50 border border-zinc-300 cursor-pointer flex items-center gap-1 transition-colors text-zinc-600"
           >
-            Copy Source
+            {copied ? <LucideCopyCheck className="w-3 h-3" /> : <LucideCopy className="w-3 h-3" />}
+            {copied ? "Copied" : "Copy"}
           </button>
         </div>
-        <div className="text-yellow-700 text-sm mb-3">
-          <p className="font-medium mb-1">Unable to render diagram:</p>
-          <p className="mb-2">{error}</p>
-          <details className="cursor-pointer">
-            <summary className="text-xs font-medium hover:text-yellow-800">
-              View diagram source
-            </summary>
-            <pre className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded overflow-x-auto mt-2 whitespace-pre-wrap">
-              {chart}
-            </pre>
-          </details>
-        </div>
-
-        {/* Helpful suggestions */}
-        <div className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded">
-          <p className="font-medium mb-1">Common fixes:</p>
-          <ul className="list-disc list-inside space-y-1">
-            <li>
-              Check that all node names are defined before referencing them
-            </li>
-            <li>Verify arrows point to existing nodes (not subgraph names)</li>
-            <li>
-              Ensure diagram starts with: graph, flowchart, sequenceDiagram,
-              etc.
-            </li>
-            <li>Check for typos in node names and connections</li>
-          </ul>
-        </div>
+        {/* Source code */}
+        <pre className="text-xs text-zinc-700 bg-zinc-50 p-4 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
+          {chart}
+        </pre>
       </div>
     );
   }

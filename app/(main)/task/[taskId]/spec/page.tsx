@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Github,
@@ -17,17 +17,13 @@ import {
   Link2,
   Info,
   Send,
-  Pencil,
-  Trash2,
-  Undo2,
-  RefreshCw,
-  Plus,
   Bot,
   SendHorizonal,
   RefreshCcw,
   RotateCcw,
   RotateCw,
   Maximize2,
+  Wrench,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
@@ -582,6 +578,8 @@ const SpecPage = () => {
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamEventIdRef = useRef(0);
   const streamChunksRef = useRef("");
+  const streamOutputEndRef = useRef<HTMLDivElement>(null);
+  const streamChunkBoxRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
   const runIdFromUrl = searchParams.get("run_id");
 
@@ -608,6 +606,38 @@ const SpecPage = () => {
       router.replace(`/task/${recipeId}/spec?run_id=${encodeURIComponent(runIdFromApi.trim())}`, { scroll: false });
     }
   }, [recipeId, runIdFromUrl, specProgress, router]);
+
+  // Interleave: for each tool show start + end together (Running → Completed), then its output box (backend sends call_id on both start/end to pair them)
+  type StreamBlock =
+    | { key: string; kind: "event"; event: (typeof streamEvents)[0] }
+    | { key: string; kind: "segment"; segment: (typeof streamSegments)[0] };
+  const mergedStreamBlocks = useMemo((): StreamBlock[] => {
+    const blocks: StreamBlock[] = [];
+    let segmentIdx = 0;
+    for (const ev of streamEvents) {
+      blocks.push({ key: ev.id, kind: "event", event: ev });
+      if (ev.type === "tool_end" && segmentIdx < streamSegments.length) {
+        const seg = streamSegments[segmentIdx];
+        blocks.push({ key: seg.id, kind: "segment", segment: seg });
+        segmentIdx++;
+      }
+    }
+    return blocks;
+  }, [streamEvents, streamSegments]);
+
+  // Auto-scroll tool output to bottom when new events/segments/chunks arrive
+  useEffect(() => {
+    if (mergedStreamBlocks.length > 0 || streamChunks) {
+      streamOutputEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [mergedStreamBlocks.length, streamChunks]);
+
+  // Auto-scroll inside the live chunk box when content grows
+  useEffect(() => {
+    if (streamChunks && streamChunkBoxRef.current) {
+      streamChunkBoxRef.current.scrollTo({ top: streamChunkBoxRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [streamChunks]);
 
   // Initialize chat with user prompt (from new chat page) and assistant response
   useEffect(() => {
@@ -651,10 +681,6 @@ const SpecPage = () => {
     } finally {
       setChatLoading(false);
     }
-  };
-  const handleChatAction = (_action: "add" | "modify" | "remove" | "undo" | "regenerate") => {
-    // Placeholder: will be connected when spec chat API is ready
-    toast.info("Spec chat actions will be connected when the backend is ready.");
   };
 
   // Update projectData when storedRepoContext changes (from Redux)
@@ -1120,27 +1146,47 @@ const SpecPage = () => {
                             {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating specification…"}
                           </p>
                         )}
-                        {streamEvents.length > 0 && (
-                          <ul className="space-y-0.5 text-xs text-zinc-600 font-mono break-words">
-                            {streamEvents.map((ev) => (
-                              <li key={ev.id} className="truncate">{ev.type === "tool_start" ? "▶ " : "✓ "}{ev.label}</li>
-                            ))}
-                          </ul>
-                        )}
-                        {/* Output segments (one per tool_call_end) + current chunk, shown right after tool list */}
-                        {(streamSegments.length > 0 || streamChunks || (streamProgress || isGenerating)) && (
-                          <div className="mt-2 space-y-2 min-w-0 overflow-hidden">
-                            {streamSegments.map((seg) => (
-                              <div key={seg.id} className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0">
-                                <p className="text-[10px] font-semibold text-[#022D2C] uppercase tracking-wide mb-1.5">{seg.label}</p>
-                                <SharedMarkdown content={normalizeMarkdownForPreview(seg.content)} />
-                              </div>
-                            ))}
-                            {(streamChunks || (streamProgress || isGenerating)) && (
-                              <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[100px] overflow-y-auto overflow-x-hidden min-w-0">
-                                <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks || "")} />
-                              </div>
+                        {/* Tool calls: single box per tool (icon | label, full output below) */}
+                        {mergedStreamBlocks.length > 0 && (
+                          <div className="space-y-3 min-w-0 overflow-hidden">
+                            {mergedStreamBlocks.map((block) =>
+                              block.kind === "event" ? (
+                                (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
+                                  <span key={block.key} className="hidden" aria-hidden />
+                                ) : (
+                                  <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
+                                    {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
+                                  </p>
+                                )
+                              ) : (
+                                <div key={block.key} className="rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden">
+                                  <div className="flex items-center gap-2 px-3 py-2 border-b border-[#CCD3CF]/60">
+                                    <Wrench className="w-4 h-4 shrink-0 text-zinc-500" aria-hidden />
+                                    <span className="text-xs font-medium text-zinc-800">{block.segment.label}</span>
+                                  </div>
+                                  <div
+                                    ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
+                                    className="p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                    style={{ msOverflowStyle: "none" }}
+                                  >
+                                    <SharedMarkdown content={normalizeMarkdownForPreview(block.segment.content)} />
+                                  </div>
+                                </div>
+                              )
                             )}
+                          </div>
+                        )}
+                        {/* Live streaming chunk + full screen button */}
+                        {(streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
+                          <div className="mt-2 space-y-2 min-w-0 overflow-hidden">
+                            {streamChunks ? (
+                              <div
+                                ref={streamChunkBoxRef}
+                                className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[100px] overflow-y-auto overflow-x-hidden min-w-0"
+                              >
+                                <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks)} />
+                              </div>
+                            ) : null}
                             {(streamSegments.some((s) => s.content.length > 0) || (streamChunks?.length ?? 0) > 0) && (
                               <>
                                 <TooltipProvider>
@@ -1173,6 +1219,9 @@ const SpecPage = () => {
                             )}
                           </div>
                         )}
+                        {(mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
+                          <div ref={streamOutputEndRef} aria-hidden />
+                        )}
                       </div>
                     </div>
                   </>
@@ -1193,26 +1242,6 @@ const SpecPage = () => {
               </React.Fragment>
             ))}
             <div ref={chatEndRef} />
-          </div>
-
-          {/* Action buttons — white bg, light grey border, dark green icons */}
-          <div className="px-6 py-2 flex flex-wrap gap-2 shrink-0">
-            {[
-              { id: "add" as const, label: "Add Item", icon: Plus },
-              { id: "modify" as const, label: "Modify", icon: Pencil },
-              { id: "remove" as const, label: "Remove", icon: Trash2 },
-              { id: "undo" as const, label: "Undo", icon: Undo2 },
-              { id: "regenerate" as const, label: "Regenerate", icon: RefreshCw },
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => handleChatAction(id)}
-                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-800 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50 transition-colors"
-              >
-                <Icon className="w-3.5 h-3.5 text-[#00291C]" />
-                {label}
-              </button>
-            ))}
           </div>
 
           {/* Chat input — multi-line textarea with send button inside at bottom-right */}

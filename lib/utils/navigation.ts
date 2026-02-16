@@ -6,8 +6,14 @@ export const SpecFlowRoutes = {
   idea: () => "/newchat",
   repo: (projectId: string, recipeId?: string) => {
     const params = new URLSearchParams({ projectId });
-    if (recipeId) params.set("recipeId", recipeId);
+    if (recipeId) return `/task/${recipeId}/qna?${params.toString()}`;
     return `/repo?${params.toString()}`;
+  },
+  qna: (recipeId: string, projectId?: string) => {
+    const params = new URLSearchParams();
+    if (projectId) params.set("projectId", projectId);
+    const qs = params.toString();
+    return qs ? `/task/${recipeId}/qna?${qs}` : `/task/${recipeId}/qna`;
   },
   spec: (recipeId: string) => `/task/${recipeId}/spec`,
   planOverview: (recipeId: string) => `/task/${recipeId}/plan_overview`,

@@ -1,6 +1,6 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
-import { parseApiError } from "@/lib/utils";
+import { parseApiError, extractJsonObjects, parseSSEBuffer, isSSEResponse } from "@/lib/utils";
 import {
   PlanGenerationRequest,
   PlanSubmitResponse,
@@ -104,9 +104,9 @@ export default class PlanService {
   }
 
   /**
-   * Start plan generation with SSE streaming.
+   * Start plan generation with streaming (same pattern as ChatService /message).
    * POST /api/v1/recipes/{recipe_id}/plan/generate-stream
-   * Returns run_id from X-Run-Id header; consumes stream and calls onEvent for each SSE event.
+   * Returns run_id from X-Run-Id header; consumes stream and calls onEvent for each JSON object.
    */
   static async startPlanGenerationStream(
     recipeId: string,
@@ -123,7 +123,7 @@ export default class PlanService {
     const url = `${this.API_BASE}/${recipeId}/plan/generate-stream${options.streamTokens !== false ? "?stream_tokens=true" : ""}`;
     const response = await fetch(url, {
       method: "POST",
-      headers: { ...headers, Accept: "text/event-stream" },
+      headers: headers as HeadersInit,
       credentials: "include",
       signal: options.signal,
     });
@@ -135,67 +135,74 @@ export default class PlanService {
       response.headers.get("X-Run-Id")?.trim() ||
       response.headers.get("x-run-id")?.trim() ||
       "";
-    if (!runId && response.body && (options.consumeStream === false || !options.onEvent)) {
-      try {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        for (let i = 0; i < 8; i++) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const dataMatch = buffer.match(/data:\s*(\{[^]*?\})\s*\n/);
-          if (dataMatch) {
-            const data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
-            const fromData =
-              typeof data.run_id === "string"
-                ? data.run_id
-                : data.data && typeof (data.data as Record<string, unknown>).run_id === "string"
-                  ? (data.data as Record<string, unknown>).run_id
-                  : "";
-            if (fromData) runId = String(fromData).trim();
-            break;
-          }
-        }
-        reader.cancel();
-      } catch {
-        // ignore
-      }
-    }
     if (options.consumeStream === false || !options.onEvent) {
+      if (!runId && response.body) {
+        try {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          for (let i = 0; i < 16; i++) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const { objects } = extractJsonObjects(buffer);
+            if (objects.length > 0) {
+              const data = JSON.parse(objects[0]) as Record<string, unknown>;
+              const inner = data.data as Record<string, unknown> | undefined;
+              runId =
+                (typeof data.run_id === "string" ? data.run_id : inner && typeof inner.run_id === "string" ? inner.run_id : "")?.trim() || runId;
+              break;
+            }
+          }
+          reader.cancel();
+        } catch {
+          // ignore
+        }
+      }
       return { runId };
     }
     const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
     if (reader && options.onEvent) {
+      const contentType = response.headers.get("Content-Type");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let useSSE = isSSEResponse(contentType);
       (async () => {
-        let buffer = "";
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n\n");
-            buffer = lines.pop() || "";
-            for (const block of lines) {
-              if (!block.trim()) continue;
-              let eventType = "message";
-              let eventId: string | undefined;
-              let data: Record<string, unknown> = {};
-              for (const line of block.split("\n")) {
-                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
-                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
-                if (line.startsWith("data:")) {
-                  try {
-                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
-                  } catch {
-                    data = { raw: line.replace(/^data:\s*/, "").trim() };
-                  }
+            if (!useSSE && buffer.includes("event:") && buffer.includes("data:")) useSSE = true;
+            if (useSSE) {
+              const { events, remaining } = parseSSEBuffer(buffer);
+              buffer = remaining;
+              for (const { eventType, data } of events) {
+                const payload =
+                  data?.data && typeof data.data === "object" && data.data !== null
+                    ? (data.data as Record<string, unknown>)
+                    : data ?? {};
+                options.onEvent?.(eventType, payload);
+                if (eventType === "end" || eventType === "error") return;
+              }
+            } else {
+              const { objects, remaining } = extractJsonObjects(buffer);
+              buffer = remaining;
+              for (const jsonStr of objects) {
+                try {
+                  const data = JSON.parse(jsonStr) as Record<string, unknown>;
+                  const eventType = (typeof data.event === "string" ? data.event : "message") as string;
+                  const payload =
+                    data.data && typeof data.data === "object" && data.data !== null
+                      ? (data.data as Record<string, unknown>)
+                      : data;
+                  if (typeof data.eventId === "string") payload.eventId = data.eventId;
+                  options.onEvent?.(eventType, payload);
+                  if (eventType === "end" || eventType === "error") return;
+                } catch {
+                  options.onEvent?.("message", { raw: jsonStr });
                 }
               }
-              if (eventId) data.eventId = eventId;
-              options.onEvent?.(eventType, data);
-              if (eventType === "end" || eventType === "error") return;
             }
           }
         } catch (e) {
@@ -248,7 +255,7 @@ export default class PlanService {
   }
 
   /**
-   * Reconnect to an existing plan stream.
+   * Reconnect to an existing plan stream. Same pattern as ChatService.
    * GET /api/v1/recipes/{recipe_id}/plan/stream?run_id=...&cursor=...
    */
   static connectPlanStream(
@@ -262,49 +269,65 @@ export default class PlanService {
     }
   ): void {
     const url = `${this.API_BASE}/${recipeId}/plan/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
-    getHeaders().then((headers) => {
-      fetch(url, {
-        method: "GET",
-        headers: { ...headers, Accept: "text/event-stream" },
-        credentials: "include",
-        signal: options.signal,
-      })
-        .then(async (response) => {
-          if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-          if (!reader || !options.onEvent) return;
-          let buffer = "";
+    getHeaders()
+      .then((headers) =>
+        fetch(url, {
+          method: "GET",
+          headers: headers as HeadersInit,
+          credentials: "include",
+          signal: options.signal,
+        })
+      )
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
+        const reader = response.body?.getReader();
+        if (!reader || !options.onEvent) return;
+        const contentType = response.headers.get("Content-Type");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let useSSE = isSSEResponse(contentType);
+        try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n\n");
-            buffer = lines.pop() || "";
-            for (const block of lines) {
-              if (!block.trim()) continue;
-              let eventType = "message";
-              let eventId: string | undefined;
-              let data: Record<string, unknown> = {};
-              for (const line of block.split("\n")) {
-                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
-                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
-                if (line.startsWith("data:")) {
-                  try {
-                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
-                  } catch {
-                    data = { raw: line.replace(/^data:\s*/, "").trim() };
-                  }
+            if (!useSSE && buffer.includes("event:") && buffer.includes("data:")) useSSE = true;
+            if (useSSE) {
+              const { events, remaining } = parseSSEBuffer(buffer);
+              buffer = remaining;
+              for (const { eventType, data } of events) {
+                const payload =
+                  data?.data && typeof data.data === "object" && data.data !== null
+                    ? (data.data as Record<string, unknown>)
+                    : data ?? {};
+                options.onEvent(eventType, payload);
+                if (eventType === "end" || eventType === "error") return;
+              }
+            } else {
+              const { objects, remaining } = extractJsonObjects(buffer);
+              buffer = remaining;
+              for (const jsonStr of objects) {
+                try {
+                  const data = JSON.parse(jsonStr) as Record<string, unknown>;
+                  const eventType = (typeof data.event === "string" ? data.event : "message") as string;
+                  const payload =
+                    data.data && typeof data.data === "object" && data.data !== null
+                      ? (data.data as Record<string, unknown>)
+                      : data;
+                  if (typeof data.eventId === "string") payload.eventId = data.eventId;
+                  options.onEvent(eventType, payload);
+                  if (eventType === "end" || eventType === "error") return;
+                } catch {
+                  options.onEvent("message", { raw: jsonStr });
                 }
               }
-              if (eventId) data.eventId = eventId;
-              options.onEvent?.(eventType, data);
-              if (eventType === "end" || eventType === "error") return;
             }
           }
-        })
-        .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
-    });
+        } catch (e) {
+          options.onError?.(e instanceof Error ? e.message : String(e));
+        }
+      })
+      .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
   }
 
   /**

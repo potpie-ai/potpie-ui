@@ -56,10 +56,14 @@ interface IdeaInputCardProps {
   onRepoSelect: (repoId: string) => void;
   repositories: any[];
   reposLoading: boolean;
+  reposError?: Error | null;
+  onRetryRepos?: () => void;
   selectedBranch: string | null;
   onBranchSelect: (branch: string) => void;
   branches: string[];
   branchesLoading: boolean;
+  branchesError?: Error | null;
+  onRetryBranches?: () => void;
   selectedAgent: string | null;
   onAgentSelect: (agent: string) => void;
   onParseRepo?: () => void;
@@ -90,10 +94,14 @@ export default function IdeaInputCard({
   onRepoSelect,
   repositories,
   reposLoading,
+  reposError,
+  onRetryRepos,
   selectedBranch,
   onBranchSelect,
   branches,
   branchesLoading,
+  branchesError,
+  onRetryBranches,
   selectedAgent,
   onAgentSelect,
   onParseRepo,
@@ -344,7 +352,27 @@ export default function IdeaInputCard({
                 )}
               </div>
               <div className="flex-1 overflow-y-auto min-h-0 p-2">
-                {reposLoading ? (
+                {reposError ? (
+                  <div className="p-7 text-center">
+                    <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-red-400" />
+                    <p className="text-[10px] font-medium text-red-600 mb-1">Failed to load repositories</p>
+                    <p className="text-[9px] text-zinc-400 mb-3">
+                      {reposError instanceof Error ? reposError.message : "An error occurred while fetching repositories"}
+                    </p>
+                    {onRetryRepos && (
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRetryRepos();
+                        }}
+                        className="text-[10px] px-3 py-1.5 h-auto"
+                        size="sm"
+                      >
+                        Retry
+                      </Button>
+                    )}
+                  </div>
+                ) : reposLoading ? (
                   <div className="p-7 text-center">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
                     <p className="text-[10px] text-zinc-500">
@@ -488,13 +516,33 @@ export default function IdeaInputCard({
                   <div className="p-5 text-center">
                     <p className="text-[10px] text-zinc-500">Please select a repository first</p>
                   </div>
-              ) : branchesLoading ? (
-                <div className="p-7 text-center">
-                  <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
-                  <p className="text-[10px] text-zinc-500">
-                    {branchSearchTerm?.trim() ? "Searching branches..." : "Loading branches..."}
-                  </p>
-                </div>
+                ) : branchesError ? (
+                  <div className="p-7 text-center">
+                    <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-red-400" />
+                    <p className="text-[10px] font-medium text-red-600 mb-1">Failed to load branches</p>
+                    <p className="text-[9px] text-zinc-400 mb-3">
+                      {branchesError instanceof Error ? branchesError.message : "An error occurred while fetching branches"}
+                    </p>
+                    {onRetryBranches && (
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRetryBranches();
+                        }}
+                        className="text-[10px] px-3 py-1.5 h-auto"
+                        size="sm"
+                      >
+                        Retry
+                      </Button>
+                    )}
+                  </div>
+                ) : branchesLoading ? (
+                  <div className="p-7 text-center">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
+                    <p className="text-[10px] text-zinc-500">
+                      {branchSearchTerm?.trim() ? "Searching branches..." : "Loading branches..."}
+                    </p>
+                  </div>
                 ) : branches.length === 0 ? (
                   <div className="p-7 text-center">
                     <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />

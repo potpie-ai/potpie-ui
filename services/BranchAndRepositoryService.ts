@@ -66,12 +66,12 @@ export default class BranchAndRepositoryService {
         try {
             const params: { search?: string } = {};
             // Only add search parameter if it's a non-empty string after trimming
-            const trimmedSearch = search?.trim();
+            let trimmedSearch = search?.trim();
             if (trimmedSearch && trimmedSearch.length > 0) {
-                // Ensure search term is properly encoded (axios handles this via params, but we validate length)
                 // Max length validation to prevent extremely long queries
                 if (trimmedSearch.length > 200) {
-                    throw new Error("Search query is too long. Maximum 200 characters allowed.");
+                    console.warn("Search query is too long. Truncating to 200 characters.");
+                    trimmedSearch = trimmedSearch.slice(0, 200);
                 }
                 params.search = trimmedSearch;
             }

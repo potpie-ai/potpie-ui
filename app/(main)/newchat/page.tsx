@@ -190,7 +190,7 @@ export default function NewChatPage() {
     return selectedRepoData.full_name || selectedRepoData.name || null;
   }, [state.selectedRepo, repositories]);
 
-  const { data: branches, isLoading: branchesLoading, error: branchesError } = useQuery({
+  const { data: branches, isLoading: branchesLoading, error: branchesError, refetch: refetchBranches } = useQuery({
     queryKey: ["user-branch", selectedRepoName, debouncedBranchSearch],
     queryFn: () => {
       if (!selectedRepoName) return Promise.resolve([]);
@@ -1005,11 +1005,15 @@ export default function NewChatPage() {
               selectedRepo={state.selectedRepo}
               onRepoSelect={handleRepoSelect}
               repositories={state.linkedRepos}
-              reposLoading={reposLoading || !!reposError}
+              reposLoading={reposLoading}
+              reposError={reposError}
+              onRetryRepos={refetchRepos}
               selectedBranch={state.selectedBranch}
               onBranchSelect={handleBranchSelect}
               branches={branches || []}
               branchesLoading={branchesLoading}
+              branchesError={branchesError}
+              onRetryBranches={refetchBranches}
               selectedAgent={state.selectedAgent}
               onAgentSelect={handleAgentSelect}
               onParseRepo={handleParseRepo}

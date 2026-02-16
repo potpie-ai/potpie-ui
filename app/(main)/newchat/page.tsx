@@ -632,13 +632,34 @@ export default function NewChatPage() {
         }
       };
       await pollStatus();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error during parsing:", err);
       setState((prev) => ({
         ...prev,
         parsingStatus: ParsingStatusEnum.ERROR,
         parsing: false,
       }));
+      
+      // Check if error indicates GitHub is not linked
+      const errorMessage = err?.response?.data?.detail || err?.response?.data?.message || err?.message || "";
+      const lowerMessage = errorMessage.toLowerCase();
+      
+      // Check for GitHub linking errors
+      if (
+        lowerMessage.includes("github") && 
+        (lowerMessage.includes("not linked") || 
+         lowerMessage.includes("not connected") ||
+         lowerMessage.includes("link github") ||
+         lowerMessage.includes("github account") ||
+         err?.response?.status === 401 ||
+         err?.response?.status === 403)
+      ) {
+        // Redirect to GitHub App installation
+        toast.error("GitHub account not linked. Redirecting to GitHub installation...");
+        openGithubPopup();
+        return;
+      }
+      
       toast.error("Failed to parse repository. Please try again.");
     }
   };

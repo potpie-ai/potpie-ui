@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,6 +69,14 @@ interface IdeaInputCardProps {
   onAttachmentChange?: (files: File[], removedIndex?: number) => void;
   /** True when any file in the list is being uploaded. */
   attachmentUploading?: boolean;
+  /** Repository search term */
+  repoSearchTerm?: string;
+  /** Handler for repository search term changes */
+  onRepoSearchChange?: (value: string) => void;
+  /** Branch search term */
+  branchSearchTerm?: string;
+  /** Handler for branch search term changes */
+  onBranchSearchChange?: (value: string) => void;
 }
 
 export default function IdeaInputCard({
@@ -91,6 +100,10 @@ export default function IdeaInputCard({
   attachedFiles: controlledFiles,
   onAttachmentChange,
   attachmentUploading = false,
+  repoSearchTerm = "",
+  onRepoSearchChange,
+  branchSearchTerm = "",
+  onBranchSearchChange,
 }: IdeaInputCardProps) {
   const router = useRouter();
   const { user } = useAuthContext();
@@ -100,6 +113,19 @@ export default function IdeaInputCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localFiles, setLocalFiles] = useState<File[]>([]);
   const { openGithubPopup } = useGithubAppPopup();
+
+  // Clear search terms when dropdowns close
+  useEffect(() => {
+    if (!repoDropdownOpen && onRepoSearchChange) {
+      onRepoSearchChange("");
+    }
+  }, [repoDropdownOpen, onRepoSearchChange]);
+
+  useEffect(() => {
+    if (!branchDropdownOpen && onBranchSearchChange) {
+      onBranchSearchChange("");
+    }
+  }, [branchDropdownOpen, onBranchSearchChange]);
 
   const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["userSubscription", user?.uid],
@@ -286,17 +312,56 @@ export default function IdeaInputCard({
                 </button>
               </DropdownMenuTrigger>
             <DropdownMenuContent className="w-[380px] max-h-[280px] flex flex-col overflow-hidden p-0 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
+              {/* Search input */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-200">
+                <Search className="h-4 w-4 shrink-0 text-zinc-400" />
+                <Input
+                  placeholder="Search repositories..."
+                  value={repoSearchTerm}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Max length validation (200 characters)
+                    if (value.length <= 200) {
+                      onRepoSearchChange?.(value);
+                    }
+                  }}
+                  maxLength={200}
+                  className="flex-1 h-8 text-[10px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-0"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                {repoSearchTerm?.trim() && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 rounded-full hover:bg-zinc-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRepoSearchChange?.("");
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
               <div className="flex-1 overflow-y-auto min-h-0 p-2">
                 {reposLoading ? (
                   <div className="p-7 text-center">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
-                    <p className="text-[10px] text-zinc-500">Loading repositories...</p>
+                    <p className="text-[10px] text-zinc-500">
+                      {repoSearchTerm?.trim() ? "Searching repositories..." : "Loading repositories..."}
+                    </p>
                   </div>
                 ) : repositories.length === 0 ? (
                   <div className="p-7 text-center">
                     <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
-                    <p className="text-[10px] font-medium text-foreground mb-1">No parsed repositories found</p>
-                    <p className="text-[9px] text-zinc-400">Parse a repository to get started</p>
+                    <p className="text-[10px] font-medium text-foreground mb-1">
+                      {repoSearchTerm?.trim()
+                        ? `No repositories found matching '${repoSearchTerm.trim()}'`
+                        : "No parsed repositories found"}
+                    </p>
+                    <p className="text-[9px] text-zinc-400">
+                      {repoSearchTerm?.trim() ? "Try a different search term" : "Parse a repository to get started"}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-0.5">
@@ -384,46 +449,89 @@ export default function IdeaInputCard({
                   )}
                 </button>
               </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[280px] max-h-[300px] overflow-y-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
-              {!selectedRepo ? (
-                <div className="p-5 text-center">
-                  <p className="text-[10px] text-zinc-500">Please select a repository first</p>
+            <DropdownMenuContent className="w-[280px] max-h-[300px] flex flex-col overflow-hidden p-0 bg-white border border-zinc-200 rounded-xl shadow-lg" align="start">
+              {/* Search input */}
+              {selectedRepo && (
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-200">
+                  <Search className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <Input
+                    placeholder="Search branches..."
+                    value={branchSearchTerm}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Max length validation (200 characters)
+                      if (value.length <= 200) {
+                        onBranchSearchChange?.(value);
+                      }
+                    }}
+                    maxLength={200}
+                    className="flex-1 h-8 text-[10px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-0"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  {branchSearchTerm?.trim() && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4 rounded-full hover:bg-zinc-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBranchSearchChange?.("");
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
+              )}
+              <div className="flex-1 overflow-y-auto min-h-0 p-2">
+                {!selectedRepo ? (
+                  <div className="p-5 text-center">
+                    <p className="text-[10px] text-zinc-500">Please select a repository first</p>
+                  </div>
               ) : branchesLoading ? (
                 <div className="p-7 text-center">
                   <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
-                  <p className="text-[10px] text-zinc-500">Loading branches...</p>
+                  <p className="text-[10px] text-zinc-500">
+                    {branchSearchTerm?.trim() ? "Searching branches..." : "Loading branches..."}
+                  </p>
                 </div>
-              ) : branches.length === 0 ? (
-                <div className="p-7 text-center">
-                  <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
-                  <p className="text-[10px] font-medium text-foreground mb-1">No branches found</p>
-                  <p className="text-[9px] text-zinc-400">Unable to load branches for this repository</p>
-                </div>
-              ) : (
-                <div className="space-y-0.5">
-                  {branches.map((branch) => {
-                    const isSelected = branch === selectedBranch;
-                    return (
-                      <DropdownMenuItem
-                        key={branch}
-                        onClick={() => {
-                          onBranchSelect(branch);
-                          setBranchDropdownOpen(false);
-                        }}
-                        className={`flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg transition-colors ${isSelected ? "bg-zinc-50 border border-zinc-200 text-foreground" : "hover:bg-zinc-50 text-foreground"}`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-[10px] font-medium truncate ${isSelected ? "text-foreground" : "text-foreground"}`}>{branch}</span>
-                            {isSelected && <Check className="h-3 w-3 text-foreground flex-shrink-0" />}
+                ) : branches.length === 0 ? (
+                  <div className="p-7 text-center">
+                    <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
+                    <p className="text-[10px] font-medium text-foreground mb-1">
+                      {branchSearchTerm?.trim()
+                        ? `No branches found matching '${branchSearchTerm.trim()}'`
+                        : "No branches found"}
+                    </p>
+                    <p className="text-[9px] text-zinc-400">
+                      {branchSearchTerm?.trim() ? "Try a different search term" : "Unable to load branches for this repository"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    {branches.map((branch) => {
+                      const isSelected = branch === selectedBranch;
+                      return (
+                        <DropdownMenuItem
+                          key={branch}
+                          onClick={() => {
+                            onBranchSelect(branch);
+                            setBranchDropdownOpen(false);
+                          }}
+                          className={`flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg transition-colors ${isSelected ? "bg-zinc-50 border border-zinc-200 text-foreground" : "hover:bg-zinc-50 text-foreground"}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[10px] font-medium truncate ${isSelected ? "text-foreground" : "text-foreground"}`}>{branch}</span>
+                              {isSelected && <Check className="h-3 w-3 text-foreground flex-shrink-0" />}
+                            </div>
                           </div>
-                        </div>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </div>
-              )}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
           </div>

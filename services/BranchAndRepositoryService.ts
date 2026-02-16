@@ -51,7 +51,7 @@ export default class BranchAndRepositoryService {
         }
     }
 
-    static async getUserRepositories() {
+    static async getUserRepositories(search?: string) {
         const headers: Headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -64,8 +64,21 @@ export default class BranchAndRepositoryService {
         })}`);
 
         try {
+            const params: { search?: string } = {};
+            // Only add search parameter if it's a non-empty string after trimming
+            const trimmedSearch = search?.trim();
+            if (trimmedSearch && trimmedSearch.length > 0) {
+                // Ensure search term is properly encoded (axios handles this via params, but we validate length)
+                // Max length validation to prevent extremely long queries
+                if (trimmedSearch.length > 200) {
+                    throw new Error("Search query is too long. Maximum 200 characters allowed.");
+                }
+                params.search = trimmedSearch;
+            }
+            
             const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
                 headers,
+                params,
             });
             console.log("BranchAndRepositoryService: Successfully fetched user repositories");
             return response.data.repositories;
@@ -94,7 +107,7 @@ export default class BranchAndRepositoryService {
       }
   }
 
-    static async getBranchList(repoName: string) {
+    static async getBranchList(repoName: string, search?: string) {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -106,12 +119,25 @@ export default class BranchAndRepositoryService {
                 return [];
             }
             
+            const params: { repo_name: string; search?: string } = {
+                repo_name: repoName,
+            };
+            // Only add search parameter if it's a non-empty string after trimming
+            const trimmedSearch = search?.trim();
+            if (trimmedSearch && trimmedSearch.length > 0) {
+                // Max length validation to prevent extremely long queries
+                if (trimmedSearch.length > 200) {
+                    console.warn("Search query is too long. Truncating to 200 characters.");
+                    params.search = trimmedSearch.substring(0, 200);
+                } else {
+                    params.search = trimmedSearch;
+                }
+            }
+            
             const response = await axios.get(
                 `${baseUrl}/api/v1/github/get-branch-list`,
                 {
-                    params: {
-                        repo_name: repoName,
-                    },
+                    params,
                     headers,
                 }
             );

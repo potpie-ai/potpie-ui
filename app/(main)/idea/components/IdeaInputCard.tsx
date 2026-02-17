@@ -37,7 +37,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -275,8 +274,10 @@ export default function IdeaInputCard({
   const handlePublicRepoSubmit = async () => {
     const repoName = publicRepoInput.trim();
     
-    // Validate format (owner/repo)
-    if (!repoName || !repoName.includes("/")) {
+    // Validate format (owner/repo) with strict regex
+    // Ensures both owner and repo are non-empty and contain no slashes or spaces
+    const repoNameRegex = /^[^\/\s]+\/[^\/\s]+$/;
+    if (!repoName || !repoNameRegex.test(repoName)) {
       toast.error("Please enter a valid repository name in the format 'owner/repo' (e.g., facebook/react)");
       return;
     }
@@ -304,17 +305,19 @@ export default function IdeaInputCard({
         const branchName = selectedBranch || "main";
         
         if (onParseRepoWithName) {
-          // Direct parsing with repo name and branch
+          // Prefer direct parsing with repo name and branch
           onParseRepoWithName(repoName, branchName);
+        } else if (onParseRepo && onRepoSearchChange) {
+          // Fallback: Set the repo in search term and wait for debounce before triggering parse
+          // Parent component uses 300ms debounce, so wait for debounce + margin (100ms)
+          const debounceMs = 300;
+          const marginMs = 100;
+          onRepoSearchChange(repoName);
+          await new Promise((resolve) => setTimeout(resolve, debounceMs + marginMs));
+          onParseRepo();
         } else if (onParseRepo) {
-          // Fallback: Set the repo in search term and trigger parse
-          // This is less reliable due to debounce timing
-          if (onRepoSearchChange) {
-            onRepoSearchChange(repoName);
-          }
-          setTimeout(() => {
-            onParseRepo();
-          }, 400);
+          // Last resort: just call onParseRepo if available
+          onParseRepo();
         }
       } else {
         // Repository is not public - show error but don't redirect to GitHub
@@ -515,7 +518,6 @@ export default function IdeaInputCard({
                 )}
               </div>
               <div className="sticky bottom-0 border-t border-zinc-100 bg-white p-2 pt-2.5">
-                <DropdownMenuSeparator className="mb-2 bg-zinc-100" />
                 <div className="space-y-1.5">
                   <DropdownMenuItem
                     onClick={handlePublicRepoClick}
@@ -974,7 +976,7 @@ export default function IdeaInputCard({
           <DialogHeader>
             <DialogTitle>Enter Public Repository</DialogTitle>
             <DialogDescription>
-              Enter a public GitHub repository name in the format "owner/repo" (e.g., facebook/react)
+              Enter a public GitHub repository name in the format <code>owner/repo</code> (e.g., <code>facebook/react</code>)
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

@@ -348,6 +348,8 @@ export default function NewChatPage() {
       projectId: string;
       additionalLinks?: string[];
       attachmentIds?: string[];
+      repoName?: string;
+      branchName?: string;
     }): Promise<CreateRecipeCodegenResponse> => {
       const recipeResponse = await SpecService.createRecipeCodegen({
         user_prompt: data.userPrompt,
@@ -367,7 +369,14 @@ export default function NewChatPage() {
       });
       return recipeResponse;
     },
-    onSuccess: (data: CreateRecipeCodegenResponse) => {
+    onSuccess: (data: CreateRecipeCodegenResponse, variables: {
+      userPrompt: string;
+      projectId: string;
+      additionalLinks?: string[];
+      attachmentIds?: string[];
+      repoName?: string;
+      branchName?: string;
+    }) => {
       const recipeId = data.recipe.id;
       const projectId = data.recipe.project_id?.toString() || state.projectId;
       setState((prev) => ({
@@ -376,44 +385,57 @@ export default function NewChatPage() {
         projectId: projectId || null,
         loading: false,
       }));
-      if (state.selectedRepo) {
+      
+      // Use repoName/branchName from variables if provided, otherwise try to get from state
+      let repoName: string = "";
+      let branchName: string = "main";
+      
+      if (variables.repoName && variables.branchName) {
+        // Use the provided repoName and branchName
+        repoName = variables.repoName;
+        branchName = variables.branchName;
+      } else if (state.selectedRepo) {
+        // Fall back to state.selectedRepo
         const selectedRepoData = repositories.find(
           (repo: Repo) => repo.id?.toString() === state.selectedRepo
         );
         if (selectedRepoData) {
-          const repoName =
-            selectedRepoData.full_name || selectedRepoData.name || "";
-          const branchName =
-            state.selectedBranch || selectedRepoData.default_branch || "main";
-          localStorage.setItem(
-            `recipe_${recipeId}`,
-            JSON.stringify({
-              recipe_id: recipeId,
-              project_id: projectId || null,
-              repo_name: repoName,
-              branch_name: branchName,
-              user_prompt: state.input ? getCleanInput(state.input) : undefined,
-            })
-          );
-          dispatch(
-            setRepoAndBranchForTask({
-              taskId: recipeId,
-              repoName: repoName || "",
-              branchName,
-              projectId: projectId || undefined,
-            })
-          );
-          const params = new URLSearchParams({ recipeId });
-          if (repoName) params.append("repoName", repoName);
-          if (state.input) params.append("featureIdea", getCleanInput(state.input));
-          router.push(`/repo?${params.toString()}`);
+          repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+          branchName = state.selectedBranch || selectedRepoData.default_branch || "main";
         } else {
           toast.error("Repository data not found. Please try again.");
+          return;
         }
       } else {
         toast.error(
           "Repository not selected. Please select a repository and try again."
         );
+        return;
+      }
+      
+      if (repoName) {
+        localStorage.setItem(
+          `recipe_${recipeId}`,
+          JSON.stringify({
+            recipe_id: recipeId,
+            project_id: projectId || null,
+            repo_name: repoName,
+            branch_name: branchName,
+            user_prompt: state.input ? getCleanInput(state.input) : undefined,
+          })
+        );
+        dispatch(
+          setRepoAndBranchForTask({
+            taskId: recipeId,
+            repoName: repoName || "",
+            branchName,
+            projectId: projectId || undefined,
+          })
+        );
+        const params = new URLSearchParams({ recipeId });
+        if (repoName) params.append("repoName", repoName);
+        if (state.input) params.append("featureIdea", getCleanInput(state.input));
+        router.push(`/repo?${params.toString()}`);
       }
     },
     onError: (error: any) => {
@@ -514,6 +536,8 @@ export default function NewChatPage() {
             additionalLinks: undefined,
             attachmentIds:
               state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+            repoName: repoName.trim(),
+            branchName: branchName || "main",
           });
         } else if (
           (state.selectedAgent === "ask" || state.selectedAgent === "debug") &&
@@ -621,6 +645,8 @@ export default function NewChatPage() {
               additionalLinks: undefined,
               attachmentIds:
                 state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+              repoName: repoName.trim(),
+              branchName: branchName || "main",
             });
           } else if (
             (state.selectedAgent === "ask" ||
@@ -682,26 +708,47 @@ export default function NewChatPage() {
         state.selectedBranch || selectedRepoData.default_branch || "main";
     } 
     // Otherwise, check if user has typed a repository URL in the search field
-    else if (debouncedRepoSearch && debouncedRepoSearch.trim()) {
-      const searchTerm = debouncedRepoSearch.trim();
+    else if (repoSearchTerm && repoSearchTerm.trim()) {
+      const searchTerm = repoSearchTerm.trim();
       
       // Check if it's a GitHub URL (https://github.com/owner/repo or http://github.com/owner/repo)
       const githubUrlRegex = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/.*)?$/;
       const match = searchTerm.match(githubUrlRegex);
       
       if (match) {
-        // Extract owner/repo from URL
-        repoName = `${match[1]}/${match[2]}`;
+        // Extract owner/repo from URL and normalize repo name by removing trailing .git (case-insensitive)
+        const owner = match[1];
+        const repo = match[2].replace(/\.git$/i, '');
+        repoName = `${owner}/${repo}`;
         branchName = state.selectedBranch || "main";
       } 
       // Check if it's already in owner/repo format
       else if (/^[^\/]+\/[^\/]+$/.test(searchTerm)) {
-        repoName = searchTerm;
+        // Normalize repo name by removing trailing .git (case-insensitive)
+        repoName = searchTerm.replace(/\.git$/i, '');
         branchName = state.selectedBranch || "main";
       } 
       else {
         toast.error("Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo) or select a repository from the list");
         return;
+      }
+      
+      // Try to find a matching repo in the repositories array
+      const matchingRepo = repositories.find(
+        (repo: Repo) => 
+          repo.full_name === repoName || 
+          repo.name === repoName ||
+          repo.full_name?.toLowerCase() === repoName.toLowerCase() ||
+          repo.name?.toLowerCase() === repoName.toLowerCase()
+      );
+      
+      if (matchingRepo) {
+        // Update state with the matching repo
+        setState((prev) => ({
+          ...prev,
+          selectedRepo: matchingRepo.id.toString(),
+          selectedBranch: branchName,
+        }));
       }
     } 
     // No repository selected and no search term - open GitHub App installation popup
@@ -950,6 +997,8 @@ export default function NewChatPage() {
         additionalLinks: undefined,
         attachmentIds:
           state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+        repoName: repoFullName,
+        branchName,
       });
       return;
     }
@@ -1080,6 +1129,25 @@ export default function NewChatPage() {
               onAgentSelect={handleAgentSelect}
               onParseRepo={handleParseRepo}
               onParseRepoWithName={(repoName: string, branchName: string) => {
+                // Try to find a matching repo in the repositories array and update state
+                const matchingRepo = repositories.find(
+                  (repo: Repo) => 
+                    repo.full_name === repoName || 
+                    repo.name === repoName ||
+                    repo.full_name?.toLowerCase() === repoName.toLowerCase() ||
+                    repo.name?.toLowerCase() === repoName.toLowerCase()
+                );
+                
+                if (matchingRepo) {
+                  // Update state with the matching repo
+                  setState((prev) => ({
+                    ...prev,
+                    selectedRepo: matchingRepo.id.toString(),
+                    selectedBranch: branchName,
+                  }));
+                }
+                
+                // Parse repository (repoName/branchName will be passed through mutation)
                 parseRepo(repoName, branchName);
               }}
               onAttachmentChange={handleAttachmentChange}

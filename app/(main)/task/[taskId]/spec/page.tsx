@@ -22,7 +22,6 @@ import {
   RefreshCcw,
   RotateCcw,
   RotateCw,
-  Maximize2,
   Wrench,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
@@ -45,7 +44,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { LiveOutputModal } from "@/components/chat/LiveOutputModal";
 import { normalizeMarkdownForPreview } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -377,45 +375,28 @@ const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: Rea
 );
 
 const PlanTabs = ({ plan }: { plan: Plan }) => {
-  const [activeTab, setActiveTab] = useState("add");
-
-  const categories = [
-    { id: "add", label: "Create", count: plan.add.length },
-    { id: "modify", label: "Update", count: plan.modify.length },
-    { id: "fix", label: "Fix", count: plan.fix.length },
+  const categories: { id: keyof Plan; label: string; items: Plan["add"] }[] = [
+    { id: "add", label: "Create", items: plan.add },
+    { id: "modify", label: "Update", items: plan.modify },
+    { id: "fix", label: "Fix", items: plan.fix },
   ];
 
-  // Get all item IDs for the active tab to set as default open values
-  const defaultOpenValues = plan[activeTab].map((item) => item.id);
-
   return (
-    <div className="space-y-6">
-      <div className="flex gap-1 border-b border-[#D3E5E5]">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveTab(cat.id)}
-            className={`px-4 py-2 text-xs font-semibold transition-all relative ${
-              activeTab === cat.id
-                ? "text-primary-color"
-                : "text-primary-color hover:text-primary-color"
-            }`}
-          >
-            {cat.label} ({cat.count})
-            {activeTab === cat.id && (
-              <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-primary-color" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      <Accordion 
-        key={activeTab}
-        type="multiple" 
-        defaultValue={defaultOpenValues} 
-        className="space-y-4"
-      >
-        {plan[activeTab].map((item) => (
+    <div className="space-y-10">
+      {categories.map((cat) => {
+        if (cat.items.length === 0) return null;
+        const defaultOpenValues = cat.items.map((item) => item.id);
+        return (
+          <div key={cat.id} className="space-y-4">
+            <h3 className="text-sm font-semibold text-primary-color border-b border-[#D3E5E5] pb-2">
+              {cat.label} ({cat.items.length})
+            </h3>
+            <Accordion
+              type="multiple"
+              defaultValue={defaultOpenValues}
+              className="space-y-4"
+            >
+              {cat.items.map((item) => (
           <AccordionItem
             key={item.id}
             value={item.id}
@@ -521,8 +502,11 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
               )}
             </AccordionContent>
           </AccordionItem>
-        ))}
-      </Accordion>
+              ))}
+            </Accordion>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -574,7 +558,6 @@ const SpecPage = () => {
   const [streamEvents, setStreamEvents] = useState<{ id: string; type: string; label: string }[]>([]);
   /** Output segments: one per tool_call_end (content streamed since previous tool end). */
   const [streamSegments, setStreamSegments] = useState<{ id: string; label: string; content: string }[]>([]);
-  const [liveOutputModalOpen, setLiveOutputModalOpen] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamEventIdRef = useRef(0);
   const streamChunksRef = useRef("");
@@ -595,6 +578,8 @@ const SpecPage = () => {
   const hasSpecPollStartedRef = useRef(false);
   const hasChatInitializedRef = useRef(false);
   const hasAppliedRunIdFromApiRef = useRef(false);
+  const hasRestoredThinkingRef = useRef<string | null>(null);
+  const THINKING_STORAGE_KEY = "potpie_thinking_spec";
 
   // If backend includes run_id in GET spec response, attach to stream by adding run_id to URL (once)
   useEffect(() => {
@@ -1030,6 +1015,50 @@ const SpecPage = () => {
   const { plan: normalizedPlan, rawSpec: rawSpecification } = normalizeSpecFromProgress(specProgress ?? undefined);
   const hasSpecContent = normalizedPlan !== null || rawSpecification !== null;
 
+  // Persist thinking (stream segments/events) when spec is completed so it survives refresh
+  useEffect(() => {
+    if (!recipeId || status !== "COMPLETED" || !hasSpecContent) return;
+    if (streamSegments.length > 0 || streamEvents.length > 0) {
+      try {
+        sessionStorage.setItem(
+          `${THINKING_STORAGE_KEY}_${recipeId}`,
+          JSON.stringify({ segments: streamSegments, events: streamEvents })
+        );
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [recipeId, status, hasSpecContent, streamSegments, streamEvents]);
+
+  // Restore thinking from sessionStorage on load when spec is completed but we have no stream state (e.g. after refresh)
+  useEffect(() => {
+    if (!recipeId || status !== "COMPLETED" || !hasSpecContent || runIdFromUrl) return;
+    if (streamSegments.length > 0 || streamEvents.length > 0) return;
+    if (hasRestoredThinkingRef.current === recipeId) return;
+    hasRestoredThinkingRef.current = recipeId;
+    try {
+      const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY}_${recipeId}`);
+      if (!raw) return;
+      const data = JSON.parse(raw) as { segments?: { id: string; label: string; content: string }[]; events?: { id: string; type: string; label: string }[] };
+      const segments = Array.isArray(data.segments) ? data.segments : [];
+      const events = Array.isArray(data.events) ? data.events : [];
+      if (segments.length > 0 || events.length > 0) {
+        setStreamSegments(segments);
+        setStreamEvents(events);
+      }
+    } catch {
+      // ignore
+    }
+  }, [recipeId, status, hasSpecContent, runIdFromUrl, streamSegments.length, streamEvents.length]);
+
+  // Reset restore ref when recipe changes so we can restore for the new recipe
+  useEffect(() => {
+    if (!recipeId) return;
+    return () => {
+      hasRestoredThinkingRef.current = null;
+    };
+  }, [recipeId]);
+
   // Auto-scroll to bottom when plan is generated
   useEffect(() => {
     if (status === 'COMPLETED' && planContentRef.current) {
@@ -1123,10 +1152,9 @@ const SpecPage = () => {
                     </div>
                   </div>
                 )}
-                {/* After first user message: assistant intro, then "Thinking" heading + thinking content */}
+                {/* After first user message: assistant intro, then thinking/stream (no bordered box) */}
                 {msg.role === "user" && i === 0 && (
                   <>
-                    {/* Assistant intro message (above thinking) */}
                     <div className="flex justify-start">
                       <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start">
                         <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
@@ -1135,98 +1163,88 @@ const SpecPage = () => {
                         Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they&apos;re ready, we can refine them together.
                       </div>
                     </div>
-                    {/* Thinking: label, status, markdown, and stream events (left side) */}
-                    <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
-                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
-                      <div className="min-w-0 space-y-2 overflow-hidden" style={{ width: "calc(100% - 52px)", maxWidth: "600px" }}>
-                        <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Thinking</p>
-                        {(streamProgress || isGenerating) && !streamChunks && (
-                          <p className="text-xs text-zinc-500 flex items-center gap-2">
-                            <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
-                            {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating specification…"}
-                          </p>
-                        )}
-                        {/* Tool calls: single box per tool (icon | label, full output below) */}
-                        {mergedStreamBlocks.length > 0 && (
-                          <div className="space-y-3 min-w-0 overflow-hidden">
-                            {mergedStreamBlocks.map((block) =>
-                              block.kind === "event" ? (
-                                (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
-                                  <span key={block.key} className="hidden" aria-hidden />
-                                ) : (
-                                  <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
-                                    {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
-                                  </p>
-                                )
-                              ) : (
-                                <div key={block.key} className="rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden">
-                                  <div className="flex items-center gap-2 px-3 py-2 border-b border-[#CCD3CF]/60">
-                                    <Wrench className="w-4 h-4 shrink-0 text-zinc-500" aria-hidden />
-                                    <span className="text-xs font-medium text-zinc-800">{block.segment.label}</span>
-                                  </div>
-                                  <div
-                                    ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
-                                    className="p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                                    style={{ msOverflowStyle: "none" }}
-                                  >
-                                    <SharedMarkdown content={normalizeMarkdownForPreview(block.segment.content)} />
-                                  </div>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        )}
-                        {/* Live streaming chunk + full screen button */}
-                        {(streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
-                          <div className="mt-2 space-y-2 min-w-0 overflow-hidden">
-                            {streamChunks ? (
-                              <div
-                                ref={streamChunkBoxRef}
-                                className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[100px] overflow-y-auto overflow-x-hidden min-w-0"
-                              >
-                                <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks)} />
-                              </div>
-                            ) : null}
-                            {(streamSegments.some((s) => s.content.length > 0) || (streamChunks?.length ?? 0) > 0) && (
-                              <>
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={() => setLiveOutputModalOpen(true)}
-                                        className="h-8 w-8 shrink-0"
-                                        aria-label="View full output"
+                    {/* Agent output: full chat width; Tool calls and Output as separate blocks */}
+                    {(streamProgress || isGenerating || mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0) && (
+                      <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
+                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                        <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
+                          {(streamProgress || isGenerating) && !streamChunks && (
+                            <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
+                              <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
+                              {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating specification…"}
+                            </p>
+                          )}
+                          {mergedStreamBlocks.length > 0 && (
+                            <div className="mb-3">
+                              <details className="group/tools rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden">
+                                <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                                  <span className="text-xs font-medium text-zinc-800">
+                                    Tool calls ({mergedStreamBlocks.filter((b) => b.kind === "segment").length})
+                                  </span>
+                                  <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open/tools:rotate-180" aria-hidden />
+                                </summary>
+                                <div className="space-y-3 min-w-0 overflow-hidden pt-1 pb-0">
+                                {mergedStreamBlocks.map((block) =>
+                                  block.kind === "event" ? (
+                                    (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
+                                      <span key={block.key} className="hidden" aria-hidden />
+                                    ) : (
+                                      <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
+                                        {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
+                                      </p>
+                                    )
+                                  ) : (
+                                    <details
+                                      key={block.key}
+                                      className="group rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden"
+                                    >
+                                      <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
+                                          <span className="text-xs font-medium text-zinc-800 truncate">
+                                            {block.segment.label}
+                                          </span>
+                                        </div>
+                                        <ChevronDown
+                                          className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180"
+                                          aria-hidden
+                                        />
+                                      </summary>
+                                      <div
+                                        ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
+                                        className="bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                        style={{ msOverflowStyle: "none" }}
                                       >
-                                        <Maximize2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipPortal>
-                                      <TooltipContent>View full output</TooltipContent>
-                                    </TooltipPortal>
-                                  </Tooltip>
-                                </TooltipProvider>
-                                <LiveOutputModal
-                                  open={liveOutputModalOpen}
-                                  onOpenChange={setLiveOutputModalOpen}
-                                  content={streamSegments.map((s) => s.content).join("\n\n") + (streamChunks ? "\n\n" + streamChunks : "")}
-                                  segments={streamSegments.map((s) => ({ label: s.label, content: s.content })).concat(streamChunks ? [{ label: "Current", content: streamChunks }] : [])}
-                                  title="Live spec output"
-                                />
-                              </>
-                            )}
-                          </div>
-                        )}
-                        {(mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
-                          <div ref={streamOutputEndRef} aria-hidden />
-                        )}
+                                        <SharedMarkdown content={normalizeMarkdownForPreview(block.segment.content)} />
+                                      </div>
+                                    </details>
+                                  )
+                                )}
+                                </div>
+                              </details>
+                            </div>
+                          )}
+                          {(streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
+                            <div className="space-y-2 min-w-0 overflow-hidden">
+                              {streamChunks ? (
+                                <div
+                                  ref={streamChunkBoxRef}
+                                  className="rounded-lg bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0"
+                                >
+                                  <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks)} />
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
+                          {(mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
+                            <div ref={streamOutputEndRef} aria-hidden />
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
-                {/* Assistant message (skip i===1 — already shown above thinking block) */}
+                {/* Assistant message (skip i===1 — shown above as thinking/stream) */}
                 {msg.role === "assistant" && i !== 1 && (
                   <div className="flex justify-start">
                     <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">

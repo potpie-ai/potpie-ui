@@ -33,7 +33,6 @@ import {
   RefreshCw,
   SendHorizonal,
   RotateCw,
-  Maximize2,
   Wrench,
 } from "lucide-react";
 import {
@@ -45,7 +44,7 @@ import {
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
 import TaskSplittingService from "@/services/TaskSplittingService";
-import { PlanStatusResponse, PlanItem, PlanPhase } from "@/lib/types/spec";
+import { PlanStatusResponse, PlanItem, PlanPhase, PhasedPlanItem } from "@/lib/types/spec";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/sonner";
@@ -60,7 +59,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { LiveOutputModal } from "@/components/chat/LiveOutputModal";
 import { useNavigationProgress } from "@/contexts/NavigationProgressContext";
 import { normalizeMarkdownForPreview } from "@/lib/utils";
 
@@ -264,7 +262,6 @@ const PlanPage = () => {
   const [streamEvents, setStreamEvents] = useState<{ id: string; type: string; label: string }[]>([]);
   /** Output segments: one per tool_call_end (content streamed since previous tool end). */
   const [streamSegments, setStreamSegments] = useState<{ id: string; label: string; content: string }[]>([]);
-  const [liveOutputModalOpen, setLiveOutputModalOpen] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamEventIdRef = useRef(0);
   const streamChunksRef = useRef("");
@@ -281,6 +278,8 @@ const PlanPage = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasChatInitializedRef = useRef(false);
   const hasAppliedRunIdFromApiRef = useRef(false);
+  const hasRestoredThinkingRef = useRef<string | null>(null);
+  const THINKING_STORAGE_KEY_PLAN = "potpie_thinking_plan";
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const { startNavigation } = useNavigationProgress();
@@ -369,10 +368,13 @@ const PlanPage = () => {
       return null;
     },
     enabled: !!recipeId,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      return (data?.generation_status === "processing" || data?.generation_status === "pending") ? 2000 : false;
-    },
+    // When streaming (run_id in URL), skip polling; stream provides live updates (same as spec page)
+    refetchInterval: runIdFromUrl
+      ? false
+      : (query: { state: { data?: PlanStatusResponse | null } }) => {
+          const data = query.state.data;
+          return (data?.generation_status === "processing" || data?.generation_status === "pending") ? 2000 : false;
+        },
   });
 
   useEffect(() => {
@@ -611,14 +613,6 @@ const PlanPage = () => {
     }
   }, [phasesFromApi.length, selectedPhaseIndex]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-color" />
-      </div>
-    );
-  }
-
   const isGenerating =
     planStatus?.generation_status === "processing" ||
     planStatus?.generation_status === "pending" ||
@@ -626,6 +620,58 @@ const PlanPage = () => {
   const isCompleted = planStatus?.generation_status === "completed";
   const isFailed = planStatus?.generation_status === "failed";
   const planId = searchParams.get("planId") ?? recipeId ?? "";
+  const hasPlanContent = Boolean(planStatus?.plan);
+
+  // Persist thinking when plan is completed so it survives refresh
+  useEffect(() => {
+    if (!recipeId || !isCompleted || !hasPlanContent) return;
+    if (streamSegments.length > 0 || streamEvents.length > 0) {
+      try {
+        sessionStorage.setItem(
+          `${THINKING_STORAGE_KEY_PLAN}_${recipeId}`,
+          JSON.stringify({ segments: streamSegments, events: streamEvents })
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }, [recipeId, isCompleted, hasPlanContent, streamSegments, streamEvents]);
+
+  // Restore thinking on load when plan is completed but we have no stream state (e.g. after refresh)
+  useEffect(() => {
+    if (!recipeId || !isCompleted || !hasPlanContent || runIdFromUrl) return;
+    if (streamSegments.length > 0 || streamEvents.length > 0) return;
+    if (hasRestoredThinkingRef.current === recipeId) return;
+    hasRestoredThinkingRef.current = recipeId;
+    try {
+      const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY_PLAN}_${recipeId}`);
+      if (!raw) return;
+      const data = JSON.parse(raw) as { segments?: { id: string; label: string; content: string }[]; events?: { id: string; type: string; label: string }[] };
+      const segments = Array.isArray(data.segments) ? data.segments : [];
+      const events = Array.isArray(data.events) ? data.events : [];
+      if (segments.length > 0 || events.length > 0) {
+        setStreamSegments(segments);
+        setStreamEvents(events);
+      }
+    } catch {
+      // ignore
+    }
+  }, [recipeId, isCompleted, hasPlanContent, runIdFromUrl, streamSegments.length, streamEvents.length]);
+
+  useEffect(() => {
+    if (!recipeId) return;
+    return () => {
+      hasRestoredThinkingRef.current = null;
+    };
+  }, [recipeId]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary-color" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#FAF8F7] text-[#000000] font-sans antialiased">
@@ -665,95 +711,85 @@ const PlanPage = () => {
                         Your implementation plan is ready. Review the phases below and tell me what you&apos;d like to change—we&apos;ll nail it before moving to code.
                       </div>
                     </div>
-                    {/* Thinking: label, status, markdown, and stream events (left side) */}
-                    <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
-                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
-                      <div className="min-w-0 space-y-2 overflow-hidden" style={{ width: "calc(100% - 52px)", maxWidth: "600px" }}>
-                        <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Thinking</p>
-                        {(streamProgress || isGenerating) && !streamChunks && (
-                          <p className="text-xs text-zinc-500 flex items-center gap-2">
-                            <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
-                            {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating plan…"}
-                          </p>
-                        )}
-                        {/* Tool calls: single box per tool (icon | label, full output below) */}
-                        {mergedStreamBlocks.length > 0 && (
-                          <div className="space-y-3 min-w-0 overflow-hidden">
-                            {mergedStreamBlocks.map((block) =>
-                              block.kind === "event" ? (
-                                (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
-                                  <span key={block.key} className="hidden" aria-hidden />
-                                ) : (
-                                  <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
-                                    {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
-                                  </p>
-                                )
-                              ) : (
-                                <div key={block.key} className="rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden">
-                                  <div className="flex items-center gap-2 px-3 py-2 border-b border-[#CCD3CF]/60">
-                                    <Wrench className="w-4 h-4 shrink-0 text-zinc-500" aria-hidden />
-                                    <span className="text-xs font-medium text-zinc-800">{block.segment.label}</span>
-                                  </div>
-                                  <div
-                                    ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
-                                    className="p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                                    style={{ msOverflowStyle: "none" }}
-                                  >
-                                    <SharedMarkdown content={normalizeMarkdownForPreview(block.segment.content)} />
-                                  </div>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        )}
-                        {/* Live streaming chunk + full screen button */}
-                        {(streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
-                          <div className="mt-2 space-y-2 min-w-0 overflow-hidden">
-                            {streamChunks ? (
-                              <div
-                                ref={streamChunkBoxRef}
-                                className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[100px] overflow-y-auto overflow-x-hidden min-w-0"
-                              >
-                                <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks)} />
-                              </div>
-                            ) : null}
-                            {(streamSegments.some((s) => s.content.length > 0) || (streamChunks?.length ?? 0) > 0) && (
-                              <>
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={() => setLiveOutputModalOpen(true)}
-                                        className="h-8 w-8 shrink-0"
-                                        aria-label="View full output"
+                    {/* Agent output: full chat width; Tool calls and Output as separate blocks */}
+                    {(streamProgress || isGenerating || mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0) && (
+                      <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
+                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                        <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
+                          {(streamProgress || isGenerating) && !streamChunks && (
+                            <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
+                              <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
+                              {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating plan…"}
+                            </p>
+                          )}
+                          {mergedStreamBlocks.length > 0 && (
+                            <div className="mb-3">
+                              <details className="group/tools rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden">
+                                <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                                  <span className="text-xs font-medium text-zinc-800">
+                                    Tool calls ({mergedStreamBlocks.filter((b) => b.kind === "segment").length})
+                                  </span>
+                                  <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open/tools:rotate-180" aria-hidden />
+                                </summary>
+                                <div className="space-y-3 min-w-0 overflow-hidden pt-1 pb-0">
+                                {mergedStreamBlocks.map((block) =>
+                                  block.kind === "event" ? (
+                                    (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
+                                      <span key={block.key} className="hidden" aria-hidden />
+                                    ) : (
+                                      <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
+                                        {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
+                                      </p>
+                                    )
+                                  ) : (
+                                    <details
+                                      key={block.key}
+                                      className="group rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden"
+                                    >
+                                      <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
+                                          <span className="text-xs font-medium text-zinc-800 truncate">
+                                            {block.segment.label}
+                                          </span>
+                                        </div>
+                                        <ChevronDown
+                                          className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180"
+                                          aria-hidden
+                                        />
+                                      </summary>
+                                      <div
+                                        ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
+                                        className="bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                        style={{ msOverflowStyle: "none" }}
                                       >
-                                        <Maximize2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipPortal>
-                                      <TooltipContent>View full output</TooltipContent>
-                                    </TooltipPortal>
-                                  </Tooltip>
-                                </TooltipProvider>
-                                <LiveOutputModal
-                                  open={liveOutputModalOpen}
-                                  onOpenChange={setLiveOutputModalOpen}
-                                  content={streamSegments.map((s) => s.content).join("\n\n") + (streamChunks ? "\n\n" + streamChunks : "")}
-                                  segments={streamSegments.map((s) => ({ label: s.label, content: s.content })).concat(streamChunks ? [{ label: "Current", content: streamChunks }] : [])}
-                                  title="Live plan output"
-                                />
-                              </>
-                            )}
-                          </div>
-                        )}
-                        {(mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
-                          <div ref={streamOutputEndRef} aria-hidden />
-                        )}
+                                        <SharedMarkdown content={normalizeMarkdownForPreview(block.segment.content)} />
+                                      </div>
+                                    </details>
+                                  )
+                                )}
+                                </div>
+                              </details>
+                            </div>
+                          )}
+                          {(streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
+                            <div className="space-y-2 min-w-0 overflow-hidden">
+                              {streamChunks ? (
+                                <div
+                                  ref={streamChunkBoxRef}
+                                  className="rounded-lg bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0"
+                                >
+                                  <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks)} />
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
+                          {(mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
+                            <div ref={streamOutputEndRef} aria-hidden />
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
                 {msg.role === "assistant" && i !== 1 && (
@@ -899,13 +935,8 @@ const PlanPage = () => {
                       </TooltipPortal>
                     </Tooltip>
                   </TooltipProvider>
-                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0 truncate min-w-0" style={{ color: "#022019" }} title={phasesFromApi[selectedPhaseIndex]?.name}>
-                    {phasesFromApi.length > 0
-                      ? (() => {
-                          const p = phasesFromApi[selectedPhaseIndex];
-                          return p ? `Phase ${selectedPhaseIndex + 1}: ${p.name}` : `Plan ${selectedPhaseIndex + 1}`;
-                        })()
-                      : "Phase Plan"}
+                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0 truncate min-w-0" style={{ color: "#022019" }} title={`Phase ${selectedPhaseIndex + 1}`}>
+                    {phasesFromApi.length > 0 ? `Phase ${selectedPhaseIndex + 1}` : "Phase Plan"}
                   </h2>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -960,7 +991,7 @@ const PlanPage = () => {
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
-            <div className="max-w-2xl mx-auto space-y-4 relative">
+            <div className="w-full space-y-4 relative">
               <div className="absolute left-[26px] top-4 bottom-4 w-[1px] -z-10" style={{ backgroundColor: "#696D6D" }} />
 
           {(streamProgress || isGenerating || streamChunks) && !isCompleted && (
@@ -1002,72 +1033,41 @@ const PlanPage = () => {
           {isCompleted && phasesFromApi.length > 0 && (() => {
             const phase = phasesFromApi[selectedPhaseIndex];
             if (!phase) return null;
-            const combinedDescription = (phase.plan_items ?? [])
-              .map((item) => item.description || item.title)
-              .filter(Boolean)
-              .join("\n\n");
             return (
-              <div className="space-y-4 pl-16">
-                <Tabs defaultValue="objective" className="w-full">
-                  <TabsList className="w-full justify-start rounded-none border-b border-[#CCD3CF] bg-transparent p-0 h-auto gap-0">
+              <div className="space-y-4">
+                <h3 className="text-xl font-bold tracking-tight text-[#022019]">
+                  {phase.name}
+                </h3>
+                <Tabs defaultValue="summary" className="w-full">
+                  <TabsList className="w-full grid grid-cols-3 rounded-none border-b border-[#D3E5E5] bg-[#F7F6F5] p-0 h-11 gap-0">
                     <TabsTrigger
-                      value="objective"
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#022019] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-sm font-medium text-[#696D6D] data-[state=active]:text-[#022019]"
+                      value="summary"
+                      className="rounded-none h-11 px-0 text-sm font-medium text-[#022019] border-b-2 border-transparent shadow-none data-[state=active]:bg-[#EAF4C8] data-[state=active]:border-[#B4D13F]"
                     >
-                      Objective
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="reasoning"
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#022019] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-sm font-medium text-[#696D6D] data-[state=active]:text-[#022019]"
-                    >
-                      Reasoning
+                      Summary
                     </TabsTrigger>
                     <TabsTrigger
                       value="architecture"
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#022019] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-sm font-medium text-[#696D6D] data-[state=active]:text-[#022019]"
+                      className="rounded-none h-11 px-0 text-sm font-medium text-[#022019] border-b-2 border-transparent shadow-none data-[state=active]:bg-[#EAF4C8] data-[state=active]:border-[#B4D13F]"
                     >
                       Architecture
                     </TabsTrigger>
+                    <TabsTrigger
+                      value="plan-items"
+                      className="rounded-none h-11 px-0 text-sm font-medium text-[#022019] border-b-2 border-transparent shadow-none data-[state=active]:bg-[#EAF4C8] data-[state=active]:border-[#B4D13F]"
+                    >
+                      Plan items
+                    </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="objective" className="mt-4 pt-2 pb-12 pr-4">
-                    <div className="space-y-8">
-                      <div className="py-5 pr-2">
-                        <div className="flex items-center gap-2 mb-3">
-                          <AlignLeft className="w-4 h-4 text-[#6B7280]" />
-                          <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Objective</span>
-                        </div>
-                        <p className="text-sm text-[#374151] leading-relaxed">
-                          {phase.description || phase.summary || "No objective provided."}
-                        </p>
-                      </div>
-                      <div className="py-5 pr-2">
-                        <div className="flex items-center gap-2 mb-3">
-                          <FileText className="w-4 h-4 text-[#6B7280]" />
-                          <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Description</span>
-                        </div>
-                        <p className="text-sm text-[#374151] leading-relaxed whitespace-pre-line">
-                          {combinedDescription || "No description provided."}
-                        </p>
-                      </div>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="reasoning" className="mt-4 pt-2 pb-12 pr-4">
+                  <TabsContent value="summary" className="mt-4 pt-2 pb-12 pr-4">
                     <div className="py-5 pr-2">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Lightbulb className="w-4 h-4 text-[#6B7280]" />
-                        <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Reasoning</span>
-                      </div>
-                      <p className="text-sm text-[#374151] leading-relaxed">
-                        {phase.summary || "No reasoning provided for this phase."}
+                      <p className="text-sm text-[#374151] leading-relaxed whitespace-pre-line">
+                        {phase.summary || "No summary provided for this phase."}
                       </p>
                     </div>
                   </TabsContent>
                   <TabsContent value="architecture" className="mt-4 pt-2 pb-12 pr-4">
                     <div className="py-5 pr-2 space-y-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Layout className="w-4 h-4 text-[#6B7280]" />
-                        <span className="text-xs font-bold uppercase tracking-wide text-[#374151]">Architecture</span>
-                      </div>
                       {phase.diagrams && phase.diagrams.length > 0 ? (
                         phase.diagrams.map((d) => (
                           <div
@@ -1099,6 +1099,74 @@ const PlanPage = () => {
                         <p className="text-sm text-[#374151] leading-relaxed">
                           No architecture diagram available for this phase.
                         </p>
+                      )}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="plan-items" className="mt-4 pt-2 pb-12 pr-4">
+                    <div className="space-y-8">
+                      {(phase.plan_items ?? []).map((item: PhasedPlanItem) => (
+                        <div
+                          key={item.plan_item_id}
+                          className="rounded-lg border bg-[#FFFDFC] overflow-hidden"
+                          style={{ borderColor: "#CCD3CF" }}
+                        >
+                          <h4 className="text-sm font-bold uppercase tracking-wide px-4 py-3 text-primary-color">
+                            {item.title}
+                          </h4>
+                          <div className="border-t px-4 py-3 space-y-4" style={{ borderColor: "#CCD3CF" }}>
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="w-4 h-4 text-primary-color" />
+                                <span className="text-xs font-bold uppercase tracking-wide text-primary-color">Description</span>
+                              </div>
+                              <p className="text-sm text-[#374151] leading-relaxed">
+                                {item.detailed_description || item.description || "No description provided."}
+                              </p>
+                            </div>
+                            {item.file_changes && item.file_changes.length > 0 && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <FileCode className="w-4 h-4 text-primary-color" />
+                                  <span className="text-xs font-bold uppercase tracking-wide text-primary-color">File changes</span>
+                                </div>
+                                <ul className="space-y-1.5">
+                                  {item.file_changes.map((fc, i) => (
+                                    <li key={i} className="flex items-center gap-2 text-sm">
+                                      <span
+                                        className={`shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                                          fc.action?.toLowerCase() === "create"
+                                            ? "bg-amber-100 text-amber-800"
+                                            : fc.action?.toLowerCase() === "modify"
+                                            ? "bg-blue-100 text-blue-800"
+                                            : "bg-zinc-100 text-zinc-700"
+                                        }`}
+                                      >
+                                        {fc.action || "change"}
+                                      </span>
+                                      <span className="font-mono text-[#374151] truncate" title={fc.path}>{fc.path}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {item.verification_criteria && item.verification_criteria.length > 0 && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <ListTodo className="w-4 h-4 text-primary-color" />
+                                  <span className="text-xs font-bold uppercase tracking-wide text-primary-color">Verification criteria</span>
+                                </div>
+                                <ul className="space-y-1.5 list-disc list-inside text-sm text-[#374151]">
+                                  {item.verification_criteria.map((c, i) => (
+                                    <li key={i}>{c}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {(!phase.plan_items || phase.plan_items.length === 0) && (
+                        <p className="text-sm text-[#374151]">No plan items in this phase.</p>
                       )}
                     </div>
                   </TabsContent>

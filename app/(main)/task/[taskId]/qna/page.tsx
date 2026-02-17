@@ -16,7 +16,6 @@ import QuestionSection from "./components/QuestionSection";
 import AdditionalContextSection from "./components/AdditionalContextSection";
 import QuestionProgress from "./components/QuestionProgress";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { LiveOutputModal } from "@/components/chat/LiveOutputModal";
 import { normalizeMarkdownForPreview } from "@/lib/utils";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Github, FileText, Loader2, GitBranch, Info, Maximize2, Wrench } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  FileText,
+  Github,
+  GitBranch,
+  Info,
+  Loader2,
+  Wrench,
+} from "lucide-react";
 import {
   RecipeQuestionsResponse,
   RecipeQuestion,
@@ -120,7 +128,6 @@ export default function QnaPage() {
   const [recipeRepoName, setRecipeRepoName] = useState<string | null>(null);
   const [recipeBranchName, setRecipeBranchName] = useState<string | null>(null);
   const [parsingStatus, setParsingStatus] = useState<string>("");
-  const [liveOutputModalOpen, setLiveOutputModalOpen] = useState(false);
   /** Real stream state (SSE); when isStreamingActive, Thinking block uses these instead of derived */
   const [streamProgress, setStreamProgress] = useState<{ step: string; message: string } | null>(null);
   const [streamEvents, setStreamEvents] = useState<{ id: string; type: string; label: string }[]>([]);
@@ -132,6 +139,12 @@ export default function QnaPage() {
   const streamEventIdRef = useRef(0);
   const streamOutputEndRef = useRef<HTMLDivElement>(null);
   const streamChunkBoxRef = useRef<HTMLDivElement>(null);
+  /** Guard: avoid starting question generation (POST) more than once per recipe (e.g. Strict Mode or effect re-run) */
+  const questionGenerationStartedForRecipeRef = useRef<string | null>(null);
+  /** Run ID from POST response so stream connects immediately without waiting for URL update */
+  const [runIdForStream, setRunIdForStream] = useState<string | null>(null);
+  const hasRestoredThinkingRef = useRef<string | null>(null);
+  const THINKING_STORAGE_KEY_QNA = "potpie_thinking_qna";
 
   const [additionalContextDialogOpen, setAdditionalContextDialogOpen] =
     useState(false);
@@ -430,7 +443,7 @@ export default function QnaPage() {
       }
   }, [recipeId]);
 
-  // When run_id in URL, connect to questions stream (same pattern as spec page)
+  // When run_id in URL, connect to questions stream (streaming part from last working commit – no poll inside this effect)
   useEffect(() => {
     if (!recipeId || !runIdFromUrl) return;
 
@@ -500,6 +513,7 @@ export default function QnaPage() {
       if (eventType === "end") {
         setStreamProgress(null);
         setIsStreamingActive(false);
+        setRunIdForStream(null);
         QuestionService.getRecipeQuestions(recipeId).then(processQuestions).catch(() => {});
         const params = new URLSearchParams(searchParams.toString());
         params.delete("run_id");
@@ -512,6 +526,7 @@ export default function QnaPage() {
         setStreamEvents([]);
         streamChunksRef.current = "";
         setIsStreamingActive(false);
+        setRunIdForStream(null);
         QuestionService.getRecipeQuestions(recipeId).then(processQuestions).catch(() => {});
         const params = new URLSearchParams(searchParams.toString());
         params.delete("run_id");
@@ -529,6 +544,7 @@ export default function QnaPage() {
         setStreamSegments([]);
         setStreamEvents([]);
         setIsStreamingActive(false);
+        setRunIdForStream(null);
         toast.error(msg || "Stream failed.");
         QuestionService.getRecipeQuestions(recipeId).then(processQuestions).catch(() => {});
         const params = new URLSearchParams(searchParams.toString());
@@ -542,6 +558,17 @@ export default function QnaPage() {
       streamAbortRef.current?.abort();
     };
   }, [recipeId, runIdFromUrl, processQuestions, router, searchParams]);
+
+  // Reset questionGenerationStartedForRecipeRef when recipeId changes (cleanup-based)
+  useEffect(() => {
+    if (!recipeId) return;
+    // On mount or recipeId change, reset is handled via cleanup
+    return () => {
+      // When recipeId changes or component unmounts, reset the guard
+      // This ensures each recipe can trigger one POST
+      questionGenerationStartedForRecipeRef.current = null;
+    };
+  }, [recipeId]);
 
   // Fetch questions when recipeId is available: try GET first (run_id from response like plan); else POST to start and get run_id; then run_id effect connects stream
   useEffect(() => {
@@ -565,8 +592,18 @@ export default function QnaPage() {
         let questionsData: RecipeQuestionsResponse;
         try {
           questionsData = await QuestionService.getRecipeQuestions(recipeId);
-          const runIdFromApi = (questionsData as unknown as Record<string, unknown>).run_id;
+          const runIdFromApi = questionsData.run_id ?? (questionsData as unknown as Record<string, unknown>).run_id;
+          
+          // If generation is in terminal state (completed/failed), clear any stale run_id from URL
+          const isTerminal = questionsData.generation_status === "completed" || questionsData.generation_status === "failed";
+          if (isTerminal && runIdFromUrl) {
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete("run_id");
+            router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
+          }
+          
           if (typeof runIdFromApi === "string" && runIdFromApi.trim()) {
+            setRunIdForStream(runIdFromApi.trim());
             const params = new URLSearchParams(searchParams.toString());
             params.set("run_id", runIdFromApi.trim());
             router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
@@ -596,25 +633,58 @@ export default function QnaPage() {
           );
         }
 
-        // No run_id from GET: start generation via POST to get run_id (same pattern as before)
+        // No run_id from GET: start generation via POST at most once per recipe (avoid double-start from Strict Mode or effect re-run)
         let gotRunId = false;
-        try {
-          streamAbortRef.current?.abort();
-          streamAbortRef.current = new AbortController();
-          const { runId } = await QuestionService.startQuestionsGenerationStream(recipeId, {
-            consumeStream: false,
-            signal: streamAbortRef.current?.signal,
-          });
-          if (runId?.trim()) {
-            const params = new URLSearchParams(searchParams.toString());
-            params.set("run_id", runId.trim());
-            router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
-            gotRunId = true;
-          } else {
-            console.warn("[QnA Page] POST succeeded but X-Run-Id header was empty or missing");
+        const alreadyStartedForThisRecipe = questionGenerationStartedForRecipeRef.current === recipeId;
+        if (!alreadyStartedForThisRecipe) {
+          questionGenerationStartedForRecipeRef.current = recipeId;
+          try {
+            streamAbortRef.current?.abort();
+            streamAbortRef.current = new AbortController();
+            const { runId } = await QuestionService.startQuestionsGenerationStream(recipeId, {
+              consumeStream: false,
+              signal: streamAbortRef.current?.signal,
+            });
+            if (runId?.trim()) {
+              setRunIdForStream(runId.trim());
+              const params = new URLSearchParams(searchParams.toString());
+              params.set("run_id", runId.trim());
+              router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
+              gotRunId = true;
+            } else {
+              const noRunIdMessage =
+                "Server did not return a stream ID. If generation was already started, refresh the page to reconnect.";
+              console.warn("[QnA Page] POST succeeded but X-Run-Id header was empty or missing");
+              setState((prev) => ({
+                ...prev,
+                pageState: "questions",
+                questionGenerationError: noRunIdMessage,
+              }));
+              toast.error(noRunIdMessage);
+            }
+          } catch (e) {
+            const errMessage =
+              e instanceof Error ? e.message : String(e);
+            console.warn("[QnA Page] Questions stream POST failed:", errMessage);
+            questionGenerationStartedForRecipeRef.current = null;
+            // Surface error so user sees why questions aren't generating (e.g. 400 "Recipe must be in PENDING_QUESTIONS state")
+            let displayMessage = errMessage;
+            try {
+              if (typeof errMessage === "string" && errMessage.startsWith("{")) {
+                const parsed = JSON.parse(errMessage) as { detail?: string };
+                if (parsed?.detail) displayMessage = parsed.detail;
+              }
+            } catch {
+              // use errMessage as-is
+            }
+            setState((prev) => ({
+              ...prev,
+              pageState: "questions",
+              questionGenerationError: displayMessage,
+            }));
+            toast.error(displayMessage);
+            return; // Don't fall through to polling when POST failed
           }
-        } catch (e) {
-          console.warn("[QnA Page] Questions stream POST failed:", e instanceof Error ? e.message : e);
         }
 
         if (gotRunId) return;
@@ -622,6 +692,14 @@ export default function QnaPage() {
         // Fallback: poll GET until questions ready or run_id appears
         try {
           questionsData = await QuestionService.getRecipeQuestions(recipeId);
+          const runIdFromFallback = questionsData.run_id ?? (questionsData as unknown as Record<string, unknown>).run_id;
+          if (typeof runIdFromFallback === "string" && runIdFromFallback.trim()) {
+            setRunIdForStream(runIdFromFallback.trim());
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("run_id", runIdFromFallback.trim());
+            router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
+            return;
+          }
           if (questionsData.questions && questionsData.questions.length > 0) {
             processQuestions(questionsData);
             return;
@@ -660,8 +738,9 @@ export default function QnaPage() {
                 questionsData.error_message ?? null,
             }));
 
-            const runIdFromPoll = (questionsData as unknown as Record<string, unknown>).run_id;
+            const runIdFromPoll = questionsData.run_id ?? (questionsData as unknown as Record<string, unknown>).run_id;
             if (typeof runIdFromPoll === "string" && runIdFromPoll.trim()) {
+              setRunIdForStream(runIdFromPoll.trim());
               const params = new URLSearchParams(searchParams.toString());
               params.set("run_id", runIdFromPoll.trim());
               router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
@@ -686,13 +765,23 @@ export default function QnaPage() {
           }
         }
 
-        toast.error("Timeout waiting for questions");
-        setState((prev) => ({ ...prev, pageState: "questions" }));
+        const timeoutMessage = "Timeout waiting for questions";
+        toast.error(timeoutMessage);
+        setState((prev) => ({
+          ...prev,
+          pageState: "questions",
+          questionGenerationError: timeoutMessage,
+        }));
       } catch (error: unknown) {
         const err = error as { message?: string };
+        const errMessage = err?.message || "Failed to load questions";
         console.error("Error fetching questions:", error);
-        toast.error(err?.message || "Failed to load questions");
-        setState((prev) => ({ ...prev, pageState: "questions" }));
+        toast.error(errMessage);
+        setState((prev) => ({
+          ...prev,
+          pageState: "questions",
+          questionGenerationError: errMessage,
+        }));
       } finally {
         setQuestionsPolling(false);
       }
@@ -702,6 +791,11 @@ export default function QnaPage() {
   }, [recipeId, runIdFromUrl, processQuestions, router, searchParams]);
 
   // Generate questions on page load (old flow - kept for backward compatibility)
+  // IMPORTANT: This page is /task/[taskId]/qna, so recipeIdFromPath should ALWAYS be present.
+  // We disable this query entirely on this route to avoid race conditions where recipeId is
+  // briefly null on first render (before useParams hydrates). The new recipe-based flow
+  // (fetch effect above) handles question generation via startQuestionsGenerationStream.
+  const isOnTaskRoute = typeof params?.taskId === "string" && params.taskId.length > 0;
   const {
     data: questionsData,
     isLoading: questionsLoading,
@@ -715,7 +809,8 @@ export default function QnaPage() {
         featureIdeaFromUrl || undefined
       );
     },
-    enabled: !!projectId && !recipeId, // Only use old flow if recipeId is not available
+    // Disable on task routes entirely; only use old flow on non-task pages (if any)
+    enabled: !!projectId && !recipeId && !isOnTaskRoute,
     retry: 2,
   });
 
@@ -868,8 +963,9 @@ export default function QnaPage() {
           const isMultipleChoice = question?.multipleChoice ?? false;
           const options = question?.options
             ? (Array.isArray(question.options)
-                ? question.options.map((o) =>
-                    typeof o === "string" ? { label: o } : o
+                ? question.options.map(
+                    (o: string | { label: string; description?: string }) =>
+                      typeof o === "string" ? { label: o } : o
                   )
                 : [])
             : [];
@@ -924,7 +1020,7 @@ export default function QnaPage() {
               const matchedIndices: number[] = [];
               
               answerLabels.forEach(answerLabel => {
-                const matchedIdx = options.findIndex(opt => {
+                const matchedIdx = options.findIndex((opt: string | { label: string }) => {
                   const optLabel = typeof opt === "string" ? opt : opt.label;
                   return optLabel.trim() === answerLabel || optLabel.trim().includes(answerLabel);
                 });
@@ -950,7 +1046,7 @@ export default function QnaPage() {
               }
             } else if (textAnswerStr && !textAnswerStr.startsWith("Other:")) {
               // Single label match for multiple choice (edge case)
-              const matchedIdx = options.findIndex(opt => {
+              const matchedIdx = options.findIndex((opt: string | { label: string }) => {
                 const optLabel = typeof opt === "string" ? opt : opt.label;
                 return optLabel.trim() === textAnswerStr || optLabel.trim().includes(textAnswerStr);
               });
@@ -962,7 +1058,7 @@ export default function QnaPage() {
             // Fallback: reconstruct selectedOptionIdx from text_answer for single choice
             const textAnswerStr = ans.text_answer.trim();
             if (!textAnswerStr.startsWith("Other:")) {
-              const matchedIdx = options.findIndex(opt => {
+              const matchedIdx = options.findIndex((opt: string | { label: string }) => {
                 const optLabel = typeof opt === "string" ? opt : opt.label;
                 return optLabel.trim() === textAnswerStr || optLabel.trim().includes(textAnswerStr);
               });
@@ -1478,11 +1574,12 @@ export default function QnaPage() {
     state.questions.length,
   ]);
 
-  // When SSE is active use stream state; otherwise use derived (parsing + poll)
+  // When SSE is active use stream state; when we have stream data (live or from past run) keep showing it; otherwise use derived (parsing + poll)
+  const hasStreamData = streamSegments.length > 0 || streamEvents.length > 0;
   const displayProgress = isStreamingActive ? streamProgress : derivedProgress;
-  const displayEvents = isStreamingActive ? streamEvents : derivedEvents;
-  const displaySegments = isStreamingActive ? streamSegments : derivedSegments;
-  const displayChunks = isStreamingActive ? streamChunks : derivedChunks;
+  const displayEvents = isStreamingActive || hasStreamData ? streamEvents : derivedEvents;
+  const displaySegments = isStreamingActive || hasStreamData ? streamSegments : derivedSegments;
+  const displayChunks = isStreamingActive || hasStreamData ? streamChunks : derivedChunks;
 
   // Interleave: for each tool show start + end together (Running → Completed), then its output box (backend sends call_id on both start/end to pair them)
   type StreamBlock =
@@ -1515,6 +1612,52 @@ export default function QnaPage() {
       streamChunkBoxRef.current.scrollTo({ top: streamChunkBoxRef.current.scrollHeight, behavior: "smooth" });
     }
   }, [displayChunks]);
+
+  const hasQuestionsReady = state.pageState === "questions" && state.questions.length > 0;
+
+  // Persist thinking when questions are ready so it survives refresh
+  useEffect(() => {
+    if (!recipeId || !hasQuestionsReady) return;
+    if (streamSegments.length > 0 || streamEvents.length > 0) {
+      try {
+        sessionStorage.setItem(
+          `${THINKING_STORAGE_KEY_QNA}_${recipeId}`,
+          JSON.stringify({ segments: streamSegments, events: streamEvents })
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }, [recipeId, hasQuestionsReady, streamSegments, streamEvents]);
+
+  // Restore thinking on load when questions are ready but we have no stream state (e.g. after refresh)
+  useEffect(() => {
+    if (!recipeId || !hasQuestionsReady || runIdFromUrl) return;
+    if (streamSegments.length > 0 || streamEvents.length > 0) return;
+    if (isStreamingActive) return;
+    if (hasRestoredThinkingRef.current === recipeId) return;
+    hasRestoredThinkingRef.current = recipeId;
+    try {
+      const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY_QNA}_${recipeId}`);
+      if (!raw) return;
+      const data = JSON.parse(raw) as { segments?: { id: string; label: string; content: string }[]; events?: { id: string; type: string; label: string }[] };
+      const segments = Array.isArray(data.segments) ? data.segments : [];
+      const events = Array.isArray(data.events) ? data.events : [];
+      if (segments.length > 0 || events.length > 0) {
+        setStreamSegments(segments);
+        setStreamEvents(events);
+      }
+    } catch {
+      // ignore
+    }
+  }, [recipeId, hasQuestionsReady, runIdFromUrl, isStreamingActive, streamSegments.length, streamEvents.length]);
+
+  useEffect(() => {
+    if (!recipeId) return;
+    return () => {
+      hasRestoredThinkingRef.current = null;
+    };
+  }, [recipeId]);
 
   // Figma: flat list for right sidebar
   const sortedSections = getSortedSections(state.sections.keys());
@@ -1575,104 +1718,110 @@ export default function QnaPage() {
                 Analyzing your repository and generating clarifying questions. They&apos;ll appear below once ready—you can then answer and we&apos;ll create a plan together.
               </div>
             </div>
-            {/* Thinking block: same layout as spec (progress, events, segments, chunks) */}
-            <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
-              <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
-              <div className="min-w-0 space-y-2 overflow-hidden" style={{ width: "calc(100% - 52px)", maxWidth: "600px" }}>
-                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Thinking</p>
-                {(displayProgress || isGenerating) && (
-                  <p className="text-xs text-zinc-500 flex items-center gap-2">
-                    <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
-                    {displayProgress ? `${displayProgress.step}: ${displayProgress.message}` : "Generating questions…"}
-                  </p>
-                )}
-                {/* Tool calls: compact bar (icon | label | preview | result) + output below, like reference UI */}
-                {mergedStreamBlocks.length > 0 && (
-                  <div className="space-y-3 min-w-0 overflow-hidden">
-                    {mergedStreamBlocks.map((block) =>
-                      block.kind === "event" ? (
-                        (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
-                          <span key={block.key} className="hidden" aria-hidden />
-                        ) : (
-                          <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
-                            {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
-                          </p>
-                        )
-                      ) : (
-                        <div key={block.key} className="rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden">
-                          <div className="flex items-center gap-2 px-3 py-2 border-b border-[#CCD3CF]/60">
-                            <Wrench className="w-4 h-4 shrink-0 text-zinc-500" aria-hidden />
-                            <span className="text-xs font-medium text-zinc-800">{block.segment.label}</span>
-                          </div>
-                          <div
-                            ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
-                            className="p-3 max-h-[120px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                            style={{ msOverflowStyle: "none" }}
-                          >
-                            <SharedMarkdown content={normalizeMarkdownForPreview(block.segment.content)} />
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-                {/* Live streaming output (current chunk before next tool_end) + full screen button */}
-                {(displayChunks || displaySegments.length > 0 || (displayProgress || isGenerating)) && (
-                  <div className="mt-2 space-y-2 min-w-0 overflow-hidden">
-                    {displayChunks ? (
-                      <div
-                        ref={streamChunkBoxRef}
-                        className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] p-3 max-h-[100px] overflow-y-auto overflow-x-hidden min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                        style={{ msOverflowStyle: "none" }}
-                      >
-                        <SharedMarkdown content={normalizeMarkdownForPreview(displayChunks)} />
-                      </div>
-                    ) : null}
-                    {/* Full screen button only while generating (hidden once questions are created) */}
-                    {(displaySegments.some((s) => s.content.length > 0) || (displayChunks?.length ?? 0) > 0) &&
-                      state.questions.length === 0 && (
-                      <>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setLiveOutputModalOpen(true)}
-                                className="h-8 w-8 shrink-0"
-                                aria-label="View full output"
+            {/* Agent output: full chat width; Tool calls and Output as separate blocks */}
+            {(displayProgress || isGenerating || mergedStreamBlocks.length > 0 || displayChunks || displaySegments.length > 0) && (
+              <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
+                <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
+                  {(displayProgress || isGenerating) && (
+                    <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
+                      <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
+                      {displayProgress ? `${displayProgress.step}: ${displayProgress.message}` : "Generating questions…"}
+                    </p>
+                  )}
+                  {mergedStreamBlocks.length > 0 && (
+                    <div className="mb-3">
+                      <details className="group/tools rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden">
+                        <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                          <span className="text-xs font-medium text-zinc-800">
+                            Tool calls ({mergedStreamBlocks.filter((b) => b.kind === "segment").length})
+                          </span>
+                          <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open/tools:rotate-180" aria-hidden />
+                        </summary>
+                        <div className="space-y-3 min-w-0 overflow-hidden pt-1 pb-0">
+                        {mergedStreamBlocks.map((block) =>
+                          block.kind === "event" ? (
+                            (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
+                              <span key={block.key} className="hidden" aria-hidden />
+                            ) : (
+                              <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
+                                {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
+                              </p>
+                            )
+                          ) : (
+                            <details
+                              key={block.key}
+                              className="group rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden"
+                            >
+                              <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
+                                  <span className="text-xs font-medium text-zinc-800 truncate">
+                                    {block.segment.label}
+                                  </span>
+                                </div>
+                                <ChevronDown
+                                  className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180"
+                                  aria-hidden
+                                />
+                              </summary>
+                              <div
+                                ref={(el) => {
+                                  if (el) el.scrollTop = el.scrollHeight;
+                                }}
+                                className="bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                style={{ msOverflowStyle: "none" }}
                               >
-                                <Maximize2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipPortal>
-                              <TooltipContent>View full output</TooltipContent>
-                            </TooltipPortal>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <LiveOutputModal
-                          open={liveOutputModalOpen}
-                          onOpenChange={setLiveOutputModalOpen}
-                          content={displaySegments.map((s) => s.content).join("\n\n") + (displayChunks ? "\n\n" + displayChunks : "")}
-                          segments={displaySegments.map((s) => ({ label: s.label, content: s.content })).concat(displayChunks ? [{ label: "Current", content: displayChunks }] : [])}
-                          title="Live output"
-                        />
-                      </>
-                    )}
-                  </div>
-                )}
-                {(mergedStreamBlocks.length > 0 || displayChunks || displaySegments.length > 0 || (displayProgress || isGenerating)) && (
-                  <div ref={streamOutputEndRef} aria-hidden />
-                )}
-                {state.questionGenerationError && (
-                  <p className="text-xs text-red-600 mt-1">{state.questionGenerationError}</p>
-                )}
+                                <SharedMarkdown
+                                  content={normalizeMarkdownForPreview(block.segment.content)}
+                                />
+                              </div>
+                            </details>
+                          )
+                        )}
+                        </div>
+                      </details>
+                    </div>
+                  )}
+                  {(displayChunks || displaySegments.length > 0 || (displayProgress || isGenerating)) && (
+                    <div className="space-y-2 min-w-0 overflow-hidden">
+                      {displayChunks ? (
+                        <div
+                          ref={streamChunkBoxRef}
+                          className="rounded-lg bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                          style={{ msOverflowStyle: "none" }}
+                        >
+                          <SharedMarkdown content={normalizeMarkdownForPreview(displayChunks)} />
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                  {(mergedStreamBlocks.length > 0 || displayChunks || displaySegments.length > 0 || (displayProgress || isGenerating)) && (
+                    <div ref={streamOutputEndRef} aria-hidden />
+                  )}
+                  {state.questionGenerationError && (
+                    <p className="text-xs text-red-600 mt-1">{state.questionGenerationError}</p>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Align with Thinking block content above (52px = avatar width + margin) */}
             <div className="max-w-3xl w-full space-y-6 ml-[52px]">
+            {/* Show error card when there's an error - full card when no questions, banner when questions exist */}
+            {state.pageState === "questions" && state.questionGenerationError && (
+              state.questions.length === 0 ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <p className="font-medium">Question generation failed</p>
+                  <p className="mt-1 text-red-700">{state.questionGenerationError}</p>
+                </div>
+              ) : (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 flex items-center gap-2">
+                  <Info className="w-4 h-4 shrink-0" />
+                  <span>Some questions may not have been generated: {state.questionGenerationError}</span>
+                </div>
+              )
+            )}
             {state.pageState === "questions" &&
               (() => {
                 return sortedSections.map((section) => {

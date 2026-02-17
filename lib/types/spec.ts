@@ -186,6 +186,8 @@ export interface RecipeQuestionsResponse {
   questions: RecipeQuestionUnion[];
   generated_at: string | null;
   error_message: string | null;
+  /** When generation is in progress, backend includes run_id for SSE stream connection */
+  run_id?: string | null;
 }
 
 /** Request for POST /api/v1/recipes/{recipe_id}/answers */
@@ -265,16 +267,31 @@ export interface PlanSubmitResponse {
   created_at: string;
 }
 
+/** File change entry within a plan item (phase.plan_items[].file_changes) */
+export interface PlanItemFileChange {
+  path: string;
+  action: string;
+  purpose?: string;
+  verified?: boolean;
+  verification_method?: string;
+}
+
 /** New API plan item structure */
 export interface PhasedPlanItem {
   plan_item_id: string;
   order: number;
   title: string;
   description: string;
-  estimated_effort: string;
+  estimated_effort?: string;
   dependencies: string[];
   status: string;
   created_at: string;
+  /** Longer description for the plan item */
+  detailed_description?: string;
+  /** File changes (path + action: create/modify/delete) */
+  file_changes?: PlanItemFileChange[];
+  /** List of verification criteria strings */
+  verification_criteria?: string[];
 }
 
 /** Diagram from plan API (phase.diagrams); matches backend PhaseDiagram */

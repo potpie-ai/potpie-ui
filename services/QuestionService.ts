@@ -373,6 +373,11 @@ export default class QuestionService {
     const url = `${this.RECIPES_URL}/${recipeId}/questions/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
     console.log("[QuestionService.connectQuestionsStream] Connecting to:", url);
     getHeaders().then((headers) => {
+      // Check if already aborted before starting fetch
+      if (options.signal?.aborted) {
+        console.log("[QuestionService.connectQuestionsStream] Aborted before fetch");
+        return;
+      }
       fetch(url, {
         method: "GET",
         headers: { ...headers, Accept: "text/event-stream" },
@@ -386,39 +391,63 @@ export default class QuestionService {
           const decoder = new TextDecoder();
           if (!reader || !options.onEvent) return;
           let buffer = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n\n");
-            buffer = lines.pop() || "";
-            for (const block of lines) {
-              if (!block.trim()) continue;
-              let eventType = "message";
-              let eventId: string | undefined;
-              let data: Record<string, unknown> = {};
-              for (const line of block.split("\n")) {
-                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
-                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
-                if (line.startsWith("data:")) {
-                  try {
-                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
-                  } catch {
-                    data = { raw: line.replace(/^data:\s*/, "").trim() };
+          try {
+            while (true) {
+              // Check abort signal before each read
+              if (options.signal?.aborted) {
+                console.log("[QuestionService.connectQuestionsStream] Aborted during read loop");
+                reader.cancel();
+                return;
+              }
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n\n");
+              buffer = lines.pop() || "";
+              for (const block of lines) {
+                if (!block.trim()) continue;
+                let eventType = "message";
+                let eventId: string | undefined;
+                let data: Record<string, unknown> = {};
+                for (const line of block.split("\n")) {
+                  if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
+                  if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
+                  if (line.startsWith("data:")) {
+                    try {
+                      data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
+                    } catch {
+                      data = { raw: line.replace(/^data:\s*/, "").trim() };
+                    }
                   }
                 }
+                if (eventId) data.eventId = eventId;
+                console.log("[QuestionService.connectQuestionsStream] Parsed event:", eventType, data);
+                options.onEvent?.(eventType, data);
+                if (eventType === "end" || eventType === "error") return;
               }
-              if (eventId) data.eventId = eventId;
-              console.log("[QuestionService.connectQuestionsStream] Parsed event:", eventType, data);
-              options.onEvent?.(eventType, data);
-              if (eventType === "end" || eventType === "error") return;
             }
+          } finally {
+            // Ensure reader is released
+            reader.releaseLock();
           }
         })
         .catch((e) => {
+          // Don't report abort errors as failures - this is expected cleanup behavior
+          if (e instanceof Error && e.name === "AbortError") {
+            console.log("[QuestionService.connectQuestionsStream] Stream aborted (cleanup)");
+            return;
+          }
           console.error("[QuestionService.connectQuestionsStream] Error:", e);
           options.onError?.(e instanceof Error ? e.message : String(e));
         });
+    }).catch((e) => {
+      // Don't report abort errors as failures
+      if (e instanceof Error && e.name === "AbortError") {
+        console.log("[QuestionService.connectQuestionsStream] getHeaders aborted");
+        return;
+      }
+      console.error("[QuestionService.connectQuestionsStream] getHeaders failed:", e);
+      options.onError?.(e instanceof Error ? e.message : String(e));
     });
   }
 }

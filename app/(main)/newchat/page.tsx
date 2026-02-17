@@ -9,6 +9,7 @@ import ParsingStatusCard from "../idea/components/ParsingStatusCard";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import SpecService from "@/services/SpecService";
+import QuestionService from "@/services/QuestionService";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { CreateRecipeCodegenResponse } from "@/lib/types/spec";
@@ -268,7 +269,7 @@ export default function NewChatPage() {
       projectId: string;
       additionalLinks?: string[];
       attachmentIds?: string[];
-    }): Promise<CreateRecipeCodegenResponse> => {
+    }): Promise<CreateRecipeCodegenResponse & { runId?: string }> => {
       const recipeResponse = await SpecService.createRecipeCodegen({
         user_prompt: data.userPrompt,
         project_id: data.projectId,
@@ -278,16 +279,21 @@ export default function NewChatPage() {
           : undefined,
       });
       const recipeId = recipeResponse.recipe.id;
-      SpecService.triggerQuestionGeneration(recipeId, {
-        user_prompt: data.userPrompt,
-        additional_links: data.additionalLinks,
-      }).catch((err) => {
-        console.error("[newchat] triggerQuestionGeneration failed", { recipeId, userPrompt: data.userPrompt, error: err });
-        toast.error("Question generation could not be started. You can continue to the repo page; questions may load later.");
-      });
-      return recipeResponse;
+      // Start streaming question generation so the QnA page can connect to the live stream.
+      // (POST /questions/generate would start the non-streaming task, which doesn't publish to Redis.)
+      let runId: string | undefined;
+      try {
+        const result = await QuestionService.startQuestionsGenerationStream(recipeId, {
+          consumeStream: false,
+        });
+        if (result.runId?.trim()) runId = result.runId.trim();
+      } catch (err) {
+        console.error("[newchat] startQuestionsGenerationStream failed", { recipeId, error: err });
+        toast.error("Question generation could not be started. You can continue to the QnA page; questions may load when ready.");
+      }
+      return { ...recipeResponse, runId };
     },
-    onSuccess: (data: CreateRecipeCodegenResponse) => {
+    onSuccess: (data: CreateRecipeCodegenResponse & { runId?: string }) => {
       const recipeId = data.recipe.id;
       const projectId = data.recipe.project_id?.toString() || state.projectId;
       setState((prev) => ({
@@ -326,6 +332,7 @@ export default function NewChatPage() {
           const params = new URLSearchParams();
           if (repoName) params.append("repoName", repoName);
           if (state.input) params.append("featureIdea", getCleanInput(state.input));
+          if (data.runId) params.set("run_id", data.runId);
           router.push(`/task/${recipeId}/qna?${params.toString()}`);
         } else {
           toast.error("Repository data not found. Please try again.");

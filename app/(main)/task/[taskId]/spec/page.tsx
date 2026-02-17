@@ -167,7 +167,7 @@ function specOutputToPlan(raw: SpecificationOutput): Plan {
 /** Normalize spec from GET /api/v1/recipes/{id}/spec response (potpie-workflows). Always returns plan in second-image format (Create/Update/Fix tabs). */
 function normalizeSpecFromProgress(progress: any): { plan: Plan | null; rawSpec: SpecificationOutput | null } {
   if (!progress || typeof progress !== "object") return { plan: null, rawSpec: null };
-  let raw = progress.spec_output ?? progress.specification;
+  let raw = progress.spec_output ?? progress.specification ?? progress.output ?? progress.spec;
   if (!raw || typeof raw !== "object") return { plan: null, rawSpec: null };
   if (raw.output && typeof raw.output === "object") raw = raw.output;
   if (raw.spec && typeof raw.spec === "object") raw = raw.spec;
@@ -1400,7 +1400,7 @@ const SpecPage = () => {
                   <SpecFallbackView spec={rawSpecification} />
                 ) : null}
               </div>
-            ) : (streamProgress || isGenerating || streamChunks) ? (
+            ) : (streamProgress || isGenerating || (streamChunks && status !== "COMPLETED")) ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="animate-spin-slow mb-4">
                   <Image

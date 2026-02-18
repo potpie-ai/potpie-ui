@@ -271,14 +271,58 @@ export default function IdeaInputCard({
     setPublicRepoInput("");
   };
 
+  /**
+   * Extracts owner/repo from various GitHub URL formats and owner/repo strings
+   * Supports:
+   * - Full URLs: https://github.com/owner/repo
+   * - URLs with .git: https://github.com/owner/repo.git
+   * - SSH URLs: git@github.com:owner/repo.git
+   * - Owner/repo format: owner/repo
+   * - URLs with paths: https://github.com/owner/repo/tree/main
+   */
+  const extractOwnerRepo = (input: string): string | null => {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+
+    // Already in owner/repo format (no protocol, no github.com)
+    const ownerRepoRegex = /^[^\/\s@]+\/[^\/\s]+$/;
+    if (ownerRepoRegex.test(trimmed)) {
+      return trimmed;
+    }
+
+    // GitHub URL patterns
+    // Match: https://github.com/owner/repo or https://www.github.com/owner/repo
+    // Match: http://github.com/owner/repo
+    // Match: github.com/owner/repo
+    const githubUrlRegex = /(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/\s]+\/[^\/\s]+?)(?:\.git)?(?:\/.*)?$/i;
+    const urlMatch = trimmed.match(githubUrlRegex);
+    if (urlMatch && urlMatch[1]) {
+      return urlMatch[1];
+    }
+
+    // SSH URL pattern: git@github.com:owner/repo.git
+    const sshRegex = /git@github\.com:([^\/\s]+\/[^\/\s]+?)(?:\.git)?$/i;
+    const sshMatch = trimmed.match(sshRegex);
+    if (sshMatch && sshMatch[1]) {
+      return sshMatch[1];
+    }
+
+    return null;
+  };
+
   const handlePublicRepoSubmit = async () => {
-    const repoName = publicRepoInput.trim();
+    const input = publicRepoInput.trim();
     
-    // Validate format (owner/repo) with strict regex
-    // Ensures both owner and repo are non-empty and contain no slashes or spaces
-    const repoNameRegex = /^[^\/\s]+\/[^\/\s]+$/;
-    if (!repoName || !repoNameRegex.test(repoName)) {
-      toast.error("Please enter a valid repository name in the format 'owner/repo' (e.g., facebook/react)");
+    if (!input) {
+      toast.error("Please enter a GitHub repository URL or owner/repo format");
+      return;
+    }
+
+    // Extract owner/repo from various formats
+    const repoName = extractOwnerRepo(input);
+    
+    if (!repoName) {
+      toast.error("Please enter a valid GitHub repository URL or owner/repo format (e.g., https://github.com/facebook/react or facebook/react)");
       return;
     }
 
@@ -976,13 +1020,13 @@ export default function IdeaInputCard({
           <DialogHeader>
             <DialogTitle>Enter Public Repository</DialogTitle>
             <DialogDescription>
-              Enter a public GitHub repository name in the format <code>owner/repo</code> (e.g., <code>facebook/react</code>)
+              Enter a GitHub repository URL or <code>owner/repo</code> format (e.g., <code>https://github.com/facebook/react</code> or <code>facebook/react</code>)
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Input
-                placeholder="owner/repo (e.g., facebook/react)"
+                placeholder="GitHub URL or owner/repo (e.g., https://github.com/facebook/react)"
                 value={publicRepoInput}
                 onChange={(e) => setPublicRepoInput(e.target.value)}
                 onKeyDown={(e) => {

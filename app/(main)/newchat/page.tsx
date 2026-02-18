@@ -493,6 +493,13 @@ export default function NewChatPage() {
     },
   });
 
+  /**
+   * Normalizes a repository name for comparison by removing .git suffix and trimming
+   */
+  const normalizeRepoName = (name: string): string => {
+    return name.trim().toLowerCase().replace(/\.git$/i, "");
+  };
+
   const parseRepo = async (repoName: string, branchName: string) => {
     if (!repoName || !branchName) {
       toast.error("Please select a repository and branch");
@@ -541,9 +548,33 @@ export default function NewChatPage() {
           });
         } else if (
           (state.selectedAgent === "ask" || state.selectedAgent === "debug") &&
-          projectId
+          projectId &&
+          state.input.trim()
         ) {
           await createConversationAndNavigate(projectId);
+        }
+        // Refetch repos and auto-select the parsed repo in the repo field
+        try {
+          const { data: refreshedRepos } = await refetchRepos();
+          const list = refreshedRepos ?? [];
+          const normalizedParsedName = normalizeRepoName(repoName);
+          const matchingRepo = list.find((r: Repo) => {
+            const repoFullName = normalizeRepoName(r.full_name || "");
+            const repoNameOnly = normalizeRepoName(r.name || "");
+            return (
+              repoFullName === normalizedParsedName ||
+              repoNameOnly === normalizedParsedName
+            );
+          });
+          if (matchingRepo) {
+            setState((prev) => ({
+              ...prev,
+              selectedRepo: matchingRepo.id?.toString() ?? prev.selectedRepo,
+              selectedBranch: branchName || "main",
+            }));
+          }
+        } catch (_) {
+          // ignore refetch errors
         }
         return;
       }
@@ -651,9 +682,33 @@ export default function NewChatPage() {
           } else if (
             (state.selectedAgent === "ask" ||
               state.selectedAgent === "debug") &&
-            projectId
+            projectId &&
+            state.input.trim()
           ) {
             await createConversationAndNavigate(projectId);
+          }
+          // Refetch repos and auto-select the parsed repo in the repo field
+          try {
+            const { data: refreshedRepos } = await refetchRepos();
+            const list = refreshedRepos ?? [];
+            const normalizedParsedName = normalizeRepoName(repoName);
+            const matchingRepo = list.find((r: Repo) => {
+              const repoFullName = normalizeRepoName(r.full_name || "");
+              const repoName = normalizeRepoName(r.name || "");
+              return (
+                repoFullName === normalizedParsedName ||
+                repoName === normalizedParsedName
+              );
+            });
+            if (matchingRepo) {
+              setState((prev) => ({
+                ...prev,
+                selectedRepo: matchingRepo.id?.toString() ?? prev.selectedRepo,
+                selectedBranch: branchName || "main",
+              }));
+            }
+          } catch (_) {
+            // ignore refetch errors
           }
         }
       };

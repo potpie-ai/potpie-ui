@@ -1,6 +1,6 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
-import { parseApiError } from "@/lib/utils";
+import { parseApiError, extractJsonObjects, parseSSEBuffer, isSSEResponse } from "@/lib/utils";
 import {
   SpecPlanRequest,
   SpecPlanSubmitResponse,
@@ -281,9 +281,9 @@ export default class SpecService {
   }
 
   /**
-   * Start spec generation with SSE streaming.
+   * Start spec generation with streaming (same pattern as ChatService /message).
    * POST /api/v1/recipes/{recipe_id}/spec/generate-stream
-   * Returns run_id from X-Run-Id header; consumes stream and calls onEvent for each SSE event.
+   * Returns run_id from X-Run-Id header; consumes stream and calls onEvent for each JSON object.
    */
   static async startSpecGenerationStream(
     recipeId: string,
@@ -300,7 +300,7 @@ export default class SpecService {
     const url = `${this.API_BASE}/${recipeId}/spec/generate-stream${options.streamTokens ? "?stream_tokens=true" : ""}`;
     const response = await fetch(url, {
       method: "POST",
-      headers: { ...headers, Accept: "text/event-stream" },
+      headers: headers as HeadersInit,
       credentials: "include",
       signal: options.signal,
     });
@@ -308,74 +308,78 @@ export default class SpecService {
       const errText = await response.text();
       throw new Error(errText || `Spec stream failed: ${response.status}`);
     }
-    // Prefer X-Run-Id (case-insensitive per HTTP); some proxies normalize to lowercase
     let runId =
       response.headers.get("X-Run-Id")?.trim() ||
       response.headers.get("x-run-id")?.trim() ||
       "";
-    // Fallback: some backends send run_id in the first SSE event instead of header
-    if (!runId && response.body && (options.consumeStream === false || !options.onEvent)) {
-      try {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        for (let i = 0; i < 8; i++) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          // Match data: {...} (single line) or multi-line JSON
-          const dataMatch = buffer.match(/data:\s*(\{[^]*?\})\s*\n/);
-          if (dataMatch) {
-            const data = JSON.parse(dataMatch[1]) as Record<string, unknown>;
-            const fromData =
-              typeof data.run_id === "string"
-                ? data.run_id
-                : data.data && typeof (data.data as Record<string, unknown>).run_id === "string"
-                  ? (data.data as Record<string, unknown>).run_id
-                  : "";
-            if (fromData) runId = String(fromData).trim();
-            break;
-          }
-        }
-        reader.cancel();
-      } catch {
-        // ignore parse errors
-      }
-    }
     if (options.consumeStream === false || !options.onEvent) {
+      if (!runId && response.body) {
+        try {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          for (let i = 0; i < 16; i++) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const { objects } = extractJsonObjects(buffer);
+            if (objects.length > 0) {
+              const data = JSON.parse(objects[0]) as Record<string, unknown>;
+              const inner = data.data as Record<string, unknown> | undefined;
+              runId =
+                (typeof data.run_id === "string" ? data.run_id : inner && typeof inner.run_id === "string" ? inner.run_id : "")?.trim() || runId;
+              break;
+            }
+          }
+          reader.cancel();
+        } catch {
+          // ignore
+        }
+      }
       return { runId };
     }
     const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
     if (reader && options.onEvent) {
+      const contentType = response.headers.get("Content-Type");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let useSSE = isSSEResponse(contentType);
       (async () => {
-        let buffer = "";
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n\n");
-            buffer = lines.pop() || "";
-            for (const block of lines) {
-              if (!block.trim()) continue;
-              let eventType = "message";
-              let eventId: string | undefined;
-              let data: Record<string, unknown> = {};
-              for (const line of block.split("\n")) {
-                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
-                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
-                if (line.startsWith("data:")) {
-                  try {
-                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
-                  } catch {
-                    data = { raw: line.replace(/^data:\s*/, "").trim() };
-                  }
+            if (!useSSE && buffer.includes("event:") && buffer.includes("data:")) useSSE = true;
+            if (useSSE) {
+              const { events, remaining } = parseSSEBuffer(buffer);
+              buffer = remaining;
+              for (const { eventType, data } of events) {
+                const payload =
+                  data?.data && typeof data.data === "object" && data.data !== null
+                    ? (data.data as Record<string, unknown>)
+                    : data ?? {};
+                options.onEvent?.(eventType, payload);
+                if (eventType === "end" || eventType === "error") return;
+              }
+            } else {
+              const { objects, remaining } = extractJsonObjects(buffer);
+              buffer = remaining;
+              for (const jsonStr of objects) {
+                try {
+                  const data = JSON.parse(jsonStr) as Record<string, unknown>;
+                  const eventType = (typeof data.event === "string" ? data.event : "message") as string;
+                  const payload =
+                    data.data && typeof data.data === "object" && data.data !== null
+                      ? (data.data as Record<string, unknown>)
+                      : data;
+                  if (typeof data.eventId === "string") payload.eventId = data.eventId;
+                  options.onEvent?.(eventType, payload);
+                  if (eventType === "end" || eventType === "error") return;
+                } catch {
+                  options.onEvent?.("message", { raw: jsonStr });
                 }
               }
-              if (eventId) data.eventId = eventId;
-              options.onEvent?.(eventType, data);
-              if (eventType === "end" || eventType === "error") return;
             }
           }
         } catch (e) {
@@ -387,7 +391,7 @@ export default class SpecService {
   }
 
   /**
-   * Reconnect to an existing spec stream (e.g. after page refresh).
+   * Reconnect to an existing spec stream (e.g. after page refresh). Same pattern as ChatService.
    * GET /api/v1/recipes/{recipe_id}/spec/stream?run_id=...&cursor=...
    */
   static connectSpecStream(
@@ -401,49 +405,65 @@ export default class SpecService {
     }
   ): void {
     const url = `${this.API_BASE}/${recipeId}/spec/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
-    getHeaders().then((headers) => {
-      fetch(url, {
-        method: "GET",
-        headers: { ...headers, Accept: "text/event-stream" },
-        credentials: "include",
-        signal: options.signal,
+    getHeaders()
+      .then((headers) => {
+        return fetch(url, {
+          method: "GET",
+          headers: headers as HeadersInit,
+          credentials: "include",
+          signal: options.signal,
+        });
       })
-        .then(async (response) => {
-          if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-          if (!reader || !options.onEvent) return;
-          let buffer = "";
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
+        const reader = response.body?.getReader();
+        if (!reader || !options.onEvent) return;
+        const contentType = response.headers.get("Content-Type");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let useSSE = isSSEResponse(contentType);
+        try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n\n");
-            buffer = lines.pop() || "";
-            for (const block of lines) {
-              if (!block.trim()) continue;
-              let eventType = "message";
-              let eventId: string | undefined;
-              let data: Record<string, unknown> = {};
-              for (const line of block.split("\n")) {
-                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
-                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
-                if (line.startsWith("data:")) {
-                  try {
-                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
-                  } catch {
-                    data = { raw: line.replace(/^data:\s*/, "").trim() };
-                  }
+            if (!useSSE && buffer.includes("event:") && buffer.includes("data:")) useSSE = true;
+            if (useSSE) {
+              const { events, remaining } = parseSSEBuffer(buffer);
+              buffer = remaining;
+              for (const { eventType, data } of events) {
+                const payload =
+                  data?.data && typeof data.data === "object" && data.data !== null
+                    ? (data.data as Record<string, unknown>)
+                    : data ?? {};
+                options.onEvent(eventType, payload);
+                if (eventType === "end" || eventType === "error") return;
+              }
+            } else {
+              const { objects, remaining } = extractJsonObjects(buffer);
+              buffer = remaining;
+              for (const jsonStr of objects) {
+                try {
+                  const data = JSON.parse(jsonStr) as Record<string, unknown>;
+                  const eventType = (typeof data.event === "string" ? data.event : "message") as string;
+                  const payload =
+                    data.data && typeof data.data === "object" && data.data !== null
+                      ? (data.data as Record<string, unknown>)
+                      : data;
+                  if (typeof data.eventId === "string") payload.eventId = data.eventId;
+                  options.onEvent(eventType, payload);
+                  if (eventType === "end" || eventType === "error") return;
+                } catch {
+                  options.onEvent("message", { raw: jsonStr });
                 }
               }
-              if (eventId) data.eventId = eventId;
-              options.onEvent?.(eventType, data);
-              if (eventType === "end" || eventType === "error") return;
             }
           }
-        })
-        .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
-    });
+        } catch (e) {
+          options.onError?.(e instanceof Error ? e.message : String(e));
+        }
+      })
+      .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
   }
 
   /**
@@ -491,7 +511,7 @@ export default class SpecService {
 
   /**
    * Get comprehensive recipe details including repo and branch information
-   * GET /api/v1/recipes/{recipe_id}/details
+   * GET /api/v1/recipes/{recipe_id}
    * On 404 returns a minimal response so callers can use localStorage/fallbacks instead of throwing.
    */
   static async getRecipeDetails(
@@ -499,11 +519,48 @@ export default class SpecService {
   ): Promise<RecipeDetailsResponse> {
     try {
       const headers = await getHeaders();
-      const response = await axios.get<RecipeDetailsResponse>(
-        `${this.API_BASE}/${recipeId}/details`,
+      // Use the new recipe API endpoint that returns { recipe: {...} }
+      const response = await axios.get<{ recipe: any }>(
+        `${this.API_BASE}/${recipeId}`,
         { headers },
       );
-      return response.data;
+      
+      const recipe = response.data.recipe;
+      
+      // Transform the response to match RecipeDetailsResponse format
+      // Also fetch questions if needed
+      let questionsAndAnswers: Array<{
+        question_id: string;
+        question: string;
+        answer: string | null;
+      }> = [];
+      
+      // Try to fetch questions if they exist
+      try {
+        const questionsResponse = await axios.get<RecipeQuestionsResponse>(
+          `${this.API_BASE}/${recipeId}/questions`,
+          { headers },
+        );
+        if (questionsResponse.data.questions) {
+          questionsAndAnswers = questionsResponse.data.questions.map((q) => ({
+            question_id: q.id,
+            question: q.question,
+            answer: null, // Answers are submitted separately and not returned in questions endpoint
+          }));
+        }
+      } catch (questionsError) {
+        // Questions might not be available yet, that's okay
+        console.log("[SpecService] Questions not available yet for recipe:", recipeId);
+      }
+      
+      return {
+        recipe_id: recipe.id || recipeId,
+        project_id: recipe.project_id || "",
+        user_prompt: recipe.user_prompt || "Implementation plan generation",
+        repo_name: recipe.repo_name || null,
+        branch_name: recipe.branch_name || null,
+        questions_and_answers: questionsAndAnswers,
+      };
     } catch (error: any) {
       if (error?.response?.status === 404) {
         return {

@@ -297,17 +297,25 @@ const PlanPage = () => {
       }
       try {
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
-        setRepoName(recipeDetails.repo_name ?? fromStorage?.repo_name ?? "Unknown Repository");
-        setBranchName(recipeDetails.branch_name ?? fromStorage?.branch_name ?? "main");
+        // Repo/branch: API first, then localStorage, so we don't show "Unknown" when API omits them
+        const repoName =
+          recipeDetails.repo_name?.trim() ||
+          fromStorage?.repo_name?.trim() ||
+          "Unknown Repository";
+        const branchName =
+          recipeDetails.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main";
+        setRepoName(repoName);
+        setBranchName(branchName);
         setUserPrompt(
           (recipeDetails.user_prompt && recipeDetails.user_prompt.trim()) ||
             fromStorage?.user_prompt ||
             "Implementation plan generation"
         );
       } catch {
-        setRepoName(fromStorage?.repo_name ?? "Unknown Repository");
-        setBranchName(fromStorage?.branch_name ?? "main");
-        setUserPrompt(fromStorage?.user_prompt ?? "Implementation plan generation");
+        // On error, use localStorage if available so repo/branch/prompt can still show
+        setRepoName(fromStorage?.repo_name?.trim() || "Unknown Repository");
+        setBranchName(fromStorage?.branch_name?.trim() || "main");
+        setUserPrompt(fromStorage?.user_prompt || "Implementation plan generation");
       }
     };
     fetchRecipeDetails();
@@ -680,7 +688,7 @@ const PlanPage = () => {
                         Your implementation plan is ready. Review the phases below and tell me what you&apos;d like to change—we&apos;ll nail it before moving to code.
                       </div>
                     </div>
-                    {/* Agent output: full chat width; Tool calls and Output as separate blocks */}
+                    {/* Agent output: interleaved thinking and tool calls */}
                     {(streamProgress || isGenerating || streamItems.length > 0) && (
                       <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
                         <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />

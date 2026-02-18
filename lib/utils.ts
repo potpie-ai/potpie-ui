@@ -5,6 +5,92 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Extract complete JSON objects from a stream buffer (same pattern as ChatService).
+ * Used for parsing streaming JSON responses in SpecService and PlanService.
+ */
+export function extractJsonObjects(input: string): {
+  objects: string[];
+  remaining: string;
+} {
+  const objects: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  let startIndex = -1;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i]!;
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (inString) escapeNext = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === "{") {
+      if (depth === 0) startIndex = i;
+      depth++;
+    } else if (char === "}") {
+      if (depth === 0) continue;
+      depth--;
+      if (depth === 0 && startIndex !== -1) {
+        objects.push(input.slice(startIndex, i + 1));
+        startIndex = -1;
+      }
+    }
+  }
+
+  const remaining =
+    depth > 0 && startIndex !== -1 ? input.slice(startIndex) : "";
+  return { objects, remaining };
+}
+
+/** Parse SSE (event:/data:) blocks from a stream buffer. */
+export function parseSSEBuffer(buffer: string): {
+  events: { eventType: string; data: Record<string, unknown> }[];
+  remaining: string;
+} {
+  const events: { eventType: string; data: Record<string, unknown> }[] = [];
+  const blocks = buffer.split(/\n\n/);
+  const remaining = blocks.pop() ?? "";
+  for (const block of blocks) {
+    if (!block.trim()) continue;
+    let eventType = "message";
+    let data: Record<string, unknown> = {};
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) eventType = line.slice(6).trim();
+      if (line.startsWith("data:")) {
+        const raw = line.slice(5).trim();
+        if (raw) {
+          try {
+            data = JSON.parse(raw) as Record<string, unknown>;
+          } catch {
+            data = { raw };
+          }
+        }
+      }
+    }
+    events.push({ eventType, data });
+  }
+  return { events, remaining };
+}
+
+export function isSSEResponse(contentType: string | null): boolean {
+  return contentType != null && contentType.toLowerCase().includes("text/event-stream");
+}
+
 export const list_system_agents = [
   "codebase_qna_agent",
   "debugging_agent",

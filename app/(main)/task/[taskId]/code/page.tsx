@@ -766,6 +766,7 @@ export default function VerticalTaskExecution() {
   const [changedFilesSliderOpen, setChangedFilesSliderOpen] = useState(false);
   const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<string | null>(null);
   const hasShownFailedToastRef = useRef(false);
+  const thinkingListRef = useRef<HTMLDivElement>(null);
   
   // Refs for polling optimization - avoid dependency array issues while accessing current values
   const allLayersRef = useRef<TaskLayer[]>([]);
@@ -818,6 +819,7 @@ export default function VerticalTaskExecution() {
   const [selectedPhaseIndex, setSelectedPhaseIndex] = useState<number>(0);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([0]));
+  const [thinkingAccordionValue, setThinkingAccordionValue] = useState<string>("");
 
   // --- UI-only: chat messages (visual only; backend chat wiring can come later) ---
   type ChatMessage = { role: "user" | "assistant"; content: string };

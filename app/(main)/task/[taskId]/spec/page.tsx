@@ -44,7 +44,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { normalizeMarkdownForPreview } from "@/lib/utils";
+import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils";
+import {
+  StreamTimeline,
+  type StreamTimelineItem,
+} from "@/components/stream/StreamTimeline";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -552,17 +556,11 @@ const SpecPage = () => {
   const [regenerateSpecKey, setRegenerateSpecKey] = useState(0);
   /** Live streaming progress when using spec generate-stream (step + message). */
   const [streamProgress, setStreamProgress] = useState<{ step: string; message: string } | null>(null);
-  /** Accumulated streaming text (chunk events) from workflows backend. */
-  const [streamChunks, setStreamChunks] = useState("");
-  /** Recent stream events (tool_call_start/end, subagent_start/end) for left-pane activity. */
-  const [streamEvents, setStreamEvents] = useState<{ id: string; type: string; label: string }[]>([]);
-  /** Output segments: one per tool_call_end (content streamed since previous tool end). */
-  const [streamSegments, setStreamSegments] = useState<{ id: string; label: string; content: string }[]>([]);
+  /** Interleaved stream: chunks (thinking/response) and tool calls in arrival order. */
+  const [streamItems, setStreamItems] = useState<StreamTimelineItem[]>([]);
   const streamAbortRef = useRef<AbortController | null>(null);
-  const streamEventIdRef = useRef(0);
-  const streamChunksRef = useRef("");
+  const streamItemIdRef = useRef(0);
   const streamOutputEndRef = useRef<HTMLDivElement>(null);
-  const streamChunkBoxRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
   const runIdFromUrl = searchParams.get("run_id");
 
@@ -592,35 +590,12 @@ const SpecPage = () => {
     }
   }, [recipeId, runIdFromUrl, specProgress, router]);
 
-  // Interleave: for each tool show start + end together (Running → Completed), then its output box (backend sends call_id on both start/end to pair them)
-  type StreamBlock =
-    | { key: string; kind: "event"; event: (typeof streamEvents)[0] }
-    | { key: string; kind: "segment"; segment: (typeof streamSegments)[0] };
-  const mergedStreamBlocks = useMemo((): StreamBlock[] => {
-    const blocks: StreamBlock[] = [];
-    for (const ev of streamEvents) {
-      blocks.push({ key: ev.id, kind: "event", event: ev });
-      if (ev.type === "tool_end") {
-        const seg = streamSegments.find((s) => s.id === `seg-${ev.id}`);
-        if (seg) blocks.push({ key: seg.id, kind: "segment", segment: seg });
-      }
-    }
-    return blocks;
-  }, [streamEvents, streamSegments]);
-
-  // Auto-scroll tool output to bottom when new events/segments/chunks arrive
+  // Auto-scroll to end when stream items change
   useEffect(() => {
-    if (mergedStreamBlocks.length > 0 || streamChunks) {
+    if (streamItems.length > 0) {
       streamOutputEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [mergedStreamBlocks.length, streamChunks]);
-
-  // Auto-scroll inside the live chunk box when content grows
-  useEffect(() => {
-    if (streamChunks && streamChunkBoxRef.current) {
-      streamChunkBoxRef.current.scrollTo({ top: streamChunkBoxRef.current.scrollHeight, behavior: "smooth" });
-    }
-  }, [streamChunks]);
+  }, [streamItems.length]);
 
   // Initialize chat with user prompt (from new chat page) and assistant response
   useEffect(() => {
@@ -811,15 +786,12 @@ const SpecPage = () => {
       streamAbortRef.current?.abort();
       streamAbortRef.current = new AbortController();
       setStreamProgress({ step: "Connecting…", message: "Opening live stream" });
-      setStreamChunks("");
-      setStreamSegments([]);
-      setStreamEvents([]);
-      streamChunksRef.current = "";
+      setStreamItems([]);
 
       SpecService.connectSpecStream(recipeId, runIdFromUrl, {
         signal: streamAbortRef.current.signal,
         onEvent: (eventType, data) => {
-          const payload = (data?.data as Record<string, unknown>) ?? data;
+          const payload = getStreamEventPayload(data);
           // queued: task queued
           if (eventType === "queued") {
             setStreamProgress({ step: "Queued", message: (payload?.message as string) ?? "Task queued for processing" });
@@ -835,39 +807,57 @@ const SpecPage = () => {
               message: (payload.message as string) ?? "",
             });
           }
-          // chunk: streaming text (thinking/tokens)
+          // chunk: append to last chunk item or push new (keeps thinking/response in order)
           if (eventType === "chunk" && payload?.content) {
             const content = String(payload.content);
-            setStreamChunks((prev) => {
-              const next = prev + content;
-              streamChunksRef.current = next;
+            setStreamItems((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.type === "chunk") {
+                return [...prev.slice(0, -1), { ...last, content: last.content + content }];
+              }
+              return [...prev, { type: "chunk", id: `chunk-${++streamItemIdRef.current}`, content }];
+            });
+          }
+          // tool_call_start: add tool inline (running)
+          if (eventType === "tool_call_start" && payload?.tool) {
+            const call_id = (payload.call_id as string) ?? `tool-${++streamItemIdRef.current}`;
+            const label = String(payload.tool);
+            setStreamItems((prev) => [
+              ...prev,
+              { type: "tool", id: call_id, label, phase: "running" as const },
+            ]);
+          }
+          // tool_call_end: mark that tool done and set result
+          if (eventType === "tool_call_end" && payload?.tool) {
+            const call_id = payload.call_id as string | undefined;
+            const label = String(payload.tool);
+            const result = payload.result;
+            const segmentContent =
+              result !== undefined && result !== null
+                ? typeof result === "object"
+                  ? JSON.stringify(result, null, 2)
+                  : String(result)
+                : "";
+            setStreamItems((prev) => {
+              const idx = call_id
+                ? prev.findIndex((it) => it.type === "tool" && it.id === call_id)
+                : prev.findLastIndex(
+                    (it) => it.type === "tool" && it.phase === "running" && it.label === label
+                  );
+              if (idx === -1) return prev;
+              const next = [...prev];
+              const cur = next[idx];
+              if (cur.type === "tool")
+                next[idx] = { ...cur, phase: "done" as const, result: segmentContent };
               return next;
             });
           }
-          // tool_call_start / tool_call_end: show in activity list; on tool_call_end push current chunks as a segment
-          if (eventType === "tool_call_start" && payload?.tool) {
-            const id = `tool-start-${++streamEventIdRef.current}`;
-            setStreamEvents((prev) => [...prev.slice(-29), { id, type: "tool_start", label: `Running ${String(payload.tool)}` }]);
-          }
-          if (eventType === "tool_call_end" && payload?.tool) {
-            const id = `tool-end-${++streamEventIdRef.current}`;
-            const duration = payload.duration_ms != null ? ` (${payload.duration_ms}ms)` : "";
-            const label = String(payload.tool);
-            const contentToPush = streamChunksRef.current;
-            // Always push a segment (same id as event) so mergedStreamBlocks can pair by id; use empty string when no content
-            setStreamSegments((prev) => [...prev, { id: `seg-${id}`, label, content: contentToPush || "" }]);
-            setStreamChunks("");
-            streamChunksRef.current = "";
-            setStreamEvents((prev) => [...prev.slice(-29), { id, type: "tool_end", label: `Completed ${label}${duration}` }]);
-          }
+          // subagent events: optional inline markers (could add as stream items later)
           if (eventType === "subagent_start" && payload?.agent) {
-            const id = `subagent-start-${++streamEventIdRef.current}`;
-            setStreamEvents((prev) => [...prev.slice(-29), { id, type: "subagent_start", label: `Agent: ${String(payload.agent)}` }]);
+            // no-op for now; could push a small "Agent: X" chunk if desired
           }
           if (eventType === "subagent_end" && payload?.agent) {
-            const id = `subagent-end-${++streamEventIdRef.current}`;
-            const duration = payload.duration_ms != null ? ` (${payload.duration_ms}ms)` : "";
-            setStreamEvents((prev) => [...prev.slice(-29), { id, type: "subagent_end", label: `Done ${String(payload.agent)}${duration}` }]);
+            // no-op
           }
           // end: stream finished successfully — keep tool calls and preview on left, just stop progress
           if (eventType === "end") {
@@ -879,10 +869,7 @@ const SpecPage = () => {
           // error: clear stream state and refetch
           if (eventType === "error") {
             setStreamProgress(null);
-            setStreamChunks("");
-            setStreamSegments([]);
-            setStreamEvents([]);
-            streamChunksRef.current = "";
+            setStreamItems([]);
             setRegenerateSpecKey((k) => k + 1);
             SpecService.getSpecProgressByRecipeId(recipeId).then(setSpecProgress).catch(() => {});
             router.replace(`/task/${recipeId}/spec`, { scroll: false });
@@ -904,10 +891,7 @@ const SpecPage = () => {
             // Status check failed, show error
           }
           setStreamProgress(null);
-          setStreamChunks("");
-          setStreamSegments([]);
-          setStreamEvents([]);
-          streamChunksRef.current = "";
+          setStreamItems([]);
           setError(msg);
           toast.error("Live stream failed. Showing progress by polling.");
           router.replace(`/task/${recipeId}/spec`, { scroll: false });
@@ -1012,41 +996,37 @@ const SpecPage = () => {
   const { plan: normalizedPlan, rawSpec: rawSpecification } = normalizeSpecFromProgress(specProgress ?? undefined);
   const hasSpecContent = normalizedPlan !== null || rawSpecification !== null;
 
-  // Persist thinking (stream segments/events) when spec is completed so it survives refresh
+  // Persist stream timeline when spec is completed so it survives refresh
   useEffect(() => {
     if (!recipeId || status !== "COMPLETED" || !hasSpecContent) return;
-    if (streamSegments.length > 0 || streamEvents.length > 0) {
+    if (streamItems.length > 0) {
       try {
         sessionStorage.setItem(
           `${THINKING_STORAGE_KEY}_${recipeId}`,
-          JSON.stringify({ segments: streamSegments, events: streamEvents })
+          JSON.stringify({ streamItems })
         );
       } catch {
         // ignore storage errors
       }
     }
-  }, [recipeId, status, hasSpecContent, streamSegments, streamEvents]);
+  }, [recipeId, status, hasSpecContent, streamItems]);
 
-  // Restore thinking from sessionStorage on load when spec is completed but we have no stream state (e.g. after refresh)
+  // Restore stream timeline from sessionStorage on load when spec is completed (e.g. after refresh)
   useEffect(() => {
     if (!recipeId || status !== "COMPLETED" || !hasSpecContent || runIdFromUrl) return;
-    if (streamSegments.length > 0 || streamEvents.length > 0) return;
+    if (streamItems.length > 0) return;
     if (hasRestoredThinkingRef.current === recipeId) return;
     hasRestoredThinkingRef.current = recipeId;
     try {
       const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY}_${recipeId}`);
       if (!raw) return;
-      const data = JSON.parse(raw) as { segments?: { id: string; label: string; content: string }[]; events?: { id: string; type: string; label: string }[] };
-      const segments = Array.isArray(data.segments) ? data.segments : [];
-      const events = Array.isArray(data.events) ? data.events : [];
-      if (segments.length > 0 || events.length > 0) {
-        setStreamSegments(segments);
-        setStreamEvents(events);
-      }
+      const data = JSON.parse(raw) as { streamItems?: StreamTimelineItem[] };
+      const items = Array.isArray(data.streamItems) ? data.streamItems : [];
+      if (items.length > 0) setStreamItems(items);
     } catch {
       // ignore
     }
-  }, [recipeId, status, hasSpecContent, runIdFromUrl, streamSegments.length, streamEvents.length]);
+  }, [recipeId, status, hasSpecContent, runIdFromUrl, streamItems.length]);
 
   // Reset restore ref when recipe changes so we can restore for the new recipe
   useEffect(() => {
@@ -1160,82 +1140,26 @@ const SpecPage = () => {
                         Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they&apos;re ready, we can refine them together.
                       </div>
                     </div>
-                    {/* Agent output: full chat width; Tool calls and Output as separate blocks */}
-                    {(streamProgress || isGenerating || mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0) && (
+                    {/* Agent output: interleaved thinking/response and tool calls in stream order */}
+                    {(streamProgress || isGenerating || streamItems.length > 0) && (
                       <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
                         <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                         <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
-                          {(streamProgress || isGenerating) && !streamChunks && (
+                          {(streamProgress || isGenerating) && streamItems.length === 0 && (
                             <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
                               <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
                               {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating specification…"}
                             </p>
                           )}
-                          {mergedStreamBlocks.length > 0 && (
-                            <div className="mb-3">
-                              <details className="group/tools rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden">
-                                <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-                                  <span className="text-xs font-medium text-zinc-800">
-                                    Tool calls ({mergedStreamBlocks.filter((b) => b.kind === "segment").length})
-                                  </span>
-                                  <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open/tools:rotate-180" aria-hidden />
-                                </summary>
-                                <div className="space-y-3 min-w-0 overflow-hidden pt-1 pb-0">
-                                {mergedStreamBlocks.map((block) =>
-                                  block.kind === "event" ? (
-                                    (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
-                                      <span key={block.key} className="hidden" aria-hidden />
-                                    ) : (
-                                      <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
-                                        {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
-                                      </p>
-                                    )
-                                  ) : (
-                                    <details
-                                      key={block.key}
-                                      className="group rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden"
-                                    >
-                                      <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
-                                          <span className="text-xs font-medium text-zinc-800 truncate">
-                                            {block.segment.label}
-                                          </span>
-                                        </div>
-                                        <ChevronDown
-                                          className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180"
-                                          aria-hidden
-                                        />
-                                      </summary>
-                                      <div
-                                        ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
-                                        className="bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                                        style={{ msOverflowStyle: "none" }}
-                                      >
-                                        <SharedMarkdown content={normalizeMarkdownForPreview(block.segment.content)} />
-                                      </div>
-                                    </details>
-                                  )
-                                )}
-                                </div>
-                              </details>
-                            </div>
-                          )}
-                          {(streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
-                            <div className="space-y-2 min-w-0 overflow-hidden">
-                              {streamChunks ? (
-                                <div
-                                  ref={streamChunkBoxRef}
-                                  className="rounded-lg bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0"
-                                >
-                                  <SharedMarkdown content={normalizeMarkdownForPreview(streamChunks)} />
-                                </div>
-                              ) : null}
-                            </div>
-                          )}
-                          {(mergedStreamBlocks.length > 0 || streamChunks || streamSegments.length > 0 || (streamProgress || isGenerating)) && (
-                            <div ref={streamOutputEndRef} aria-hidden />
-                          )}
+                          <StreamTimeline
+                            items={streamItems}
+                            endRef={streamOutputEndRef}
+                            loading={
+                              streamItems.length > 0 &&
+                              (streamProgress != null || isGenerating) &&
+                              status !== "COMPLETED"
+                            }
+                          />
                         </div>
                       </div>
                     )}
@@ -1291,7 +1215,7 @@ const SpecPage = () => {
         <div
           className="overflow-hidden flex-none flex flex-col max-w-[50%]"
           style={{
-            width: (specProgress != null || runIdFromUrl || streamProgress || isGenerating || !!streamChunks) ? "50%" : "0",
+            width: (specProgress != null || runIdFromUrl || streamProgress || isGenerating || streamItems.length > 0) ? "50%" : "0",
             minWidth: 0,
             transition: "width 0.35s ease-out",
           }}
@@ -1397,7 +1321,7 @@ const SpecPage = () => {
                   <SpecFallbackView spec={rawSpecification} />
                 ) : null}
               </div>
-            ) : (streamProgress || isGenerating || (streamChunks && status !== "COMPLETED")) ? (
+            ) : (streamProgress || isGenerating || (streamItems.length > 0 && status !== "COMPLETED")) ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="animate-spin-slow mb-4">
                   <Image

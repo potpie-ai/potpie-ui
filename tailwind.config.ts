@@ -98,11 +98,16 @@ const config = {
   				to: {
   					height: '0'
   				}
+  			},
+  			'loading-dot': {
+  				'0%, 80%, 100%': { transform: 'translateY(0) scale(0.8)', opacity: '0.5' },
+  				'40%': { transform: 'translateY(-6px) scale(1)', opacity: '1' }
   			}
   		},
   		animation: {
-  			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-down': 'accordion-down 0.28s ease-out',
+  			'accordion-up': 'accordion-up 0.28s ease-out',
+  			'loading-dot': 'loading-dot 1.4s ease-in-out infinite'
   		}
   	}
   },

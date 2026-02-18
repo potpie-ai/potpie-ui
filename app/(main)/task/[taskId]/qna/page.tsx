@@ -16,7 +16,11 @@ import QuestionSection from "./components/QuestionSection";
 import AdditionalContextSection from "./components/AdditionalContextSection";
 import QuestionProgress from "./components/QuestionProgress";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { normalizeMarkdownForPreview } from "@/lib/utils";
+import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils";
+import {
+  StreamTimeline,
+  type StreamTimelineItem,
+} from "@/components/stream/StreamTimeline";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -128,17 +132,13 @@ export default function QnaPage() {
   const [recipeRepoName, setRecipeRepoName] = useState<string | null>(null);
   const [recipeBranchName, setRecipeBranchName] = useState<string | null>(null);
   const [parsingStatus, setParsingStatus] = useState<string>("");
-  /** Real stream state (SSE); when isStreamingActive, Thinking block uses these instead of derived */
+  /** Real stream state (SSE); interleaved timeline when streaming */
   const [streamProgress, setStreamProgress] = useState<{ step: string; message: string } | null>(null);
-  const [streamEvents, setStreamEvents] = useState<{ id: string; type: string; label: string }[]>([]);
-  const [streamSegments, setStreamSegments] = useState<{ id: string; label: string; content: string }[]>([]);
-  const [streamChunks, setStreamChunks] = useState("");
+  const [streamItems, setStreamItems] = useState<StreamTimelineItem[]>([]);
   const [isStreamingActive, setIsStreamingActive] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
-  const streamChunksRef = useRef("");
-  const streamEventIdRef = useRef(0);
+  const streamItemIdRef = useRef(0);
   const streamOutputEndRef = useRef<HTMLDivElement>(null);
-  const streamChunkBoxRef = useRef<HTMLDivElement>(null);
   /** Guard: avoid starting question generation (POST) more than once per recipe (e.g. Strict Mode or effect re-run) */
   const questionGenerationStartedForRecipeRef = useRef<string | null>(null);
   /** Run ID from POST response so stream connects immediately without waiting for URL update */
@@ -452,14 +452,11 @@ export default function QnaPage() {
     streamAbortRef.current = new AbortController();
     setIsStreamingActive(true);
     setStreamProgress({ step: "Connecting…", message: "Opening live stream" });
-    setStreamChunks("");
-    setStreamSegments([]);
-    setStreamEvents([]);
-    streamChunksRef.current = "";
+    setStreamItems([]);
 
     const onEvent = (eventType: string, data: Record<string, unknown>) => {
       if (cancelled) return;
-      const payload = (data?.data as Record<string, unknown>) ?? data;
+      const payload = getStreamEventPayload(data);
       console.log("[QnA Stream] Event:", eventType, payload);
       if (eventType === "queued") {
         setStreamProgress({ step: "Queued", message: (payload?.message as string) ?? "Task queued for processing" });
@@ -476,39 +473,66 @@ export default function QnaPage() {
       }
       if (eventType === "chunk" && payload?.content) {
         const content = String(payload.content);
-        setStreamChunks((prev) => {
-          const next = prev + content;
-          streamChunksRef.current = next;
+        setStreamItems((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.type === "chunk") {
+            return [...prev.slice(0, -1), { ...last, content: last.content + content }];
+          }
+          return [...prev, { type: "chunk", id: `chunk-${++streamItemIdRef.current}`, content }];
+        });
+      }
+      if (eventType === "tool_call_start" && payload?.tool) {
+        const call_id = (payload.call_id as string) ?? `tool-${++streamItemIdRef.current}`;
+        setStreamItems((prev) => [
+          ...prev,
+          { type: "tool", id: call_id, label: String(payload.tool), phase: "running" as const },
+        ]);
+      }
+      if (eventType === "tool_call_end" && payload?.tool) {
+        const call_id = payload.call_id as string | undefined;
+        const label = String(payload.tool);
+        const result = payload.result;
+        const segmentContent =
+          result !== undefined && result !== null
+            ? typeof result === "object"
+              ? JSON.stringify(result, null, 2)
+              : String(result)
+            : "";
+        setStreamItems((prev) => {
+          const idx = call_id
+            ? prev.findIndex((it) => it.type === "tool" && it.id === call_id)
+            : prev.findLastIndex(
+                (it) => it.type === "tool" && it.phase === "running" && it.label === label
+              );
+          if (idx === -1) return prev;
+          const next = [...prev];
+          const cur = next[idx];
+          if (cur.type === "tool")
+            next[idx] = { ...cur, phase: "done" as const, result: segmentContent };
           return next;
         });
       }
-      // tool_call_start / tool_call_end: show in activity list; on tool_call_end push current chunks as a segment (same as spec)
-      if (eventType === "tool_call_start" && payload?.tool) {
-        const id = `tool-start-${++streamEventIdRef.current}`;
-        console.log("[QnA Stream] Tool start:", payload.tool);
-        setStreamEvents((prev) => [...prev.slice(-29), { id, type: "tool_start", label: `Running ${String(payload.tool)}` }]);
-      }
-      if (eventType === "tool_call_end" && payload?.tool) {
-        console.log("[QnA Stream] Tool end:", payload.tool);
-        const id = `tool-end-${++streamEventIdRef.current}`;
-        const duration = payload.duration_ms != null ? ` (${payload.duration_ms}ms)` : "";
-        const label = String(payload.tool);
-        const contentToPush = streamChunksRef.current;
-        if (contentToPush) {
-          setStreamSegments((prev) => [...prev, { id: `seg-${id}`, label, content: contentToPush }]);
-        }
-        setStreamChunks("");
-        streamChunksRef.current = "";
-        setStreamEvents((prev) => [...prev.slice(-29), { id, type: "tool_end", label: `Completed ${label}${duration}` }]);
-      }
       if (eventType === "subagent_start" && payload?.agent) {
-        const id = `subagent-start-${++streamEventIdRef.current}`;
-        setStreamEvents((prev) => [...prev.slice(-29), { id, type: "subagent_start", label: `Agent: ${String(payload.agent)}` }]);
+        const id = `subagent-${++streamItemIdRef.current}`;
+        setStreamItems((prev) => [
+          ...prev,
+          { type: "tool", id, label: `Agent: ${String(payload.agent)}`, phase: "running" as const },
+        ]);
       }
       if (eventType === "subagent_end" && payload?.agent) {
-        const id = `subagent-end-${++streamEventIdRef.current}`;
         const duration = payload.duration_ms != null ? ` (${payload.duration_ms}ms)` : "";
-        setStreamEvents((prev) => [...prev.slice(-29), { id, type: "subagent_end", label: `Done ${String(payload.agent)}${duration}` }]);
+        const label = `Agent: ${String(payload.agent)}`;
+        setStreamItems((prev) => {
+          const idx = prev.findLastIndex(
+            (it) => it.type === "tool" && it.phase === "running" && it.label === label
+          );
+          if (idx === -1) return prev;
+          const next = [...prev];
+          const cur = next[idx];
+          if (cur.type === "tool")
+            next[idx] = { ...cur, phase: "done" as const, result: `Done${duration}` };
+          return next;
+        });
       }
       if (eventType === "end") {
         setStreamProgress(null);
@@ -521,10 +545,7 @@ export default function QnaPage() {
       }
       if (eventType === "error") {
         setStreamProgress(null);
-        setStreamChunks("");
-        setStreamSegments([]);
-        setStreamEvents([]);
-        streamChunksRef.current = "";
+        setStreamItems([]);
         setIsStreamingActive(false);
         setRunIdForStream(null);
         QuestionService.getRecipeQuestions(recipeId).then(processQuestions).catch(() => {});
@@ -540,9 +561,7 @@ export default function QnaPage() {
       onError: (msg) => {
         if (cancelled) return;
         setStreamProgress(null);
-        setStreamChunks("");
-        setStreamSegments([]);
-        setStreamEvents([]);
+        setStreamItems([]);
         setIsStreamingActive(false);
         setRunIdForStream(null);
         toast.error(msg || "Stream failed.");
@@ -1491,12 +1510,10 @@ export default function QnaPage() {
 
   const {
     streamProgress: derivedProgress,
-    streamEvents: derivedEvents,
-    streamSegments: derivedSegments,
-    streamChunks: derivedChunks,
+    derivedItems,
   } = useMemo(() => {
-    const events: { id: string; type: string; label: string }[] = [];
-    const segments: { id: string; label: string; content: string }[] = [];
+    const events: { id: string; type: string; label: string; call_id?: string }[] = [];
+    const segments: { id: string; label: string; content: string; call_id?: string }[] = [];
     let chunks = "";
     let idx = 0;
 
@@ -1555,11 +1572,34 @@ export default function QnaPage() {
     const streamProgressValue =
       stepMessage ? { step: "Processing", message: stepMessage } : null;
 
+    const items: StreamTimelineItem[] = [];
+    if (chunks)
+      items.push({ type: "chunk", id: "derived-chunk", content: chunks });
+    const seen = new Set<string>();
+    for (const ev of events) {
+      if (ev.type === "tool_start") {
+        const cid = ev.call_id ?? ev.id;
+        if (!seen.has(cid)) {
+          seen.add(cid);
+          const seg = segments.find((s) => s.id === `seg-${cid}` || s.call_id === cid);
+          if (seg)
+            items.push({ type: "tool", id: cid, label: seg.label, phase: "done", result: seg.content });
+          else
+            items.push({ type: "tool", id: cid, label: ev.label.replace(/^Running\s+/, ""), phase: "running" });
+        }
+      }
+    }
+    for (const seg of segments) {
+      const cid = seg.call_id ?? seg.id.replace(/^seg-/, "");
+      if (!seen.has(cid)) {
+        seen.add(cid);
+        items.push({ type: "tool", id: cid, label: seg.label, phase: "done", result: seg.content });
+      }
+    }
+
     return {
       streamProgress: streamProgressValue,
-      streamEvents: events,
-      streamSegments: segments,
-      streamChunks: chunks,
+      derivedItems: items,
     };
   }, [
     parsingStatus,
@@ -1570,81 +1610,85 @@ export default function QnaPage() {
     state.questions.length,
   ]);
 
-  // When SSE is active use stream state; when we have stream data (live or from past run) keep showing it; otherwise use derived (parsing + poll)
-  const hasStreamData = streamSegments.length > 0 || streamEvents.length > 0;
+  const hasStreamData = streamItems.length > 0;
   const displayProgress = isStreamingActive ? streamProgress : derivedProgress;
-  const displayEvents = isStreamingActive || hasStreamData ? streamEvents : derivedEvents;
-  const displaySegments = isStreamingActive || hasStreamData ? streamSegments : derivedSegments;
-  const displayChunks = isStreamingActive || hasStreamData ? streamChunks : derivedChunks;
+  const displayItems = isStreamingActive || hasStreamData ? streamItems : derivedItems;
 
-  // Interleave: for each tool show start + end together (Running → Completed), then its output box (backend sends call_id on both start/end to pair them)
-  type StreamBlock =
-    | { key: string; kind: "event"; event: (typeof displayEvents)[0] }
-    | { key: string; kind: "segment"; segment: (typeof displaySegments)[0] };
-  const mergedStreamBlocks = useMemo((): StreamBlock[] => {
-    const blocks: StreamBlock[] = [];
-    for (const ev of displayEvents) {
-      blocks.push({ key: ev.id, kind: "event", event: ev });
-      if (ev.type === "tool_end") {
-        const seg = displaySegments.find((s) => s.id === `seg-${ev.id}`);
-        if (seg) blocks.push({ key: seg.id, kind: "segment", segment: seg });
-      }
-    }
-    return blocks;
-  }, [displayEvents, displaySegments]);
-
-  // Auto-scroll tool output to bottom when new events/segments/chunks arrive
   useEffect(() => {
-    if (mergedStreamBlocks.length > 0 || displayChunks) {
+    if (displayItems.length > 0) {
       streamOutputEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [mergedStreamBlocks.length, displayChunks]);
-
-  // Auto-scroll inside the live chunk box when content grows
-  useEffect(() => {
-    if (displayChunks && streamChunkBoxRef.current) {
-      streamChunkBoxRef.current.scrollTo({ top: streamChunkBoxRef.current.scrollHeight, behavior: "smooth" });
-    }
-  }, [displayChunks]);
+  }, [displayItems.length]);
 
   const hasQuestionsReady = state.pageState === "questions" && state.questions.length > 0;
 
   // Persist thinking when questions are ready so it survives refresh
   useEffect(() => {
     if (!recipeId || !hasQuestionsReady) return;
-    if (streamSegments.length > 0 || streamEvents.length > 0) {
+    if (streamItems.length > 0) {
       try {
         sessionStorage.setItem(
           `${THINKING_STORAGE_KEY_QNA}_${recipeId}`,
-          JSON.stringify({ segments: streamSegments, events: streamEvents })
+          JSON.stringify({ streamItems })
         );
       } catch {
         // ignore
       }
     }
-  }, [recipeId, hasQuestionsReady, streamSegments, streamEvents]);
+  }, [recipeId, hasQuestionsReady, streamItems]);
 
   // Restore thinking on load when questions are ready but we have no stream state (e.g. after refresh)
   useEffect(() => {
     if (!recipeId || !hasQuestionsReady || runIdFromUrl) return;
-    if (streamSegments.length > 0 || streamEvents.length > 0) return;
+    if (streamItems.length > 0) return;
     if (isStreamingActive) return;
     if (hasRestoredThinkingRef.current === recipeId) return;
     hasRestoredThinkingRef.current = recipeId;
     try {
       const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY_QNA}_${recipeId}`);
       if (!raw) return;
-      const data = JSON.parse(raw) as { segments?: { id: string; label: string; content: string }[]; events?: { id: string; type: string; label: string }[] };
+      const data = JSON.parse(raw) as {
+        streamItems?: StreamTimelineItem[];
+        segments?: { id: string; label: string; content: string; call_id?: string }[];
+        events?: { id: string; type: string; label: string; call_id?: string }[];
+      };
+      const items = Array.isArray(data.streamItems) ? data.streamItems : [];
+      if (items.length > 0) {
+        setStreamItems(items);
+        return;
+      }
       const segments = Array.isArray(data.segments) ? data.segments : [];
       const events = Array.isArray(data.events) ? data.events : [];
       if (segments.length > 0 || events.length > 0) {
-        setStreamSegments(segments);
-        setStreamEvents(events);
+        const legacy: StreamTimelineItem[] = [];
+        const seen = new Set<string>();
+        for (const ev of events) {
+          if (ev.type === "tool_start") {
+            const cid = ev.call_id ?? ev.id;
+            if (!seen.has(cid)) {
+              seen.add(cid);
+              const seg = segments.find((s) => s.id === `seg-${cid}` || s.call_id === cid);
+              const label = ev.label.replace(/^Running\s+/, "");
+              if (seg)
+                legacy.push({ type: "tool", id: cid, label: seg.label, phase: "done", result: seg.content });
+              else
+                legacy.push({ type: "tool", id: cid, label, phase: "running" });
+            }
+          }
+        }
+        for (const seg of segments) {
+          const cid = seg.call_id ?? seg.id.replace(/^seg-/, "");
+          if (!seen.has(cid)) {
+            seen.add(cid);
+            legacy.push({ type: "tool", id: cid, label: seg.label, phase: "done", result: seg.content });
+          }
+        }
+        if (legacy.length > 0) setStreamItems(legacy);
       }
     } catch {
       // ignore
     }
-  }, [recipeId, hasQuestionsReady, runIdFromUrl, isStreamingActive, streamSegments.length, streamEvents.length]);
+  }, [recipeId, hasQuestionsReady, runIdFromUrl, isStreamingActive, streamItems.length]);
 
   useEffect(() => {
     if (!recipeId) return;
@@ -1712,87 +1756,26 @@ export default function QnaPage() {
                 Analyzing your repository and generating clarifying questions. They&apos;ll appear below once ready—you can then answer and we&apos;ll create a plan together.
               </div>
             </div>
-            {/* Agent output: full chat width; Tool calls and Output as separate blocks */}
-            {(displayProgress || isGenerating || mergedStreamBlocks.length > 0 || displayChunks || displaySegments.length > 0) && (
+            {/* Agent output: interleaved timeline (chunks + tool rows in stream order) */}
+            {(displayProgress || isGenerating || displayItems.length > 0) && (
               <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
                 <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                 <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
-                  {(displayProgress || isGenerating) && (
+                  {(displayProgress || isGenerating) && displayItems.length === 0 && (
                     <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
                       <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
                       {displayProgress ? `${displayProgress.step}: ${displayProgress.message}` : "Generating questions…"}
                     </p>
                   )}
-                  {mergedStreamBlocks.length > 0 && (
-                    <div className="mb-3">
-                      <details className="group/tools rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden">
-                        <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-                          <span className="text-xs font-medium text-zinc-800">
-                            Tool calls ({mergedStreamBlocks.filter((b) => b.kind === "segment").length})
-                          </span>
-                          <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open/tools:rotate-180" aria-hidden />
-                        </summary>
-                        <div className="space-y-3 min-w-0 overflow-hidden pt-1 pb-0">
-                        {mergedStreamBlocks.map((block) =>
-                          block.kind === "event" ? (
-                            (block.event.type === "tool_start" || block.event.type === "tool_end") ? (
-                              <span key={block.key} className="hidden" aria-hidden />
-                            ) : (
-                              <p key={block.key} className="text-xs text-zinc-600 font-mono break-words">
-                                {block.event.type === "subagent_start" ? "▶ " : "✓ "}{block.event.label}
-                              </p>
-                            )
-                          ) : (
-                            <details
-                              key={block.key}
-                              className="group rounded-lg bg-[#F5F5F4] min-w-0 overflow-hidden"
-                            >
-                              <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
-                                  <span className="text-xs font-medium text-zinc-800 truncate">
-                                    {block.segment.label}
-                                  </span>
-                                </div>
-                                <ChevronDown
-                                  className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180"
-                                  aria-hidden
-                                />
-                              </summary>
-                              <div
-                                ref={(el) => {
-                                  if (el) el.scrollTop = el.scrollHeight;
-                                }}
-                                className="bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                                style={{ msOverflowStyle: "none" }}
-                              >
-                                <SharedMarkdown
-                                  content={normalizeMarkdownForPreview(block.segment.content)}
-                                />
-                              </div>
-                            </details>
-                          )
-                        )}
-                        </div>
-                      </details>
-                    </div>
-                  )}
-                  {(displayChunks || displaySegments.length > 0 || (displayProgress || isGenerating)) && (
-                    <div className="space-y-2 min-w-0 overflow-hidden">
-                      {displayChunks ? (
-                        <div
-                          ref={streamChunkBoxRef}
-                          className="rounded-lg bg-[#FAF8F7] p-3 overflow-y-auto overflow-x-hidden min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                          style={{ msOverflowStyle: "none" }}
-                        >
-                          <SharedMarkdown content={normalizeMarkdownForPreview(displayChunks)} />
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                  {(mergedStreamBlocks.length > 0 || displayChunks || displaySegments.length > 0 || (displayProgress || isGenerating)) && (
-                    <div ref={streamOutputEndRef} aria-hidden />
-                  )}
+                  <StreamTimeline
+                    items={displayItems}
+                    endRef={streamOutputEndRef}
+                    loading={
+                      displayItems.length > 0 &&
+                      (isStreamingActive || isGenerating) &&
+                      state.pageState !== "questions"
+                    }
+                  />
                   {state.questionGenerationError && (
                     <p className="text-xs text-red-600 mt-1">{state.questionGenerationError}</p>
                   )}

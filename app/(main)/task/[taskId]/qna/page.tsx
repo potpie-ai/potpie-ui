@@ -597,14 +597,14 @@ export default function QnaPage() {
           // If generation is in terminal state (completed/failed), clear any stale run_id from URL
           const isTerminal = questionsData.generation_status === "completed" || questionsData.generation_status === "failed";
           if (isTerminal && runIdFromUrl) {
-            const params = new URLSearchParams(searchParams.toString());
+            const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
             params.delete("run_id");
             router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
           }
           
           if (typeof runIdFromApi === "string" && runIdFromApi.trim()) {
             setRunIdForStream(runIdFromApi.trim());
-            const params = new URLSearchParams(searchParams.toString());
+            const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
             params.set("run_id", runIdFromApi.trim());
             router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
             return;
@@ -647,7 +647,7 @@ export default function QnaPage() {
             });
             if (runId?.trim()) {
               setRunIdForStream(runId.trim());
-              const params = new URLSearchParams(searchParams.toString());
+              const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
               params.set("run_id", runId.trim());
               router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
               gotRunId = true;
@@ -695,7 +695,7 @@ export default function QnaPage() {
           const runIdFromFallback = questionsData.run_id ?? (questionsData as unknown as Record<string, unknown>).run_id;
           if (typeof runIdFromFallback === "string" && runIdFromFallback.trim()) {
             setRunIdForStream(runIdFromFallback.trim());
-            const params = new URLSearchParams(searchParams.toString());
+            const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
             params.set("run_id", runIdFromFallback.trim());
             router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
             return;
@@ -741,7 +741,7 @@ export default function QnaPage() {
             const runIdFromPoll = questionsData.run_id ?? (questionsData as unknown as Record<string, unknown>).run_id;
             if (typeof runIdFromPoll === "string" && runIdFromPoll.trim()) {
               setRunIdForStream(runIdFromPoll.trim());
-              const params = new URLSearchParams(searchParams.toString());
+              const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
               params.set("run_id", runIdFromPoll.trim());
               router.replace(`/task/${recipeId}/qna?${params.toString()}`, { scroll: false });
               return;
@@ -788,7 +788,7 @@ export default function QnaPage() {
     };
 
     fetchQuestions();
-  }, [recipeId, runIdFromUrl, processQuestions, router, searchParams]);
+  }, [recipeId, runIdFromUrl, processQuestions, router]);
 
   // Generate questions on page load (old flow - kept for backward compatibility)
   // IMPORTANT: This page is /task/[taskId]/qna, so recipeIdFromPath should ALWAYS be present.
@@ -1481,14 +1481,6 @@ export default function QnaPage() {
     return !hasAnswer;
   }).length;
 
-  // Set repo and branch in Redux store when recipeId is available
-  useEffect(() => {
-    if (!recipeId) return;
-    if (!repoName || repoName === "Unknown Repository") return;
-
-    // Note: setRepoAndBranchForTask removed - not needed for current flow
-  }, [recipeId, repoName, branchName, projectId]);
-
   // Drive thinking stream UI from parsing + question status (same layout as spec)
   const questionsCount = state.questions.length;
   const isGenerating =
@@ -1513,10 +1505,12 @@ export default function QnaPage() {
       events.push({ id: `ev-${idx++}`, type: "tool_start", label });
       chunks = label;
     } else if (parsingStatus === ParsingStatusEnum.READY) {
-      events.push({ id: `ev-${idx++}`, type: "tool_end", label: "Cloning your repository" });
-      events.push({ id: `ev-${idx++}`, type: "tool_end", label: "Parsing your code" });
-      events.push({ id: `ev-${idx++}`, type: "tool_end", label: "Understanding your codebase" });
-      segments.push({ id: "seg-repo", label: "Repository", content: "Cloned and parsed successfully." });
+      const repoEvId = `ev-${idx}`;
+      events.push({ id: repoEvId, type: "tool_end", label: "Cloning your repository" });
+      events.push({ id: `ev-${++idx}`, type: "tool_end", label: "Parsing your code" });
+      events.push({ id: `ev-${++idx}`, type: "tool_end", label: "Understanding your codebase" });
+      idx++;
+      segments.push({ id: `seg-${repoEvId}`, label: "Repository", content: "Cloned and parsed successfully." });
     }
 
     const qStatus = state.questionGenerationStatus;
@@ -1535,9 +1529,11 @@ export default function QnaPage() {
       events.push({ id: `ev-${idx++}`, type: "tool_start", label: msg });
       chunks = chunks ? `${chunks}\n\n${msg}` : msg;
     } else if (questionsCount > 0) {
-      events.push({ id: `ev-${idx++}`, type: "tool_end", label: "Generating questions" });
+      const questionsEvId = `ev-${idx}`;
+      events.push({ id: questionsEvId, type: "tool_end", label: "Generating questions" });
+      idx++;
       segments.push({
-        id: "seg-questions",
+        id: `seg-${questionsEvId}`,
         label: "Questions",
         content: `Generated ${questionsCount} clarifying questions.`,
       });
@@ -1587,13 +1583,11 @@ export default function QnaPage() {
     | { key: string; kind: "segment"; segment: (typeof displaySegments)[0] };
   const mergedStreamBlocks = useMemo((): StreamBlock[] => {
     const blocks: StreamBlock[] = [];
-    let segmentIdx = 0;
     for (const ev of displayEvents) {
       blocks.push({ key: ev.id, kind: "event", event: ev });
-      if (ev.type === "tool_end" && segmentIdx < displaySegments.length) {
-        const seg = displaySegments[segmentIdx];
-        blocks.push({ key: seg.id, kind: "segment", segment: seg });
-        segmentIdx++;
+      if (ev.type === "tool_end") {
+        const seg = displaySegments.find((s) => s.id === `seg-${ev.id}`);
+        if (seg) blocks.push({ key: seg.id, kind: "segment", segment: seg });
       }
     }
     return blocks;

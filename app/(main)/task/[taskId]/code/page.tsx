@@ -75,6 +75,105 @@ import {
  * Code / implementation page: plan slices from API, task splitting (codegen), layers and tasks from getTaskSplittingItems.
  */
 
+/** Agent activity event (tool call) from task splitting status */
+type AgentActivityEvt = {
+  params?: Record<string, unknown>;
+  tool?: string;
+  phase?: number;
+  task?: number;
+};
+
+function getParamDisplayForEvt(evt: AgentActivityEvt): string {
+  const params = evt.params || {};
+  const tool = evt.tool || "";
+  if (params._truncated) {
+    return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
+  }
+  switch (tool) {
+    case "read": {
+      const filePath = String(params.file_path ?? params.path ?? "");
+      const segments = filePath.split("/").filter(Boolean);
+      return segments.length > 3 ? "…/" + segments.slice(-3).join("/") : filePath;
+    }
+    case "grep":
+    case "search":
+    case "ripgrep": {
+      const patternStr = String(params.pattern ?? params.query ?? "");
+      return `"${patternStr.slice(0, 40)}${patternStr.length > 40 ? "…" : ""}"`;
+    }
+    case "glob":
+    case "find":
+      return String(params.pattern ?? params.glob ?? "");
+    case "edit":
+    case "write":
+    case "str_replace": {
+      const editPath = String(params.file_path ?? params.path ?? "");
+      const editSegments = editPath.split("/").filter(Boolean);
+      return editSegments.length > 3 ? "…/" + editSegments.slice(-3).join("/") : editPath;
+    }
+    case "bash":
+    case "shell":
+    case "run": {
+      const cmd = params.command ?? params.cmd ?? "";
+      return String(cmd).slice(0, 40) + (String(cmd).length > 40 ? "…" : "");
+    }
+    case "list_dir":
+    case "ls":
+      return String(params.path ?? params.directory ?? ".");
+    default: {
+      const firstVal = Object.values(params).find((v) => typeof v === "string");
+      if (firstVal) {
+        const s = String(firstVal);
+        return s.slice(0, 40) + (s.length > 40 ? "…" : "");
+      }
+      return "";
+    }
+  }
+}
+
+function ToolCallItem({
+  evt,
+  index,
+  bodyRef,
+}: {
+  evt: AgentActivityEvt;
+  index: number;
+  bodyRef?: React.Ref<HTMLDivElement>;
+}) {
+  const paramDisplay = getParamDisplayForEvt(evt);
+  const toolLabel = evt.tool || "unknown";
+  const phaseTask = evt.phase != null ? `P${evt.phase + 1}.T${(evt.task ?? 0) + 1}` : "";
+  const oneLine = [toolLabel, paramDisplay ? (paramDisplay.length > 60 ? paramDisplay.slice(0, 60) + "…" : paramDisplay) : "", phaseTask].filter(Boolean).join(" · ");
+  const fullParams = evt?.params && typeof evt.params === "object" ? JSON.stringify(evt.params, null, 2) : "";
+  const bodyText = fullParams || (paramDisplay ? String(paramDisplay) : "");
+
+  return (
+    <details
+      key={index}
+      className="group rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden"
+    >
+      <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+        <div className="flex items-center gap-2 min-w-0">
+          <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
+          <span className="text-xs font-medium text-zinc-800 truncate min-w-0" title={oneLine}>
+            {oneLine}
+          </span>
+        </div>
+        <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+      </summary>
+      {bodyText ? (
+        <div
+          ref={bodyRef}
+          className="border-t border-[#CCD3CF]/60 bg-[#FAF8F7] p-3 max-h-[140px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ msOverflowStyle: "none" }}
+        >
+          <pre className="whitespace-pre-wrap break-words font-mono text-inherit">{bodyText}</pre>
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
 /** True if segment looks like a file (has an extension); otherwise treat as folder. */
 function looksLikeFileName(segment: string): boolean {
   return /\.\w+(\?.*)?$/.test(segment) || segment.includes(".");
@@ -2010,69 +2109,9 @@ export default function VerticalTaskExecution() {
                             {(taskSplittingStatus?.agent_activity?.length ?? 0) > 0 && (
                               <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] px-4 py-3 min-w-0 w-full">
                                 <div className="space-y-3 min-w-0 overflow-y-auto overflow-x-hidden max-h-[420px] pr-1">
-                                  {(taskSplittingStatus?.agent_activity ?? []).map((evt: { params?: Record<string, unknown>; tool?: string; phase?: number; task?: number }, i: number) => {
-                                    const params = evt.params || {};
-                                    const tool = evt.tool || "";
-                                    const getParamDisplay = (): string => {
-                                      if (params._truncated) return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
-                                      switch (tool) {
-                                        case "read": {
-                                          const filePath = String(params.file_path ?? params.path ?? "");
-                                          const segments = filePath.split("/").filter(Boolean);
-                                          return segments.length > 3 ? "…/" + segments.slice(-3).join("/") : filePath;
-                                        }
-                                        case "grep":
-                                        case "search":
-                                        case "ripgrep": {
-                                          const patternStr = String(params.pattern || params.query || "");
-                                          return `"${patternStr.slice(0, 40)}${patternStr.length > 40 ? "…" : ""}"`;
-                                        }
-                                        case "glob":
-                                        case "find": return String(params.pattern ?? params.glob ?? "");
-                                        case "edit":
-                                        case "write":
-                                        case "str_replace": {
-                                          const editPath = String(params.file_path ?? params.path ?? "");
-                                          const editSegments = editPath.split("/").filter(Boolean);
-                                          return editSegments.length > 3 ? "…/" + editSegments.slice(-3).join("/") : editPath;
-                                        }
-                                        case "bash":
-                                        case "shell":
-                                        case "run": return String(params.command ?? params.cmd ?? "").slice(0, 40) + (String(params.command ?? params.cmd ?? "").length > 40 ? "…" : "");
-                                        case "list_dir":
-                                        case "ls": return String(params.path ?? params.directory ?? ".");
-                                        default: {
-                                          const firstVal = Object.values(params).find((v) => typeof v === "string");
-                                          return firstVal ? String(firstVal).slice(0, 40) + (String(firstVal).length > 40 ? "…" : "") : "";
-                                        }
-                                      }
-                                    };
-                                    const paramDisplay = getParamDisplay();
-                                    const toolLabel = evt.tool || "unknown";
-                                    const phaseTask = evt.phase != null ? `P${evt.phase + 1}.T${(evt.task ?? 0) + 1}` : "";
-                                    const oneLine = [toolLabel, paramDisplay ? (paramDisplay.length > 60 ? paramDisplay.slice(0, 60) + "…" : paramDisplay) : "", phaseTask].filter(Boolean).join(" · ");
-                                    const fullParams = evt?.params && typeof evt.params === "object" ? JSON.stringify(evt.params, null, 2) : "";
-                                    const bodyText = fullParams || (paramDisplay ? String(paramDisplay) : "");
-                                    return (
-                                      <details
-                                        key={i}
-                                        className="group rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden"
-                                      >
-                                        <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-                                          <div className="flex items-center gap-2 min-w-0">
-                                            <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
-                                            <span className="text-xs font-medium text-zinc-800 truncate min-w-0" title={oneLine}>{oneLine}</span>
-                                          </div>
-                                          <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180" aria-hidden />
-                                        </summary>
-                                        {bodyText ? (
-                                          <div className="border-t border-[#CCD3CF]/60 bg-[#FAF8F7] p-3 max-h-[140px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ msOverflowStyle: "none" }}>
-                                            <pre className="whitespace-pre-wrap break-words font-mono text-inherit">{bodyText}</pre>
-                                          </div>
-                                        ) : null}
-                                      </details>
-                                    );
-                                  })}
+                                  {(taskSplittingStatus?.agent_activity ?? []).map((evt, i) => (
+                                    <ToolCallItem key={i} index={i} evt={evt as AgentActivityEvt} />
+                                  ))}
                                 </div>
                               </div>
                             )}
@@ -2116,103 +2155,22 @@ export default function VerticalTaskExecution() {
                               <AccordionContent className="pt-3 pb-0 transition-all data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                                 {(() => {
                                   const activity = taskSplittingStatus?.agent_activity ?? [];
-                                  const getParamDisplay = (evt: { params?: Record<string, unknown>; tool?: string }): string => {
-                                    const params = evt.params || {};
-                                    const tool = evt.tool || "";
-                                    if (params._truncated) {
-                                      return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
-                                    }
-                                    switch (tool) {
-                                      case "read": {
-                                        const filePath = String(params.file_path ?? params.path ?? "");
-                                        const segments = filePath.split("/").filter(Boolean);
-                                        return segments.length > 3 ? "…/" + segments.slice(-3).join("/") : filePath;
-                                      }
-                                      case "grep":
-                                      case "search":
-                                      case "ripgrep": {
-                                        const pattern = params.pattern || params.query || "";
-                                        const patternStr = String(pattern);
-                                        return `"${patternStr.slice(0, 40)}${patternStr.length > 40 ? "…" : ""}"`;
-                                      }
-                                      case "glob":
-                                      case "find":
-                                        return String(params.pattern ?? params.glob ?? "");
-                                      case "edit":
-                                      case "write":
-                                      case "str_replace": {
-                                        const editPath = String(params.file_path ?? params.path ?? "");
-                                        const editSegments = editPath.split("/").filter(Boolean);
-                                        return editSegments.length > 3 ? "…/" + editSegments.slice(-3).join("/") : editPath;
-                                      }
-                                      case "bash":
-                                      case "shell":
-                                      case "run": {
-                                        const cmd = params.command || params.cmd || "";
-                                        return String(cmd).slice(0, 40) + (String(cmd).length > 40 ? "…" : "");
-                                      }
-                                      case "list_dir":
-                                      case "ls":
-                                        return String(params.path ?? params.directory ?? ".");
-                                      default: {
-                                        const firstVal = Object.values(params).find((v) => typeof v === "string");
-                                        if (firstVal) {
-                                          const s = String(firstVal);
-                                          return s.slice(0, 40) + (s.length > 40 ? "…" : "");
-                                        }
-                                        return "";
-                                      }
-                                    }
-                                  };
                                   if (activity.length > 0) {
                                     return (
                                       <div
                                         ref={thinkingListRef}
                                         className="space-y-3 min-w-0 overflow-y-auto overflow-x-hidden max-h-[420px] pr-1"
                                       >
-                                        {activity.map((evt, i) => {
-                                          const paramDisplay = getParamDisplay(evt);
-                                          const toolLabel = evt.tool || "unknown";
-                                          const phaseTask = evt.phase != null ? `P${evt.phase + 1}.T${(evt.task ?? 0) + 1}` : "";
-                                          const oneLine = [toolLabel, paramDisplay ? (paramDisplay.length > 60 ? paramDisplay.slice(0, 60) + "…" : paramDisplay) : "", phaseTask].filter(Boolean).join(" · ");
-                                          const fullParams =
-                                            evt?.params && typeof evt.params === "object"
-                                              ? JSON.stringify(evt.params, null, 2)
-                                              : "";
-                                          const bodyText = fullParams || (paramDisplay ? String(paramDisplay) : "");
-                                          return (
-                                            <details
-                                              key={i}
-                                              className="group rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden"
-                                            >
-                                              <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                  <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
-                                                  <span className="text-xs font-medium text-zinc-800 truncate min-w-0" title={oneLine}>
-                                                    {oneLine}
-                                                  </span>
-                                                </div>
-                                                <ChevronDown
-                                                  className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180"
-                                                  aria-hidden
-                                                />
-                                              </summary>
-                                              {bodyText ? (
-                                                <div
-                                                  ref={(el) => {
-                                                    if (el) el.scrollTop = el.scrollHeight;
-                                                  }}
-                                                  className="border-t border-[#CCD3CF]/60 bg-[#FAF8F7] p-3 max-h-[140px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                                                  style={{ msOverflowStyle: "none" }}
-                                                >
-                                                  <pre className="whitespace-pre-wrap break-words font-mono text-inherit">
-                                                    {bodyText}
-                                                  </pre>
-                                                </div>
-                                              ) : null}
-                                            </details>
-                                          );
-                                        })}
+                                        {activity.map((evt, i) => (
+                                          <ToolCallItem
+                                            key={i}
+                                            index={i}
+                                            evt={evt as AgentActivityEvt}
+                                            bodyRef={(el) => {
+                                              if (el) el.scrollTop = el.scrollHeight;
+                                            }}
+                                          />
+                                        ))}
                                       </div>
                                     );
                                   }

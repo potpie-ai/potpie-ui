@@ -41,53 +41,56 @@ export default function QuestionEditMode({
 
   // Helper to strip option prefix (A., B., etc.) if already present
   const stripOptionPrefix = (option: string): string => {
-    // Remove patterns like "A. ", "B. ", etc. from the start
     return option.replace(/^[A-Z]\.\s*/, "");
   };
 
-  // Effect depends only on answer values, not onAnswerChange
-  useEffect(() => {
+  // Build answer payload from current values; used only when user changes something (no mount emit).
+  const buildPayload = (
+    t: string,
+    m: string,
+    s: number[],
+    c: string
+  ): Partial<QuestionAnswer> => {
     if (isMultipleChoice) {
-      // For multiple choice, build text answer from selected indices
       const options = Array.isArray(question.options)
         ? question.options.map((o) => (typeof o === "string" ? { label: o } : o))
         : [];
-      const selectedLabels = selectedIndices
+      const selectedLabels = s
         .map((idx) => {
           const opt = options[idx];
           return typeof opt === "string" ? opt : opt?.label;
         })
         .filter(Boolean)
         .join(", ");
-      
-      onAnswerChangeRef.current({
-        textAnswer: customAnswer || selectedLabels || undefined,
-        mcqAnswer: selectedIndices.map((idx) => String.fromCharCode(65 + idx)).join(",") || undefined,
-        selectedOptionIndices: selectedIndices.length > 0 ? selectedIndices : undefined,
+      return {
+        textAnswer: c || selectedLabels || undefined,
+        mcqAnswer: s.map((idx) => String.fromCharCode(65 + idx)).join(",") || undefined,
+        selectedOptionIndices: s.length > 0 ? s : undefined,
         selectedOptionIdx: undefined,
-      });
-    } else {
-      onAnswerChangeRef.current({
-        textAnswer: textValue || customAnswer || undefined,
-        mcqAnswer: mcqValue || undefined,
-        selectedOptionIdx: mcqValue ? (mcqValue.charCodeAt(0) - 65) : undefined,
-        selectedOptionIndices: undefined,
-      });
+      };
     }
-  }, [textValue, mcqValue, customAnswer, selectedIndices, isMultipleChoice, question.options]);
+    return {
+      textAnswer: t || c || undefined,
+      mcqAnswer: m || undefined,
+      selectedOptionIdx: m ? (m.charCodeAt(0) - 65) : undefined,
+      selectedOptionIndices: undefined,
+    };
+  };
 
   const handleToggleOption = (index: number) => {
     if (isMultipleChoice) {
       const isSelected = selectedIndices.includes(index);
       const newIndices = isSelected
-        ? selectedIndices.filter(i => i !== index)
+        ? selectedIndices.filter((i) => i !== index)
         : [...selectedIndices, index].sort((a, b) => a - b);
       setSelectedIndices(newIndices);
-      setCustomAnswer(""); // Clear custom answer when option is selected
+      setCustomAnswer("");
+      onAnswerChangeRef.current(buildPayload(textValue, mcqValue, newIndices, ""));
     } else {
       const optionLabel = String.fromCharCode(65 + index);
       setMcqValue(optionLabel);
-      setCustomAnswer(""); // Clear custom answer when MCQ option is selected
+      setCustomAnswer("");
+      onAnswerChangeRef.current(buildPayload(textValue, optionLabel, selectedIndices, ""));
     }
   };
 
@@ -145,8 +148,8 @@ export default function QuestionEditMode({
               value={mcqValue}
               onValueChange={(value) => {
                 setMcqValue(value);
-                // Clear custom answer when MCQ option is selected
                 setCustomAnswer("");
+                onAnswerChangeRef.current(buildPayload(textValue, value, selectedIndices, ""));
               }}
             >
               <div className="space-y-1.5">
@@ -191,15 +194,15 @@ export default function QuestionEditMode({
             <Textarea
               value={customAnswer}
               onChange={(e) => {
-                setCustomAnswer(e.target.value);
-                // Clear MCQ selection if custom answer is entered
-                if (e.target.value) {
-                  if (isMultipleChoice) {
-                    setSelectedIndices([]);
-                  } else {
-                    setMcqValue("");
-                  }
+                const nextCustom = e.target.value;
+                setCustomAnswer(nextCustom);
+                const nextIndices = nextCustom ? [] : selectedIndices;
+                const nextMcq = nextCustom ? "" : mcqValue;
+                if (nextCustom) {
+                  if (isMultipleChoice) setSelectedIndices([]);
+                  else setMcqValue("");
                 }
+                onAnswerChangeRef.current(buildPayload(textValue, nextMcq, nextIndices, nextCustom));
               }}
               placeholder="Enter your preferred option..."
               className="min-h-[60px] text-xs border-zinc-200 focus:border-zinc-300 rounded-lg"
@@ -209,7 +212,11 @@ export default function QuestionEditMode({
       ) : (
         <Textarea
           value={textValue}
-          onChange={(e) => setTextValue(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setTextValue(next);
+            onAnswerChangeRef.current(buildPayload(next, mcqValue, selectedIndices, customAnswer));
+          }}
           placeholder="Enter your answer..."
           className="min-h-[80px] text-xs border-zinc-200 focus:border-zinc-300 rounded-lg"
         />

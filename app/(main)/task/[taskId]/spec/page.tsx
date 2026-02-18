@@ -598,13 +598,11 @@ const SpecPage = () => {
     | { key: string; kind: "segment"; segment: (typeof streamSegments)[0] };
   const mergedStreamBlocks = useMemo((): StreamBlock[] => {
     const blocks: StreamBlock[] = [];
-    let segmentIdx = 0;
     for (const ev of streamEvents) {
       blocks.push({ key: ev.id, kind: "event", event: ev });
-      if (ev.type === "tool_end" && segmentIdx < streamSegments.length) {
-        const seg = streamSegments[segmentIdx];
-        blocks.push({ key: seg.id, kind: "segment", segment: seg });
-        segmentIdx++;
+      if (ev.type === "tool_end") {
+        const seg = streamSegments.find((s) => s.id === `seg-${ev.id}`);
+        if (seg) blocks.push({ key: seg.id, kind: "segment", segment: seg });
       }
     }
     return blocks;
@@ -856,9 +854,8 @@ const SpecPage = () => {
             const duration = payload.duration_ms != null ? ` (${payload.duration_ms}ms)` : "";
             const label = String(payload.tool);
             const contentToPush = streamChunksRef.current;
-            if (contentToPush) {
-              setStreamSegments((prev) => [...prev, { id: `seg-${id}`, label, content: contentToPush }]);
-            }
+            // Always push a segment (same id as event) so mergedStreamBlocks can pair by id; use empty string when no content
+            setStreamSegments((prev) => [...prev, { id: `seg-${id}`, label, content: contentToPush || "" }]);
             setStreamChunks("");
             streamChunksRef.current = "";
             setStreamEvents((prev) => [...prev.slice(-29), { id, type: "tool_end", label: `Completed ${label}${duration}` }]);

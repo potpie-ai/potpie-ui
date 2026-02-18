@@ -541,13 +541,11 @@ const PlanPage = () => {
     | { key: string; kind: "segment"; segment: (typeof streamSegments)[0] };
   const mergedStreamBlocks = useMemo((): StreamBlock[] => {
     const blocks: StreamBlock[] = [];
-    let segmentIdx = 0;
     for (const ev of streamEvents) {
       blocks.push({ key: ev.id, kind: "event", event: ev });
-      if (ev.type === "tool_end" && segmentIdx < streamSegments.length) {
-        const seg = streamSegments[segmentIdx];
-        blocks.push({ key: seg.id, kind: "segment", segment: seg });
-        segmentIdx++;
+      if (ev.type === "tool_end") {
+        const seg = streamSegments.find((s) => s.id === `seg-${ev.id}`);
+        if (seg) blocks.push({ key: seg.id, kind: "segment", segment: seg });
       }
     }
     return blocks;

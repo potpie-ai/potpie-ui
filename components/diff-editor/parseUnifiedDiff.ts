@@ -1,14 +1,27 @@
 /**
  * Parse unified diff content into original (left) and modified (right) file content
  * for use with Monaco DiffEditor.
+ * If no diff markers are found, returns empty original/modified so the caller
+ * can treat the content as plain text (e.g. single-editor path) and avoid stripping indentation.
  */
 export function parseUnifiedDiff(diffContent: string): {
   original: string;
   modified: string;
 } {
+  const lines = diffContent.split("\n");
+  const hasDiffMarker = lines.some(
+    (line) =>
+      line.startsWith("diff --git") ||
+      line.startsWith("@@") ||
+      line.startsWith("+++ ") ||
+      line.startsWith("--- ")
+  );
+  if (!hasDiffMarker) {
+    return { original: "", modified: "" };
+  }
+
   const original: string[] = [];
   const modified: string[] = [];
-  const lines = diffContent.split("\n");
 
   for (const line of lines) {
     // Skip diff metadata lines

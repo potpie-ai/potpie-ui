@@ -2,7 +2,70 @@
 
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "@/components/ui/sonner";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import QuestionService from "@/services/QuestionService";
+import type { MCQOption } from "@/services/QuestionService";
+import SpecService from "@/services/SpecService";
+import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
+import MediaService from "@/services/MediaService";
+import AIAnalysisBanner from "./components/AIAnalysisBanner";
+import QuestionSection from "./components/QuestionSection";
+import AdditionalContextSection from "./components/AdditionalContextSection";
+import QuestionProgress from "./components/QuestionProgress";
+import { Card, CardHeader } from "@/components/ui/card";
+import { Github, FileText, Loader2, GitBranch, Info } from "lucide-react";
+import {
+  RecipeQuestionsResponse,
+  RecipeQuestion,
+  RecipeQuestionNew,
+  QuestionOption,
+  TriggerSpecGenerationResponse,
+} from "@/lib/types/spec";
+import type {
+  MCQQuestion,
+  QuestionAnswer,
+  QuestionGenerationStatus,
+  RepoPageState,
+} from "@/types/question";
+import { DEFAULT_SECTION_ORDER } from "@/types/question";
+import { ParsingStatusEnum } from "@/lib/Constants";
 
+/** Sort section keys by DEFAULT_SECTION_ORDER, then alphabetically. */
+function getSortedSections(sectionKeys: Iterable<string>): string[] {
+  return Array.from(sectionKeys).sort((a, b) => {
+    const aIndex = DEFAULT_SECTION_ORDER.findIndex(
+      (s) =>
+        a.toLowerCase().includes(s.toLowerCase()) ||
+        s.toLowerCase().includes(a.toLowerCase())
+    );
+    const bIndex = DEFAULT_SECTION_ORDER.findIndex(
+      (s) =>
+        b.toLowerCase().includes(s.toLowerCase()) ||
+        s.toLowerCase().includes(b.toLowerCase())
+    );
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+const Badge = ({
+  children,
+  icon: Icon,
+}: {
+  children: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+}) => (
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-border-light rounded text-xs font-medium text-primary-color">
+    {Icon && <Icon className="w-3.5 h-3.5" />}
+    {children}
+  </div>
+);
+
+const RECIPE_ID_UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REPO_RECIPE_STORAGE_PREFIX = "repo_recipe_";
 
 /**
@@ -139,14 +202,25 @@ export default function RepoRedirectPage() {
                     }))
                   : [];
               const recIdxRaw = newQ.answer_recommendation?.idx;
-              const recIdx =
-                typeof recIdxRaw === "number"
-                  ? recIdxRaw
-                  : typeof recIdxRaw === "string"
-                    ? parseInt(recIdxRaw, 10)
-                    : null;
+              let recIdx: number | null = null;
+              if (typeof recIdxRaw === "number") {
+                recIdx = recIdxRaw;
+              } else if (typeof recIdxRaw === "string") {
+                const parsed = parseInt(recIdxRaw, 10);
+                recIdx = !Number.isNaN(parsed) ? parsed : null;
+              }
+              // Validate: must be a valid integer, finite, and within bounds of available options
+              // If options array is empty or index is invalid, set to null (no recommendation)
               const recIdxValid =
-                recIdx != null && !Number.isNaN(recIdx) ? recIdx : null;
+                recIdx != null &&
+                Number.isInteger(recIdx) &&
+                Number.isFinite(recIdx) &&
+                recIdx >= 0 &&
+                options.length > 0 &&
+                recIdx < options.length &&
+                options[recIdx] != null
+                  ? recIdx
+                  : null;
               const assumedLabel =
                 recIdxValid != null &&
                 recIdxValid >= 0 &&
@@ -222,6 +296,10 @@ export default function RepoRedirectPage() {
           const options = Array.isArray(q.options)
             ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
             : [];
+          
+          // Skip if no options available (can't select from empty array)
+          if (options.length === 0) return;
+          
           let recIdx: number | undefined;
           if (typeof q.answerRecommendationIdx === "number") {
             recIdx = q.answerRecommendationIdx;
@@ -230,10 +308,24 @@ export default function RepoRedirectPage() {
               (o) => (typeof o === "string" ? o : o.label) === q.assumed
             );
             if (found >= 0) recIdx = found;
-            else if (/^[A-Z]$/.test(q.assumed))
-              recIdx = q.assumed.charCodeAt(0) - 65;
+            else if (/^[A-Z]$/.test(q.assumed)) {
+              const letterIdx = q.assumed.charCodeAt(0) - 65;
+              // Validate letter index is within bounds
+              if (letterIdx >= 0 && letterIdx < options.length) {
+                recIdx = letterIdx;
+              }
+            }
           }
-          if (recIdx != null && recIdx >= 0 && recIdx < options.length) {
+          
+          // Validate: must be a valid integer, finite, and within bounds
+          if (
+            recIdx != null &&
+            Number.isInteger(recIdx) &&
+            Number.isFinite(recIdx) &&
+            recIdx >= 0 &&
+            recIdx < options.length &&
+            options[recIdx] != null
+          ) {
             const opt = options[recIdx];
             const label = typeof opt === "string" ? opt : opt.label;
             const isMultipleChoice = q.multipleChoice ?? false;
@@ -466,7 +558,7 @@ export default function RepoRedirectPage() {
           const isMultipleChoice = question?.multipleChoice ?? false;
           const options = question?.options
             ? (Array.isArray(question.options)
-                ? question.options.map((o) =>
+                ? question.options.map((o: string | MCQOption) =>
                     typeof o === "string" ? { label: o } : o
                   )
                 : [])
@@ -521,8 +613,8 @@ export default function RepoRedirectPage() {
               const answerLabels = textAnswerStr.split(",").map(l => l.trim());
               const matchedIndices: number[] = [];
               
-              answerLabels.forEach(answerLabel => {
-                const matchedIdx = options.findIndex(opt => {
+              answerLabels.forEach((answerLabel: string) => {
+                const matchedIdx = options.findIndex((opt: string | MCQOption) => {
                   const optLabel = typeof opt === "string" ? opt : opt.label;
                   return optLabel.trim() === answerLabel || optLabel.trim().includes(answerLabel);
                 });
@@ -548,7 +640,7 @@ export default function RepoRedirectPage() {
               }
             } else if (textAnswerStr && !textAnswerStr.startsWith("Other:")) {
               // Single label match for multiple choice (edge case)
-              const matchedIdx = options.findIndex(opt => {
+              const matchedIdx = options.findIndex((opt: string | MCQOption) => {
                 const optLabel = typeof opt === "string" ? opt : opt.label;
                 return optLabel.trim() === textAnswerStr || optLabel.trim().includes(textAnswerStr);
               });
@@ -560,7 +652,7 @@ export default function RepoRedirectPage() {
             // Fallback: reconstruct selectedOptionIdx from text_answer for single choice
             const textAnswerStr = ans.text_answer.trim();
             if (!textAnswerStr.startsWith("Other:")) {
-              const matchedIdx = options.findIndex(opt => {
+              const matchedIdx = options.findIndex((opt: string | MCQOption) => {
                 const optLabel = typeof opt === "string" ? opt : opt.label;
                 return optLabel.trim() === textAnswerStr || optLabel.trim().includes(textAnswerStr);
               });
@@ -595,6 +687,10 @@ export default function RepoRedirectPage() {
       const options = Array.isArray(q.options)
         ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
         : [];
+      
+      // Skip if no options available (can't select from empty array)
+      if (options.length === 0) return;
+      
       let idx: number | undefined;
       const qWithRec = q as MCQQuestion & { answerRecommendationIdx?: number };
       if (typeof qWithRec.answerRecommendationIdx === "number") {
@@ -604,10 +700,24 @@ export default function RepoRedirectPage() {
           (o) => (typeof o === "string" ? o : o.label) === q.assumed
         );
         if (found >= 0) idx = found;
-        else if (/^[A-Z]$/.test(q.assumed))
-          idx = q.assumed.charCodeAt(0) - 65;
+        else if (/^[A-Z]$/.test(q.assumed)) {
+          const letterIdx = q.assumed.charCodeAt(0) - 65;
+          // Validate letter index is within bounds
+          if (letterIdx >= 0 && letterIdx < options.length) {
+            idx = letterIdx;
+          }
+        }
       }
-      if (idx != null && idx >= 0 && idx < options.length) {
+      
+      // Validate: must be a valid integer, finite, and within bounds
+      if (
+        idx != null &&
+        Number.isInteger(idx) &&
+        Number.isFinite(idx) &&
+        idx >= 0 &&
+        idx < options.length &&
+        options[idx] != null
+      ) {
         const opt = options[idx];
         const label = typeof opt === "string" ? opt : opt.label;
         const isMultipleChoice = q.multipleChoice ?? false;

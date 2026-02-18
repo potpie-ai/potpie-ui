@@ -590,16 +590,12 @@ const ModelSelection: FC<{
           onClick={handleModelList}
         >
           <div className="flex flex-row justify-center items-center">
-            {currentModel.provider === "zai" ? (
-              <Zap className="h-5 w-5" />
-            ) : (
-              <Image
+            <Image
                 height={20}
                 width={20}
                 src={`/chat/${currentModel.provider}.svg`}
                 alt={currentModel.provider.charAt(0)}
               />
-            )}
 
             <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
           </div>
@@ -668,11 +664,6 @@ const ModelSelection: FC<{
                               onSelect={handleModelSelect(model.id)}
                               value={model.name + " " + model.provider}
                             >
-                              {model.provider === "zai" ? (
-                                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800">
-                                  <Zap className="h-5 w-5" />
-                                </div>
-                              ) : (
                                 <Avatar className="overflow-hidden rounded-full w-10 h-10">
                                   <AvatarImage
                                     src={`/chat/${model.provider}.svg`}
@@ -683,7 +674,6 @@ const ModelSelection: FC<{
                                     {model.provider.charAt(0)}
                                   </AvatarFallback>
                                 </Avatar>
-                              )}
                               <div className="flex flex-col">
                                 <div className="flex flex-row items-center">
                                   <span className="ml-2">{model.name}</span>

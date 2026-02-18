@@ -135,49 +135,53 @@ export default class TaskSplittingService {
     }
   ): void {
     const url = `${this.API_BASE}/${taskSplittingId}/stream${options.cursor ? `?cursor=${encodeURIComponent(options.cursor)}` : ""}`;
-    getHeaders().then((headers) => {
-      fetch(url, {
-        method: "GET",
-        headers: { ...headers, Accept: "text/event-stream" },
-        credentials: "include",
-        signal: options.signal,
-      })
-        .then(async (response) => {
-          if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-          if (!reader || !options.onEvent) return;
-          let buffer = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n\n");
-            buffer = lines.pop() || "";
-            for (const block of lines) {
-              if (!block.trim()) continue;
-              let eventType = "message";
-              let eventId: string | undefined;
-              let data: Record<string, unknown> = {};
-              for (const line of block.split("\n")) {
-                if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
-                if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
-                if (line.startsWith("data:")) {
-                  try {
-                    data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
-                  } catch {
-                    data = { raw: line.replace(/^data:\s*/, "").trim() };
+    getHeaders()
+      .then((headers) => {
+        fetch(url, {
+          method: "GET",
+          headers: { ...headers, Accept: "text/event-stream" },
+          credentials: "include",
+          signal: options.signal,
+        })
+          .then(async (response) => {
+            if (!response.ok) throw new Error(`Stream connect failed: ${response.status}`);
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            if (!reader || !options.onEvent) return;
+            let buffer = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n\n");
+              buffer = lines.pop() || "";
+              for (const block of lines) {
+                if (!block.trim()) continue;
+                let eventType = "message";
+                let eventId: string | undefined;
+                let data: Record<string, unknown> = {};
+                for (const line of block.split("\n")) {
+                  if (line.startsWith("event:")) eventType = line.replace(/^event:\s*/, "").trim();
+                  if (line.startsWith("id:")) eventId = line.replace(/^id:\s*/, "").trim();
+                  if (line.startsWith("data:")) {
+                    try {
+                      data = JSON.parse(line.replace(/^data:\s*/, "").trim()) as Record<string, unknown>;
+                    } catch {
+                      data = { raw: line.replace(/^data:\s*/, "").trim() };
+                    }
                   }
                 }
+                if (eventId) data.eventId = eventId;
+                options.onEvent?.(eventType, data);
+                if (eventType === "end" || eventType === "error") return;
               }
-              if (eventId) data.eventId = eventId;
-              options.onEvent?.(eventType, data);
-              if (eventType === "end" || eventType === "error") return;
             }
-          }
-        })
-        .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
-    });
+          })
+          .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
+      })
+      .catch((e) => {
+        options.onError?.(e instanceof Error ? e.message : String(e));
+      });
   }
 
   /**

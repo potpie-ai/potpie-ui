@@ -144,6 +144,12 @@ export default function QnaPage() {
   /** Run ID from POST response so stream connects immediately without waiting for URL update */
   const [runIdForStream, setRunIdForStream] = useState<string | null>(null);
   const hasRestoredThinkingRef = useRef<string | null>(null);
+  /** Used to persist answer to localStorage after setState (keeps updater pure) */
+  const answerPersistRef = useRef<{
+    recipeId: string;
+    questionId: string;
+    updatedAnswer: QuestionAnswer;
+  } | null>(null);
   const THINKING_STORAGE_KEY_QNA = "potpie_thinking_qna";
 
   const [additionalContextDialogOpen, setAdditionalContextDialogOpen] =
@@ -1301,7 +1307,12 @@ export default function QnaPage() {
         answersPayload["additional_context"] = state.additionalContext.trim();
       }
 
-      // Clear localStorage after successful submission since answers are now saved on backend
+      await SpecService.submitAnswers(recipeId, answersPayload);
+      const { runId } = await SpecService.startSpecGenerationStream(recipeId, {
+        consumeStream: false,
+      });
+
+      // Clear localStorage only after both calls succeed so we don't lose answers on submission failure
       if (typeof window !== "undefined" && recipeId) {
         try {
           const storageKey = `qa_answers_${recipeId}`;
@@ -1311,10 +1322,6 @@ export default function QnaPage() {
         }
       }
 
-      await SpecService.submitAnswers(recipeId, answersPayload);
-      const { runId } = await SpecService.startSpecGenerationStream(recipeId, {
-        consumeStream: false,
-      });
       return { runId };
     },
     onSuccess: (data: { runId?: string } | void) => {
@@ -1353,35 +1360,40 @@ export default function QnaPage() {
         isEditing: false,
         isUserModified: false,
       };
-      // Always mark as user modified when answer changes
       const updatedAnswer = { ...existing, ...answer, isUserModified: true };
       newAnswers.set(questionId, updatedAnswer);
-      
-      // Persist to localStorage to survive page navigation
-      if (typeof window !== "undefined" && recipeId) {
-        try {
-          const storageKey = `qa_answers_${recipeId}`;
-          const storedAnswers = localStorage.getItem(storageKey);
-          const answersToStore = storedAnswers ? JSON.parse(storedAnswers) : {};
-          answersToStore[questionId] = {
-            textAnswer: updatedAnswer.textAnswer,
-            mcqAnswer: updatedAnswer.mcqAnswer,
-            selectedOptionIdx: updatedAnswer.selectedOptionIdx,
-            selectedOptionIndices: updatedAnswer.selectedOptionIndices,
-            isOther: updatedAnswer.isOther,
-            otherText: updatedAnswer.otherText,
-            isUserModified: true,
-          };
-          localStorage.setItem(storageKey, JSON.stringify(answersToStore));
-        } catch (error) {
-          console.warn("Failed to persist answer to localStorage:", error);
-        }
-      }
-      
-      // Clear validation highlight when user provides an answer
       const newUnanswered = new Set(prev.unansweredQuestionIds ?? []);
       newUnanswered.delete(questionId);
+
+      if (recipeId) {
+        answerPersistRef.current = { recipeId, questionId, updatedAnswer };
+      }
+
       return { ...prev, answers: newAnswers, unansweredQuestionIds: newUnanswered };
+    });
+
+    // Persist to localStorage after state update (keeps setState updater pure)
+    queueMicrotask(() => {
+      const p = answerPersistRef.current;
+      if (!p || typeof window === "undefined") return;
+      answerPersistRef.current = null;
+      try {
+        const storageKey = `qa_answers_${p.recipeId}`;
+        const storedAnswers = localStorage.getItem(storageKey);
+        const answersToStore = storedAnswers ? JSON.parse(storedAnswers) : {};
+        answersToStore[p.questionId] = {
+          textAnswer: p.updatedAnswer.textAnswer,
+          mcqAnswer: p.updatedAnswer.mcqAnswer,
+          selectedOptionIdx: p.updatedAnswer.selectedOptionIdx,
+          selectedOptionIndices: p.updatedAnswer.selectedOptionIndices,
+          isOther: p.updatedAnswer.isOther,
+          otherText: p.updatedAnswer.otherText,
+          isUserModified: true,
+        };
+        localStorage.setItem(storageKey, JSON.stringify(answersToStore));
+      } catch (error) {
+        console.warn("Failed to persist answer to localStorage:", error);
+      }
     });
   };
 

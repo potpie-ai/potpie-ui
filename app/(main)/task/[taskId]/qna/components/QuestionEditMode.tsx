@@ -123,6 +123,7 @@ export default function QuestionEditMode({
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => handleToggleOption(index)}
+                      onClick={(e) => e.stopPropagation()}
                       id={`option-${question.id}-${index}`}
                       className="mt-0.5 shrink-0"
                     />

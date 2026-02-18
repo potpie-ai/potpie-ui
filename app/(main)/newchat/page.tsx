@@ -351,7 +351,6 @@ export default function NewChatPage() {
       attachmentIds?: string[];
       repoName?: string;
       branchName?: string;
-    }): Promise<CreateRecipeCodegenResponse> => {
     }): Promise<CreateRecipeCodegenResponse & { runId?: string }> => {
       const recipeResponse = await SpecService.createRecipeCodegen({
         user_prompt: data.userPrompt,
@@ -376,7 +375,7 @@ export default function NewChatPage() {
       }
       return { ...recipeResponse, runId };
     },
-    onSuccess: (data: CreateRecipeCodegenResponse, variables: {
+    onSuccess: (data: CreateRecipeCodegenResponse & { runId?: string }, variables: {
       userPrompt: string;
       projectId: string;
       additionalLinks?: string[];
@@ -384,7 +383,6 @@ export default function NewChatPage() {
       repoName?: string;
       branchName?: string;
     }) => {
-    onSuccess: (data: CreateRecipeCodegenResponse & { runId?: string }) => {
       const recipeId = data.recipe.id;
       const projectId = data.recipe.project_id?.toString() || state.projectId;
       setState((prev) => ({

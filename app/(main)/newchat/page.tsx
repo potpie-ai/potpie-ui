@@ -9,6 +9,7 @@ import ParsingStatusCard from "../idea/components/ParsingStatusCard";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import SpecService from "@/services/SpecService";
+import QuestionService from "@/services/QuestionService";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { CreateRecipeCodegenResponse } from "@/lib/types/spec";
@@ -22,6 +23,7 @@ import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
 import { ParsingStatusEnum } from "@/lib/Constants";
 import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
 import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
+import { useGithubAppPopup } from "../idea/hooks/useGithubAppPopup";
 
 interface Repo {
   id: string;
@@ -73,6 +75,10 @@ export default function NewChatPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useAuthContext();
   const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
+  const { openGithubPopup } = useGithubAppPopup(() => {
+    // Refetch repos when GitHub App installation is complete
+    refetchRepos();
+  });
 
   const [state, setState] = useState<NewChatPageState>({
     input: "",
@@ -343,7 +349,10 @@ export default function NewChatPage() {
       projectId: string;
       additionalLinks?: string[];
       attachmentIds?: string[];
+      repoName?: string;
+      branchName?: string;
     }): Promise<CreateRecipeCodegenResponse> => {
+    }): Promise<CreateRecipeCodegenResponse & { runId?: string }> => {
       const recipeResponse = await SpecService.createRecipeCodegen({
         user_prompt: data.userPrompt,
         project_id: data.projectId,
@@ -353,16 +362,29 @@ export default function NewChatPage() {
           : undefined,
       });
       const recipeId = recipeResponse.recipe.id;
-      SpecService.triggerQuestionGeneration(recipeId, {
-        user_prompt: data.userPrompt,
-        additional_links: data.additionalLinks,
-      }).catch((err) => {
-        console.error("[newchat] triggerQuestionGeneration failed", { recipeId, userPrompt: data.userPrompt, error: err });
-        toast.error("Question generation could not be started. You can continue to the repo page; questions may load later.");
-      });
-      return recipeResponse;
+      // Start streaming question generation so the QnA page can connect to the live stream.
+      // (POST /questions/generate would start the non-streaming task, which doesn't publish to Redis.)
+      let runId: string | undefined;
+      try {
+        const result = await QuestionService.startQuestionsGenerationStream(recipeId, {
+          consumeStream: false,
+        });
+        if (result.runId?.trim()) runId = result.runId.trim();
+      } catch (err) {
+        console.error("[newchat] startQuestionsGenerationStream failed", { recipeId, error: err });
+        toast.error("Question generation could not be started. You can continue to the QnA page; questions may load when ready.");
+      }
+      return { ...recipeResponse, runId };
     },
-    onSuccess: (data: CreateRecipeCodegenResponse) => {
+    onSuccess: (data: CreateRecipeCodegenResponse, variables: {
+      userPrompt: string;
+      projectId: string;
+      additionalLinks?: string[];
+      attachmentIds?: string[];
+      repoName?: string;
+      branchName?: string;
+    }) => {
+    onSuccess: (data: CreateRecipeCodegenResponse & { runId?: string }) => {
       const recipeId = data.recipe.id;
       const projectId = data.recipe.project_id?.toString() || state.projectId;
       setState((prev) => ({
@@ -371,7 +393,17 @@ export default function NewChatPage() {
         projectId: projectId || null,
         loading: false,
       }));
-      if (state.selectedRepo) {
+      
+      // Use repoName/branchName from variables if provided, otherwise try to get from state
+      let repoName: string = "";
+      let branchName: string = "main";
+      
+      if (variables.repoName && variables.branchName) {
+        // Use the provided repoName and branchName
+        repoName = variables.repoName;
+        branchName = variables.branchName;
+      } else if (state.selectedRepo) {
+        // Fall back to state.selectedRepo
         const selectedRepoData = repositories.find(
           (repo: Repo) => repo.id?.toString() === state.selectedRepo
         );
@@ -398,17 +430,45 @@ export default function NewChatPage() {
               projectId: projectId || undefined,
             })
           );
-          const params = new URLSearchParams({ recipeId });
+          const params = new URLSearchParams();
           if (repoName) params.append("repoName", repoName);
           if (state.input) params.append("featureIdea", getCleanInput(state.input));
-          router.push(`/repo?${params.toString()}`);
+          if (data.runId) params.set("run_id", data.runId);
+          router.push(`/task/${recipeId}/qna?${params.toString()}`);
         } else {
           toast.error("Repository data not found. Please try again.");
+          return;
         }
       } else {
         toast.error(
           "Repository not selected. Please select a repository and try again."
         );
+        return;
+      }
+      
+      if (repoName) {
+        localStorage.setItem(
+          `recipe_${recipeId}`,
+          JSON.stringify({
+            recipe_id: recipeId,
+            project_id: projectId || null,
+            repo_name: repoName,
+            branch_name: branchName,
+            user_prompt: state.input ? getCleanInput(state.input) : undefined,
+          })
+        );
+        dispatch(
+          setRepoAndBranchForTask({
+            taskId: recipeId,
+            repoName: repoName || "",
+            branchName,
+            projectId: projectId || undefined,
+          })
+        );
+        const params = new URLSearchParams({ recipeId });
+        if (repoName) params.append("repoName", repoName);
+        if (state.input) params.append("featureIdea", getCleanInput(state.input));
+        router.push(`/repo?${params.toString()}`);
       }
     },
     onError: (error: any) => {
@@ -466,6 +526,13 @@ export default function NewChatPage() {
     },
   });
 
+  /**
+   * Normalizes a repository name for comparison by removing .git suffix and trimming
+   */
+  const normalizeRepoName = (name: string): string => {
+    return name.trim().toLowerCase().replace(/\.git$/i, "");
+  };
+
   const parseRepo = async (repoName: string, branchName: string) => {
     if (!repoName || !branchName) {
       toast.error("Please select a repository and branch");
@@ -509,12 +576,38 @@ export default function NewChatPage() {
             additionalLinks: undefined,
             attachmentIds:
               state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+            repoName: repoName.trim(),
+            branchName: branchName || "main",
           });
         } else if (
           (state.selectedAgent === "ask" || state.selectedAgent === "debug") &&
-          projectId
+          projectId &&
+          state.input.trim()
         ) {
           await createConversationAndNavigate(projectId);
+        }
+        // Refetch repos and auto-select the parsed repo in the repo field
+        try {
+          const { data: refreshedRepos } = await refetchRepos();
+          const list = refreshedRepos ?? [];
+          const normalizedParsedName = normalizeRepoName(repoName);
+          const matchingRepo = list.find((r: Repo) => {
+            const repoFullName = normalizeRepoName(r.full_name || "");
+            const repoNameOnly = normalizeRepoName(r.name || "");
+            return (
+              repoFullName === normalizedParsedName ||
+              repoNameOnly === normalizedParsedName
+            );
+          });
+          if (matchingRepo) {
+            setState((prev) => ({
+              ...prev,
+              selectedRepo: matchingRepo.id?.toString() ?? prev.selectedRepo,
+              selectedBranch: branchName || "main",
+            }));
+          }
+        } catch (_) {
+          // ignore refetch errors
         }
         return;
       }
@@ -616,43 +709,147 @@ export default function NewChatPage() {
               additionalLinks: undefined,
               attachmentIds:
                 state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+              repoName: repoName.trim(),
+              branchName: branchName || "main",
             });
           } else if (
             (state.selectedAgent === "ask" ||
               state.selectedAgent === "debug") &&
-            projectId
+            projectId &&
+            state.input.trim()
           ) {
             await createConversationAndNavigate(projectId);
+          }
+          // Refetch repos and auto-select the parsed repo in the repo field
+          try {
+            const { data: refreshedRepos } = await refetchRepos();
+            const list = refreshedRepos ?? [];
+            const normalizedParsedName = normalizeRepoName(repoName);
+            const matchingRepo = list.find((r: Repo) => {
+              const repoFullName = normalizeRepoName(r.full_name || "");
+              const repoName = normalizeRepoName(r.name || "");
+              return (
+                repoFullName === normalizedParsedName ||
+                repoName === normalizedParsedName
+              );
+            });
+            if (matchingRepo) {
+              setState((prev) => ({
+                ...prev,
+                selectedRepo: matchingRepo.id?.toString() ?? prev.selectedRepo,
+                selectedBranch: branchName || "main",
+              }));
+            }
+          } catch (_) {
+            // ignore refetch errors
           }
         }
       };
       await pollStatus();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error during parsing:", err);
       setState((prev) => ({
         ...prev,
         parsingStatus: ParsingStatusEnum.ERROR,
         parsing: false,
       }));
+      
+      // Check if error indicates GitHub is not linked
+      const errorMessage = err?.response?.data?.detail || err?.response?.data?.message || err?.message || "";
+      const lowerMessage = errorMessage.toLowerCase();
+      
+      // Check for GitHub linking errors
+      if (
+        lowerMessage.includes("github") && 
+        (lowerMessage.includes("not linked") || 
+         lowerMessage.includes("not connected") ||
+         lowerMessage.includes("link github") ||
+         lowerMessage.includes("github account") ||
+         err?.response?.status === 401 ||
+         err?.response?.status === 403)
+      ) {
+        // Redirect to GitHub App installation
+        toast.error("GitHub account not linked. Redirecting to GitHub installation...");
+        openGithubPopup();
+        return;
+      }
+      
       toast.error("Failed to parse repository. Please try again.");
     }
   };
 
   const handleParseRepo = async () => {
-    if (!state.selectedRepo) {
-      toast.error("Please select a repository first");
+    let repoName: string = "";
+    let branchName: string = "main";
+
+    // If a repository is selected from the dropdown, use it
+    if (state.selectedRepo) {
+      const selectedRepoData = repositories.find(
+        (repo: Repo) => repo.id?.toString() === state.selectedRepo
+      );
+      if (!selectedRepoData) {
+        toast.error("Repository not found");
+        return;
+      }
+      repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+      branchName =
+        state.selectedBranch || selectedRepoData.default_branch || "main";
+    } 
+    // Otherwise, check if user has typed a repository URL in the search field
+    else if (repoSearchTerm && repoSearchTerm.trim()) {
+      const searchTerm = repoSearchTerm.trim();
+      
+      // Check if it's a GitHub URL (https://github.com/owner/repo or http://github.com/owner/repo)
+      const githubUrlRegex = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/.*)?$/;
+      const match = searchTerm.match(githubUrlRegex);
+      
+      if (match) {
+        // Extract owner/repo from URL and normalize repo name by removing trailing .git (case-insensitive)
+        const owner = match[1];
+        const repo = match[2].replace(/\.git$/i, '');
+        repoName = `${owner}/${repo}`;
+        branchName = state.selectedBranch || "main";
+      } 
+      // Check if it's already in owner/repo format
+      else if (/^[^\/]+\/[^\/]+$/.test(searchTerm)) {
+        // Normalize repo name by removing trailing .git (case-insensitive)
+        repoName = searchTerm.replace(/\.git$/i, '');
+        branchName = state.selectedBranch || "main";
+      } 
+      else {
+        toast.error("Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo) or select a repository from the list");
+        return;
+      }
+      
+      // Try to find a matching repo in the repositories array
+      const matchingRepo = repositories.find(
+        (repo: Repo) => 
+          repo.full_name === repoName || 
+          repo.name === repoName ||
+          repo.full_name?.toLowerCase() === repoName.toLowerCase() ||
+          repo.name?.toLowerCase() === repoName.toLowerCase()
+      );
+      
+      if (matchingRepo) {
+        // Update state with the matching repo
+        setState((prev) => ({
+          ...prev,
+          selectedRepo: matchingRepo.id.toString(),
+          selectedBranch: branchName,
+        }));
+      }
+    } 
+    // No repository selected and no search term - open GitHub App installation popup
+    else {
+      openGithubPopup();
       return;
     }
-    const selectedRepoData = repositories.find(
-      (repo: Repo) => repo.id?.toString() === state.selectedRepo
-    );
-    if (!selectedRepoData) {
-      toast.error("Repository not found");
+
+    if (!repoName) {
+      toast.error("Repository name is required");
       return;
     }
-    const repoName = selectedRepoData.full_name || selectedRepoData.name || "";
-    const branchName =
-      state.selectedBranch || selectedRepoData.default_branch || "main";
+
     await parseRepo(repoName, branchName);
   };
 
@@ -763,10 +960,10 @@ export default function NewChatPage() {
           branchName,
         })
       );
-      const params = new URLSearchParams({ recipeId: state.recipeId });
+      const params = new URLSearchParams();
       if (repoName) params.append("repoName", repoName);
       if (state.input) params.append("featureIdea", getCleanInput(state.input));
-      router.push(`/repo?${params.toString()}`);
+      router.push(`/task/${state.recipeId}/qna?${params.toString()}`);
       return;
     }
     toast.error("Invalid agent selection");
@@ -888,6 +1085,8 @@ export default function NewChatPage() {
         additionalLinks: undefined,
         attachmentIds:
           state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+        repoName: repoFullName,
+        branchName,
       });
       return;
     }
@@ -1017,6 +1216,28 @@ export default function NewChatPage() {
               selectedAgent={state.selectedAgent}
               onAgentSelect={handleAgentSelect}
               onParseRepo={handleParseRepo}
+              onParseRepoWithName={(repoName: string, branchName: string) => {
+                // Try to find a matching repo in the repositories array and update state
+                const matchingRepo = repositories.find(
+                  (repo: Repo) => 
+                    repo.full_name === repoName || 
+                    repo.name === repoName ||
+                    repo.full_name?.toLowerCase() === repoName.toLowerCase() ||
+                    repo.name?.toLowerCase() === repoName.toLowerCase()
+                );
+                
+                if (matchingRepo) {
+                  // Update state with the matching repo
+                  setState((prev) => ({
+                    ...prev,
+                    selectedRepo: matchingRepo.id.toString(),
+                    selectedBranch: branchName,
+                  }));
+                }
+                
+                // Parse repository (repoName/branchName will be passed through mutation)
+                parseRepo(repoName, branchName);
+              }}
               onAttachmentChange={handleAttachmentChange}
               attachmentUploading={state.attachmentUploading}
               repoSearchTerm={repoSearchTerm}

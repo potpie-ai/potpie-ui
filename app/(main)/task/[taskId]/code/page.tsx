@@ -35,19 +35,18 @@ import {
   Github,
   Sparkles,
   Info,
-  Plus,
-  Pencil,
-  Trash2,
-  Undo2,
   RefreshCw,
   SendHorizonal,
   FolderTree,
+  Wrench,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
 import TaskSplittingService from "@/services/TaskSplittingService";
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
+import ChatService from "@/services/ChatService";
+import { useAuthContext } from "@/contexts/AuthContext";
 import { useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/sonner";
 import {
@@ -58,16 +57,127 @@ import {
 } from "@/lib/types/spec";
 import Image from "next/image";
 import { TreeView, TreeNode } from "@/components/ui/tree-view";
+import { MonacoDiffView } from "@/components/diff-editor/MonacoDiffView";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 /**
  * Code / implementation page: plan slices from API, task splitting (codegen), layers and tasks from getTaskSplittingItems.
  */
+
+/** Agent activity event (tool call) from task splitting status */
+type AgentActivityEvt = {
+  params?: Record<string, unknown>;
+  tool?: string;
+  phase?: number;
+  task?: number;
+};
+
+function getParamDisplayForEvt(evt: AgentActivityEvt): string {
+  const params = evt.params || {};
+  const tool = evt.tool || "";
+  if (params._truncated) {
+    return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
+  }
+  switch (tool) {
+    case "read": {
+      const filePath = String(params.file_path ?? params.path ?? "");
+      const segments = filePath.split("/").filter(Boolean);
+      return segments.length > 3 ? "…/" + segments.slice(-3).join("/") : filePath;
+    }
+    case "grep":
+    case "search":
+    case "ripgrep": {
+      const patternStr = String(params.pattern ?? params.query ?? "");
+      return `"${patternStr.slice(0, 40)}${patternStr.length > 40 ? "…" : ""}"`;
+    }
+    case "glob":
+    case "find":
+      return String(params.pattern ?? params.glob ?? "");
+    case "edit":
+    case "write":
+    case "str_replace": {
+      const editPath = String(params.file_path ?? params.path ?? "");
+      const editSegments = editPath.split("/").filter(Boolean);
+      return editSegments.length > 3 ? "…/" + editSegments.slice(-3).join("/") : editPath;
+    }
+    case "bash":
+    case "shell":
+    case "run": {
+      const cmd = params.command ?? params.cmd ?? "";
+      return String(cmd).slice(0, 40) + (String(cmd).length > 40 ? "…" : "");
+    }
+    case "list_dir":
+    case "ls":
+      return String(params.path ?? params.directory ?? ".");
+    default: {
+      const firstVal = Object.values(params).find((v) => typeof v === "string");
+      if (firstVal) {
+        const s = String(firstVal);
+        return s.slice(0, 40) + (s.length > 40 ? "…" : "");
+      }
+      return "";
+    }
+  }
+}
+
+function ToolCallItem({
+  evt,
+  index,
+  bodyRef,
+}: {
+  evt: AgentActivityEvt;
+  index: number;
+  bodyRef?: React.Ref<HTMLDivElement>;
+}) {
+  const paramDisplay = getParamDisplayForEvt(evt);
+  const toolLabel = evt.tool || "unknown";
+  const phaseTask = evt.phase != null ? `P${evt.phase + 1}.T${(evt.task ?? 0) + 1}` : "";
+  const oneLine = [toolLabel, paramDisplay ? (paramDisplay.length > 60 ? paramDisplay.slice(0, 60) + "…" : paramDisplay) : "", phaseTask].filter(Boolean).join(" · ");
+  const fullParams = evt?.params && typeof evt.params === "object" ? JSON.stringify(evt.params, null, 2) : "";
+  const bodyText = fullParams || (paramDisplay ? String(paramDisplay) : "");
+
+  return (
+    <details
+      key={index}
+      className="group rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden"
+    >
+      <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+        <div className="flex items-center gap-2 min-w-0">
+          <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
+          <span className="text-xs font-medium text-zinc-800 truncate min-w-0" title={oneLine}>
+            {oneLine}
+          </span>
+        </div>
+        <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+      </summary>
+      {bodyText ? (
+        <div
+          ref={bodyRef}
+          className="border-t border-[#CCD3CF]/60 bg-[#FAF8F7] p-3 max-h-[140px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ msOverflowStyle: "none" }}
+        >
+          <pre className="whitespace-pre-wrap break-words font-mono text-inherit">{bodyText}</pre>
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
+/** True if segment looks like a file (has an extension); otherwise treat as folder. */
+function looksLikeFileName(segment: string): boolean {
+  return /\.\w+(\?.*)?$/.test(segment) || segment.includes(".");
+}
 
 /** Build a tree of TreeNode from file paths (e.g. ["src/foo/bar.ts", "src/baz.ts"]). */
 function buildFileTree(paths: string[]): TreeNode[] {
@@ -87,7 +197,8 @@ function buildFileTree(paths: string[]): TreeNode[] {
 
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
-      const isFile = i === parts.length - 1;
+      const isLast = i === parts.length - 1;
+      const isFile = isLast && looksLikeFileName(part);
       pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part;
       const id = pathSoFar;
 
@@ -173,52 +284,6 @@ const StatusBadge = ({ status, tests }: { status: string; tests: any }) => {
   );
 };
 
-// Renders file diff content (used in CodeFileCard and in Changed files slider)
-const FileDiffView = ({
-  change,
-}: {
-  change: { path: string; lang: string; content: string };
-}) => {
-  const lines = change.content?.split("\n") || [];
-  return (
-    <div className="min-w-0 overflow-x-auto" style={{ contain: "inline-size" }}>
-      <table className="w-full border-collapse min-w-max">
-        <tbody>
-          {lines.map((line, idx) => {
-            const isAddition = line.startsWith("+") && !line.startsWith("+++");
-            const isRemoval = line.startsWith("-") && !line.startsWith("---");
-            const isHunkHeader = line.startsWith("@@");
-            const isFileHeader = line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("+++") || line.startsWith("---");
-            const lineNum = idx + 1;
-            let rowBg = "";
-            if (isAddition) rowBg = "bg-emerald-50/50";
-            else if (isRemoval) rowBg = "bg-red-50/50";
-            else if (isHunkHeader) rowBg = "bg-blue-50/50";
-            else if (isFileHeader) rowBg = "bg-zinc-50/30";
-            let textClass = "text-[#022019]";
-            if (isAddition) textClass = "text-emerald-700";
-            else if (isRemoval) textClass = "text-red-700";
-            else if (isHunkHeader) textClass = "text-blue-600 font-medium";
-            else if (isFileHeader) textClass = "text-zinc-400 italic";
-            return (
-              <tr key={idx} className={rowBg}>
-                <td className="select-none text-right pr-4 pl-4 py-0.5 w-12 bg-[#FAFAFA] border-r border-gray-100">
-                  <span className="text-[11px] text-zinc-400 font-mono">
-                    {lineNum.toString().padStart(2, "0")}
-                  </span>
-                </td>
-                <td className="pl-4 py-0.5 font-mono text-[11px] whitespace-pre">
-                  <span className={textClass}>{line || " "}</span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
 // Code File Card Component with collapsible sections
 const CodeFileCard = ({
   change,
@@ -251,7 +316,13 @@ const CodeFileCard = ({
         </div>
       </button>
       {isExpanded && (
-        <FileDiffView change={{ path: change.path, lang: change.lang, content: change.content }} />
+        <div className="min-h-[280px]">
+          <MonacoDiffView
+            change={{ path: change.path, lang: change.lang, content: change.content }}
+            height={280}
+            className="w-full"
+          />
+        </div>
       )}
     </div>
   );
@@ -544,37 +615,15 @@ const TaskCard = ({
                           </div>
                         </div>
                         {change.content ? (
-                          <pre className="p-3 overflow-x-auto text-[10px] font-mono leading-relaxed bg-background">
-                            {change.content
-                              .split("\n")
-                              .map((line: string, i: number) => {
-                                // Determine line styling based on diff content
-                                let lineClass = "text-primary-color";
-                                if (line.startsWith("+") && !line.startsWith("+++")) {
-                                  // Added line (not file header)
-                                  lineClass = "bg-emerald-50 text-emerald-900 w-full block -mx-3 px-3";
-                                } else if (line.startsWith("-") && !line.startsWith("---")) {
-                                  // Removed line (not file header)
-                                  lineClass = "bg-red-50 text-red-900 w-full block -mx-3 px-3";
-                                } else if (line.startsWith("@@")) {
-                                  // Hunk header
-                                  lineClass = "bg-blue-50 text-blue-700 w-full block -mx-3 px-3 font-medium";
-                                } else if (line.startsWith("diff --git") || line.startsWith("index ")) {
-                                  // Git metadata
-                                  lineClass = "text-zinc-400 italic";
-                                }
-                                return (
-                                  <div key={i} className={lineClass}>
-                                    <span className="inline-block w-6 text-zinc-400 select-none text-right mr-3 border-r border-zinc-100 pr-2">
-                                      {i + 1}
-                                    </span>
-                                    {line}
-                                  </div>
-                                );
-                              })}
-                          </pre>
+                          <div className="min-h-[280px] rounded-b-lg overflow-hidden">
+                            <MonacoDiffView
+                              change={{ path: change.path, lang: change.lang, content: change.content }}
+                              height={280}
+                              className="w-full"
+                            />
+                          </div>
                         ) : (
-                          <div className="p-4 text-center text-[10px] font-mono text-primary-color italic bg-background flex flex-col items-center gap-2">
+                          <div className="p-4 text-center text-[10px] font-mono text-primary-color italic bg-background flex flex-col items-center gap-2 min-h-[200px] justify-center">
                             <Loader2 className="w-4 h-4 animate-spin text-primary-color" />
                             <span className="text-primary-color">
                               Generating diff...
@@ -705,8 +754,27 @@ export default function VerticalTaskExecution() {
   const [activeSliceId, setActiveSliceId] = useState(
     itemNumberFromUrl ? parseInt(itemNumberFromUrl) : 1
   );
-  const [completedSlices, setCompletedSlices] = useState<number[]>([]);
+  // Persist completed slices in localStorage to survive page refresh
+  const [completedSlices, setCompletedSlices] = useState<number[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem(`completed_slices_${recipeId}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isRunning, setIsRunning] = useState(false);
+  
+  // Persist completedSlices changes to localStorage
+  useEffect(() => {
+    if (!recipeId || completedSlices.length === 0) return;
+    try {
+      localStorage.setItem(`completed_slices_${recipeId}`, JSON.stringify(completedSlices));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [recipeId, completedSlices]);
 
   // Task Splitting API State
   const [planId, setPlanId] = useState<string | null>(planIdFromUrl);
@@ -733,10 +801,12 @@ export default function VerticalTaskExecution() {
   const [changedFilesSliderOpen, setChangedFilesSliderOpen] = useState(false);
   const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<string | null>(null);
   const hasShownFailedToastRef = useRef(false);
+  const thinkingListRef = useRef<HTMLDivElement>(null);
   
   // Refs for polling optimization - avoid dependency array issues while accessing current values
   const allLayersRef = useRef<TaskLayer[]>([]);
   const taskSplittingStatusRef = useRef<TaskSplittingStatusResponse | null>(null);
+  const planItemsRef = useRef<PlanItem[]>([]);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -747,10 +817,33 @@ export default function VerticalTaskExecution() {
     taskSplittingStatusRef.current = taskSplittingStatus;
   }, [taskSplittingStatus]);
 
+  useEffect(() => {
+    planItemsRef.current = planItems;
+  }, [planItems]);
+
   // --- UI-only: recipe/project info for the left header ---
   const [recipePrompt, setRecipePrompt] = useState<string>("");
   const [repoName, setRepoName] = useState<string>("Unknown Repository");
   const [branchName, setBranchName] = useState<string>("main");
+  const [projectId, setProjectId] = useState<string | null>(null); // For Q&A conversation (recipe context)
+  const recipeFetchDoneRef = useRef<string | null>(null); // Track which recipeId was fetched
+
+  // Code gen chat: same backend as ask flow (codebase_qna_agent), one conversation per recipe
+  const { user } = useAuthContext();
+  const [codegenConversationId, setCodegenConversationId] = useState<string | null>(null);
+  const [isChatStreaming, setIsChatStreaming] = useState(false);
+  const codegenChatInitRef = useRef<string | null>(null);
+  const prevRecipeIdForChatRef = useRef<string | null>(null);
+
+  // When recipe (task) changes, reset codegen chat state so we don't use the previous recipe's conversation
+  useEffect(() => {
+    if (!recipeId) return;
+    if (prevRecipeIdForChatRef.current !== null && prevRecipeIdForChatRef.current !== recipeId) {
+      setCodegenConversationId(null);
+      codegenChatInitRef.current = null;
+    }
+    prevRecipeIdForChatRef.current = recipeId;
+  }, [recipeId]);
 
   // --- UI-only: plan phases for the "Generated Plan" card (keep backend intact) ---
   const [planPhases, setPlanPhases] = useState<Array<{ name: string; total: number }>>(
@@ -761,12 +854,14 @@ export default function VerticalTaskExecution() {
   const [selectedPhaseIndex, setSelectedPhaseIndex] = useState<number>(0);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([0]));
+  const [thinkingAccordionValue, setThinkingAccordionValue] = useState<string>("");
 
   // --- UI-only: chat messages (visual only; backend chat wiring can come later) ---
   type ChatMessage = { role: "user" | "assistant"; content: string };
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInitDoneForRecipeRef = useRef<string | null>(null);
 
   const terminalRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -815,8 +910,12 @@ export default function VerticalTaskExecution() {
   }, [allLayers]);
 
   // Fetch recipe details (prompt + repo/branch) for the left header.
+  // Only fetch once per recipeId to avoid re-renders on page refresh.
   useEffect(() => {
     if (!recipeId) return;
+    // Skip if we already fetched for this recipeId
+    if (recipeFetchDoneRef.current === recipeId) return;
+    
     let mounted = true;
     const fromStorage = (() => {
       if (typeof window === "undefined") return null;
@@ -828,12 +927,16 @@ export default function VerticalTaskExecution() {
       }
     })();
 
+    // Mark as fetched before async call to prevent double fetches
+    recipeFetchDoneRef.current = recipeId;
+
     const run = async () => {
       try {
         const details = await SpecService.getRecipeDetails(recipeId);
         if (!mounted) return;
         const prompt = (details.user_prompt || "").trim();
         setRecipePrompt(prompt);
+        setProjectId(details.project_id?.trim() || null);
         setRepoName(details.repo_name?.trim() || fromStorage?.repo_name?.trim() || "Unknown Repository");
         setBranchName(details.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main");
       } catch (e) {
@@ -849,11 +952,14 @@ export default function VerticalTaskExecution() {
     };
   }, [recipeId]);
 
-  // Initialize the left "chat" with the prompt + a codegen helper message.
+  // Initialize the left "chat" with the prompt + a codegen helper message (once per recipe).
+  // Run once per recipeId; use fallback prompt if recipePrompt not loaded yet so the pane is never empty.
   useEffect(() => {
     if (!recipeId) return;
-    if (chatMessages.length > 0) return;
+    if (chatInitDoneForRecipeRef.current === recipeId) return;
+
     const prompt = recipePrompt?.trim() || "Can you implement this feature?";
+    chatInitDoneForRecipeRef.current = recipeId;
     setChatMessages([
       { role: "user", content: prompt },
       {
@@ -862,8 +968,99 @@ export default function VerticalTaskExecution() {
           "Your implementation plan is ready. Review the tasks below and tell me what you'd like to change—we'll get it right before we start building.",
       },
     ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeId, recipePrompt]);
+
+  // Get-or-create codegen Q&A conversation (same agent as ask flow) and load messages
+  useEffect(() => {
+    if (!recipeId || !user?.uid) return;
+    if (codegenChatInitRef.current === recipeId) return;
+    // Backend requires project_ids[0] for conversation creation; repo_name/branch_name are optional context
+    if (!projectId || projectId.length === 0) return;
+
+    let mounted = true;
+    codegenChatInitRef.current = recipeId;
+
+    const run = async () => {
+      try {
+        const storageKey = `codegen_conversation_${recipeId}`;
+        let conversationId: string | null = null;
+        if (typeof window !== "undefined") {
+          try {
+            conversationId = localStorage.getItem(storageKey);
+          } catch {
+            // ignore
+          }
+        }
+
+        if (!conversationId) {
+          const title = "Code gen Q&A";
+          const agentId = "codebase_qna_agent";
+          const res = await ChatService.createConversation(
+            user.uid,
+            title,
+            projectId || null,
+            agentId,
+            true, // hidden
+            repoName !== "Unknown Repository" ? repoName : undefined,
+            branchName !== "main" ? branchName : undefined
+          );
+          conversationId = res?.conversation_id ?? null;
+          if (conversationId && typeof window !== "undefined") {
+            try {
+              localStorage.setItem(storageKey, conversationId);
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        if (!mounted) return;
+        if (conversationId) {
+          setCodegenConversationId(conversationId);
+          try {
+            const loaded = await ChatService.loadMessages(conversationId, 0, 500);
+            if (!mounted) return;
+            if (loaded && loaded.length > 0) {
+              const mapped: ChatMessage[] = loaded.map((m: { sender: string; text: string }) => ({
+                role: m.sender === "user" ? "user" : "assistant",
+                content: m.text ?? "",
+              }));
+              setChatMessages(mapped);
+            }
+          } catch (loadErr) {
+            console.error("[Code Page] Load messages failed (stale conversation?):", loadErr);
+            if (!mounted) return;
+            // Stale or deleted conversation: clear so we can create a new one on next run
+            try {
+              localStorage.removeItem(storageKey);
+            } catch {
+              // ignore
+            }
+            setCodegenConversationId(null);
+            codegenChatInitRef.current = null;
+            toast.error("Chat session expired. It will be recreated when you send a message.");
+          }
+        }
+      } catch (e) {
+        console.error("[Code Page] Codegen chat init error:", e);
+        if (mounted) {
+          codegenChatInitRef.current = null;
+          try {
+            const storageKey = `codegen_conversation_${recipeId}`;
+            localStorage.removeItem(storageKey);
+          } catch {
+            // ignore
+          }
+          toast.error("Could not set up chat. You can try again later.");
+        }
+      }
+    };
+
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, [recipeId, user?.uid, projectId, repoName, branchName]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -871,8 +1068,12 @@ export default function VerticalTaskExecution() {
     }
   }, [chatMessages.length]);
 
-  // Notify when a new phase layer arrives (non-streaming "real time" progress)
+  // Notify when a new phase layer arrives during this session (not on initial load)
   useEffect(() => {
+    if (prevLayerCountRef.current === 0 && allLayers.length > 0) {
+      prevLayerCountRef.current = allLayers.length;
+      return;
+    }
     if (allLayers.length <= prevLayerCountRef.current) return;
     const newLayers = allLayers.slice(prevLayerCountRef.current);
     for (const layer of newLayers) {
@@ -891,10 +1092,24 @@ export default function VerticalTaskExecution() {
   // Poll for PR status after user clicks "Create PR".
   // The main polling effects stop once codegen completes, so we need a
   // dedicated poller that runs while pr_status is IN_PROGRESS.
+  // Use a ref to track if we've shown the success/error toast to avoid duplicates.
+  const prToastShownRef = useRef(false);
   useEffect(() => {
     if (!taskSplittingId) return;
     const prStatus = taskSplittingStatus?.pr_status;
+    
+    // Don't start polling if PR is already done (COMPLETED/FAILED with URL or no isCreatingPR)
+    if (taskSplittingStatus?.pr_url) {
+      // PR already exists, no need to poll
+      setIsCreatingPR(false);
+      return;
+    }
     if (prStatus !== "IN_PROGRESS" && !isCreatingPR) return;
+    
+    // Reset toast flag when starting new PR creation
+    if (isCreatingPR && prStatus !== "IN_PROGRESS") {
+      prToastShownRef.current = false;
+    }
 
     let mounted = true;
     const poll = async () => {
@@ -902,6 +1117,7 @@ export default function VerticalTaskExecution() {
         const status =
           await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
         if (!mounted) return;
+        
         // Only update if status changed
         setTaskSplittingStatus((prev) => {
           if (!prev) return status;
@@ -916,10 +1132,15 @@ export default function VerticalTaskExecution() {
           return status;
         });
 
-        if (status.pr_url) {
+        // Show toast only once per PR creation attempt
+        if (status.pr_url && !prToastShownRef.current) {
+          prToastShownRef.current = true;
           toast.success("Pull request created!");
-        } else if (status.pr_status === "FAILED") {
+          setIsCreatingPR(false);
+        } else if (status.pr_status === "FAILED" && !prToastShownRef.current) {
+          prToastShownRef.current = true;
           toast.error(status.pr_error_message || "PR creation failed");
+          setIsCreatingPR(false);
         }
       } catch (e) {
         console.error("[Code Page] PR status poll error:", e);
@@ -934,14 +1155,19 @@ export default function VerticalTaskExecution() {
       mounted = false;
       clearInterval(interval);
     };
-  }, [taskSplittingId, taskSplittingStatus?.pr_status, isCreatingPR]);
+  }, [taskSplittingId, taskSplittingStatus?.pr_status, taskSplittingStatus?.pr_url, isCreatingPR]);
 
   // Fetch plan by recipeId (new API: plan items come from getPlanStatusByRecipeId)
+  // Only skip fetch when we already have plan items for this recipe (avoid re-fetch on re-renders).
   useEffect(() => {
-    if (!recipeId || planItems.length > 0) return;
+    if (!recipeId) return;
+    // If we already have plan items, only update URL if needed; don't re-fetch
+    if (planItems.length > 0 && planId === recipeId) return;
+
     setIsLoadingPlanItems(true);
-      PlanService.getPlanStatusByRecipeId(recipeId)
-        .then((status) => {
+
+    PlanService.getPlanStatusByRecipeId(recipeId)
+      .then((status) => {
         if (status.plan) {
           // Keep phase-level meta for "Generated Plan" card
           try {
@@ -977,25 +1203,33 @@ export default function VerticalTaskExecution() {
           });
           setPlanItems(items);
           setPlanId(recipeId);
-            const params = new URLSearchParams(searchParams.toString());
-          params.set("planId", recipeId);
-          if (!params.get("itemNumber")) params.set("itemNumber", "1");
+          // Only update URL when it's missing planId or itemNumber to avoid unnecessary re-renders
+          const currentUrl = new URL(window.location.href);
+          const currentPlanId = currentUrl.searchParams.get("planId");
+          const currentItemNumber = currentUrl.searchParams.get("itemNumber");
+          if (currentPlanId !== recipeId || !currentItemNumber) {
+            const params = new URLSearchParams(currentUrl.search);
+            params.set("planId", recipeId);
+            if (!params.get("itemNumber")) params.set("itemNumber", "1");
             router.replace(`/task/${recipeId}/code?${params.toString()}`);
           }
-        })
-        .catch((error) => {
-          console.error("Error fetching plan status:", error);
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching plan status:", error);
       })
       .finally(() => {
         setIsLoadingPlanItems(false);
-        });
-  }, [recipeId, planItems.length]);
+      });
+  }, [recipeId, planId, planItems.length, router]);
 
   // Submit task splitting when we have planId and itemNumber but no taskSplittingId
+  // Use planItemsRef to avoid re-running when planItems array updates
+  const planItemsLength = planItems.length;
   useEffect(() => {
     if (!planId || !activeSliceId || taskSplittingId) return;
     // Wait for plan items to be loaded before submitting
-    if (planItems.length === 0 || isLoadingPlanItems) return;
+    if (planItemsLength === 0 || isLoadingPlanItems) return;
 
     // Priority 1: Check URL parameter
     if (taskSplittingIdFromUrl) {
@@ -1022,7 +1256,9 @@ export default function VerticalTaskExecution() {
     const submitTaskSplitting = async () => {
       try {
         // Find the plan item by item_number to get its id (plan_item_id)
-        const planItem = planItems.find(
+        // Use ref to get current plan items to avoid stale closure
+        const currentPlanItems = planItemsRef.current;
+        const planItem = currentPlanItems.find(
           (item) => item.item_number === activeSliceId
         );
         if (!planItem) {
@@ -1032,7 +1268,7 @@ export default function VerticalTaskExecution() {
           );
           console.error(
             "[Code Page] Available plan items:",
-            planItems.map((item) => item.item_number)
+            currentPlanItems.map((item) => item.item_number)
           );
           // Don't show error toast - just wait for plan items to load or user to select valid item
           return;
@@ -1054,8 +1290,9 @@ export default function VerticalTaskExecution() {
           response.task_splitting_id
         );
 
-        // Update URL with taskSplittingId
-        const params = new URLSearchParams(searchParams.toString());
+        // Update URL with taskSplittingId - use window.location to get fresh URL
+        const currentUrl = new URL(window.location.href);
+        const params = new URLSearchParams(currentUrl.search);
         params.set("taskSplittingId", response.task_splitting_id);
         router.replace(`/task/${recipeId}/code?${params.toString()}`);
 
@@ -1067,20 +1304,50 @@ export default function VerticalTaskExecution() {
     };
 
     submitTaskSplitting();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     planId,
     activeSliceId,
     taskSplittingId,
     taskSplittingIdFromUrl,
-    searchParams,
     recipeId,
-    router,
-    planItems,
+    planItemsLength,
     isLoadingPlanItems,
   ]);
 
   // 1. Reset State when Slice Changes
+  // Track if this is the initial mount to avoid resetting state on page refresh
+  const isInitialMountRef = useRef(true);
+  const prevActiveSliceIdRef = useRef<number | null>(null);
+  
   useEffect(() => {
+    // On initial mount, don't reset - let the task splitting effect handle loading existing data
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      prevActiveSliceIdRef.current = activeSliceId;
+      
+      // On initial mount, check if we have a stored task splitting ID and use it
+      if (planId) {
+        const storedTaskSplittingId = localStorage.getItem(
+          `task_splitting_${planId}_${activeSliceId}`
+        );
+        if (storedTaskSplittingId && !taskSplittingId) {
+          setTaskSplittingId(storedTaskSplittingId);
+          // If already completed, don't show graph loading animation
+          if (completedSlices.includes(activeSliceId)) {
+            setIsGraphLoading(false);
+          }
+        }
+      }
+      return;
+    }
+    
+    // Only run reset logic if activeSliceId actually changed (not just on re-renders)
+    if (prevActiveSliceIdRef.current === activeSliceId) {
+      return;
+    }
+    prevActiveSliceIdRef.current = activeSliceId;
+    
     // Only reset if we haven't completed this slice
     if (!completedSlices.includes(activeSliceId)) {
       setCurrentDag([]);
@@ -1110,7 +1377,7 @@ export default function VerticalTaskExecution() {
       setIsGraphLoading(false); // Already loaded
       setGraphLoadIndex(allLayers.length);
     }
-  }, [activeSliceId, planId]);
+  }, [activeSliceId, planId, completedSlices, taskSplittingId, allLayers]);
 
   // 2. UNIFIED poll for task splitting status, layers, and codegen status
   // This consolidates what was previously 2 separate polling effects to avoid duplicate API calls
@@ -1280,7 +1547,7 @@ export default function VerticalTaskExecution() {
             ]);
 
             // Auto-advance to next slice if available
-            const nextSlice = planItems.find(
+            const nextSlice = planItemsRef.current.find(
               (item) => item.item_number > activeSliceId
             );
             if (nextSlice) {
@@ -1340,32 +1607,76 @@ export default function VerticalTaskExecution() {
       }
     };
 
-    // Initial fetch
-    fetchStatusAndLayers();
-
-    // Set up polling every 2 seconds (single unified poll)
-    pollInterval = setInterval(fetchStatusAndLayers, 2000);
+    // Initial fetch - check if already complete before starting polling
+    const initPolling = async () => {
+      // First, do initial fetch
+      await fetchStatusAndLayers();
+      
+      if (!mounted) return;
+      
+      // After initial fetch, check if we even need to poll
+      // Use the latest status from ref (updated by fetchStatusAndLayers)
+      const currentStatus = taskSplittingStatusRef.current;
+      const isAlreadyComplete = 
+        currentStatus?.codegen_status === "COMPLETED" || 
+        currentStatus?.codegen_status === "FAILED";
+      
+      // Only start polling if codegen is still in progress
+      if (!isAlreadyComplete) {
+        pollInterval = setInterval(fetchStatusAndLayers, 3000);
+      } else {
+        // Codegen already done - no need to poll, just ensure UI is updated
+        setIsGraphLoading(false);
+        setIsRunning(false);
+      }
+    };
+    
+    initPolling();
 
     return () => {
       mounted = false;
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [taskSplittingId, activeSliceId, completedSlices, planItems]);
+    // Only re-run when taskSplittingId or activeSliceId changes. Do NOT depend on planItems.length:
+    // when plan loads, planItems.length 0->N would restart polling and cause a visible refresh.
+    // planItemsRef is used inside for auto-advance; completedSlices omitted to avoid restarting interval.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskSplittingId, activeSliceId]);
+
+  // Auto-scroll Thinking list to latest tool call when expanded and activity updates
+  const activityLength = taskSplittingStatus?.agent_activity?.length ?? 0;
+  useEffect(() => {
+    if (thinkingAccordionValue !== "thinking" || activityLength === 0) return;
+    const el = thinkingListRef.current;
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }, [activityLength, thinkingAccordionValue]);
 
   // 3. Step-by-Step Graph Discovery (Loading Phase) - progressive reveal
+  // Depend on primitive values (length, status string) so polling updates to allLayers/taskSplittingStatus
+  // (new refs, same content) don't re-run this effect and cause refresh/jank.
+  const layersLength = allLayers.length;
+  const taskSplittingStatusStatus = taskSplittingStatus?.status;
   useEffect(() => {
     if (!isGraphLoading) return;
 
     // Wait for task splitting to complete and layers to be fetched
-    if (taskSplittingStatus?.status !== "COMPLETED" || allLayers.length === 0) {
+    if (taskSplittingStatusStatus !== "COMPLETED" || layersLength === 0) {
       return;
     }
 
     // Load layers progressively
-    if (graphLoadIndex < allLayers.length) {
+    if (graphLoadIndex < layersLength) {
+      const layerIndexToAdd = graphLoadIndex;
       const timer = setTimeout(() => {
-        const nextLayer = allLayers[graphLoadIndex];
-        setCurrentDag((prev) => [...prev, nextLayer]);
+        const layers = allLayersRef.current;
+        const nextLayer = layers[layerIndexToAdd];
+        if (nextLayer) {
+          setCurrentDag((prev) => [...prev, nextLayer]);
+        }
         setGraphLoadIndex((prev) => prev + 1);
       }, 600); // 600ms delay between levels appearing
 
@@ -1378,8 +1689,8 @@ export default function VerticalTaskExecution() {
     isGraphLoading,
     graphLoadIndex,
     activeSliceId,
-    allLayers,
-    taskSplittingStatus,
+    layersLength,
+    taskSplittingStatusStatus,
   ]);
 
   // 4. NOTE: Codegen polling was consolidated into effect #2 above to avoid duplicate API calls
@@ -1496,16 +1807,72 @@ export default function VerticalTaskExecution() {
       </div>
     );
 
-  const handleSendChatMessage = () => {
+  const handleSendChatMessage = async () => {
     const text = chatInput.trim();
     if (!text) return;
-    setChatMessages((prev) => [...prev, { role: "user", content: text }]);
-    setChatInput("");
-    toast.info("Chat editing is UI-only for now.", { title: "Info" });
-  };
+    if (isChatStreaming) return;
 
-  const handleChatAction = (_action: "add" | "modify" | "remove" | "undo") => {
-    toast.info("These actions are UI-only for now.");
+    if (!user?.uid) {
+      toast.error("Sign in to use chat.");
+      return;
+    }
+    if (!codegenConversationId) {
+      toast.error("Chat is still setting up. Try again in a moment.");
+      return;
+    }
+
+    setIsChatStreaming(true);
+    setChatInput("");
+    setChatMessages((prev) => [
+      ...prev,
+      { role: "user", content: text },
+      { role: "assistant", content: "" },
+    ]);
+
+    try {
+      await ChatService.streamMessage(
+        codegenConversationId,
+        text,
+        [], // selectedNodes
+        [], // images
+        (message: string) => {
+          setChatMessages((prev) => {
+            const next = [...prev];
+            const lastIdx = next.length - 1;
+            if (lastIdx >= 0 && next[lastIdx]?.role === "assistant") {
+              next[lastIdx] = { role: "assistant", content: message };
+            }
+            return next;
+          });
+        }
+      );
+    } catch (e: unknown) {
+      console.error("[Code Page] Chat stream error:", e);
+      const errMsg = e instanceof Error ? e.message : "Failed to send message";
+      toast.error(errMsg);
+      setChatMessages((prev) => {
+        const next = [...prev];
+        const lastIdx = next.length - 1;
+        if (lastIdx >= 0 && next[lastIdx]?.role === "assistant" && next[lastIdx]?.content === "") {
+          next[lastIdx] = { role: "assistant", content: "Sorry, something went wrong. Please try again." };
+        }
+        return next;
+      });
+    } finally {
+      setIsChatStreaming(false);
+      setChatMessages((prev) => {
+        const next = [...prev];
+        const lastIdx = next.length - 1;
+        if (
+          lastIdx >= 0 &&
+          next[lastIdx]?.role === "assistant" &&
+          next[lastIdx]?.content.trim() === ""
+        ) {
+          next[lastIdx] = { role: "assistant", content: "No response." };
+        }
+        return next;
+      });
+    }
   };
 
     return (
@@ -1548,7 +1915,28 @@ export default function VerticalTaskExecution() {
                         : "px-4 py-3 text-gray-900"
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === "assistant" &&
+                    !msg.content &&
+                    isChatStreaming &&
+                    i === chatMessages.length - 1 ? (
+                      <span className="inline-flex items-center gap-3 text-[#022D2C]">
+                        <span
+                          className="inline-block w-5 h-5 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin shrink-0"
+                          aria-hidden
+                        />
+                        <span className="flex items-center gap-1 font-medium">
+                          <Sparkles className="w-3.5 h-3.5 text-[#00291C] shrink-0" />
+                          Crafting response
+                          <span className="inline-flex gap-0.5 ml-0.5 [&>span]:w-1 [&>span]:h-1 [&>span]:rounded-full [&>span]:bg-[#022D2C] [&>span]:animate-bounce">
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                        </span>
+                      </span>
+                    ) : (
+                      msg.content
+                    )}
                   </div>
                     </div>
 
@@ -1562,7 +1950,7 @@ export default function VerticalTaskExecution() {
                           <Check className="w-5 h-5 text-[#022D2C] shrink-0 mt-0.5" />
                           <div>
                             <p className="text-sm font-bold text-[#00291C]">Spec Generation Completed</p>
-                            <p className="text-[10px] text-zinc-500 mt-0.5">STATUS: 100% COMPLETED</p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">STATUS: COMPLETED</p>
                     </div>
                   </div>
             </div>
@@ -1705,119 +2093,108 @@ export default function VerticalTaskExecution() {
                     </div>
                   </div>
 
-                      {/* Agent Activity - tool calls during codegen */}
-                      {(taskSplittingId &&
-                        (taskSplittingStatus?.status === "IN_PROGRESS" ||
-                          taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
-                          (taskSplittingStatus?.agent_activity?.length ?? 0) > 0)) && (
-                        <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4 mt-3">
-                          <div className="flex items-center gap-2 mb-3">
-                            <TerminalSquare className="w-3.5 h-3.5 text-[#00291C]" />
-                            <p className="text-xs font-bold text-[#00291C]">
-                              Agent Activity
-                              {(taskSplittingStatus?.status === "IN_PROGRESS" ||
-                                taskSplittingStatus?.codegen_status === "IN_PROGRESS") && (
-                                <Loader2 className="w-3 h-3 animate-spin inline-block ml-1.5" />
-                              )}
-                            </p>
+                      {/* Thinking / Agent Activity - accordion when in progress; Completed card + collapsible Agent output when done */}
+                      {taskSplittingId &&
+                        (taskSplittingStatus?.codegen_status === "COMPLETED" ? (
+                          <div className="space-y-3 min-w-0">
+                            <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] px-4 py-4 min-w-0">
+                              <div className="flex items-center gap-3">
+                                <Check className="w-5 h-5 text-[#022D2C] shrink-0" />
+                                <div>
+                                  <p className="text-sm font-bold text-[#00291C]">Code generation completed</p>
+                                  <p className="text-[10px] text-zinc-500 mt-0.5">STATUS: COMPLETED</p>
+                                </div>
+                              </div>
+                            </div>
+                            {(taskSplittingStatus?.agent_activity?.length ?? 0) > 0 && (
+                              <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] px-4 py-3 min-w-0 w-full">
+                                <div className="space-y-3 min-w-0 overflow-y-auto overflow-x-hidden max-h-[420px] pr-1">
+                                  {(taskSplittingStatus?.agent_activity ?? []).map((evt, i) => (
+                                    <ToolCallItem key={i} index={i} evt={evt as AgentActivityEvt} />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div className="max-h-[200px] overflow-y-auto font-mono text-[10px] space-y-1.5 bg-zinc-900 rounded-lg p-3 text-zinc-300">
-                            {(() => {
-                              const activity = taskSplittingStatus?.agent_activity ?? [];
-                              if (activity.length > 0) {
-                                return [...activity]
-                                  .reverse()
-                                  .slice(0, 30)
-                                  .map((evt, i) => {
-                                    // Helper to get display text for tool params
-                                    const getParamDisplay = () => {
-                                      const params = evt.params || {};
-                                      const tool = evt.tool || "";
-                                      
-                                      // Handle truncated params
-                                      if (params._truncated) {
-                                        return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
-                                      }
-                                      
-                                      // Tool-specific param display
-                                      switch (tool) {
-                                        case "read":
-                                          const filePath = params.file_path || params.path || "";
-                                          // Show last 3 path segments for readability
-                                          const segments = String(filePath).split("/").filter(Boolean);
-                                          return segments.length > 3 
-                                            ? "…/" + segments.slice(-3).join("/")
-                                            : filePath;
-                                        case "grep":
-                                        case "search":
-                                        case "ripgrep":
-                                          const pattern = params.pattern || params.query || "";
-                                          const patternStr = String(pattern);
-                                          return `"${patternStr.slice(0, 40)}${patternStr.length > 40 ? "…" : ""}"`;
-                                        case "glob":
-                                        case "find":
-                                          return params.pattern || params.glob || "";
-                                        case "edit":
-                                        case "write":
-                                        case "str_replace":
-                                          const editPath = params.file_path || params.path || "";
-                                          const editSegments = String(editPath).split("/").filter(Boolean);
-                                          return editSegments.length > 3
-                                            ? "…/" + editSegments.slice(-3).join("/")
-                                            : editPath;
-                                        case "bash":
-                                        case "shell":
-                                        case "run":
-                                          const cmd = params.command || params.cmd || "";
-                                          return String(cmd).slice(0, 40) + (String(cmd).length > 40 ? "…" : "");
-                                        case "list_dir":
-                                        case "ls":
-                                          return params.path || params.directory || ".";
-                                        default:
-                                          // Generic: show first string param or empty
-                                          const firstVal = Object.values(params).find(v => typeof v === "string");
-                                          if (firstVal) {
-                                            const s = String(firstVal);
-                                            return s.slice(0, 40) + (s.length > 40 ? "…" : "");
-                                          }
-                                          return "";
-                                      }
-                                    };
-                                    
-                                    const paramDisplay = getParamDisplay();
-                                    
+                        ) : (
+                          (taskSplittingStatus?.status === "IN_PROGRESS" ||
+                            taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
+                            (taskSplittingStatus?.agent_activity?.length ?? 0) > 0) && (
+                        <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4 min-w-0">
+                          <Accordion
+                            type="single"
+                            collapsible
+                            value={thinkingAccordionValue}
+                            onValueChange={setThinkingAccordionValue}
+                            className="w-full"
+                          >
+                            <AccordionItem value="thinking" className="border-none">
+                              <AccordionTrigger className="py-2 hover:no-underline [&[data-state=open]>svg]:rotate-180">
+                                <div className="flex items-center w-full gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#102C2C]/10 shrink-0">
+                                      <Wrench className="w-4 h-4 text-[#00291C]" />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-xs font-bold text-[#00291C]">Thinking</p>
+                                      {(taskSplittingStatus?.status === "IN_PROGRESS" || taskSplittingStatus?.codegen_status === "IN_PROGRESS") && (
+                                        <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin shrink-0" aria-hidden />
+                                      )}
+                                    </div>
+                                  </div>
+                                  {(taskSplittingStatus?.agent_activity?.length ?? 0) > 0 && (
+                                    <span className="text-xs text-zinc-500 font-normal bg-white/80 px-2 py-0.5 rounded border border-[#CCD3CF]/60">
+                                      {(taskSplittingStatus?.agent_activity?.length ?? 0) >= 50
+                                        ? "50+"
+                                        : taskSplittingStatus?.agent_activity?.length}{" "}
+                                      tool calls
+                                    </span>
+                                  )}
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent className="pt-3 pb-0 transition-all data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                                {(() => {
+                                  const activity = taskSplittingStatus?.agent_activity ?? [];
+                                  if (activity.length > 0) {
                                     return (
-                                      <div key={i} className="flex flex-col gap-0.5 py-1 border-b border-zinc-700 last:border-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[#B6E343] font-semibold">
-                                            {evt.tool || "unknown"}
-                                          </span>
-                                          {evt.phase != null && (
-                                            <span className="text-zinc-500">
-                                              P{evt.phase + 1}.T{(evt.task ?? 0) + 1}
-                                            </span>
-                                          )}
-                                        </div>
-                                        {paramDisplay && typeof paramDisplay === "string" && (
-                                          <div className="text-zinc-400 truncate max-w-full" title={paramDisplay}>
-                                            {paramDisplay}
-                                          </div>
-                                        )}
+                                      <div
+                                        ref={thinkingListRef}
+                                        className="space-y-3 min-w-0 overflow-y-auto overflow-x-hidden max-h-[420px] pr-1"
+                                      >
+                                        {activity.map((evt, i) => (
+                                          <ToolCallItem
+                                            key={i}
+                                            index={i}
+                                            evt={evt as AgentActivityEvt}
+                                            bodyRef={(el) => {
+                                              if (el) el.scrollTop = el.scrollHeight;
+                                            }}
+                                          />
+                                        ))}
                                       </div>
                                     );
-                                  });
-                              }
-                              // Empty state - show context-aware message
-                              if (taskSplittingStatus?.codegen_status === "COMPLETED") {
-                                return <div className="text-zinc-500 italic">No activity recorded</div>;
-                              }
-                              if (taskSplittingStatus?.codegen_status === "FAILED") {
-                                return <div className="text-zinc-500 italic">Codegen failed</div>;
-                              }
-                              return <div className="text-zinc-500 italic">Waiting for agent to start…</div>;
-                            })()}
-                          </div>
+                                  }
+                                  const codegenStatus =
+                                    taskSplittingStatus?.codegen_status as TaskSplittingStatusResponse["codegen_status"] | undefined;
+                                  if (codegenStatus === "COMPLETED") {
+                                    return <p className="text-xs text-zinc-500 italic">No activity recorded</p>;
+                                  }
+                                  if (codegenStatus === "FAILED") {
+                                    return <p className="text-xs text-zinc-500 italic">Codegen failed</p>;
+                                  }
+                                  return (
+                                    <p className="text-xs text-zinc-500 flex items-center gap-2">
+                                      <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
+                                      Generating code…
+                                    </p>
+                                  );
+                                })()}
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
                         </div>
+                        )
+                        )
                       )}
                     </div>
               </div>
@@ -1826,25 +2203,6 @@ export default function VerticalTaskExecution() {
             ))}
             <div ref={chatEndRef} />
           </div>
-
-          {/* Action buttons */}
-          <div className="px-6 py-2 flex flex-wrap gap-2 shrink-0">
-            {[
-              { id: "add" as const, label: "Add Item", icon: Plus },
-              { id: "modify" as const, label: "Modify", icon: Pencil },
-              { id: "remove" as const, label: "Remove", icon: Trash2 },
-              { id: "undo" as const, label: "Undo", icon: Undo2 },
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => handleChatAction(id)}
-                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-800 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50 transition-colors"
-              >
-                <Icon className="w-3.5 h-3.5 text-[#00291C]" />
-                {label}
-              </button>
-            ))}
-        </div>
 
           {/* Chat input */}
           <div className="p-4 shrink-0">
@@ -1865,9 +2223,14 @@ export default function VerticalTaskExecution() {
               <button
                 type="button"
                 onClick={handleSendChatMessage}
-                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity"
+                disabled={isChatStreaming || !codegenConversationId}
+                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <SendHorizonal className="w-5 h-5" />
+                {isChatStreaming ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <SendHorizonal className="w-5 h-5" />
+                )}
               </button>
             </div>
             </div>
@@ -2113,6 +2476,8 @@ export default function VerticalTaskExecution() {
                     data={changedFilesTreeData}
                     showLines
                     showIcons
+                    folderIconUrl="/images/figma/folder.svg"
+                    fileIconUrl="/images/figma/file.svg"
                     selectable
                     selectedIds={selectedChangedFilePath ? [selectedChangedFilePath] : []}
                     onSelectionChange={(ids) => setSelectedChangedFilePath(ids[0] ?? null)}
@@ -2120,7 +2485,7 @@ export default function VerticalTaskExecution() {
                       const hasChildren = (node.children?.length ?? 0) > 0;
                       if (!hasChildren) setSelectedChangedFilePath(node.id);
                     }}
-                    defaultExpandedIds={getAllNodeIds(changedFilesTreeData)}
+                    defaultExpandedIds={changedFilesTreeData.map((n) => n.id)}
                     animateExpand
                   />
                 </div>
@@ -2141,8 +2506,12 @@ export default function VerticalTaskExecution() {
                       {selectedChangedFilePath}
                     </p>
                   </div>
-                  <div className="flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto">
-                    <FileDiffView change={pathToChange[selectedChangedFilePath]} />
+                  <div className="flex-1 min-h-[300px] min-w-0 overflow-hidden flex flex-col">
+                    <MonacoDiffView
+                      change={pathToChange[selectedChangedFilePath]}
+                      height="100%"
+                      className="flex-1 min-h-0 w-full"
+                    />
                   </div>
                 </div>
               ) : (

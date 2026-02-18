@@ -16,6 +16,7 @@
     "@assistant-ui/react-markdown": "^0.11.4",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
+    "@monaco-editor/react": "^4.7.0",
     "@formbricks/js": "^3.0.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.3",

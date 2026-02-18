@@ -99,7 +99,7 @@ export function AppSidebar() {
     enabled: !!userId && !!userSubscription,
   });
 
-  // Fetch account info from backend to get work email and verification status
+  // Fetch account info from backend to get work email
   const { data: accountInfo } = useQuery<UserAccount>({
     queryKey: ["accountInfo", userId],
     queryFn: async () => {
@@ -389,8 +389,6 @@ export function AppSidebar() {
               // Use work email from backend (database), fallback to Firebase email
               email: accountInfo?.email || user?.email || "",
               name: user?.displayName,
-              // Use verification status from backend (work email), fallback to Firebase status
-              emailVerified: accountInfo?.email_verified ?? user?.emailVerified ?? false,
             }}
           />
         </div>

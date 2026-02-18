@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from "react";
 import { ChevronRight, Folder, File, FolderOpen } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 // Types
@@ -22,6 +23,12 @@ export type TreeViewProps = {
   defaultExpandedIds?: string[];
   showLines?: boolean;
   showIcons?: boolean;
+  /** URL for folder icon (e.g. /images/figma/folder.svg). When set, overrides default lucide Folder/FolderOpen. */
+  folderIconUrl?: string;
+  /** URL for file icon (e.g. /images/figma/file.svg). When set, overrides default lucide File. */
+  fileIconUrl?: string;
+  /** URL for open folder icon. If not set and folderIconUrl is set, folderIconUrl is used for both. */
+  folderOpenIconUrl?: string;
   selectable?: boolean;
   multiSelect?: boolean;
   selectedIds?: string[];
@@ -39,6 +46,9 @@ export function TreeView({
   defaultExpandedIds = [],
   showLines = true,
   showIcons = true,
+  folderIconUrl,
+  fileIconUrl,
+  folderOpenIconUrl,
   selectable = true,
   multiSelect = false,
   selectedIds = [],
@@ -107,16 +117,27 @@ export function TreeView({
     const isSelected = currentSelectedIds.includes(node.id);
     const currentPath = [...parentPath, isLast];
 
-    const getDefaultIcon = () =>
-      hasChildren ? (
-        isExpanded ? (
+    const getDefaultIcon = () => {
+      if (hasChildren) {
+        const folderUrl = isExpanded ? (folderOpenIconUrl ?? folderIconUrl) : folderIconUrl;
+        if (folderUrl) {
+          return (
+            <Image src={folderUrl} alt="" width={16} height={16} className="h-4 w-4 shrink-0" />
+          );
+        }
+        return isExpanded ? (
           <FolderOpen className="h-4 w-4" />
         ) : (
           <Folder className="h-4 w-4" />
-        )
-      ) : (
-        <File className="h-4 w-4" />
-      );
+        );
+      }
+      if (fileIconUrl) {
+        return (
+          <Image src={fileIconUrl} alt="" width={16} height={16} className="h-4 w-4 shrink-0" />
+        );
+      }
+      return <File className="h-4 w-4" />;
+    };
 
     return (
       <div key={node.id} className="select-none">

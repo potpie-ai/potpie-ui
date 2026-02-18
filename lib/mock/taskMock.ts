@@ -3,7 +3,7 @@
  * 
  * Flow A has been replaced by Flow B which uses real API integration:
  * - Entry: /newchat (instead of /newtask)
- * - Q&A: /repo (instead of /task/[taskId]/userqa)
+ * - Q&A: /task/[taskId]/qna
  * - Spec: /task/[recipeId]/spec (now uses real API instead of mock data)
  * - Plan: /task/[recipeId]/plan_overview
  * 
@@ -11,7 +11,7 @@
  * 
  * @see IMPLEMENTATION_PLAN_FLOW_B_SPEC_INTEGRATION.md
  * @see /app/(main)/newchat/page.tsx - New entry point
- * @see /app/(main)/repo/page.tsx - Real Q&A flow
+ * @see /app/(main)/task/[taskId]/qna/page.tsx - Real Q&A flow
  */
 import { v4 as uuidv4 } from "uuid";
 

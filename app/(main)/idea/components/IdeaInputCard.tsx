@@ -287,7 +287,8 @@ export default function IdeaInputCard({
     // Already in owner/repo format (no protocol, no github.com)
     const ownerRepoRegex = /^[^\/\s@]+\/[^\/\s]+$/;
     if (ownerRepoRegex.test(trimmed)) {
-      return trimmed;
+      // Strip trailing .git suffix (case-insensitive) to match other parsing branches
+      return trimmed.replace(/\.git$/i, "");
     }
 
     // GitHub URL patterns
@@ -335,6 +336,8 @@ export default function IdeaInputCard({
       // Handle different response formats
       if (typeof response === "boolean") {
         isPublic = response;
+      } else if (typeof response === "string") {
+        isPublic = response.toLowerCase() === "true";
       } else if (typeof response === "object" && response !== null) {
         isPublic = response.is_public === true || response.isPublic === true || response.public === true;
       }
@@ -345,8 +348,26 @@ export default function IdeaInputCard({
         setPublicRepoInput("");
         
         // Parse repository directly with the repo name
-        // Use default branch "main" - user can select different branch later if needed
-        const branchName = selectedBranch || "main";
+        // Check if selectedBranch belongs to the repo being entered
+        // Only use selectedBranch if it belongs to the same repo context
+        let branchName = "main";
+        if (selectedBranch && selectedRepo) {
+          // Check if the currently selected repo matches the repo being entered
+          const selectedRepoData = repositories.find(
+            (repo) => repo.id?.toString() === selectedRepo
+          );
+          if (selectedRepoData) {
+            const selectedRepoName = selectedRepoData.full_name || selectedRepoData.name;
+            // Normalize repo names for comparison (case-insensitive, remove .git suffix)
+            const normalizeRepoName = (name: string) => 
+              name.trim().toLowerCase().replace(/\.git$/i, "");
+            if (normalizeRepoName(selectedRepoName || "") === normalizeRepoName(repoName)) {
+              // selectedBranch belongs to this repo, use it
+              branchName = selectedBranch;
+            }
+          }
+        }
+        // Otherwise, default to "main" for newly entered public repo
         
         if (onParseRepoWithName) {
           // Prefer direct parsing with repo name and branch

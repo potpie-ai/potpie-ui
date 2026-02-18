@@ -5,11 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Bot, Minimize2, Maximize2, Send, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import type { MCQQuestion } from "@/types/question";
 
 interface ChatbotPanelProps {
-  projectId: string;
-  questions: MCQQuestion[];
   minimized: boolean;
   onToggleMinimize: () => void;
   isGenerating: boolean;
@@ -22,8 +19,6 @@ interface Message {
 }
 
 export default function ChatbotPanel({
-  projectId,
-  questions,
   minimized,
   onToggleMinimize,
   isGenerating,
@@ -108,7 +103,7 @@ export default function ChatbotPanel({
     setInput("");
     setIsLoading(true);
 
-    // Simulate AI response (in real implementation, this would call an API)
+    // TODO: replace mock with real API call to backend/LLM QA endpoint
     timeoutRef.current = setTimeout(() => {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),

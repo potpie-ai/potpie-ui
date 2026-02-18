@@ -350,6 +350,12 @@ export default class QuestionService {
           }
         } catch (e) {
           options.onError?.(e instanceof Error ? e.message : String(e));
+        } finally {
+          try {
+            reader.releaseLock();
+          } catch {
+            // ignore if already released or stream closed
+          }
         }
       })();
     }

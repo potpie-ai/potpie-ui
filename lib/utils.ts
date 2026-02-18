@@ -390,6 +390,38 @@ export function parseApiError(error: any): string {
  * @param maxLineLength - Maximum unbroken segment length before inserting breaks (default: 80)
  * @returns Normalized markdown string safe for constrained-width preview
  */
+/**
+ * Get the event payload from stream SSE data. Handles envelope shape and double-encoded data.
+ */
+export function getStreamEventPayload(data: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (data == null) return {};
+  const raw = (data as Record<string, unknown>)?.data ?? data;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return (data as Record<string, unknown>) ?? {};
+    }
+  }
+  return (raw as Record<string, unknown>) ?? (data as Record<string, unknown>);
+}
+
+/**
+ * Shorten raw ToolCallPart repr (e.g. from backend or cached) to "tool_name(args)" only.
+ * Strips tool_call_id, provider_details, thought_signature so only tool name and args show.
+ */
+export function shortenToolCallPartContent(text: string | undefined | null): string {
+  if (text == null || typeof text !== "string" || !text) return "";
+  let out = text;
+  // Remove , tool_call_id='...'
+  out = out.replace(/,?\s*tool_call_id\s*=\s*['"][^'"]*['"]/g, "");
+  // Remove , provider_details={...} (may contain nested braces and long thought_signature)
+  out = out.replace(/,?\s*provider_details\s*=\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, "");
+  // Replace ToolCallPart(tool_name='X', args= with X(
+  out = out.replace(/ToolCallPart\s*\(\s*tool_name\s*=\s*['"]([^'"]+)['"]\s*,\s*args\s*=/g, "$1(");
+  return out;
+}
+
 export function normalizeMarkdownForPreview(
   content: string | undefined | null,
   maxLineLength: number = 80
@@ -397,9 +429,13 @@ export function normalizeMarkdownForPreview(
   if (content == null || typeof content !== "string") return "";
   if (!content) return "";
 
+  // Shorten any raw ToolCallPart repr to tool_name(args) before display
+  const shortened = shortenToolCallPartContent(content);
+  const toWrap = shortened !== content ? shortened : content;
+
   // Insert zero-width space (\u200B) into long unbroken segments to allow wrapping
   // This handles long URLs, file paths, hashes, etc.
-  return content.replace(
+  return toWrap.replace(
     /(\S{40,})/g,
     (match) => {
       // Insert zero-width space every maxLineLength characters

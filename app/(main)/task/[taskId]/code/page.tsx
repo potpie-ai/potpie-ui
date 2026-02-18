@@ -55,6 +55,7 @@ import {
   TaskLayer,
   PlanItem,
 } from "@/lib/types/spec";
+import { getStreamEventPayload } from "@/lib/utils";
 import Image from "next/image";
 import { TreeView, TreeNode } from "@/components/ui/tree-view";
 import { MonacoDiffView } from "@/components/diff-editor/MonacoDiffView";
@@ -70,6 +71,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  StreamTimeline,
+  type StreamTimelineItem,
+} from "@/components/stream/StreamTimeline";
+
+/** sessionStorage key for codegen thinking */
+const THINKING_STORAGE_KEY_CODEGEN = "potpie_thinking_codegen";
 
 /**
  * Code / implementation page: plan slices from API, task splitting (codegen), layers and tasks from getTaskSplittingItems.
@@ -129,49 +137,6 @@ function getParamDisplayForEvt(evt: AgentActivityEvt): string {
       return "";
     }
   }
-}
-
-function ToolCallItem({
-  evt,
-  index,
-  bodyRef,
-}: {
-  evt: AgentActivityEvt;
-  index: number;
-  bodyRef?: React.Ref<HTMLDivElement>;
-}) {
-  const paramDisplay = getParamDisplayForEvt(evt);
-  const toolLabel = evt.tool || "unknown";
-  const phaseTask = evt.phase != null ? `P${evt.phase + 1}.T${(evt.task ?? 0) + 1}` : "";
-  const oneLine = [toolLabel, paramDisplay ? (paramDisplay.length > 60 ? paramDisplay.slice(0, 60) + "…" : paramDisplay) : "", phaseTask].filter(Boolean).join(" · ");
-  const fullParams = evt?.params && typeof evt.params === "object" ? JSON.stringify(evt.params, null, 2) : "";
-  const bodyText = fullParams || (paramDisplay ? String(paramDisplay) : "");
-
-  return (
-    <details
-      key={index}
-      className="group rounded-lg border border-[#CCD3CF] bg-[#F5F5F4] min-w-0 overflow-hidden"
-    >
-      <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-        <div className="flex items-center gap-2 min-w-0">
-          <Check className="w-4 h-4 shrink-0 text-emerald-600" aria-hidden />
-          <span className="text-xs font-medium text-zinc-800 truncate min-w-0" title={oneLine}>
-            {oneLine}
-          </span>
-        </div>
-        <ChevronDown className="w-4 h-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180" aria-hidden />
-      </summary>
-      {bodyText ? (
-        <div
-          ref={bodyRef}
-          className="border-t border-[#CCD3CF]/60 bg-[#FAF8F7] p-3 max-h-[140px] overflow-y-auto overflow-x-hidden min-w-0 text-xs text-zinc-700 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          style={{ msOverflowStyle: "none" }}
-        >
-          <pre className="whitespace-pre-wrap break-words font-mono text-inherit">{bodyText}</pre>
-        </div>
-      ) : null}
-    </details>
-  );
 }
 
 /** True if segment looks like a file (has an extension); otherwise treat as folder. */
@@ -1643,17 +1608,158 @@ export default function VerticalTaskExecution() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSplittingId, activeSliceId]);
 
-  // Auto-scroll Thinking list to latest tool call when expanded and activity updates
-  const activityLength = taskSplittingStatus?.agent_activity?.length ?? 0;
+  // Codegen "stream" timeline from polled agent_activity (same display pattern as spec/plan)
+  const codegenStreamItems: StreamTimelineItem[] = useMemo(() => {
+    const activity = taskSplittingStatus?.agent_activity ?? [];
+    return activity.map((evt, i) => {
+      const tool = evt.tool || "unknown";
+      const paramDisplay = getParamDisplayForEvt(evt as AgentActivityEvt);
+      const phaseTask =
+        evt.phase != null ? `P${evt.phase + 1}.T${(evt.task ?? 0) + 1}` : "";
+      const oneLine = [tool, paramDisplay, phaseTask].filter(Boolean).join(" · ");
+      const result =
+        evt.params && typeof evt.params === "object"
+          ? JSON.stringify(evt.params, null, 2)
+          : oneLine || "";
+      return {
+        type: "tool" as const,
+        id: `codegen-${i}-${evt.tool ?? i}`,
+        label: oneLine.length > 60 ? oneLine.slice(0, 60) + "…" : oneLine,
+        phase: "done" as const,
+        result,
+      };
+    });
+  }, [taskSplittingStatus?.agent_activity]);
+
+  // Live codegen stream (when backend supports SSE) – same event shape as spec/plan
+  const [codegenLiveStreamItems, setCodegenLiveStreamItems] = useState<StreamTimelineItem[]>([]);
+  const codegenStreamAbortRef = useRef<AbortController | null>(null);
+  const codegenStreamItemIdRef = useRef(0);
+  const codegenStreamEndRef = useRef<HTMLDivElement>(null);
+  const hasRestoredCodegenThinkingRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (thinkingAccordionValue !== "thinking" || activityLength === 0) return;
-    const el = thinkingListRef.current;
-    if (el) {
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
+    const taskId = taskSplittingId;
+    const inProgress =
+      taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
+      taskSplittingStatus?.status === "IN_PROGRESS";
+    if (!taskId || !inProgress) return;
+
+    codegenStreamAbortRef.current?.abort();
+    codegenStreamAbortRef.current = new AbortController();
+    setCodegenLiveStreamItems([]);
+
+    TaskSplittingService.connectCodegenStream(taskId, {
+      signal: codegenStreamAbortRef.current.signal,
+      onEvent(eventType: string, data: Record<string, unknown>) {
+        const payload = getStreamEventPayload(data);
+        if (eventType === "chunk" && payload?.content) {
+          const content = String(payload.content);
+          setCodegenLiveStreamItems((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.type === "chunk") {
+              return [...prev.slice(0, -1), { ...last, content: last.content + content }];
+            }
+            return [...prev, { type: "chunk", id: `codegen-chunk-${++codegenStreamItemIdRef.current}`, content }];
+          });
+        }
+        if (eventType === "tool_call_start" && payload?.tool) {
+          const call_id = (payload.call_id as string) ?? `codegen-tool-${++codegenStreamItemIdRef.current}`;
+          setCodegenLiveStreamItems((prev) => [
+            ...prev,
+            { type: "tool", id: call_id, label: String(payload.tool), phase: "running" },
+          ]);
+        }
+        if (eventType === "tool_call_end" && payload?.tool) {
+          const call_id = payload.call_id as string | undefined;
+          const label = String(payload.tool);
+          const result = payload.result;
+          const segmentContent =
+            result !== undefined && result !== null
+              ? typeof result === "object"
+                ? JSON.stringify(result, null, 2)
+                : String(result)
+              : "";
+          setCodegenLiveStreamItems((prev) => {
+            const idx = call_id
+              ? prev.findIndex((it) => it.type === "tool" && it.id === call_id)
+              : prev.findLastIndex(
+                  (it) => it.type === "tool" && it.phase === "running" && it.label === label
+                );
+            if (idx === -1) return prev;
+            const next = [...prev];
+            const cur = next[idx];
+            if (cur.type === "tool")
+              next[idx] = { ...cur, phase: "done", result: segmentContent };
+            return next;
+          });
+        }
+        if (eventType === "end" || eventType === "error") {
+          codegenStreamAbortRef.current?.abort();
+        }
+      },
+      onError() {
+        setCodegenLiveStreamItems((prev) => prev);
+      },
+    });
+
+    return () => {
+      codegenStreamAbortRef.current?.abort();
+    };
+  }, [
+    taskSplittingId,
+    taskSplittingStatus?.codegen_status,
+    taskSplittingStatus?.status,
+  ]);
+
+  const displayCodegenItems =
+    codegenLiveStreamItems.length > 0 ? codegenLiveStreamItems : codegenStreamItems;
+  const codegenStreamItemsLength = displayCodegenItems.length;
+  useEffect(() => {
+    if (codegenStreamItemsLength > 0) {
+      codegenStreamEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [activityLength, thinkingAccordionValue]);
+  }, [codegenStreamItemsLength]);
+
+  // Determine if codegen is complete for persistence
+  const codegenIsComplete =
+    taskSplittingStatus?.status === "COMPLETED" ||
+    taskSplittingStatus?.codegen_status === "COMPLETED";
+
+  // Persist codegen thinking when done so it survives refresh
+  useEffect(() => {
+    if (!taskSplittingId || !codegenIsComplete) return;
+    const items = codegenLiveStreamItems.length > 0 ? codegenLiveStreamItems : codegenStreamItems;
+    if (items.length > 0) {
+      try {
+        sessionStorage.setItem(
+          `${THINKING_STORAGE_KEY_CODEGEN}_${taskSplittingId}`,
+          JSON.stringify({ streamItems: items })
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }, [taskSplittingId, codegenIsComplete, codegenLiveStreamItems, codegenStreamItems]);
+
+  // Restore codegen thinking on load when already complete but no stream state (e.g. after refresh)
+  useEffect(() => {
+    if (!taskSplittingId || !codegenIsComplete) return;
+    if (codegenLiveStreamItems.length > 0 || codegenStreamItems.length > 0) return;
+    if (hasRestoredCodegenThinkingRef.current === taskSplittingId) return;
+    hasRestoredCodegenThinkingRef.current = taskSplittingId;
+    try {
+      const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY_CODEGEN}_${taskSplittingId}`);
+      if (!raw) return;
+      const data = JSON.parse(raw) as { streamItems?: StreamTimelineItem[] };
+      const items = Array.isArray(data.streamItems) ? data.streamItems : [];
+      if (items.length > 0) {
+        setCodegenLiveStreamItems(items);
+      }
+    } catch {
+      // ignore
+    }
+  }, [taskSplittingId, codegenIsComplete, codegenLiveStreamItems.length, codegenStreamItems.length]);
 
   // 3. Step-by-Step Graph Discovery (Loading Phase) - progressive reveal
   // Depend on primitive values (length, status string) so polling updates to allLayers/taskSplittingStatus
@@ -2093,109 +2199,44 @@ export default function VerticalTaskExecution() {
                     </div>
                   </div>
 
-                      {/* Thinking / Agent Activity - accordion when in progress; Completed card + collapsible Agent output when done */}
+                      {/* Codegen stream timeline (same pattern as spec/plan): tool calls + loading dots */}
                       {taskSplittingId &&
-                        (taskSplittingStatus?.codegen_status === "COMPLETED" ? (
+                        (taskSplittingStatus?.codegen_status === "COMPLETED" ||
+                          taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
+                          taskSplittingStatus?.status === "IN_PROGRESS" ||
+                          (taskSplittingStatus?.agent_activity?.length ?? 0) > 0) && (
                           <div className="space-y-3 min-w-0">
-                            <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] px-4 py-4 min-w-0">
-                              <div className="flex items-center gap-3">
-                                <Check className="w-5 h-5 text-[#022D2C] shrink-0" />
-                                <div>
-                                  <p className="text-sm font-bold text-[#00291C]">Code generation completed</p>
-                                  <p className="text-[10px] text-zinc-500 mt-0.5">STATUS: COMPLETED</p>
-                                </div>
-                              </div>
-                            </div>
-                            {(taskSplittingStatus?.agent_activity?.length ?? 0) > 0 && (
-                              <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] px-4 py-3 min-w-0 w-full">
-                                <div className="space-y-3 min-w-0 overflow-y-auto overflow-x-hidden max-h-[420px] pr-1">
-                                  {(taskSplittingStatus?.agent_activity ?? []).map((evt, i) => (
-                                    <ToolCallItem key={i} index={i} evt={evt as AgentActivityEvt} />
-                                  ))}
+                            {taskSplittingStatus?.codegen_status === "COMPLETED" && (
+                              <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] px-4 py-4 min-w-0">
+                                <div className="flex items-center gap-3">
+                                  <Check className="w-5 h-5 text-[#022D2C] shrink-0" />
+                                  <div>
+                                    <p className="text-sm font-bold text-[#00291C]">Code generation completed</p>
+                                    <p className="text-[10px] text-zinc-500 mt-0.5">STATUS: COMPLETED</p>
+                                  </div>
                                 </div>
                               </div>
                             )}
+                            {(displayCodegenItems.length > 0 ||
+                              taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
+                              taskSplittingStatus?.status === "IN_PROGRESS") && (
+                              <div className="min-w-0">
+                                <StreamTimeline
+                                  items={displayCodegenItems}
+                                  endRef={codegenStreamEndRef}
+                                  loading={
+                                    (taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
+                                      taskSplittingStatus?.status === "IN_PROGRESS") &&
+                                    taskSplittingStatus?.codegen_status !== "FAILED"
+                                  }
+                                />
+                              </div>
+                            )}
+                            {taskSplittingStatus?.codegen_status === "FAILED" && displayCodegenItems.length === 0 && (
+                              <p className="text-xs text-zinc-500 italic">Codegen failed</p>
+                            )}
                           </div>
-                        ) : (
-                          (taskSplittingStatus?.status === "IN_PROGRESS" ||
-                            taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
-                            (taskSplittingStatus?.agent_activity?.length ?? 0) > 0) && (
-                        <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4 min-w-0">
-                          <Accordion
-                            type="single"
-                            collapsible
-                            value={thinkingAccordionValue}
-                            onValueChange={setThinkingAccordionValue}
-                            className="w-full"
-                          >
-                            <AccordionItem value="thinking" className="border-none">
-                              <AccordionTrigger className="py-2 hover:no-underline [&[data-state=open]>svg]:rotate-180">
-                                <div className="flex items-center w-full gap-2 flex-wrap">
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#102C2C]/10 shrink-0">
-                                      <Wrench className="w-4 h-4 text-[#00291C]" />
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-xs font-bold text-[#00291C]">Thinking</p>
-                                      {(taskSplittingStatus?.status === "IN_PROGRESS" || taskSplittingStatus?.codegen_status === "IN_PROGRESS") && (
-                                        <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin shrink-0" aria-hidden />
-                                      )}
-                                    </div>
-                                  </div>
-                                  {(taskSplittingStatus?.agent_activity?.length ?? 0) > 0 && (
-                                    <span className="text-xs text-zinc-500 font-normal bg-white/80 px-2 py-0.5 rounded border border-[#CCD3CF]/60">
-                                      {(taskSplittingStatus?.agent_activity?.length ?? 0) >= 50
-                                        ? "50+"
-                                        : taskSplittingStatus?.agent_activity?.length}{" "}
-                                      tool calls
-                                    </span>
-                                  )}
-                                </div>
-                              </AccordionTrigger>
-                              <AccordionContent className="pt-3 pb-0 transition-all data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-                                {(() => {
-                                  const activity = taskSplittingStatus?.agent_activity ?? [];
-                                  if (activity.length > 0) {
-                                    return (
-                                      <div
-                                        ref={thinkingListRef}
-                                        className="space-y-3 min-w-0 overflow-y-auto overflow-x-hidden max-h-[420px] pr-1"
-                                      >
-                                        {activity.map((evt, i) => (
-                                          <ToolCallItem
-                                            key={i}
-                                            index={i}
-                                            evt={evt as AgentActivityEvt}
-                                            bodyRef={(el) => {
-                                              if (el) el.scrollTop = el.scrollHeight;
-                                            }}
-                                          />
-                                        ))}
-                                      </div>
-                                    );
-                                  }
-                                  const codegenStatus =
-                                    taskSplittingStatus?.codegen_status as TaskSplittingStatusResponse["codegen_status"] | undefined;
-                                  if (codegenStatus === "COMPLETED") {
-                                    return <p className="text-xs text-zinc-500 italic">No activity recorded</p>;
-                                  }
-                                  if (codegenStatus === "FAILED") {
-                                    return <p className="text-xs text-zinc-500 italic">Codegen failed</p>;
-                                  }
-                                  return (
-                                    <p className="text-xs text-zinc-500 flex items-center gap-2">
-                                      <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
-                                      Generating code…
-                                    </p>
-                                  );
-                                })()}
-                              </AccordionContent>
-                            </AccordionItem>
-                          </Accordion>
-                        </div>
-                        )
-                        )
-                      )}
+                        )}
                     </div>
               </div>
             )}
@@ -2273,66 +2314,59 @@ export default function VerticalTaskExecution() {
                 )}
 
                 {/* MAKE PR / VIEW PR */}
-                {taskSplittingId && (
-                  <>
-                    {taskSplittingStatus?.pr_url ? (
-                      <a
-                        href={taskSplittingStatus.pr_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="shrink-0 px-5 py-2 rounded-lg font-semibold text-xs bg-[#022019] text-[#B4D13F] hover:opacity-90"
-                      >
-                        VIEW PR
-                      </a>
-            ) : (
-              <button
-                        type="button"
-                        disabled={
-                          !taskSplittingStatus ||
-                          taskSplittingStatus.codegen_status !== "COMPLETED" ||
-                          isCreatingPR ||
-                          taskSplittingStatus.pr_status === "IN_PROGRESS"
-                        }
-                        onClick={async () => {
-                          if (!taskSplittingId) return;
-                          try {
-                            setIsCreatingPR(true);
-                            await TaskSplittingService.createPullRequest(taskSplittingId);
-                            toast.success("PR creation started", { title: "Success" });
-                          } catch (e: any) {
-                            setIsCreatingPR(false);
-                            toast.error(e?.message || "Failed to start PR creation", { title: "Error" });
-                          }
-                        }}
-                        className={`shrink-0 px-5 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 ${
-                          !taskSplittingStatus ||
-                          taskSplittingStatus.codegen_status !== "COMPLETED" ||
-                          isCreatingPR ||
-                          taskSplittingStatus.pr_status === "IN_PROGRESS"
-                       ? "bg-zinc-100 text-primary-color cursor-not-allowed"
-                            : "bg-[#022019] text-[#B4D13F] hover:opacity-90"
-                        }`}
-                        title={
-                          taskSplittingStatus?.codegen_status !== "COMPLETED"
-                            ? "Finish code generation before creating a PR"
-                            : taskSplittingStatus?.pr_status === "FAILED"
-                              ? taskSplittingStatus?.pr_error_message || "PR creation failed"
-                              : "Create a PR from completed changes"
-                        }
-                      >
-                        {isCreatingPR || taskSplittingStatus?.pr_status === "IN_PROGRESS" ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            MAKING PR…
-                  </>
+                {taskSplittingStatus?.pr_url ? (
+                  <a
+                    href={taskSplittingStatus.pr_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 px-5 py-2 rounded-lg font-semibold text-xs bg-[#022019] text-[#B4D13F] hover:opacity-90"
+                  >
+                    VIEW PR
+                  </a>
                 ) : (
-                          "MAKE PR"
-                )}
-              </button>
+                  <button
+                    type="button"
+                    disabled={
+                      !taskSplittingId ||
+                      !taskSplittingStatus ||
+                      taskSplittingStatus.codegen_status !== "COMPLETED" ||
+                      isCreatingPR ||
+                      taskSplittingStatus.pr_status === "IN_PROGRESS"
+                    }
+                    onClick={async () => {
+                      if (!taskSplittingId) return;
+                      try {
+                        setIsCreatingPR(true);
+                        await TaskSplittingService.createPullRequest(taskSplittingId);
+                        toast.success("PR creation started", { title: "Success" });
+                      } catch (e: any) {
+                        setIsCreatingPR(false);
+                        toast.error(e?.message || "Failed to start PR creation", { title: "Error" });
+                      }
+                    }}
+                    className="shrink-0 px-5 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 bg-[#022019] text-[#B4D13F] hover:opacity-90 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:hover:opacity-100 disabled:cursor-not-allowed"
+                    title={
+                      !taskSplittingId
+                        ? "Start code generation before creating a PR"
+                        : taskSplittingStatus?.codegen_status !== "COMPLETED"
+                          ? "Finish code generation before creating a PR"
+                          : taskSplittingStatus?.pr_status === "FAILED"
+                            ? taskSplittingStatus?.pr_error_message || "PR creation failed"
+                            : taskSplittingStatus?.pr_status === "IN_PROGRESS"
+                              ? "PR creation is in progress"
+                              : "Create a PR from completed changes"
+                    }
+                  >
+                    {isCreatingPR || taskSplittingStatus?.pr_status === "IN_PROGRESS" ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        MAKING PR…
+                      </>
+                    ) : (
+                      "MAKE PR"
                     )}
-                  </>
-                  
-            )}
+                  </button>
+                )}
             </div>
           </div>
                 </div>

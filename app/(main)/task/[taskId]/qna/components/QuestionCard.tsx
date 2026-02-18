@@ -235,6 +235,7 @@ export default function QuestionCard({
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => !isSkipped && handleSelectOption(index)}
+                        onClick={(e) => e.stopPropagation()}
                         id={`${question.id ?? "q"}-opt-${index}`}
                         className="mt-0.5 shrink-0"
                         disabled={isSkipped}

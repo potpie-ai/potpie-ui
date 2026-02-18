@@ -876,6 +876,8 @@ const SpecPage = () => {
           }
         },
         onError: async (msg) => {
+          // Don't treat abort as an error - expected when switching streams or regenerating
+          if (/abort/i.test(msg)) return;
           // On stream error, check if spec is already completed - if so, don't show error toast
           try {
             const fallbackStatus = await SpecService.getSpecProgressByRecipeId(recipeId);

@@ -299,10 +299,19 @@ export default function RepoPage() {
                     }))
                   : [];
               const recIdxRaw = newQ.answer_recommendation?.idx;
-              const recIdx = typeof recIdxRaw === "number" ? recIdxRaw : null;
+              const recIdx =
+                typeof recIdxRaw === "number"
+                  ? recIdxRaw
+                  : typeof recIdxRaw === "string"
+                    ? parseInt(recIdxRaw, 10)
+                    : null;
+              const recIdxValid =
+                recIdx != null && !Number.isNaN(recIdx) ? recIdx : null;
               const assumedLabel =
-                recIdx != null && recIdx >= 0 && recIdx < options.length
-                  ? options[recIdx].label
+                recIdxValid != null &&
+                recIdxValid >= 0 &&
+                recIdxValid < options.length
+                  ? options[recIdxValid].label
                   : undefined;
               return {
                 id: newQ.id ?? `q-${index}`,
@@ -313,7 +322,7 @@ export default function RepoPage() {
                 multipleChoice: newQ.multiple_choice ?? false,
                 assumed: assumedLabel,
                 reasoning: newQ.answer_recommendation?.reasoning,
-                answerRecommendationIdx: recIdx ?? null,
+                answerRecommendationIdx: recIdxValid,
                 expectedAnswerType: newQ.expected_answer_type,
                 contextRefs: newQ.context_refs ?? null,
               };
@@ -387,10 +396,12 @@ export default function RepoPage() {
           if (recIdx != null && recIdx >= 0 && recIdx < options.length) {
             const opt = options[recIdx];
             const label = typeof opt === "string" ? opt : opt.label;
+            const isMultipleChoice = q.multipleChoice ?? false;
             initialAnswers.set(q.id, {
               questionId: q.id,
               mcqAnswer: String.fromCharCode(65 + recIdx),
-              selectedOptionIdx: recIdx,
+              selectedOptionIdx: isMultipleChoice ? undefined : recIdx,
+              selectedOptionIndices: isMultipleChoice ? [recIdx] : undefined,
               textAnswer: label,
               isOther: false,
               isUserModified: false,
@@ -768,10 +779,12 @@ export default function RepoPage() {
       if (idx != null && idx >= 0 && idx < options.length) {
         const opt = options[idx];
         const label = typeof opt === "string" ? opt : opt.label;
+        const isMultipleChoice = q.multipleChoice ?? false;
         answersMap.set(q.id, {
           questionId: q.id,
           mcqAnswer: String.fromCharCode(65 + idx),
-          selectedOptionIdx: idx,
+          selectedOptionIdx: isMultipleChoice ? undefined : idx,
+          selectedOptionIndices: isMultipleChoice ? [idx] : undefined,
           textAnswer: label,
           isUserModified: false,
         });

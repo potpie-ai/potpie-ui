@@ -1040,14 +1040,12 @@ export default function IdeaInputCard({
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Enter Public Repository</DialogTitle>
-            <DialogDescription>
-              Enter a GitHub repository URL or <code>owner/repo</code> format (e.g., <code>https://github.com/facebook/react</code> or <code>facebook/react</code>)
-            </DialogDescription>
+            
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Input
-                placeholder="GitHub URL or owner/repo (e.g., https://github.com/facebook/react)"
+                placeholder="e.g. owner/repo or https://github.com/owner/repo"
                 value={publicRepoInput}
                 onChange={(e) => setPublicRepoInput(e.target.value)}
                 onKeyDown={(e) => {

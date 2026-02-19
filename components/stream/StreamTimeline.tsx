@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, Wrench } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -9,8 +9,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { normalizeMarkdownForPreview } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { ToolResultContent } from "@/components/stream/ToolResultContent";
+import { cn, normalizeMarkdownForPreview } from "@/lib/utils";
 
 export type StreamTimelineItem =
   | { type: "chunk"; id: string; content: string }
@@ -105,7 +105,7 @@ export function StreamTimeline({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-50">
-                        <Check
+                        <Wrench
                           className="h-3.5 w-3.5 text-emerald-600"
                           aria-hidden
                         />
@@ -130,9 +130,7 @@ export function StreamTimeline({
                       )}
                     >
                       {item.result ? (
-                        <SharedMarkdown
-                          content={normalizeMarkdownForPreview(item.result)}
-                        />
+                        <ToolResultContent result={item.result} />
                       ) : (
                         <span className="text-zinc-500">No output</span>
                       )}

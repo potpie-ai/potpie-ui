@@ -448,3 +448,37 @@ export function normalizeMarkdownForPreview(
     }
   );
 }
+
+/** Detect if content looks like Markdown (headings, bold, code blocks). */
+export function looksLikeMarkdown(text: string): boolean {
+  if (!text || text.length > 5000) return false;
+  const trimmed = text.trim();
+  if (/^#+\s/m.test(trimmed)) return true;
+  if (/\*\*[^*]+\*\*|__[^_]+__/.test(trimmed)) return true;
+  if (/^```[\s\S]*?```/m.test(trimmed)) return true;
+  if (/^\s*[-*+]\s+/m.test(trimmed) && /\n/.test(trimmed)) return true;
+  return false;
+}
+
+/**
+ * Format tool result for display: valid JSON is pretty-printed; otherwise return as-is.
+ * Caller should use JSON view for parseable JSON and markdown/plain for the rest.
+ */
+export function formatToolResultForDisplay(raw: string): {
+  kind: "json" | "markdown" | "plain";
+  content: string;
+} {
+  if (raw == null || typeof raw !== "string") return { kind: "plain", content: "" };
+  const trimmed = raw.trim();
+  if (!trimmed) return { kind: "plain", content: "" };
+  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return { kind: "json", content: JSON.stringify(parsed, null, 2) };
+    } catch {
+      // not valid JSON
+    }
+  }
+  if (looksLikeMarkdown(trimmed)) return { kind: "markdown", content: trimmed };
+  return { kind: "plain", content: trimmed };
+}

@@ -1,32 +1,28 @@
 <p align="center">
   <a href="https://potpie.ai?utm_source=github">
-    <img src="https://github.com/user-attachments/assets/1a0b9824-833b-4c0a-b56d-ede5623295ca" width="318px" alt="Potpie logo" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="../assets/readme_logo_dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="../assets/logo_light.svg" />
+      <img src="../assets/logo_light.svg"  alt="Potpie AI logo" />
+    </picture>
   </a>
 </p>
 
-<h1 align="center">Prompt-To-Agent: Create custom engineering agents for your code</h1>
 
 <p align="center">
   <strong>User Interface</strong>
 </p>
 
+
 <p align="center">
-  <a href="https://github.com/potpie-ai/potpie/stargazers">
-    <img src="https://img.shields.io/github/stars/potpie-ai/potpie-ui" alt="Stars" />
-  </a>
-    <a href="https://twitter.com/potpiedotai">
-    <img src="https://img.shields.io/twitter/follow/potpiedotai?style=social" alt="Twitter" />
-  </a>
-<br/>
-<a href="https://discord.gg/ryk5CMD5v6">
-    <img src="https://img.shields.io/badge/Join%20our-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord">
-</a>
-
-
+<img width="700" alt="Potpie Dashboard" src="./assets/home_page.png" />
 </p>
 
 <p align="center">
-  <img width="1506" alt="Potpie UI Screenshot" src="https://github.com/user-attachments/assets/a400b48f-dc4c-47b1-a42b-26eaf062adb2" />
+  <a href="https://docs.potpie.ai"><img src="https://img.shields.io/badge/Docs-Read-blue?logo=readthedocs&logoColor=white" alt="Docs"></a>
+  <a href="https://github.com/potpie-ai/potpie/blob/main/LICENSE"><img src="https://img.shields.io/github/license/potpie-ai/potpie" alt="Apache 2.0"></a>
+  <a href="https://github.com/potpie-ai/potpie"><img src="https://img.shields.io/github/stars/potpie-ai/potpie" alt="GitHub Stars"></a>
+  <a href="https://discord.gg/ryk5CMD5v6"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 ## 📋 Table of Contents

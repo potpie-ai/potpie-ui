@@ -658,7 +658,7 @@ const PlanPage = () => {
         {/* Left: Chat (same pattern as spec page) */}
         <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7] chat-panel-contained">
           <div className="flex justify-between items-center px-6 py-4 shrink-0">
-            <h1 className="text-lg font-bold text-[#022019] truncate">
+            <h1 className="text-lg font-bold text-[#022019] truncate capitalize">
               {userPrompt?.slice(0, 50) || "Chat Name"}
               {(userPrompt?.length ?? 0) > 50 ? "…" : ""}
             </h1>

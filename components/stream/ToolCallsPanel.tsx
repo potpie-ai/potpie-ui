@@ -8,8 +8,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { normalizeMarkdownForPreview } from "@/lib/utils";
+import { ToolResultContent } from "@/components/stream/ToolResultContent";
 import { cn } from "@/lib/utils";
 
 export type StreamEvent = {
@@ -150,11 +149,7 @@ export function ToolCallsPanel({
                           }}
                           className="max-h-48 overflow-y-auto overflow-x-hidden border-t border-zinc-100 bg-zinc-50/80 p-3 text-xs text-zinc-700 [scrollbar-width:thin]"
                         >
-                          <SharedMarkdown
-                            content={normalizeMarkdownForPreview(
-                              block.segment.content
-                            )}
-                          />
+                          <ToolResultContent result={block.segment.content} />
                         </div>
                       </AccordionContent>
                     </AccordionItem>

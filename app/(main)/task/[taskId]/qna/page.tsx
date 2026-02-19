@@ -1796,7 +1796,7 @@ export default function QnaPage() {
             )}
 
             {/* Align with Thinking block content above (52px = avatar width + margin) */}
-            <div className="max-w-3xl w-full space-y-6 ml-[52px]">
+            <div className="space-y-6 ml-[52px] min-w-0" style={{ width: "calc(100% - 52px)" }}>
             {/* Show error card when there's an error - full card when no questions, banner when questions exist */}
             {state.pageState === "questions" && state.questionGenerationError && (
               state.questions.length === 0 ? (

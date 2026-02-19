@@ -63,11 +63,11 @@ export default function QuestionCard({
       ? selectedIndices.length > 0 && selectedIndices.some(idx => idx >= 0 && idx < options.length)
       : selectedIdx != null && selectedIdx >= 0 && selectedIdx < options.length);
 
-  // Show "Input needed" when: no answer_recommendation.idx AND user hasn't selected
+  // Show "Input needed" when: free-text question OR MCQ with no AI pre-selection, and user hasn't answered
   const needsInput =
-    question.needsInput &&
     !hasAnswer &&
-    (question.answerRecommendationIdx == null ||
+    (isFreeTextOnly ||
+      question.answerRecommendationIdx == null ||
       question.answerRecommendationIdx < 0);
 
   const cardClasses = [

@@ -63,11 +63,11 @@ export default function QuestionCard({
       ? selectedIndices.length > 0 && selectedIndices.some(idx => idx >= 0 && idx < options.length)
       : selectedIdx != null && selectedIdx >= 0 && selectedIdx < options.length);
 
-  // Show "Input needed" when: free-text question OR MCQ with no AI pre-selection, and user hasn't answered
+  // Show "Input needed" when: no answer_recommendation.idx AND user hasn't selected
   const needsInput =
+    question.needsInput &&
     !hasAnswer &&
-    (isFreeTextOnly ||
-      question.answerRecommendationIdx == null ||
+    (question.answerRecommendationIdx == null ||
       question.answerRecommendationIdx < 0);
 
   const cardClasses = [
@@ -186,7 +186,7 @@ export default function QuestionCard({
                     Skipped
                   </span>
                 )}
-                {!isSkipped && needsInput && (
+                {!isSkipped && needsInput && isFreeTextOnly && (
                   <span 
                     className="px-3 py-1 text-xs font-semibold tracking-wide whitespace-nowrap font-mono flex-shrink-0"
                     style={{ 

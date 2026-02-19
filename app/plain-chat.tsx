@@ -24,13 +24,7 @@ export default function PlainChatProvider() {
                 background-color: var(--plain-background) !important;
                 color: var(--plain-text-primary) !important;
             }
-            
-            [class*="plain"],
-            [class*="plain"] * {
-                background-color: #ffffff !important;
-                color: #111827 !important;
-            }
-            
+
             [data-plain-chat-window],
             .plain-chat-window {
                 background: #ffffff !important;

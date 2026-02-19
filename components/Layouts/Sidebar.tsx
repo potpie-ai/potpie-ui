@@ -46,22 +46,14 @@ import {
   setTotalHumanMessages,
   setUserPlanType,
 } from "@/lib/state/Reducers/User";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+
 import { ProFeatureModal } from "./ProFeatureModal";
 import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 
 export function AppSidebar() {
-  const [supportPopoverOpen, setSupportPopoverOpen] = useState(false);
   const [proModalOpen, setProModalOpen] = useState(false);
   const [isCheckingBackend, setIsCheckingBackend] = useState(false);
   const [isBackendAccessible, setIsBackendAccessible] = useState<boolean | null>(null);
-  const supportPopoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
   const [progress, setProgress] = React.useState(90);
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
@@ -273,108 +265,6 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
-              {/* Support button (hover popover) in same group */}
-              {(() => {
-                const supportItem = SidebarItems[1];
-                return (
-                  <SidebarMenuItem>
-                    <Popover
-                      open={supportPopoverOpen}
-                      onOpenChange={setSupportPopoverOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <SidebarMenuButton
-                          className="flex gap-2 items-center w-full"
-                          onMouseEnter={() => {
-                            if (
-                              supportPopoverTimeoutRef.current !=
-                              null
-                            ) {
-                              clearTimeout(
-                                supportPopoverTimeoutRef.current
-                              );
-                              supportPopoverTimeoutRef.current = null;
-                            }
-                            setSupportPopoverOpen(true);
-                          }}
-                          onMouseLeave={() => {
-                            supportPopoverTimeoutRef.current =
-                              setTimeout(
-                                () => setSupportPopoverOpen(false),
-                                150
-                              );
-                          }}
-                        >
-                          {supportItem.links[0]?.icons && (
-                            <span>{supportItem.links[0].icons}</span>
-                          )}
-                          <span>Support</span>
-                        </SidebarMenuButton>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        side="right"
-                        align="start"
-                        sideOffset={8}
-                        className="w-56 p-1 bg-[#FFFBF7] border-border text-foreground"
-                        onMouseEnter={() => {
-                          if (
-                            supportPopoverTimeoutRef.current !=
-                            null
-                          ) {
-                            clearTimeout(
-                              supportPopoverTimeoutRef.current
-                            );
-                            supportPopoverTimeoutRef.current = null;
-                          }
-                          setSupportPopoverOpen(true);
-                        }}
-                        onMouseLeave={() =>
-                          setSupportPopoverOpen(false)
-                        }
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          {supportItem.links.map((link) =>
-                            link.disabled && link.handleTrack ? (
-                              <button
-                                key={link.title}
-                                type="button"
-                                className="flex w-full gap-2 items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                                onClick={() => {
-                                  handleTrack();
-                                  setSupportPopoverOpen(false);
-                                }}
-                              >
-                                {link.icons && (
-                                  <span className="shrink-0">
-                                    {link.icons}
-                                  </span>
-                                )}
-                                <span>{link.title}</span>
-                              </button>
-                            ) : (
-                              <Link
-                                key={link.title}
-                                href={link.href}
-                                className="flex gap-2 items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                                onClick={() =>
-                                  setSupportPopoverOpen(false)
-                                }
-                              >
-                                {link.icons && (
-                                  <span className="shrink-0">
-                                    {link.icons}
-                                  </span>
-                                )}
-                                <span>{link.title}</span>
-                              </Link>
-                            )
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </SidebarMenuItem>
-                );
-              })()}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

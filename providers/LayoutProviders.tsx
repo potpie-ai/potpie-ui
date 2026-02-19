@@ -12,6 +12,7 @@ import posthog from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import FormbricksProvider from "@/app/formbricks";
+import PlainChatProvider from "@/app/plain-chat";
 import { isPostHogEnabled } from "@/lib/utils";
 
 // Conditionally initialize PostHog based on environment variables
@@ -30,9 +31,9 @@ if (typeof window !== "undefined") {
   } else {
     // Override methods with no-op implementations while maintaining the original posthog object
     posthog.capture = () => undefined;
-    posthog.identify = () => {};
-    posthog.reset = () => {};
-    posthog.startSessionRecording = () => {};
+    posthog.identify = () => { };
+    posthog.reset = () => { };
+    posthog.startSessionRecording = () => { };
     console.log(
       "PostHog initialized with mock implementation for local development"
     );
@@ -53,6 +54,7 @@ const LayoutProviders = ({ children }: { children: React.ReactNode }) => {
             <NavigationProgressProvider>
               <NavigationProgressBar />
               <FormbricksProvider />
+              <PlainChatProvider />
               <PersistGate loading={<Loading />} persistor={persistor}>
                 <Provider store={store}>
                   <TooltipProvider>{children}</TooltipProvider>

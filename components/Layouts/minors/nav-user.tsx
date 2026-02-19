@@ -6,6 +6,7 @@ import {
   CreditCard,
   LogOut,
   Receipt,
+  Settings,
   SubscriptIcon,
 } from "lucide-react";
 
@@ -101,6 +102,13 @@ export function NavUser({
               >
                 <Receipt />
                 Manage Subscription
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="hover:bg-[#F5F0EB] cursor-pointer"
+                onClick={() => router.push("/settings")}
+              >
+                <Settings />
+                Settings
               </DropdownMenuItem>
               <DropdownMenuItem className="hover:bg-[#F5F0EB] cursor-pointer">
                 <Link

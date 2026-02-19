@@ -50,7 +50,7 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
   if (status === ParsingStatusEnum.SUBMITTED || 
       status === ParsingStatusEnum.CLONED || 
       status === ParsingStatusEnum.PARSED || 
-      status === ParsingStatusEnum.PROCESSING ||
+      status === ParsingStatusEnum.INFERRING ||
       status === "loading") { // Include "loading" for backward compatibility
     return (
       <div className="flex justify-start items-center gap-3 mt-2">

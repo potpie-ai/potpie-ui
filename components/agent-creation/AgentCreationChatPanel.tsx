@@ -213,14 +213,14 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
             setParsingStatus(ParsingStatusEnum.ERROR);
           } else if (
             status === "submitted" ||
-            status === "processing" ||
             status === "cloned" ||
             status === "parsed" ||
+            status === "inferring" ||
             status === "ready"
           ) {
             setParsingStatus(status as ParsingStatusEnum);
           } else {
-            setParsingStatus(ParsingStatusEnum.PROCESSING);
+            setParsingStatus(ParsingStatusEnum.INFERRING);
           }
         },
         async () => {
@@ -504,18 +504,18 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                         !selectedBranch ||
                         [
                           ParsingStatusEnum.SUBMITTED,
-                          ParsingStatusEnum.PROCESSING,
                           ParsingStatusEnum.CLONED,
                           ParsingStatusEnum.PARSED,
+                          ParsingStatusEnum.INFERRING,
                         ].includes(parsingStatus as ParsingStatusEnum)
                       }
                       onClick={parseRepo}
                     >
                       {[
                         ParsingStatusEnum.SUBMITTED,
-                        ParsingStatusEnum.PROCESSING,
                         ParsingStatusEnum.CLONED,
                         ParsingStatusEnum.PARSED,
+                        ParsingStatusEnum.INFERRING,
                       ].includes(parsingStatus as ParsingStatusEnum) ? (
                         <>
                           <Loader className="mr-2 h-4 w-4 animate-spin" />

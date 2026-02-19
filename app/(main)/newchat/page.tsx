@@ -609,11 +609,52 @@ export default function NewChatPage() {
         }
         return;
       }
+      if (initialStatus === ParsingStatusEnum.INFERRING) {
+        setState((prev) => ({
+          ...prev,
+          parsingStatus: ParsingStatusEnum.INFERRING,
+          parsingProgress: 80,
+          parsingSteps: [
+            "Cloning repository...",
+            "Analyzing directory structure...",
+            "Detecting tech stack...",
+            "Parsing routing files...",
+            "Extracting API endpoints...",
+            "Analyzing database schema...",
+          ],
+        }));
+        if (
+          state.selectedAgent === "build" &&
+          state.input.trim() &&
+          projectId
+        ) {
+          const cleanInput = getCleanInput(state.input);
+          setState((prev) => ({ ...prev, parsing: false }));
+          dispatch(
+            setRepoAndBranchForTask({
+              taskId: projectId,
+              repoName: repoName.trim(),
+              branchName: branchName || "main",
+              projectId,
+            })
+          );
+          createRecipeMutation.mutate({
+            userPrompt: cleanInput,
+            projectId,
+            additionalLinks: undefined,
+            attachmentIds:
+              state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+          });
+          return;
+        }
+        // Ask/Debug: keep polling until READY, then create conversation
+      }
       const pollStatus = async () => {
         const pollInterval = 5000;
         const maxDuration = 45 * 60 * 1000;
         const startTime = Date.now();
         let parsingStatus = initialStatus;
+        let buildRecipeStarted = false;
         const updateStatusAndProgress = (status: string) => {
           let progress = 0;
           let steps: string[] = [];
@@ -631,7 +672,7 @@ export default function NewChatPage() {
               "Detecting tech stack...",
               "Parsing routing files...",
             ];
-          } else if (status === ParsingStatusEnum.PROCESSING) {
+          } else if (status === ParsingStatusEnum.INFERRING) {
             progress = 80;
             steps = [
               "Cloning repository...",
@@ -655,7 +696,38 @@ export default function NewChatPage() {
               status !== ParsingStatusEnum.ERROR,
           }));
         };
+        const maybeStartBuildRecipe = () => {
+          if (
+            buildRecipeStarted ||
+            state.selectedAgent !== "build" ||
+            !state.input.trim() ||
+            !projectId
+          )
+            return;
+          buildRecipeStarted = true;
+          const cleanInput = getCleanInput(state.input);
+          setState((prev) => ({ ...prev, parsing: false }));
+          dispatch(
+            setRepoAndBranchForTask({
+              taskId: projectId,
+              repoName: repoName.trim(),
+              branchName: branchName || "main",
+              projectId,
+            })
+          );
+          createRecipeMutation.mutate({
+            userPrompt: cleanInput,
+            projectId,
+            additionalLinks: undefined,
+            attachmentIds:
+              state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+          });
+        };
         updateStatusAndProgress(parsingStatus);
+        if (parsingStatus === ParsingStatusEnum.INFERRING) {
+          maybeStartBuildRecipe();
+          if (buildRecipeStarted) return;
+        }
         while (
           parsingStatus !== ParsingStatusEnum.READY &&
           parsingStatus !== ParsingStatusEnum.ERROR &&
@@ -666,6 +738,10 @@ export default function NewChatPage() {
             parsingStatus =
               await BranchAndRepositoryService.getParsingStatus(projectId);
             updateStatusAndProgress(parsingStatus);
+            if (parsingStatus === ParsingStatusEnum.INFERRING) {
+              maybeStartBuildRecipe();
+              if (buildRecipeStarted) return;
+            }
           } catch (error) {
             console.error("Error polling parsing status:", error);
             setState((prev) => ({

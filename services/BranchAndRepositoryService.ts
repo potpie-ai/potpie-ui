@@ -254,6 +254,7 @@ export default class BranchAndRepositoryService {
             case ParsingStatusEnum.CLONED:
               return "Parsing your code";
             case ParsingStatusEnum.PARSED:
+            case ParsingStatusEnum.INFERRING:
               return "Understanding your codebase";
             case ParsingStatusEnum.ERROR:
               return "Error";

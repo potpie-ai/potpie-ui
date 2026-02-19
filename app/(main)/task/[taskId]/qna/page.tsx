@@ -100,7 +100,7 @@ function getParsingDisplayStatus(status: string): string {
     case ParsingStatusEnum.CLONED:
       return "Parsing your code";
     case ParsingStatusEnum.PARSED:
-    case ParsingStatusEnum.PROCESSING:
+    case ParsingStatusEnum.INFERRING:
       return "Understanding your codebase";
     default:
       return status;

@@ -942,23 +942,28 @@ export default function VerticalTaskExecution() {
     // Backend requires project_ids[0] for conversation creation; repo_name/branch_name are optional context
     if (!projectId || projectId.length === 0) return;
 
+    const storageKey = `codegen_conversation_${recipeId}`;
+    let existingId: string | null = null;
+    if (typeof window !== "undefined") {
+      try {
+        existingId = localStorage.getItem(storageKey);
+      } catch {
+        // ignore
+      }
+    }
+    // When creating a new conversation, wait for user prompt so we can name it like spec/plan
+    const promptForTitle = recipePrompt?.trim();
+    if (!existingId && !promptForTitle) return;
+
     let mounted = true;
     codegenChatInitRef.current = recipeId;
 
     const run = async () => {
       try {
-        const storageKey = `codegen_conversation_${recipeId}`;
-        let conversationId: string | null = null;
-        if (typeof window !== "undefined") {
-          try {
-            conversationId = localStorage.getItem(storageKey);
-          } catch {
-            // ignore
-          }
-        }
+        let conversationId: string | null = existingId;
 
         if (!conversationId) {
-          const title = "Code gen Q&A";
+          const title = promptForTitle!.slice(0, 50) + (promptForTitle!.length > 50 ? "…" : "");
           const agentId = "codebase_qna_agent";
           const res = await ChatService.createConversation(
             user.uid,
@@ -1025,7 +1030,7 @@ export default function VerticalTaskExecution() {
     return () => {
       mounted = false;
     };
-  }, [recipeId, user?.uid, projectId, repoName, branchName]);
+  }, [recipeId, user?.uid, projectId, repoName, branchName, recipePrompt]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -1989,8 +1994,8 @@ export default function VerticalTaskExecution() {
           {/* Header */}
           <div className="flex justify-between items-center px-6 py-4 shrink-0">
             <h1 className="text-lg font-bold text-primary-color truncate capitalize">
-              {(recipePrompt || "Chat Name").slice(0, 50)}
-              {(recipePrompt || "").length > 50 ? "…" : ""}
+              {recipePrompt?.slice(0, 50) ?? "Chat Name"}
+              {(recipePrompt?.length ?? 0) > 50 ? "…" : ""}
             </h1>
             <div className="flex items-center gap-2 shrink-0">
               <Badge icon={Github}>{repoName}</Badge>

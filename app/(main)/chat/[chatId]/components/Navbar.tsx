@@ -22,7 +22,7 @@ import getHeaders from "@/app/utils/headers.util";
 import { toast } from "@/components/ui/sonner";
 import { usePathname } from "next/navigation";
 import { z } from "zod";
-import { ClipboardCheck, Share2, X } from "lucide-react";
+import { Paperclip, Share2, X } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import {
   Select,
@@ -338,7 +338,7 @@ const Navbar = ({
                     <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-background p-6">
+                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
                   <DialogHeader>
                     <DialogTitle className="text-center font-semibold text-xl">
                       Share Chat with Others
@@ -365,7 +365,7 @@ const Navbar = ({
                           placeholder="Enter Email"
                           value={emailValue}
                           onChange={handleEmailChange}
-                          className="border rounded-md p-2"
+                          className="border rounded-md p-3 w-full h-15"
                         />
                         {emailError && (
                           <p className="text-red-500 text-sm">{emailError}</p>
@@ -425,9 +425,9 @@ const Navbar = ({
                       className="gap-2"
                       variant="outline"
                       onClick={handleCopyLink}
-                      disabled={hasPendingChanges || disableShare}
+                      disabled={(!shareWithLink && hasPendingChanges) || disableShare}
                     >
-                      <ClipboardCheck className="w-4 h-4" /> Copy Link
+                      <Paperclip className="w-4 h-4" /> Copy Link
                     </Button>
                     <Button
                       type="button"

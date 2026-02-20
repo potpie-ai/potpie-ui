@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import axios from "axios";
 import { CalendarIcon, Plus, TrendingUp } from "lucide-react";
 import {
   Select,
@@ -15,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/sonner";
-import getHeaders from "@/app/utils/headers.util";
+import SettingsService from "@/services/SettingsService";
 
 const StackedBarChart = dynamic(() => import("./StackedBarChart"), {
   ssr: false,
@@ -25,8 +24,6 @@ const StackedBarChart = dynamic(() => import("./StackedBarChart"), {
     </div>
   ),
 });
-
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 // ── Heatmap helpers ────────────────────────────────────────────────────────────
 function intensityColor(val: number): string {
@@ -86,34 +83,17 @@ const [openRouterInput, setOpenRouterInput] = useState("");
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: apiKeyData, isLoading: isLoadingKey } = useQuery<ApiKeyState>({
     queryKey: ["api-key"],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const res = await axios.get<{ api_key: string }>(
-        `${BASE_URL}/api/v1/api-keys`,
-        { headers }
-      );
-      return { api_key: res.data.api_key };
-    },
+    queryFn: () => SettingsService.getApiKey(),
   });
 
   const { data: keySecrets } = useQuery<KeySecrets>({
     queryKey: ["secrets"],
-    queryFn: async () => {
-      const headers = await getHeaders();
-      const res = await axios.get<KeySecrets>(
-        `${BASE_URL}/api/v1/secrets/all`,
-        { headers }
-      );
-      return res.data;
-    },
+    queryFn: () => SettingsService.getSecrets(),
   });
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const { mutate: generateApiKey, isPending: isGenerating } = useMutation({
-    mutationFn: async () => {
-      const headers = await getHeaders();
-      return axios.post(`${BASE_URL}/api/v1/api-keys`, {}, { headers });
-    },
+    mutationFn: () => SettingsService.generateApiKey(),
     onSuccess: () => {
       toast.success("API Key generated successfully");
       queryClient.invalidateQueries({ queryKey: ["api-key"] });
@@ -127,12 +107,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
   const { mutate: saveProviderKey } = useMutation({
     mutationFn: async (data: { provider: string; api_key: string }) => {
       setSavingProvider(data.provider);
-      const headers = await getHeaders();
-      return axios.post(
-        `${BASE_URL}/api/v1/secrets`,
-        { inference_config: { api_key: data.api_key, provider: data.provider } },
-        { headers }
-      );
+      return SettingsService.saveProviderKey(data.provider, data.api_key);
     },
     onSuccess: (_data, variables) => {
       toast.success(`${variables.provider} key saved`);

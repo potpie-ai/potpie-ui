@@ -171,31 +171,42 @@ export default function QuestionCard({
       <div className="space-y-4">
         {/* Question */}
         <div className="flex items-start gap-4">
-          <div className="flex-1 min-w-0 space-y-1 pr-20">
-            <p
-              className={`text-sm font-bold leading-relaxed ${
-                isSkipped ? "text-zinc-400 line-through" : "text-primary-color"
-              }`}
-            >
-              {question.question}
-            </p>
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-start justify-between gap-3">
+              <p
+                className={`text-sm font-bold leading-relaxed flex-1 min-w-0 ${
+                  isSkipped ? "text-zinc-400 line-through" : "text-primary-color"
+                }`}
+              >
+                {question.question}
+              </p>
+              <div className="flex items-center gap-1.5 flex-shrink-0 -mt-0.5">
+                {isSkipped && (
+                  <span className="px-1.5 py-0.5 bg-zinc-200 border border-zinc-300 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Skipped
+                  </span>
+                )}
+                {!isSkipped && needsInput && isFreeTextOnly && (
+                  <span 
+                    className="px-3 py-1 text-xs font-semibold tracking-wide whitespace-nowrap font-mono flex-shrink-0"
+                    style={{ 
+                      backgroundColor: "#F9FFE9",
+                      border: "1px solid #B6E343",
+                      borderRadius: "5px",
+                      color: "#263B29",
+                      fontFamily: "'Roboto Mono', monospace"
+                    }}
+                  >
+                    Input Needed
+                  </span>
+                )}
+              </div>
+            </div>
             {question.multipleChoice && options.length > 0 && !isSkipped && (
               <p className="text-xs text-muted-foreground">
                 (Select all that apply)
               </p>
             )}
-            <div className="flex items-center gap-1.5 flex-shrink-0 absolute top-4 right-4">
-              {isSkipped && (
-                <span className="px-1.5 py-0.5 bg-zinc-200 border border-zinc-300 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                  Skipped
-                </span>
-              )}
-              {!isSkipped && needsInput && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider text-primary-color" style={{ backgroundColor: "#e6ffe6" }}>
-                  INPUT NEEDED
-                </span>
-              )}
-            </div>
           </div>
         </div>
 

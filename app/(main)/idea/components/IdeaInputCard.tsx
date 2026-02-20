@@ -449,7 +449,7 @@ export default function IdeaInputCard({
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-sm font-medium" style={{ color: FIGMA.textPrimary }}>
               <Globe className="h-4 w-4" style={{ color: FIGMA.textPrimary }} />
-              Repository URL
+              Select Repo
             </label>
             <DropdownMenu open={repoDropdownOpen} onOpenChange={setRepoDropdownOpen}>
               <DropdownMenuTrigger asChild>
@@ -464,11 +464,10 @@ export default function IdeaInputCard({
                   }}
                   disabled={loading || isSubmitting}
                 >
-                  <Search className="h-4 w-4 shrink-0 text-zinc-500" />
                   <span className="flex-1 truncate">
                     {selectedRepoData
                       ? selectedRepoData.full_name || selectedRepoData.name
-                      : "Enter a GitHub Repository URL"}
+                      : "Select Repo"}
                   </span>
                   <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" />
                 </button>
@@ -805,9 +804,9 @@ export default function IdeaInputCard({
           className="flex items-start gap-1.5 px-4 py-4 min-h-[160px]"
           style={{ backgroundColor: FIGMA.terminalContentBg }}
         >
-          <span className="text-base font-mono select-none pt-0.5" style={{ color: FIGMA.textDark }}>$</span>
+          <span className="text-base font-mono select-none" style={{ color: FIGMA.textDark }}>$</span>
           {!selectedRepo ? (
-            <p className="text-base font-mono flex-1 pt-0.5" style={{ color: FIGMA.textMuted }}>
+            <p className="text-base font-mono flex-1" style={{ color: FIGMA.textMuted }}>
               Please select a repository to start...
             </p>
           ) : (

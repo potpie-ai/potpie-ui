@@ -39,6 +39,7 @@ import {
   SendHorizonal,
   FolderTree,
   Wrench,
+  AlertCircle,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -930,7 +931,7 @@ export default function VerticalTaskExecution() {
       {
         role: "assistant",
         content:
-          "Your implementation plan is ready. Review the tasks below and tell me what you'd like to change—we'll get it right before we start building.",
+          "Your code generation setup is complete. Check the implementation below.",
       },
     ]);
   }, [recipeId, recipePrompt]);
@@ -2262,7 +2263,7 @@ export default function VerticalTaskExecution() {
                     handleSendChatMessage();
                   }
                 }}
-                placeholder="Describe any change that you want...."
+                placeholder="Ask about the code or request changes..."
                 rows={3}
                 className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-[#FFFDFC] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#102C2C]/20 focus:border-[#102C2C] resize-none"
               />
@@ -2340,6 +2341,7 @@ export default function VerticalTaskExecution() {
                     }
                     onClick={async () => {
                       if (!taskSplittingId) return;
+                      toast.dismiss(); // Clear any previous PR toasts so only this attempt's result is shown
                       try {
                         setIsCreatingPR(true);
                         await TaskSplittingService.createPullRequest(taskSplittingId);
@@ -2426,11 +2428,29 @@ export default function VerticalTaskExecution() {
                                 }}
                               />
                             ))
+                          ) : selectedTask.status === "FAILED" ? (
+                            <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center">
+                              <AlertCircle className="w-6 h-6 text-red-600 mx-auto mb-2" />
+                              <p className="text-sm text-red-700">Task failed</p>
+                              {(selectedTask as any).error && (
+                                <p className="text-xs text-red-600 mt-1">{(selectedTask as any).error}</p>
+                              )}
+                            </div>
+                          ) : selectedTask.status === "COMPLETED" ? (
+                            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
+                              <Check className="w-6 h-6 text-green-500 mx-auto mb-2" />
+                              <p className="text-sm text-zinc-600">Task completed with no file changes</p>
+                            </div>
+                          ) : selectedTask.status === "IN_PROGRESS" ? (
+                            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
+                              <img src="/images/loader.gif" alt="Loading" className="w-12 h-12 mx-auto mb-2" />
+                              <p className="text-sm text-zinc-600">Generating code...</p>
+                            </div>
                           ) : (
                             <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-                              <Loader2 className="w-6 h-6 animate-spin text-[#022D2C] mx-auto mb-2" />
-                              <p className="text-sm text-zinc-600">Generating code...</p>
-                          </div>
+                              <Circle className="w-6 h-6 text-zinc-300 mx-auto mb-2" />
+                              <p className="text-sm text-zinc-600">Waiting to start...</p>
+                            </div>
                           )}
                         </>
                       );

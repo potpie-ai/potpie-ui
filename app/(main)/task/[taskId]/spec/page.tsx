@@ -215,7 +215,7 @@ function FunctionalRequirementCard({ fr }: { fr: any }) {
   const extStrings = externalDeps.map((e: any) => typeof e === "string" ? e : (e?.name != null ? String(e.name) : String(e)));
   const appendix = fr?.appendix != null && typeof fr.appendix === "object" ? fr.appendix : null;
   return (
-    <div className="rounded-lg border border-[#D3E5E5] bg-zinc-50/50 p-4 space-y-3">
+    <div className="rounded-lg border border-[#E5E8E6] bg-zinc-50/50 p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <span className="text-xs font-mono text-primary-color">{id}</span>
         {priority && <span className="text-xs font-medium text-zinc-600 capitalize">{priority}</span>}
@@ -237,7 +237,7 @@ function FunctionalRequirementCard({ fr }: { fr: any }) {
           <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Depends on</p>
           <div className="flex flex-wrap gap-1.5">
             {requirementDeps.map((reqId: string, i: number) => (
-              <span key={i} className="px-2 py-0.5 bg-zinc-100 border border-[#D3E5E5] rounded text-xs font-mono text-primary-color">
+              <span key={i} className="px-2 py-0.5 bg-zinc-100 border border-[#E5E8E6] rounded text-xs font-mono text-primary-color">
                 {reqId}
               </span>
             ))}
@@ -279,7 +279,7 @@ function FunctionalRequirementCard({ fr }: { fr: any }) {
       {appendix && Object.keys(appendix).length > 0 && (
         <div>
           <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Appendix</p>
-          <pre className="text-xs text-muted-foreground bg-white border border-[#D3E5E5] rounded p-3 overflow-x-auto">
+          <pre className="text-xs text-muted-foreground bg-white border border-[#E5E8E6] rounded p-3 overflow-x-auto">
             {JSON.stringify(appendix, null, 2)}
           </pre>
         </div>
@@ -310,7 +310,7 @@ function SpecContextBlock({ context }: { context: Record<string, any> }) {
       {items.map(({ label, value }, i) => (
         <div key={i}>
           <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">{label}</p>
-          <SharedMarkdown content={value} className="text-sm text-muted-foreground [&_p]:my-0 rounded-md border border-[#D3E5E5] bg-zinc-50/50 p-3" />
+          <SharedMarkdown content={value} className="text-sm text-muted-foreground [&_p]:my-0 rounded-md border border-[#E5E8E6] bg-zinc-50/50 p-3" />
         </div>
       ))}
     </div>
@@ -351,7 +351,7 @@ function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
               {content.map((item: any, j: number) => <FunctionalRequirementCard key={j} fr={item} />)}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground leading-relaxed rounded-md border border-[#D3E5E5] bg-zinc-50/50 p-4">
+            <div className="text-sm text-muted-foreground leading-relaxed rounded-md border border-[#E5E8E6] bg-zinc-50/50 p-4">
               {Array.isArray(content) ? (
                 <ul className="list-disc pl-4 space-y-1">
                   {content.map((item: any, j: number) => (
@@ -372,39 +372,29 @@ function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
 }
 
 const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color">
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#E5E8E6] rounded text-xs font-medium text-primary-color">
     {Icon && <Icon className="w-3.5 h-3.5" />}
     {children}
   </div>
 );
 
 const PlanTabs = ({ plan }: { plan: Plan }) => {
-  const categories: { id: keyof Plan; label: string; items: Plan["add"] }[] = [
-    { id: "add", label: "Create", items: plan.add },
-    { id: "modify", label: "Update", items: plan.modify },
-    { id: "fix", label: "Fix", items: plan.fix },
-  ];
+  // Combine all items from all categories
+  const allItems = [...plan.add, ...plan.modify, ...plan.fix];
+  const defaultOpenValues = allItems.map((item) => item.id);
 
   return (
-    <div className="space-y-10">
-      {categories.map((cat) => {
-        if (cat.items.length === 0) return null;
-        const defaultOpenValues = cat.items.map((item) => item.id);
-        return (
-          <div key={cat.id} className="space-y-4">
-            <h3 className="text-sm font-semibold text-primary-color border-b border-[#D3E5E5] pb-2">
-              {cat.label} ({cat.items.length})
-            </h3>
-            <Accordion
-              type="multiple"
-              defaultValue={defaultOpenValues}
-              className="space-y-4"
-            >
-              {cat.items.map((item) => (
+    <div className="space-y-4">
+      <Accordion
+        type="multiple"
+        defaultValue={defaultOpenValues}
+        className="space-y-4"
+      >
+        {allItems.map((item) => (
           <AccordionItem
             key={item.id}
             value={item.id}
-            className="bg-background border border-[#D3E5E5] transition-all rounded-lg overflow-hidden data-[state=open]:border-[#D3E5E5] data-[state=open]:shadow-sm border-[#D3E5E5] hover:border-[#D3E5E5]"
+            className="bg-background border border-[#E5E8E6] transition-all rounded-lg overflow-hidden data-[state=open]:border-[#E5E8E6] data-[state=open]:shadow-sm border-[#E5E8E6] hover:border-[#E5E8E6]"
           >
             <AccordionTrigger className="p-4 flex justify-between items-start cursor-pointer select-none hover:no-underline [&>svg]:hidden [&[data-state=open] svg:last-child]:rotate-180">
               <div className="flex gap-3 flex-1 min-w-0">
@@ -426,7 +416,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
               </div>
             </AccordionTrigger>
 
-            <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-[#D3E5E5] font-sans">
+            <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-t-[1px] border-[#E5E8E6] font-sans">
               {/* Depends on (requirement IDs), Libraries, External dependencies — no Target Files per API */}
               {((item.requirementDependencies?.length ?? 0) > 0 || (item.dependencies?.length ?? 0) > 0 || (item.externalConnections?.length ?? 0) > 0) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -441,7 +431,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                         {item.requirementDependencies?.map((reqId, i) => (
                           <span
                             key={i}
-                            className="px-3 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded-md text-xs font-mono text-primary-color"
+                            className="px-3 py-1.5 bg-zinc-50 border border-[#E5E8E6] rounded-md text-xs font-mono text-primary-color"
                           >
                             {typeof reqId === "string" ? reqId : String(reqId)}
                           </span>
@@ -460,7 +450,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                         {item.dependencies?.map((dep, i) => (
                           <span
                             key={i}
-                            className="px-3 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded-md text-xs font-mono text-primary-color"
+                            className="px-3 py-1.5 bg-zinc-50 border border-[#E5E8E6] rounded-md text-xs font-mono text-primary-color"
                           >
                             {typeof dep === "string" ? dep : (dep && typeof dep === "object" && "name" in dep ? String((dep as { name?: string }).name) : String(dep))}
                           </span>
@@ -497,7 +487,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                     <Info className="w-3.5 h-3.5" />
                     Context
                   </p>
-                  <div className="bg-zinc-50 border border-[#D3E5E5] rounded-md p-4">
+                  <div className="bg-zinc-50 border border-[#E5E8E6] rounded-md p-4">
                     <div className="text-sm text-muted-foreground leading-relaxed">
                       <SharedMarkdown content={item.context} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left [&_p]:mb-2 [&_p:last-child]:mb-0" />
                     </div>
@@ -506,11 +496,8 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
               )}
             </AccordionContent>
           </AccordionItem>
-              ))}
-            </Accordion>
-          </div>
-        );
-      })}
+        ))}
+      </Accordion>
     </div>
   );
 };
@@ -1074,9 +1061,9 @@ const SpecPage = () => {
   // When we have run_id we go straight to spec page and show streaming; no loading screen
   if (recipeId && isLoading && !specProgress && !runIdFromUrl) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-primary-color" />
-        <p className="ml-3 text-primary-color">Loading spec generation...</p>
+      <div className="flex flex-col items-center justify-center min-h-[80vh]">
+        <img src="/images/loader.gif" alt="Loading" className="w-16 h-16 mb-4" />
+        <p className="text-primary-color">Loading spec generation...</p>
       </div>
     );
   }
@@ -1104,7 +1091,7 @@ const SpecPage = () => {
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
-        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7] chat-panel-contained">
+        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-r-[1px] border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
           {/* Chat header */}
           <div className="flex justify-between items-center px-6 py-4 shrink-0">
             <h1 className="text-lg font-bold text-primary-color truncate capitalize">
@@ -1222,8 +1209,8 @@ const SpecPage = () => {
             transition: "width 0.35s ease-out",
           }}
         >
-          <aside className="h-full w-full min-w-[280px] flex flex-col border-l border-[#D3E5E5]">
-            <div className="p-6 border-b border-[#D3E5E5]">
+          <aside className="h-full w-full min-w-[280px] flex flex-col border-l border-l-[1px] border-[#E5E8E6]">
+            <div className="p-6 border-b border-[#E5E8E6]">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
                   <div className="flex items-center gap-2">
@@ -1301,17 +1288,6 @@ const SpecPage = () => {
                     )}
                   </button>
                 </div>
-                {status === "COMPLETED" && !isCancelled && hasSpecContent && (
-                  <button
-                    onClick={() => {
-                      startNavigation();
-                      router.push(`/task/${recipeId}/plan`);
-                    }}
-                    className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm flex items-center gap-2 bg-[#022019] text-white hover:opacity-90"
-                  >
-                    GENERATE PLAN
-                  </button>
-                )}
               </div>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6">
@@ -1325,15 +1301,7 @@ const SpecPage = () => {
               </div>
             ) : (streamProgress || isGenerating || (streamItems.length > 0 && status !== "COMPLETED")) ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
-                <div className="animate-spin-slow mb-4">
-                  <Image
-                    src="/images/logo.svg"
-                    width={48}
-                    height={48}
-                    alt="Loading"
-                    className="w-12 h-12"
-                  />
-                </div>
+                <img src="/images/loader.gif" alt="Loading" className="w-16 h-16 mb-4" />
                 <p className="text-sm font-medium text-[#102C2C]">Cooking ingredients for spec</p>
                 <p className="text-xs text-zinc-500 mt-1">
                   {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Preparing specification…"}
@@ -1343,6 +1311,20 @@ const SpecPage = () => {
               <p className="text-sm text-zinc-500">Specification will appear here when ready.</p>
             )}
             </div>
+            {/* Sticky bottom bar with Generate Plan button */}
+            {status === "COMPLETED" && !isCancelled && hasSpecContent && (
+              <div className="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-[#E5E8E6] flex justify-end">
+                <button
+                  onClick={() => {
+                    startNavigation();
+                    router.push(`/task/${recipeId}/plan`);
+                  }}
+                  className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
+                >
+                  GENERATE PLAN
+                </button>
+              </div>
+            )}
           </aside>
         </div>
       </div>

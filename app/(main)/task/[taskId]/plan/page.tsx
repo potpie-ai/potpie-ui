@@ -281,6 +281,7 @@ const PlanPage = () => {
   const THINKING_STORAGE_KEY_PLAN = "potpie_thinking_plan";
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const planContentRef = useRef<HTMLDivElement>(null);
   const { startNavigation } = useNavigationProgress();
 
   useEffect(() => {
@@ -605,6 +606,18 @@ const PlanPage = () => {
   const planId = searchParams.get("planId") ?? recipeId ?? "";
   const hasPlanContent = Boolean(planStatus?.plan);
 
+  // Auto-scroll to bottom when plan is generated
+  useEffect(() => {
+    if (isCompleted && planContentRef.current) {
+      setTimeout(() => {
+        planContentRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
+    }
+  }, [isCompleted]);
+
   // Persist stream timeline when plan is completed so it survives refresh
   useEffect(() => {
     if (!recipeId || !isCompleted || !hasPlanContent) return;
@@ -914,20 +927,11 @@ const PlanPage = () => {
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
-            <div className="w-full space-y-4 relative">
-              <div className="absolute left-[26px] top-4 bottom-4 w-[1px] -z-10" style={{ backgroundColor: "#696D6D" }} />
+            <div className="absolute left-[26px] top-4 bottom-4 w-[1px] -z-10" style={{ backgroundColor: "#696D6D" }} />
 
           {(streamProgress || isGenerating || streamItems.length > 0) && !isCompleted && (
-            <div className="h-full flex flex-col items-center justify-center text-center py-12">
-              <div className="animate-spin-slow mb-4">
-                <Image
-                  src="/images/logo.svg"
-                  width={48}
-                  height={48}
-                  alt="Loading"
-                  className="w-12 h-12"
-                />
-              </div>
+            <div className="h-full flex flex-col items-center justify-center text-center">
+              <img src="/images/loader.gif" alt="Loading" className="w-16 h-16 mb-4" />
               <p className="text-sm font-medium text-[#102C2C]">Cooking ingredients for plan</p>
               <p className="text-xs text-zinc-500 mt-1">
                 {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Preparing plan…"}
@@ -957,7 +961,7 @@ const PlanPage = () => {
             const phase = phasesFromApi[selectedPhaseIndex];
             if (!phase) return null;
             return (
-              <div className="space-y-4">
+              <div ref={planContentRef} className="space-y-4">
                 <h3 className="text-xl font-bold tracking-tight text-[#022019]">
                   {phase.name}
                 </h3>
@@ -1303,7 +1307,6 @@ const PlanPage = () => {
           )}
 
           <div ref={bottomRef} />
-            </div>
           </div>
 
           {isCompleted && planItems.length > 0 && (

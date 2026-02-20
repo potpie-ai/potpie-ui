@@ -931,7 +931,7 @@ export default function VerticalTaskExecution() {
       {
         role: "assistant",
         content:
-          "Your implementation plan is ready. Review the tasks below and tell me what you'd like to change—we'll get it right before we start building.",
+          "Your code generation setup is complete. Check the implementation below.",
       },
     ]);
   }, [recipeId, recipePrompt]);
@@ -2263,7 +2263,7 @@ export default function VerticalTaskExecution() {
                     handleSendChatMessage();
                   }
                 }}
-                placeholder="Describe any change that you want...."
+                placeholder="Ask about the code or request changes..."
                 rows={3}
                 className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-[#FFFDFC] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#102C2C]/20 focus:border-[#102C2C] resize-none"
               />

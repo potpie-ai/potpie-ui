@@ -135,12 +135,21 @@ const [openRouterInput, setOpenRouterInput] = useState("");
     onSuccess: (_data, variables) => {
       toast.success(`${variables.provider} key saved`);
       queryClient.invalidateQueries({ queryKey: ["secrets"] });
+      if (variables.provider === "openai") setOpenAIInput("");
+      else if (variables.provider === "anthropic") setAnthropicInput("");
+      else if (variables.provider === "openrouter") setOpenRouterInput("");
     },
     onError: () => toast.error("Failed to save key"),
   });
 
-  const maskedKey = (key: string) =>
-    key ? `${key.slice(0, 4)}${"•".repeat(24)}${key.slice(-4)}` : "";
+  const maskedKey = (key: string) => {
+    if (!key) return "";
+    if (key.length <= 8) return "•".repeat(key.length);
+    const visibleStart = 4;
+    const visibleEnd = 4;
+    const maskLen = key.length - visibleStart - visibleEnd;
+    return `${key.slice(0, visibleStart)}${"•".repeat(maskLen)}${key.slice(-visibleEnd)}`;
+  };
 
   const savedProvider = keySecrets?.inference_config?.provider?.toLowerCase();
 
@@ -238,7 +247,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 />
                 {openAIInput && (
                   <Button size="sm" disabled={isSavingProvider}
-                    onClick={() => { saveProviderKey({ provider: "openai", api_key: openAIInput }); setOpenAIInput(""); }}>
+                    onClick={() => saveProviderKey({ provider: "openai", api_key: openAIInput })}>
                     Save
                   </Button>
                 )}
@@ -261,7 +270,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 />
                 {anthropicInput && (
                   <Button size="sm" disabled={isSavingProvider}
-                    onClick={() => { saveProviderKey({ provider: "anthropic", api_key: anthropicInput }); setAnthropicInput(""); }}>
+                    onClick={() => saveProviderKey({ provider: "anthropic", api_key: anthropicInput })}>
                     Save
                   </Button>
                 )}
@@ -284,7 +293,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 />
                 {openRouterInput && (
                   <Button size="sm" disabled={isSavingProvider}
-                    onClick={() => { saveProviderKey({ provider: "openrouter", api_key: openRouterInput }); setOpenRouterInput(""); }}>
+                    onClick={() => saveProviderKey({ provider: "openrouter", api_key: openRouterInput })}>
                     Save
                   </Button>
                 )}

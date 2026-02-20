@@ -1,4 +1,4 @@
-import { Plus, PanelLeftClose } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -173,15 +173,22 @@ export function AppSidebar() {
                   className="h-9 w-auto object-contain object-left"
                 />
               </Link>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 mr-2"
-                onClick={toggleSidebar}
-              >
-                <PanelLeftClose className="h-5 w-5" />
-                <span className="sr-only">Toggle Sidebar</span>
-              </Button>
+              {open && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 mr-2 bg-[#FFFDFC] hover:bg-[#FFFDFC] hover:opacity-100"
+                  onClick={toggleSidebar}
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2.34082 14.9792C2.50863 15.7188 2.78449 16.2805 3.23798 16.7341C4.39575 17.8918 6.25913 17.8918 9.98594 17.8918C13.7127 17.8918 15.5761 17.8918 16.7338 16.7341C17.8915 15.5763 17.8915 13.7128 17.8915 9.98611C17.8915 6.25934 17.8915 4.39596 16.7338 3.2382C15.5761 2.08044 13.7127 2.08044 9.98594 2.08044C6.25913 2.08044 4.39575 2.08044 3.23798 3.2382C2.78449 3.6917 2.50863 4.25346 2.34082 4.99306" stroke="#00291C" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M4.57661 7.48958L2.08008 9.98611L4.57661 12.4826M2.91225 9.98611H8.73749" stroke="#00291C" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M12.4824 2.07881V17.8901" stroke="#00291C" strokeWidth="1.24826"/>
+                    <path d="M17.8916 7.07187H12.4824M17.8916 12.8971H12.4824" stroke="#00291C" strokeWidth="1.24826"/>
+                  </svg>
+                  <span className="sr-only">Toggle Sidebar</span>
+                </Button>
+              )}
             </div>
           </SidebarMenuItem>
         </SidebarMenu>

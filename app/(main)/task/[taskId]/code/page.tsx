@@ -39,6 +39,7 @@ import {
   SendHorizonal,
   FolderTree,
   Wrench,
+  AlertCircle,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";
@@ -2340,6 +2341,7 @@ export default function VerticalTaskExecution() {
                     }
                     onClick={async () => {
                       if (!taskSplittingId) return;
+                      toast.dismiss(); // Clear any previous PR toasts so only this attempt's result is shown
                       try {
                         setIsCreatingPR(true);
                         await TaskSplittingService.createPullRequest(taskSplittingId);
@@ -2426,11 +2428,29 @@ export default function VerticalTaskExecution() {
                                 }}
                               />
                             ))
+                          ) : selectedTask.status === "FAILED" ? (
+                            <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center">
+                              <AlertCircle className="w-6 h-6 text-red-600 mx-auto mb-2" />
+                              <p className="text-sm text-red-700">Task failed</p>
+                              {(selectedTask as any).error && (
+                                <p className="text-xs text-red-600 mt-1">{(selectedTask as any).error}</p>
+                              )}
+                            </div>
+                          ) : selectedTask.status === "COMPLETED" ? (
+                            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
+                              <Check className="w-6 h-6 text-green-500 mx-auto mb-2" />
+                              <p className="text-sm text-zinc-600">Task completed with no file changes</p>
+                            </div>
+                          ) : selectedTask.status === "IN_PROGRESS" ? (
+                            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
+                              <img src="/images/loader.gif" alt="Loading" className="w-12 h-12 mx-auto mb-2" />
+                              <p className="text-sm text-zinc-600">Generating code...</p>
+                            </div>
                           ) : (
                             <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-                              <Loader2 className="w-6 h-6 animate-spin text-[#022D2C] mx-auto mb-2" />
-                              <p className="text-sm text-zinc-600">Generating code...</p>
-                          </div>
+                              <Circle className="w-6 h-6 text-zinc-300 mx-auto mb-2" />
+                              <p className="text-sm text-zinc-600">Waiting to start...</p>
+                            </div>
                           )}
                         </>
                       );

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, Loader2, Paperclip, FileText, X } from "lucide-react";
+import { Loader2, Paperclip, FileText, X } from "lucide-react";
 
 interface AdditionalContextSectionProps {
   open: boolean;
@@ -181,13 +181,10 @@ export default function AdditionalContextSection({
               {isGenerating ? (
                 <>
                   <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-                  Generating...
+                  GENERATING...
                 </>
               ) : (
-                <>
-                  <Check className="w-3 h-3 mr-1.5" />
-                  Generate Implementation Plan
-                </>
+                "GENERATE IMPLEMENTATION PLAN"
               )}
             </Button>
           </div>

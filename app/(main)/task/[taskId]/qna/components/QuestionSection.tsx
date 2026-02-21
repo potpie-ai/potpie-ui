@@ -48,7 +48,7 @@ export default function QuestionSection({
           isExpanded={expandedOptions.has(question.id)}
           isSkipped={skippedQuestions.has(question.id)}
           onHover={() => onHover(question.id)}
-          onHoverLeave={() => onHover(null)}
+          onHoverLeave={() => {}}
           onAnswerChange={(answer) => onAnswerChange(question.id, answer)}
           onSave={() => onSave(question.id)}
           onCancel={() => onCancel(question.id)}

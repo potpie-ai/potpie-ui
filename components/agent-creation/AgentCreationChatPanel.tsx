@@ -404,31 +404,36 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                             )}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full p-0" align="start">
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                           <Command>
                             <CommandInput
                               placeholder="Search repositories..."
                               value={repoSearchTerm}
                               onValueChange={setRepoSearchTerm}
                             />
-                            <CommandList className="custom-scrollbar max-h-60 overflow-y-auto">
+                            <CommandList className="overflow-y-hidden">
                               <CommandEmpty>
                                 No repositories found.
                               </CommandEmpty>
-                              <CommandGroup>
-                                {repositories?.map((repo: any) => (
-                                  <CommandItem
-                                    key={repo.id}
-                                    value={repo.full_name}
-                                    onSelect={() => {
-                                      setSelectedRepo(repo);
-                                      setRepoOpen(false);
-                                    }}
-                                  >
-                                    {repo.full_name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
+                              <div
+                                style={{ maxHeight: "240px", overflowY: "auto" }}
+                                onWheel={(e) => e.stopPropagation()}
+                              >
+                                <CommandGroup>
+                                  {repositories?.map((repo: any) => (
+                                    <CommandItem
+                                      key={repo.id}
+                                      value={repo.full_name}
+                                      onSelect={() => {
+                                        setSelectedRepo(repo);
+                                        setRepoOpen(false);
+                                      }}
+                                    >
+                                      {repo.full_name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </div>
                             </CommandList>
                           </Command>
                         </PopoverContent>
@@ -457,30 +462,35 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                             )}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full p-0" align="start">
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                           <Command>
                             <CommandInput
                               placeholder="Search branches..."
                               value={branchSearchTerm}
                               onValueChange={setBranchSearchTerm}
                             />
-                            <CommandList className="custom-scrollbar max-h-60 overflow-y-auto">
+                            <CommandList className="overflow-y-hidden">
                               <CommandEmpty>No branches found.</CommandEmpty>
-                              <CommandGroup>
-                                {Array.isArray(branches) &&
-                                  branches.map((branch: string) => (
-                                    <CommandItem
-                                      key={branch}
-                                      value={branch}
-                                      onSelect={() => {
-                                        setSelectedBranch(branch);
-                                        setBranchOpen(false);
-                                      }}
-                                    >
-                                      {branch}
-                                    </CommandItem>
-                                  ))}
-                              </CommandGroup>
+                              <div
+                                style={{ maxHeight: "240px", overflowY: "auto" }}
+                                onWheel={(e) => e.stopPropagation()}
+                              >
+                                <CommandGroup>
+                                  {Array.isArray(branches) &&
+                                    branches.map((branch: string) => (
+                                      <CommandItem
+                                        key={branch}
+                                        value={branch}
+                                        onSelect={() => {
+                                          setSelectedBranch(branch);
+                                          setBranchOpen(false);
+                                        }}
+                                      >
+                                        {branch}
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </div>
                             </CommandList>
                           </Command>
                         </PopoverContent>

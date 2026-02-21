@@ -322,6 +322,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
               {/* Tool listing with scrollable area */}
               <div
                 className="custom-scrollbar overflow-y-auto flex-1 relative max-h-[250px] min-h-[100px] overflow-x-hidden"
+                onWheel={(e) => e.stopPropagation()}
               >
                 {isLoading ? (
                   <div className="flex justify-center items-center py-8">
@@ -365,7 +366,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
                                     <TooltipContent
                                       side="right"
                                       align="start"
-                                      className="max-w-[250px] z-[9999] bg-background border shadow-lg p-2"
+                                      className="max-w-[250px] z-[9999] bg-white border shadow-lg p-2"
                                       collisionPadding={20}
                                     >
                                       <p className="text-sm">

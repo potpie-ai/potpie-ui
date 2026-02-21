@@ -1751,6 +1751,9 @@ export default function QnaPage() {
           <div
             className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ msOverflowStyle: "none" }}
+            onMouseLeave={() =>
+              setState((prev) => ({ ...prev, hoveredQuestion: null }))
+            }
           >
             {/* Chat UI like spec: user message + assistant intro + Thinking block */}
             {/* User message (feature idea) */}

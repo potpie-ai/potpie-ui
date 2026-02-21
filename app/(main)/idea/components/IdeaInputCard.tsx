@@ -449,7 +449,7 @@ export default function IdeaInputCard({
           <div className="space-y-1.5">
             <label className="flex items-center gap-1.5 text-sm font-medium" style={{ color: FIGMA.textPrimary }}>
               <Globe className="h-4 w-4" style={{ color: FIGMA.textPrimary }} />
-              Select Repo
+              Repo
             </label>
             <DropdownMenu open={repoDropdownOpen} onOpenChange={setRepoDropdownOpen}>
               <DropdownMenuTrigger asChild>

@@ -177,6 +177,11 @@ export default function QnaPage() {
     const fetchRecipeDetails = async () => {
       if (!recipeId) return;
 
+      const repoFromUrl =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("repoName")
+          : null;
+
       let fromStorage: { repo_name?: string; branch_name?: string } | null = null;
       if (typeof window !== "undefined") {
         try {
@@ -220,9 +225,10 @@ export default function QnaPage() {
           null;
         setRecipeRepoName(repo);
         setRecipeBranchName(branch ?? "main");
-        
-        // Dispatch to Redux so it persists across navigation (same as spec page)
-        if (repo) {
+
+        // Don't overwrite Redux when user navigated with ?repoName= (explicit selection);
+        // backend can return a different repo and would replace the user's choice.
+        if (repo && !repoFromUrl?.trim()) {
           dispatch(
             setRepoAndBranchForTask({
               taskId: recipeId,
@@ -864,17 +870,17 @@ export default function QnaPage() {
     enabled: !!projectId,
   });
 
-  // Same as spec: Redux first (set by newchat), then recipe details, URL, project data, fallback
+  // Prefer URL param (user's explicit selection from newchat) so it's not overwritten by backend/Redux
   const repoName =
+    repoNameFromUrl ||
     storedRepoContext?.repoName ||
     recipeRepoName ||
-    repoNameFromUrl ||
     projectData?.repo_name ||
     "Unknown Repository";
   const branchName =
     storedRepoContext?.branchName ||
-    recipeBranchName || 
-    projectData?.branch_name || 
+    recipeBranchName ||
+    projectData?.branch_name ||
     "main";
 
   // Parse feature idea from properties if not in URL
@@ -1735,18 +1741,12 @@ export default function QnaPage() {
           className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
           style={{ backgroundColor: "#FAF8F7" }}
         >
-          {/* Chat-style header: title + repo/branch (always visible, including before questions generated) */}
-          <div className="flex justify-between items-center px-6 pt-6 pb-4 shrink-0 gap-2">
+          {/* Title on left side */}
+          <div className="shrink-0 px-6 pt-6 pb-4">
             <h1 className="text-lg font-bold text-primary-color truncate capitalize min-w-0">
               {featureIdea?.slice(0, 50) || "Clarifying Questions"}
               {(featureIdea?.length ?? 0) > 50 ? "…" : ""}
             </h1>
-            <div className="flex items-center gap-2 shrink-0">
-              {repoName && repoName !== "Unknown Repository" && (
-                <Badge icon={Github}>{repoName}</Badge>
-              )}
-              {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
-            </div>
           </div>
           <div
             className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -1871,11 +1871,14 @@ export default function QnaPage() {
             className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
             style={{ backgroundColor: "#FAF8F7" }}
           >
-            <aside className="h-full w-full min-w-[280px] flex flex-col overflow-hidden min-h-0">
-              <div className="px-10 py-3 flex items-center gap-2 flex-wrap shrink-0 justify-end">
-                {repoName && <Badge icon={Github}>{repoName}</Badge>}
-                {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
-              </div>
+            {/* Repo/branch badges on right side only */}
+            <div className="flex justify-end items-center px-6 pt-6 pb-4 shrink-0 gap-2">
+              {repoName && repoName !== "Unknown Repository" && (
+                <Badge icon={Github}>{repoName}</Badge>
+              )}
+              {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
+            </div>
+            <aside className="flex-1 min-h-0 w-full min-w-[280px] flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto min-h-0 py-3 pl-6 pr-8">
                 <h2 className="text-sm font-bold mb-2 text-left text-primary-color">
                   Clarifying Questions

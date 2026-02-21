@@ -170,8 +170,8 @@ export default function QuestionCard({
     >
       <div className="space-y-4">
         {/* Question */}
-        <div className="flex items-start gap-4">
-          <div className="flex-1 min-w-0 space-y-1 pr-20">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0 space-y-1">
             <p
               className={`text-sm font-bold leading-relaxed ${
                 isSkipped ? "text-zinc-400 line-through" : "text-primary-color"
@@ -184,18 +184,26 @@ export default function QuestionCard({
                 (Select all that apply)
               </p>
             )}
-            <div className="flex items-center gap-1.5 flex-shrink-0 absolute top-4 right-4">
-              {isSkipped && (
-                <span className="px-1.5 py-0.5 bg-zinc-200 border border-zinc-300 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                  Skipped
-                </span>
-              )}
-              {!isSkipped && needsInput && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider text-primary-color" style={{ backgroundColor: "#e6ffe6" }}>
-                  INPUT NEEDED
-                </span>
-              )}
-            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+            {isSkipped && (
+              <span className="px-1.5 py-0.5 bg-zinc-200 border border-zinc-300 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                Skipped
+              </span>
+            )}
+            {!isSkipped && (needsInput || (isFreeTextOnly && !hasAnswer)) && (
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wider"
+                style={{
+                  backgroundColor: "#F9FFE9",
+                  border: "1px solid #B6E343",
+                  color: "#4a6b00",
+                  fontFamily: "'Roboto Mono', monospace",
+                }}
+              >
+                Input Needed
+              </span>
+            )}
           </div>
         </div>
 

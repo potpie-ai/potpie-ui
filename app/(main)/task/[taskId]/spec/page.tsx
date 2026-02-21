@@ -550,6 +550,7 @@ const SpecPage = () => {
   const streamOutputEndRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
   const runIdFromUrl = searchParams.get("run_id");
+  const repoNameFromUrl = searchParams.get("repoName");
 
   // Chat UI state (first message = new chat input; wired to spec chat API)
   type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -708,14 +709,16 @@ const SpecPage = () => {
         });
         setAnswers(answersMap);
 
-        dispatch(
-          setRepoAndBranchForTask({
-            taskId: recipeId,
-            repoName: repoName,
-            branchName: branchName,
-            projectId: recipeDetails.project_id || undefined,
-          })
-        );
+        if (!repoNameFromUrl?.trim() && typeof window !== "undefined" && !new URLSearchParams(window.location.search).get("repoName")?.trim()) {
+          dispatch(
+            setRepoAndBranchForTask({
+              taskId: recipeId,
+              repoName: repoName,
+              branchName: branchName,
+              projectId: recipeDetails.project_id || undefined,
+            })
+          );
+        }
 
         hasInitializedRef.current = true;
       } catch (err: any) {
@@ -1098,12 +1101,14 @@ const SpecPage = () => {
               {recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}
               {(recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""}
             </h1>
-            {projectData && (
-              <div className="flex items-center gap-2 shrink-0">
-                <Badge icon={Github}>{projectData.repo}</Badge>
-                <Badge icon={GitBranch}>{projectData.branch}</Badge>
-              </div>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge icon={Github}>
+                {repoNameFromUrl || storedRepoContext?.repoName || projectData?.repo || "Unknown Repository"}
+              </Badge>
+              <Badge icon={GitBranch}>
+                {storedRepoContext?.branchName || projectData?.branch || "main"}
+              </Badge>
+            </div>
           </div>
 
           {/* Messages — only this section scrolls */}

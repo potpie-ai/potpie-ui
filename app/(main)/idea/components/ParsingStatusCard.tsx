@@ -47,13 +47,13 @@ export default function ParsingStatusCard({
               </span>
             </div>
 
-            {/* Progress Bar - lime green fill */}
+            {/* Progress Bar - brand green (#B6E343) */}
             <div className="h-2 w-full rounded-full bg-zinc-200">
               <div
                 className="h-2 rounded-full transition-all duration-500 ease-out"
                 style={{
                   width: `${cappedProgress}%`,
-                  backgroundColor: "#B7F600",
+                  backgroundColor: "#B6E343",
                 }}
               />
             </div>

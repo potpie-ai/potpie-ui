@@ -16,11 +16,9 @@ export default class MediaService {
    * Backend accepts any file type; images are processed, others stored as document.
    */
   static async uploadFile(file: File): Promise<AttachmentUploadResponse> {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL ||
-      process.env.NEXT_PUBLIC_BASE_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     if (!baseUrl) {
-      throw new Error("NEXT_PUBLIC_CONVERSATION_BASE_URL or NEXT_PUBLIC_BASE_URL is not set");
+      throw new Error("NEXT_PUBLIC_BASE_URL is not set");
     }
 
     const headers = await getHeaders();

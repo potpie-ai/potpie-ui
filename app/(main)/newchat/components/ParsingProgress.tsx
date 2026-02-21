@@ -20,8 +20,8 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
   if (status === ParsingStatusEnum.READY) {
     return (
       <div className="flex justify-start items-center gap-3 mt-2">
-        <CheckCircle className="text-green-600 h-4 w-4" />
-        <span className="text-green-600">{displayStatus}</span>
+        <CheckCircle className="h-4 w-4" style={{ color: "#B6E343" }} />
+        <span style={{ color: "#B6E343" }}>{displayStatus}</span>
       </div>
     );
   }
@@ -46,15 +46,15 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
     );
   }
   
-  // For in-progress statuses
-  if (status === ParsingStatusEnum.SUBMITTED || 
-      status === ParsingStatusEnum.CLONED || 
-      status === ParsingStatusEnum.PARSED || 
+  // For in-progress statuses (use brand green #B6E343 for progress)
+  if (status === ParsingStatusEnum.SUBMITTED ||
+      status === ParsingStatusEnum.CLONED ||
+      status === ParsingStatusEnum.PARSED ||
       status === ParsingStatusEnum.INFERRING ||
       status === "loading") { // Include "loading" for backward compatibility
     return (
       <div className="flex justify-start items-center gap-3 mt-2">
-        <Loader className="animate-spin h-4 w-4" />
+        <Loader className="animate-spin h-4 w-4" style={{ color: "#B6E343" }} />
         <span>{displayStatus}</span>
       </div>
     );

@@ -37,12 +37,14 @@ import {
   Info,
   RefreshCw,
   SendHorizonal,
-  FolderTree,
   Wrench,
   AlertCircle,
+  Download,
 } from "lucide-react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch } from "@/lib/state/store";
 import { RootState } from "@/lib/state/store";
+import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
 import TaskSplittingService from "@/services/TaskSplittingService";
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
@@ -270,16 +272,9 @@ const CodeFileCard = ({
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full px-4 py-3 bg-[#F5F5F5] border-b border-gray-200 flex items-center justify-between gap-3 hover:bg-[#EEEEEE] transition-colors"
       >
-        <div className="flex items-center gap-2">
-          <ChevronDown
-            className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${
-              isExpanded ? "" : "-rotate-90"
-            }`}
-          />
-          <span className="text-xs font-medium text-[#022019] truncate">
-            {change.path}
-          </span>
-        </div>
+        <span className="text-xs font-medium text-[#022019] truncate">
+          {change.path}
+        </span>
       </button>
       {isExpanded && (
         <div className="min-h-[280px]">
@@ -711,11 +706,16 @@ export default function VerticalTaskExecution() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dispatch = useDispatch<AppDispatch>();
   // Note: taskId in URL is actually recipeId now
   const recipeId = params?.taskId as string;
   const planIdFromUrl = searchParams.get("planId");
   const itemNumberFromUrl = searchParams.get("itemNumber");
   const taskSplittingIdFromUrl = searchParams.get("taskSplittingId");
+  const repoNameFromUrl = searchParams.get("repoName");
+
+  const repoBranchByTask = useSelector((state: RootState) => state.RepoAndBranch.byTaskId);
+  const storedRepoContext = recipeId ? repoBranchByTask?.[recipeId] : undefined;
 
   const [activeSliceId, setActiveSliceId] = useState(
     itemNumberFromUrl ? parseInt(itemNumberFromUrl) : 1
@@ -875,6 +875,44 @@ export default function VerticalTaskExecution() {
     return map;
   }, [allLayers]);
 
+  // Download generated code as a zip (all changed files from layers)
+  const handleDownloadCode = useCallback(async () => {
+    const files: { path: string; content: string }[] = [];
+    const seen = new Set<string>();
+    for (const layer of allLayers) {
+      for (const task of layer.tasks ?? []) {
+        for (const change of task.changes ?? []) {
+          const path = change.path?.trim();
+          if (!path || seen.has(path)) continue;
+          seen.add(path);
+          files.push({ path, content: change.content ?? "" });
+        }
+      }
+    }
+    if (files.length === 0) {
+      toast.error("No generated code to download.");
+      return;
+    }
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      for (const { path, content } of files) {
+        zip.file(path, content);
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const name = `codegen-${taskSplittingId ?? "export"}-${Date.now()}.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${files.length} file(s) as ${name}`);
+    } catch (err) {
+      toast.error("Failed to create download.");
+    }
+  }, [allLayers, taskSplittingId]);
+
   // Fetch recipe details (prompt + repo/branch) for the left header.
   // Only fetch once per recipeId to avoid re-renders on page refresh.
   useEffect(() => {
@@ -903,8 +941,13 @@ export default function VerticalTaskExecution() {
         const prompt = (details.user_prompt || "").trim();
         setRecipePrompt(prompt);
         setProjectId(details.project_id?.trim() || null);
-        setRepoName(details.repo_name?.trim() || fromStorage?.repo_name?.trim() || "Unknown Repository");
-        setBranchName(details.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main");
+        const repo = details.repo_name?.trim() || fromStorage?.repo_name?.trim() || null;
+        const branch = details.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main";
+        setRepoName(repo || "Unknown Repository");
+        setBranchName(branch);
+        if (repo && typeof window !== "undefined" && !new URLSearchParams(window.location.search).get("repoName")?.trim()) {
+          dispatch(setRepoAndBranchForTask({ taskId: recipeId, repoName: repo, branchName: branch }));
+        }
       } catch (e) {
         if (!mounted) return;
         setRecipePrompt(fromStorage?.user_prompt || "");
@@ -916,7 +959,12 @@ export default function VerticalTaskExecution() {
     return () => {
       mounted = false;
     };
-  }, [recipeId]);
+  }, [recipeId, dispatch]);
+
+  // Prefer URL/Redux for repo/branch so we don't show "Unknown Repository" when API is empty or wrong
+  const displayRepoName =
+    repoNameFromUrl || storedRepoContext?.repoName || repoName;
+  const displayBranchName = storedRepoContext?.branchName || branchName;
 
   // Initialize the left "chat" with the prompt + a codegen helper message (once per recipe).
   // Run once per recipeId; use fallback prompt if recipePrompt not loaded yet so the pane is never empty.
@@ -972,8 +1020,8 @@ export default function VerticalTaskExecution() {
             projectId || null,
             agentId,
             true, // hidden
-            repoName !== "Unknown Repository" ? repoName : undefined,
-            branchName !== "main" ? branchName : undefined
+            displayRepoName !== "Unknown Repository" ? displayRepoName : undefined,
+            displayBranchName !== "main" ? displayBranchName : undefined
           );
           conversationId = res?.conversation_id ?? null;
           if (conversationId && typeof window !== "undefined") {
@@ -1031,7 +1079,7 @@ export default function VerticalTaskExecution() {
     return () => {
       mounted = false;
     };
-  }, [recipeId, user?.uid, projectId, repoName, branchName, recipePrompt]);
+  }, [recipeId, user?.uid, projectId, displayRepoName, displayBranchName, recipePrompt]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -1999,8 +2047,8 @@ export default function VerticalTaskExecution() {
               {(recipePrompt?.length ?? 0) > 50 ? "…" : ""}
             </h1>
             <div className="flex items-center gap-2 shrink-0">
-              <Badge icon={Github}>{repoName}</Badge>
-              <Badge icon={GitBranch}>{branchName}</Badge>
+              <Badge icon={Github}>{displayRepoName}</Badge>
+              <Badge icon={GitBranch}>{displayBranchName}</Badge>
         </div>
       </div>
 
@@ -2303,7 +2351,7 @@ export default function VerticalTaskExecution() {
               </div>
 
                 <div className="flex items-center gap-4">
-                {/* Changed files (slider with tree + diff) — before MAKE PR */}
+                {/* View files (slider with tree + diff) */}
                 {taskSplittingId && (
                   <button
                     type="button"
@@ -2312,68 +2360,26 @@ export default function VerticalTaskExecution() {
                       setChangedFilesSliderOpen(true);
                     }}
                     className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#D3E5E5] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
-                    title="View all changed files and diffs"
+                    title="View all files and diffs"
                   >
-                    <FolderTree className="w-3.5 h-3.5" />
-                    Changed files
+                    View files
                   </button>
                 )}
 
-                {/* MAKE PR / VIEW PR */}
-                {taskSplittingStatus?.pr_url ? (
-                  <a
-                    href={taskSplittingStatus.pr_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 px-5 py-2 rounded-lg font-semibold text-xs bg-[#022019] text-[#B4D13F] hover:opacity-90"
-                  >
-                    VIEW PR
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={
-                      !taskSplittingId ||
-                      !taskSplittingStatus ||
-                      taskSplittingStatus.codegen_status !== "COMPLETED" ||
-                      isCreatingPR ||
-                      taskSplittingStatus.pr_status === "IN_PROGRESS"
-                    }
-                    onClick={async () => {
-                      if (!taskSplittingId) return;
-                      toast.dismiss(); // Clear any previous PR toasts so only this attempt's result is shown
-                      try {
-                        setIsCreatingPR(true);
-                        await TaskSplittingService.createPullRequest(taskSplittingId);
-                        toast.success("PR creation started", { title: "Success" });
-                      } catch (e: any) {
-                        setIsCreatingPR(false);
-                        toast.error(e?.message || "Failed to start PR creation", { title: "Error" });
-                      }
-                    }}
-                    className="shrink-0 px-5 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 bg-[#022019] text-[#B4D13F] hover:opacity-90 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:hover:opacity-100 disabled:cursor-not-allowed"
-                    title={
-                      !taskSplittingId
-                        ? "Start code generation before creating a PR"
-                        : taskSplittingStatus?.codegen_status !== "COMPLETED"
-                          ? "Finish code generation before creating a PR"
-                          : taskSplittingStatus?.pr_status === "FAILED"
-                            ? taskSplittingStatus?.pr_error_message || "PR creation failed"
-                            : taskSplittingStatus?.pr_status === "IN_PROGRESS"
-                              ? "PR creation is in progress"
-                              : "Create a PR from completed changes"
-                    }
-                  >
-                    {isCreatingPR || taskSplittingStatus?.pr_status === "IN_PROGRESS" ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        MAKING PR…
-                      </>
-                    ) : (
-                      "MAKE PR"
-                    )}
-                  </button>
-                )}
+                {/* Download generated code (zip) — when codegen completed and no PR yet */}
+                {taskSplittingId &&
+                  taskSplittingStatus?.codegen_status === "COMPLETED" &&
+                  !taskSplittingStatus?.pr_url && (
+                    <button
+                      type="button"
+                      onClick={handleDownloadCode}
+                      className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#D3E5E5] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
+                      title="Download generated code as zip"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download code
+                    </button>
+                  )}
             </div>
           </div>
                 </div>
@@ -2510,20 +2516,92 @@ export default function VerticalTaskExecution() {
                 })()}
               </div>
           </div>
+
+            {/* Sticky MAKE PR / VIEW PR at end of code gen panel */}
+            {taskSplittingId && (
+              <div className="sticky bottom-0 shrink-0 border-t border-[#D3E5E5] bg-white px-6 py-4 flex justify-end">
+                {taskSplittingStatus?.pr_url ? (
+                  <a
+                    href={taskSplittingStatus.pr_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 px-5 py-2.5 rounded-lg font-semibold text-xs bg-[#022019] text-[#B4D13F] hover:opacity-90"
+                  >
+                    VIEW PR
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={
+                      !taskSplittingId ||
+                      !taskSplittingStatus ||
+                      taskSplittingStatus.codegen_status !== "COMPLETED" ||
+                      isCreatingPR ||
+                      taskSplittingStatus.pr_status === "IN_PROGRESS"
+                    }
+                    onClick={async () => {
+                      if (!taskSplittingId) return;
+                      toast.dismiss();
+                      try {
+                        setIsCreatingPR(true);
+                        await TaskSplittingService.createPullRequest(taskSplittingId);
+                        toast.success("PR creation started", { title: "Success" });
+                      } catch (e: any) {
+                        setIsCreatingPR(false);
+                        const msg = e?.message ?? "Failed to start PR creation";
+                        const isAppNotInstalled =
+                          typeof msg === "string" &&
+                          (msg.includes("not installed") ||
+                            msg.includes("GitHub App") ||
+                            msg.includes("404"));
+                        if (isAppNotInstalled) {
+                          toast.error(
+                            "Cannot create PR since Potpie app is not installed on this repository. You can download the generated code below.",
+                            { title: "PR not available", duration: 8000 }
+                          );
+                        } else {
+                          toast.error(msg, { title: "Error" });
+                        }
+                      }
+                    }}
+                    className="shrink-0 px-5 py-2.5 rounded-lg font-semibold text-xs flex items-center gap-2 bg-[#022019] text-[#B4D13F] hover:opacity-90 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:hover:opacity-100 disabled:cursor-not-allowed"
+                    title={
+                      !taskSplittingId
+                        ? "Start code generation before creating a PR"
+                        : taskSplittingStatus?.codegen_status !== "COMPLETED"
+                          ? "Finish code generation before creating a PR"
+                          : taskSplittingStatus?.pr_status === "FAILED"
+                            ? taskSplittingStatus?.pr_error_message || "PR creation failed"
+                            : taskSplittingStatus?.pr_status === "IN_PROGRESS"
+                              ? "PR creation is in progress"
+                              : "Create a PR from completed changes"
+                    }
+                  >
+                    {isCreatingPR || taskSplittingStatus?.pr_status === "IN_PROGRESS" ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        MAKING PR…
+                      </>
+                    ) : (
+                      "MAKE PR"
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
           </aside>
                 </div>
               </div>
 
-      {/* Changed files slider: tree + file diff */}
+      {/* View files slider: tree + file diff */}
       <Sheet open={changedFilesSliderOpen} onOpenChange={setChangedFilesSliderOpen}>
         <SheetContent
           side="right"
           className="w-full max-w-[90vw] sm:max-w-6xl flex flex-col gap-0 p-0 overflow-hidden bg-white"
         >
           <SheetHeader className="px-6 py-4 shrink-0 border-b border-[#E5E7EB]">
-            <SheetTitle className="text-base font-semibold text-[#022019] flex items-center gap-2">
-              <FolderTree className="w-4 h-4" />
-              Changed files
+            <SheetTitle className="text-base font-semibold text-[#022019]">
+              View files
             </SheetTitle>
           </SheetHeader>
           <div className="flex-1 flex min-h-0 overflow-hidden">
@@ -2551,7 +2629,7 @@ export default function VerticalTaskExecution() {
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-zinc-500">
                   <FileText className="w-10 h-10 mb-3 opacity-50" />
-                  <p className="text-sm font-medium">No changed files yet</p>
+                  <p className="text-sm font-medium">No files yet</p>
                   <p className="text-xs mt-1">Files will appear here as code generation runs</p>
                 </div>
               )}

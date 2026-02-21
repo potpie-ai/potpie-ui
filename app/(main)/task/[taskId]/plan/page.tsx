@@ -46,6 +46,9 @@ import SpecService from "@/services/SpecService";
 import TaskSplittingService from "@/services/TaskSplittingService";
 import { PlanStatusResponse, PlanItem, PlanPhase, PhasedPlanItem } from "@/lib/types/spec";
 import { useSearchParams } from "next/navigation";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/lib/state/store";
+import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/sonner";
 import Image from "next/image";
@@ -250,8 +253,13 @@ const PlanPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const dispatch = useDispatch<AppDispatch>();
   const recipeId = params?.taskId as string;
   const runIdFromUrl = searchParams.get("run_id");
+  const repoNameFromUrl = searchParams.get("repoName");
+
+  const repoBranchByTask = useSelector((state: RootState) => state.RepoAndBranch.byTaskId);
+  const storedRepoContext = recipeId ? repoBranchByTask?.[recipeId] : undefined;
 
   const [planStatus, setPlanStatus] = useState<PlanStatusResponse | null>(null);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
@@ -299,19 +307,22 @@ const PlanPage = () => {
       try {
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
         // Repo/branch: API first, then localStorage, so we don't show "Unknown" when API omits them
-        const repoName =
+        const repo =
           recipeDetails.repo_name?.trim() ||
           fromStorage?.repo_name?.trim() ||
           "Unknown Repository";
-        const branchName =
+        const branch =
           recipeDetails.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main";
-        setRepoName(repoName);
-        setBranchName(branchName);
+        setRepoName(repo);
+        setBranchName(branch);
         setUserPrompt(
           (recipeDetails.user_prompt && recipeDetails.user_prompt.trim()) ||
             fromStorage?.user_prompt ||
             "Implementation plan generation"
         );
+        if (repo && repo !== "Unknown Repository" && typeof window !== "undefined" && !new URLSearchParams(window.location.search).get("repoName")?.trim()) {
+          dispatch(setRepoAndBranchForTask({ taskId: recipeId, repoName: repo, branchName: branch }));
+        }
       } catch {
         // On error, use localStorage if available so repo/branch/prompt can still show
         setRepoName(fromStorage?.repo_name?.trim() || "Unknown Repository");
@@ -320,7 +331,11 @@ const PlanPage = () => {
       }
     };
     fetchRecipeDetails();
-  }, [recipeId]);
+  }, [recipeId, dispatch]);
+
+  const displayRepoName =
+    repoNameFromUrl || storedRepoContext?.repoName || repoName;
+  const displayBranchName = storedRepoContext?.branchName || branchName;
 
   useEffect(() => {
     if (!userPrompt || hasChatInitializedRef.current) return;
@@ -676,8 +691,8 @@ const PlanPage = () => {
               {(userPrompt?.length ?? 0) > 50 ? "…" : ""}
             </h1>
             <div className="flex items-center gap-2 shrink-0">
-              <ChatBadge icon={Github}>{repoName}</ChatBadge>
-              <ChatBadge icon={GitBranch}>{branchName}</ChatBadge>
+              <ChatBadge icon={Github}>{displayRepoName}</ChatBadge>
+              <ChatBadge icon={GitBranch}>{displayBranchName}</ChatBadge>
             </div>
           </div>
 
@@ -846,36 +861,35 @@ const PlanPage = () => {
         <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 border-l border-[#D3E5E5]">
           <div className="p-6 border-b border-[#D3E5E5] bg-[#FFFDFC] shrink-0">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
-                <div className="flex items-center gap-2">
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className="p-1 rounded-full hover:bg-[#CCD3CF]/30 transition-colors shrink-0"
-                          aria-label="Phase Plan info"
-                        >
-                          <Info className="w-4 h-4" style={{ color: "#022019" }} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipPortal>
-                        <TooltipContent
-                          side="bottom"
-                          align="start"
-                          sideOffset={8}
-                          className="max-w-[280px] bg-white text-gray-900 border border-gray-200 shadow-lg rounded-lg px-4 py-3 text-sm font-normal"
-                        >
-                          Phase Plan breaks the specification into ordered phases and implementation steps.
-                        </TooltipContent>
-                      </TooltipPortal>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0 truncate min-w-0" style={{ color: "#022019" }} title={`Phase ${selectedPhaseIndex + 1}`}>
-                    {phasesFromApi.length > 0 ? `Phase ${selectedPhaseIndex + 1}` : "Phase Plan"}
-                  </h2>
+              <div className="flex items-center gap-2">
+              <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0 truncate min-w-0" style={{ color: "#022019" }} title={`Phase ${selectedPhaseIndex + 1}`}>
+                {phasesFromApi.length > 0 ? `Phase ${selectedPhaseIndex + 1}` : "Phase Plan"}
+              </h2>
+              <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-1 rounded-full hover:bg-[#CCD3CF]/30 transition-colors shrink-0"
+                        aria-label="Phase Plan info"
+                      >
+                        <Info className="w-4 h-4" style={{ color: "#022019" }} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipPortal>
+                      <TooltipContent
+                        side="bottom"
+                        align="end"
+                        sideOffset={8}
+                        className="max-w-[280px] bg-white text-gray-900 border border-gray-200 shadow-lg rounded-lg px-4 py-3 text-sm font-normal"
+                      >
+                        Phase Plan breaks the specification into ordered phases and implementation steps.
+                      </TooltipContent>
+                    </TooltipPortal>
+                  </Tooltip>
+                </TooltipProvider>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={async () => {
@@ -921,8 +935,8 @@ const PlanPage = () => {
                   >
                     <ChevronRight className="w-4 h-4" style={{ color: "#022019" }} />
                   </button>
+                
                 </div>
-              </div>
             </div>
           </div>
 

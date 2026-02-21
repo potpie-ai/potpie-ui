@@ -191,7 +191,7 @@ export default function QuestionCard({
                 Skipped
               </span>
             )}
-            {!isSkipped && (needsInput || (isFreeTextOnly && !hasAnswer)) && (
+            {!isSkipped && !hasAnswer && (isFreeTextOnly || question.answerRecommendationIdx == null || question.answerRecommendationIdx < 0) && (
               <span
                 className="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wider"
                 style={{

@@ -905,8 +905,13 @@ export default function VerticalTaskExecution() {
       const a = document.createElement("a");
       a.href = url;
       a.download = name;
-      a.click();
-      URL.revokeObjectURL(url);
+      document.body.appendChild(a);
+      try {
+        a.click();
+      } finally {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
       toast.success(`Downloaded ${files.length} file(s) as ${name}`);
     } catch (err) {
       toast.error("Failed to create download.");

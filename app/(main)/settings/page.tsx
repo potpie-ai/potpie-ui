@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { CalendarIcon, Plus, TrendingUp } from "lucide-react";
 import {
@@ -14,7 +14,52 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/sonner";
-import SettingsService from "@/services/SettingsService";
+import SettingsService, { TokensByDayItem } from "@/services/SettingsService";
+
+const CHART_COLORS = ["#bbf7d0", "#4ade80", "#3b6fa0", "#1e1b4b", "#6366f1", "#f59e0b"];
+
+function formatDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function getDateRange(range: string): { startDate: string; endDate: string } {
+  const today = new Date();
+  const end = formatDate(today);
+  if (range === "today") return { startDate: end, endDate: end };
+  const start = new Date(today);
+  start.setDate(start.getDate() - (range === "last_week" ? 6 : 29));
+  return { startDate: formatDate(start), endDate: end };
+}
+
+function buildChartData(items: TokensByDayItem[]) {
+  const dates = [...new Set(items.map((i) => i.date))].sort();
+  const labels = dates.map((d) => {
+    const dt = new Date(d + "T00:00:00");
+    return `${dt.getDate()} ${dt.toLocaleString("en", { month: "short" }).toUpperCase()}`;
+  });
+
+  const dateIndex = new Map(dates.map((d, i) => [d, i]));
+  const projectMap = new Map<string, number[]>();
+
+  for (const item of items) {
+    const key = item.project_id ?? "__others__";
+    if (!projectMap.has(key)) projectMap.set(key, new Array(dates.length).fill(0));
+    projectMap.get(key)![dateIndex.get(item.date)!] = item.total_tokens;
+  }
+
+  // Put "Others" (null project_id) last
+  const entries = [...projectMap.entries()].sort(([a], [b]) =>
+    a === "__others__" ? 1 : b === "__others__" ? -1 : 0
+  );
+
+  const datasets = entries.map(([pid, data], i) => ({
+    label: pid === "__others__" ? "Others" : `Project ${i + 1}`,
+    data,
+    backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+  }));
+
+  return { labels, datasets };
+}
 
 const StackedBarChart = dynamic(() => import("./StackedBarChart"), {
   ssr: false,
@@ -47,12 +92,10 @@ function OpenAIIcon() {
   return <img src="/images/openai.svg" alt="OpenAI" width={16} height={16} />;
 }
 
-// TODO: replace the src with your actual SVG path, e.g. "/icons/anthropic.svg"
 function AnthropicIcon() {
   return <img src="/images/anthropic.svg" alt="Anthropic" width={16} height={16} />;
 }
 
-// TODO: replace the src with your actual SVG path, e.g. "/icons/openrouter.svg"
 function OpenRouterIcon() {
   return <img src="/images/openrouter.svg" alt="OpenRouter" width={16} height={16} />;
 }
@@ -78,12 +121,14 @@ interface ApiKeyState {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
 
-  const [dateRange, setDateRange] = useState("today");
+  const [dateRange, setDateRange] = useState("last_week");
 
   // Provider key inputs
   const [openAIInput, setOpenAIInput] = useState("");
   const [anthropicInput, setAnthropicInput] = useState("");
-const [openRouterInput, setOpenRouterInput] = useState("");
+  const [openRouterInput, setOpenRouterInput] = useState("");
+
+  const { startDate, endDate } = useMemo(() => getDateRange(dateRange), [dateRange]);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: apiKeyData, isLoading: isLoadingKey } = useQuery<ApiKeyState>({
@@ -95,6 +140,21 @@ const [openRouterInput, setOpenRouterInput] = useState("");
     queryKey: ["secrets"],
     queryFn: () => SettingsService.getSecrets(),
   });
+
+  const { data: tokensByDay } = useQuery({
+    queryKey: ["analytics-tokens-by-day", startDate, endDate],
+    queryFn: () => SettingsService.getTokensByDay(startDate, endDate),
+  });
+
+  const { data: analyticsSummary } = useQuery({
+    queryKey: ["analytics-summary", startDate, endDate],
+    queryFn: () => SettingsService.getAnalyticsSummary(startDate, endDate),
+  });
+
+  const chartData = useMemo(
+    () => buildChartData(tokensByDay ?? []),
+    [tokensByDay]
+  );
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const { mutate: generateApiKey, isPending: isGenerating } = useMutation({
@@ -162,7 +222,13 @@ const [openRouterInput, setOpenRouterInput] = useState("");
       <div className="border border-gray-200 rounded-xl mb-5 flex overflow-hidden bg-white">
         {/* Chart */}
         <div className="flex-1 min-w-0 p-5 h-[300px]">
-          <StackedBarChart />
+          {chartData.labels.length > 0 ? (
+            <StackedBarChart labels={chartData.labels} datasets={chartData.datasets} />
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+              {tokensByDay ? "No token usage data for this period." : "Loading…"}
+            </div>
+          )}
         </div>
 
         {/* Stats */}
@@ -170,19 +236,23 @@ const [openRouterInput, setOpenRouterInput] = useState("");
           <div className="flex-1 flex flex-col justify-center px-6 py-5">
             <p className="text-sm font-semibold text-gray-500 mb-1">Total Tokens</p>
             <div className="flex items-end justify-between mt-1">
-              <span className="text-2xl font-bold text-gray-900">29,67,879</span>
-              <span className="text-sm font-semibold text-emerald-500 flex items-center gap-0.5">
-                4.0% <TrendingUp className="w-3.5 h-3.5" />
+              <span className="text-2xl font-bold text-gray-900">
+                {analyticsSummary
+                  ? analyticsSummary.summary.total_tokens.toLocaleString()
+                  : "—"}
               </span>
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             </div>
           </div>
           <div className="flex-1 flex flex-col justify-center px-6 py-5">
             <p className="text-sm font-semibold text-gray-500 mb-1">Total Requests</p>
             <div className="flex items-end justify-between mt-1">
-              <span className="text-2xl font-bold text-gray-900">29,67,879</span>
-              <span className="text-sm font-semibold text-emerald-500 flex items-center gap-0.5">
-                4.0% <TrendingUp className="w-3.5 h-3.5" />
+              <span className="text-2xl font-bold text-gray-900">
+                {analyticsSummary
+                  ? analyticsSummary.summary.total_llm_calls.toLocaleString()
+                  : "—"}
               </span>
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             </div>
           </div>
         </div>

@@ -14,33 +14,16 @@ import { Bar } from "react-chartjs-2";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-const labels = ["15 FEB", "16 FEB", "17 FEB", "18 FEB", "19 FEB", "20 FEB", "21 FEB"];
+interface Dataset {
+  label: string;
+  data: number[];
+  backgroundColor: string;
+}
 
-const data = {
-  labels,
-  datasets: [
-    {
-      label: "Others",
-      data: [30, 60, 70, 50, 70, 75, 115],
-      backgroundColor: "#1e1b4b",
-    },
-    {
-      label: "Project 3",
-      data: [30, 60, 85, 70, 80, 90, 120],
-      backgroundColor: "#3b6fa0",
-    },
-    {
-      label: "Project 2",
-      data: [35, 45, 55, 40, 55, 65, 90],
-      backgroundColor: "#4ade80",
-    },
-    {
-      label: "Project 1",
-      data: [40, 45, 50, 40, 55, 55, 90],
-      backgroundColor: "#bbf7d0",
-    },
-  ],
-};
+interface StackedBarChartProps {
+  labels: string[];
+  datasets: Dataset[];
+}
 
 const options: ChartOptions<"bar"> = {
   plugins: {
@@ -89,6 +72,6 @@ const options: ChartOptions<"bar"> = {
   },
 };
 
-export default function StackedBarChart() {
-  return <Bar data={data} options={options} />;
+export default function StackedBarChart({ labels, datasets }: StackedBarChartProps) {
+  return <Bar data={{ labels, datasets }} options={options} />;
 }

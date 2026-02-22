@@ -84,13 +84,9 @@ interface IdeaInputCardProps {
   onAttachmentChange?: (files: File[], removedIndex?: number) => void;
   /** True when any file in the list is being uploaded. */
   attachmentUploading?: boolean;
-  /** Repository search term */
-  repoSearchTerm?: string;
-  /** Handler for repository search term changes */
+  /** Handler for repository search term changes (debounced — called after user stops typing) */
   onRepoSearchChange?: (value: string) => void;
-  /** Branch search term */
-  branchSearchTerm?: string;
-  /** Handler for branch search term changes */
+  /** Handler for branch search term changes (debounced — called after user stops typing) */
   onBranchSearchChange?: (value: string) => void;
 }
 
@@ -120,9 +116,7 @@ export default function IdeaInputCard({
   attachedFiles: controlledFiles,
   onAttachmentChange,
   attachmentUploading = false,
-  repoSearchTerm = "",
   onRepoSearchChange,
-  branchSearchTerm = "",
   onBranchSearchChange,
 }: IdeaInputCardProps) {
   const router = useRouter();
@@ -131,6 +125,10 @@ export default function IdeaInputCard({
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localRepoSearch, setLocalRepoSearch] = useState("");
+  const [localBranchSearch, setLocalBranchSearch] = useState("");
+  const repoDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const branchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [localFiles, setLocalFiles] = useState<File[]>([]);
   const { openGithubPopup } = useGithubAppPopup();
   const [publicRepoDialogOpen, setPublicRepoDialogOpen] = useState(false);
@@ -139,14 +137,18 @@ export default function IdeaInputCard({
 
   // Clear search terms when dropdowns close
   useEffect(() => {
-    if (!repoDropdownOpen && onRepoSearchChange) {
-      onRepoSearchChange("");
+    if (!repoDropdownOpen) {
+      setLocalRepoSearch("");
+      if (repoDebounceRef.current) clearTimeout(repoDebounceRef.current);
+      onRepoSearchChange?.("");
     }
   }, [repoDropdownOpen, onRepoSearchChange]);
 
   useEffect(() => {
-    if (!branchDropdownOpen && onBranchSearchChange) {
-      onBranchSearchChange("");
+    if (!branchDropdownOpen) {
+      setLocalBranchSearch("");
+      if (branchDebounceRef.current) clearTimeout(branchDebounceRef.current);
+      onBranchSearchChange?.("");
     }
   }, [branchDropdownOpen, onBranchSearchChange]);
 
@@ -479,25 +481,31 @@ export default function IdeaInputCard({
                 <Search className="h-4 w-4 shrink-0 text-zinc-400" />
                 <Input
                   placeholder="Search repositories..."
-                  value={repoSearchTerm}
+                  value={localRepoSearch}
                   onChange={(e) => {
                     const value = e.target.value;
-                    // Max length validation (200 characters)
                     if (value.length <= 200) {
-                      onRepoSearchChange?.(value);
+                      setLocalRepoSearch(value);
+                      if (repoDebounceRef.current) clearTimeout(repoDebounceRef.current);
+                      repoDebounceRef.current = setTimeout(() => {
+                        onRepoSearchChange?.(value.trim());
+                      }, 350);
                     }
                   }}
                   maxLength={200}
                   className="flex-1 h-8 text-[10px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-0"
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
                 />
-                {repoSearchTerm?.trim() && (
+                {localRepoSearch.trim() && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-4 w-4 rounded-full hover:bg-zinc-100"
                     onClick={(e) => {
                       e.stopPropagation();
+                      setLocalRepoSearch("");
+                      if (repoDebounceRef.current) clearTimeout(repoDebounceRef.current);
                       onRepoSearchChange?.("");
                     }}
                   >
@@ -530,19 +538,19 @@ export default function IdeaInputCard({
                   <div className="p-7 text-center">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
                     <p className="text-[10px] text-zinc-500">
-                      {repoSearchTerm?.trim() ? "Searching repositories..." : "Loading repositories..."}
+                      {localRepoSearch.trim() ? "Searching repositories..." : "Loading repositories..."}
                     </p>
                   </div>
                 ) : repositories.length === 0 ? (
                   <div className="p-7 text-center">
                     <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
                     <p className="text-[10px] font-medium text-foreground mb-1">
-                      {repoSearchTerm?.trim()
-                        ? `No repositories found matching '${repoSearchTerm.trim()}'`
+                      {localRepoSearch.trim()
+                        ? `No repositories found matching '${localRepoSearch.trim()}'`
                         : "No parsed repositories found"}
                     </p>
                     <p className="text-[9px] text-zinc-400">
-                      {repoSearchTerm?.trim() ? "Try a different search term" : "Parse a repository to get started"}
+                      {localRepoSearch.trim() ? "Try a different search term" : "Parse a repository to get started"}
                     </p>
                   </div>
                 ) : (
@@ -646,25 +654,31 @@ export default function IdeaInputCard({
                   <Search className="h-4 w-4 shrink-0 text-zinc-400" />
                   <Input
                     placeholder="Search branches..."
-                    value={branchSearchTerm}
+                    value={localBranchSearch}
                     onChange={(e) => {
                       const value = e.target.value;
-                      // Max length validation (200 characters)
                       if (value.length <= 200) {
-                        onBranchSearchChange?.(value);
+                        setLocalBranchSearch(value);
+                        if (branchDebounceRef.current) clearTimeout(branchDebounceRef.current);
+                        branchDebounceRef.current = setTimeout(() => {
+                          onBranchSearchChange?.(value.trim());
+                        }, 350);
                       }
                     }}
                     maxLength={200}
                     className="flex-1 h-8 text-[10px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-0"
                     onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                   />
-                  {branchSearchTerm?.trim() && (
+                  {localBranchSearch.trim() && (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-4 w-4 rounded-full hover:bg-zinc-100"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setLocalBranchSearch("");
+                        if (branchDebounceRef.current) clearTimeout(branchDebounceRef.current);
                         onBranchSearchChange?.("");
                       }}
                     >
@@ -702,19 +716,19 @@ export default function IdeaInputCard({
                   <div className="p-7 text-center">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
                     <p className="text-[10px] text-zinc-500">
-                      {branchSearchTerm?.trim() ? "Searching branches..." : "Loading branches..."}
+                      {localBranchSearch.trim() ? "Searching branches..." : "Loading branches..."}
                     </p>
                   </div>
                 ) : branches.length === 0 ? (
                   <div className="p-7 text-center">
                     <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
                     <p className="text-[10px] font-medium text-foreground mb-1">
-                      {branchSearchTerm?.trim()
-                        ? `No branches found matching '${branchSearchTerm.trim()}'`
+                      {localBranchSearch.trim()
+                        ? `No branches found matching '${localBranchSearch.trim()}'`
                         : "No branches found"}
                     </p>
                     <p className="text-[9px] text-zinc-400">
-                      {branchSearchTerm?.trim() ? "Try a different search term" : "Unable to load branches for this repository"}
+                      {localBranchSearch.trim() ? "Try a different search term" : "Unable to load branches for this repository"}
                     </p>
                   </div>
                 ) : (

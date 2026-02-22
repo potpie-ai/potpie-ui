@@ -97,73 +97,11 @@ export default function NewChatPage() {
     attachmentUploading: false,
   });
 
-  const [repoSearchTerm, setRepoSearchTerm] = useState<string>("");
-  const [branchSearchTerm, setBranchSearchTerm] = useState<string>("");
-  const [debouncedRepoSearch, setDebouncedRepoSearch] = useState<string>("");
-  const [debouncedBranchSearch, setDebouncedBranchSearch] = useState<string>("");
-  const repoSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const branchSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [repoSearch, setRepoSearch] = useState<string>("");
+  const [branchSearch, setBranchSearch] = useState<string>("");
 
   const isDemoMode = searchParams.get("demo") === "true";
 
-  // Debounce repository search (300ms)
-  useEffect(() => {
-    if (repoSearchTimeoutRef.current) {
-      clearTimeout(repoSearchTimeoutRef.current);
-    }
-    
-    // If search is cleared, update debounced value immediately
-    const trimmedSearch = repoSearchTerm.trim();
-    if (trimmedSearch === "") {
-      setDebouncedRepoSearch("");
-      return;
-    }
-    
-    repoSearchTimeoutRef.current = setTimeout(() => {
-      setDebouncedRepoSearch(trimmedSearch);
-    }, 300);
-    
-    return () => {
-      if (repoSearchTimeoutRef.current) {
-        clearTimeout(repoSearchTimeoutRef.current);
-      }
-    };
-  }, [repoSearchTerm]);
-
-  // Debounce branch search (300ms)
-  useEffect(() => {
-    if (branchSearchTimeoutRef.current) {
-      clearTimeout(branchSearchTimeoutRef.current);
-    }
-    
-    // If search is cleared, update debounced value immediately
-    const trimmedSearch = branchSearchTerm.trim();
-    if (trimmedSearch === "") {
-      setDebouncedBranchSearch("");
-      return;
-    }
-    
-    branchSearchTimeoutRef.current = setTimeout(() => {
-      setDebouncedBranchSearch(trimmedSearch);
-    }, 300);
-    
-    return () => {
-      if (branchSearchTimeoutRef.current) {
-        clearTimeout(branchSearchTimeoutRef.current);
-      }
-    };
-  }, [branchSearchTerm]);
-
-  // Clear search terms when changing repo or branch
-  useEffect(() => {
-    setRepoSearchTerm("");
-    setDebouncedRepoSearch("");
-  }, [state.selectedRepo]);
-
-  useEffect(() => {
-    setBranchSearchTerm("");
-    setDebouncedBranchSearch("");
-  }, [state.selectedBranch]);
 
   const {
     data: allRepositories,
@@ -171,10 +109,10 @@ export default function NewChatPage() {
     refetch: refetchRepos,
     error: reposError,
   } = useQuery({
-    queryKey: ["user-repositories", debouncedRepoSearch],
+    queryKey: ["user-repositories", repoSearch],
     queryFn: async () => {
       const repos = await BranchAndRepositoryService.getUserRepositories(
-        debouncedRepoSearch || undefined
+        repoSearch || undefined
       );
       return repos || [];
     },
@@ -197,7 +135,7 @@ export default function NewChatPage() {
   }, [state.selectedRepo, repositories]);
 
   const { data: branches, isLoading: branchesLoading, error: branchesError, refetch: refetchBranches } = useQuery({
-    queryKey: ["user-branch", selectedRepoName, debouncedBranchSearch],
+    queryKey: ["user-branch", selectedRepoName, branchSearch],
     queryFn: () => {
       if (!selectedRepoName) return Promise.resolve([]);
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
@@ -206,7 +144,7 @@ export default function NewChatPage() {
         const ownerRepo = `${match[1]}/${match[2]}`;
         return BranchAndRepositoryService.getBranchList(
           ownerRepo,
-          debouncedBranchSearch || undefined
+          branchSearch || undefined
         ).then((data) => {
           if (data?.length === 1 && !state.selectedBranch) {
             setState((prev) => ({ ...prev, selectedBranch: data[0] }));
@@ -216,7 +154,7 @@ export default function NewChatPage() {
       }
       return BranchAndRepositoryService.getBranchList(
         selectedRepoName,
-        debouncedBranchSearch || undefined
+        branchSearch || undefined
       ).then((data) => {
         if (data?.length === 1 && !state.selectedBranch) {
           setState((prev) => ({ ...prev, selectedBranch: data[0] }));
@@ -870,8 +808,8 @@ export default function NewChatPage() {
         state.selectedBranch || selectedRepoData.default_branch || "main";
     } 
     // Otherwise, check if user has typed a repository URL in the search field
-    else if (repoSearchTerm && repoSearchTerm.trim()) {
-      const searchTerm = repoSearchTerm.trim();
+    else if (repoSearch && repoSearch.trim()) {
+      const searchTerm = repoSearch.trim();
       
       // Check if it's a GitHub URL (https://github.com/owner/repo or http://github.com/owner/repo)
       const githubUrlRegex = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/.*)?$/;
@@ -1314,10 +1252,8 @@ export default function NewChatPage() {
               }}
               onAttachmentChange={handleAttachmentChange}
               attachmentUploading={state.attachmentUploading}
-              repoSearchTerm={repoSearchTerm}
-              onRepoSearchChange={setRepoSearchTerm}
-              branchSearchTerm={branchSearchTerm}
-              onBranchSearchChange={setBranchSearchTerm}
+              onRepoSearchChange={setRepoSearch}
+              onBranchSearchChange={setBranchSearch}
             />
             {state.parsing && (
               <ParsingStatusCard

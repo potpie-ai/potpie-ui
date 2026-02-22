@@ -136,7 +136,7 @@ pnpm start
 
 ## Contributing
 
-Contributions are welcome! Please read the [Contributing Guide](https://github.com/potpie-ai/potpie/blob/main/.github/CONTRIBUTING.md) before submitting a PR.
+Contributions are welcome! Please read the [Contributing Guide](.github/CONTRIBUTING.md) before submitting a PR.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -145,7 +145,7 @@ Contributions are welcome! Please read the [Contributing Guide](https://github.c
 5. Open a Pull Request
 
 <p>
-  <a href="https://github.com/potpie-ai/potpie/blob/main/.github/CONTRIBUTING.md">
+  <a href=".github/CONTRIBUTING.md">
     <img src="https://img.shields.io/badge/Read-Contributing%20Guide-22c55e?style=for-the-badge" alt="Contributing Guide"/>
   </a>
 </p>

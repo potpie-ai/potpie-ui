@@ -92,6 +92,8 @@ interface IdeaInputCardProps {
   branchSearchTerm?: string;
   /** Handler for branch search term changes */
   onBranchSearchChange?: (value: string) => void;
+  /** When true, show "Generate spec" option under Debug (e.g. only on localhost in new chat) */
+  showSpecGenOption?: boolean;
 }
 
 export default function IdeaInputCard({
@@ -124,6 +126,7 @@ export default function IdeaInputCard({
   onRepoSearchChange,
   branchSearchTerm = "",
   onBranchSearchChange,
+  showSpecGenOption = false,
 }: IdeaInputCardProps) {
   const router = useRouter();
   const { user } = useAuthContext();
@@ -414,6 +417,7 @@ export default function IdeaInputCard({
     { value: "ask", label: "Ask a question" },
     { value: "build", label: "Build a feature" },
     { value: "debug", label: "Debug an issue" },
+    ...(showSpecGenOption ? [{ value: "spec_gen" as const, label: "Generate a spec" }] : []),
   ];
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);

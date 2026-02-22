@@ -303,6 +303,7 @@ export default function NewChatPage() {
           "Integrate payment processing with Stripe. Add a checkout page with credit card validation, handle webhooks for payment status updates, and create an admin dashboard to view transactions.",
         debug:
           "Explore the tool with a pre-configured fraud detection pipeline demo showcasing the full workflow. This demo will walk you through the complete process of building, analyzing, and implementing a feature.",
+        code: "Add Redis caching to the get_user_subscription method with a 60-minute TTL",
       };
       const demoIdea = state.selectedAgent
         ? demoIdeas[state.selectedAgent as keyof typeof demoIdeas] ||
@@ -586,7 +587,9 @@ export default function NewChatPage() {
             branchName: branchName || "main",
           });
         } else if (
-          (state.selectedAgent === "ask" || state.selectedAgent === "debug") &&
+          (state.selectedAgent === "ask" ||
+            state.selectedAgent === "debug" ||
+            state.selectedAgent === "code") &&
           projectId &&
           state.input.trim()
         ) {
@@ -796,7 +799,8 @@ export default function NewChatPage() {
             });
           } else if (
             (state.selectedAgent === "ask" ||
-              state.selectedAgent === "debug") &&
+              state.selectedAgent === "debug" ||
+              state.selectedAgent === "code") &&
             projectId &&
             state.input.trim()
           ) {
@@ -938,7 +942,9 @@ export default function NewChatPage() {
   const createConversationAndNavigate = async (projectId: string) => {
     if (
       !state.selectedAgent ||
-      (state.selectedAgent !== "ask" && state.selectedAgent !== "debug")
+      (state.selectedAgent !== "ask" &&
+        state.selectedAgent !== "debug" &&
+        state.selectedAgent !== "code")
     )
       return;
     if (!user?.uid) {
@@ -949,6 +955,7 @@ export default function NewChatPage() {
       const agentIdMap: Record<string, string> = {
         ask: "codebase_qna_agent",
         debug: "debugging_agent",
+        code: "code_generation_agent",
       };
       const agentId = agentIdMap[state.selectedAgent];
       if (!agentId) {
@@ -956,7 +963,11 @@ export default function NewChatPage() {
         return;
       }
       const title =
-        state.selectedAgent === "ask" ? "Codebase Q&A Chat" : "Debug Chat";
+        state.selectedAgent === "ask"
+          ? "Codebase Q&A Chat"
+          : state.selectedAgent === "code"
+            ? "Code Generation Chat"
+            : "Debug Chat";
       const conversationResponse = await ChatService.createConversation(
         user.uid,
         title,
@@ -1003,7 +1014,7 @@ export default function NewChatPage() {
 
   const handleContinue = async () => {
     if (!state.selectedAgent) {
-      toast.error("Please select an agent (Ask, Build, or Debug)");
+      toast.error("Please select an agent (Ask, Build, Code, or Debug)");
       return;
     }
     const selectedRepoData = repositories.find(
@@ -1013,7 +1024,11 @@ export default function NewChatPage() {
       selectedRepoData?.full_name || selectedRepoData?.name || "";
     const branchName =
       state.selectedBranch || selectedRepoData?.default_branch || "main";
-    if (state.selectedAgent === "ask" || state.selectedAgent === "debug") {
+    if (
+      state.selectedAgent === "ask" ||
+      state.selectedAgent === "debug" ||
+      state.selectedAgent === "code"
+    ) {
       if (!state.projectId) {
         toast.error("Project ID is required. Please submit your idea first.");
         return;
@@ -1096,7 +1111,7 @@ export default function NewChatPage() {
       return;
     }
     if (!state.selectedAgent) {
-      toast.error("Please select an agent (Ask, Build, or Debug)");
+      toast.error("Please select an agent (Ask, Build, Code, or Debug)");
       return;
     }
     if (state.loading) return;
@@ -1172,7 +1187,11 @@ export default function NewChatPage() {
       });
       return;
     }
-    if (state.selectedAgent === "ask" || state.selectedAgent === "debug") {
+    if (
+      state.selectedAgent === "ask" ||
+      state.selectedAgent === "debug" ||
+      state.selectedAgent === "code"
+    ) {
       if (!state.selectedRepo || !state.selectedBranch) {
         toast.error("Please select a repository and branch");
         setState((prev) => ({ ...prev, loading: false }));

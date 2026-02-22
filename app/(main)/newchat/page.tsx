@@ -31,6 +31,7 @@ interface Repo {
   full_name: string;
   url: string;
   description?: string;
+  default_branch?: string;
 }
 
 interface Project {
@@ -401,82 +402,54 @@ export default function NewChatPage() {
         loading: false,
       }));
       
-      // Use repoName/branchName from variables if provided, otherwise try to get from state
+      // Use repoName/branchName from variables if provided, otherwise from selected repo (so QnA gets the repo user picked)
       let repoName: string = "";
       let branchName: string = "main";
-      
+
       if (variables.repoName && variables.branchName) {
-        // Use the provided repoName and branchName
         repoName = variables.repoName;
         branchName = variables.branchName;
       } else if (state.selectedRepo) {
-        // Fall back to state.selectedRepo
         const selectedRepoData = repositories.find(
           (repo: Repo) => repo.id?.toString() === state.selectedRepo
         );
         if (selectedRepoData) {
-          const repoName =
-            selectedRepoData.full_name || selectedRepoData.name || "";
-          const branchName =
+          repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+          branchName =
             state.selectedBranch || selectedRepoData.default_branch || "main";
-          localStorage.setItem(
-            `recipe_${recipeId}`,
-            JSON.stringify({
-              recipe_id: recipeId,
-              project_id: projectId || null,
-              repo_name: repoName,
-              branch_name: branchName,
-              user_prompt: state.input ? getCleanInput(state.input) : undefined,
-            })
-          );
-          dispatch(
-            setRepoAndBranchForTask({
-              taskId: recipeId,
-              repoName: repoName || "",
-              branchName,
-              projectId: projectId || undefined,
-            })
-          );
-          const params = new URLSearchParams();
-          if (repoName) params.append("repoName", repoName);
-          if (state.input) params.append("featureIdea", getCleanInput(state.input));
-          if (data.runId) params.set("run_id", data.runId);
-          router.push(`/task/${recipeId}/qna?${params.toString()}`);
-        } else {
-          toast.error("Repository data not found. Please try again.");
-          return;
         }
-      } else {
+      }
+
+      if (!repoName) {
         toast.error(
           "Repository not selected. Please select a repository and try again."
         );
         return;
       }
-      
-      if (repoName) {
-        localStorage.setItem(
-          `recipe_${recipeId}`,
-          JSON.stringify({
-            recipe_id: recipeId,
-            project_id: projectId || null,
-            repo_name: repoName,
-            branch_name: branchName,
-            user_prompt: state.input ? getCleanInput(state.input) : undefined,
-          })
-        );
-        dispatch(
-          setRepoAndBranchForTask({
-            taskId: recipeId,
-            repoName: repoName || "",
-            branchName,
-            projectId: projectId || undefined,
-          })
-        );
-        const params = new URLSearchParams({ recipeId });
-        if (repoName) params.append("repoName", repoName);
-        if (state.input) params.append("featureIdea", getCleanInput(state.input));
-        router.push(`/repo?${params.toString()}`);
-      }
+
+      localStorage.setItem(
+        `recipe_${recipeId}`,
+        JSON.stringify({
+          recipe_id: recipeId,
+          project_id: projectId || null,
+          repo_name: repoName,
+          branch_name: branchName,
+          user_prompt: state.input ? getCleanInput(state.input) : undefined,
+        })
+      );
+      dispatch(
+        setRepoAndBranchForTask({
+          taskId: recipeId,
+          repoName: repoName || "",
+          branchName,
+          projectId: projectId || undefined,
+        })
+      );
+      const params = new URLSearchParams();
+      if (repoName) params.append("repoName", repoName);
+      if (state.input) params.append("featureIdea", getCleanInput(state.input));
+      if (data.runId) params.set("run_id", data.runId);
+      router.push(`/task/${recipeId}/qna?${params.toString()}`);
     },
     onError: (error: any) => {
       console.error("Error creating recipe:", error);
@@ -540,6 +513,22 @@ export default function NewChatPage() {
     return name.trim().toLowerCase().replace(/\.git$/i, "");
   };
 
+  /**
+   * Returns whether a project's repo_name matches the selected repo (exact match only).
+   * Avoids matching e.g. potpie-ai/potpie to a project for potpie-ai/potpie-ui.
+   */
+  const projectRepoMatches = (
+    projectRepoName: string,
+    repoFullName: string,
+    repoNameOnly: string
+  ): boolean => {
+    if (!projectRepoName?.trim()) return false;
+    const p = normalizeRepoName(projectRepoName);
+    const full = normalizeRepoName(repoFullName);
+    const only = normalizeRepoName(repoNameOnly);
+    return p === full || p === only;
+  };
+
   const parseRepo = async (repoName: string, branchName: string) => {
     if (!repoName || !branchName) {
       toast.error("Please select a repository and branch");
@@ -593,7 +582,11 @@ export default function NewChatPage() {
           projectId &&
           state.input.trim()
         ) {
-          await createConversationAndNavigate(projectId);
+          await createConversationAndNavigate(
+            projectId,
+            repoName.trim(),
+            branchName || "main"
+          );
         }
         // Refetch repos and auto-select the parsed repo in the repo field
         try {
@@ -655,6 +648,8 @@ export default function NewChatPage() {
             additionalLinks: undefined,
             attachmentIds:
               state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+            repoName: repoName.trim(),
+            branchName: branchName || "main",
           });
           return;
         }
@@ -732,6 +727,8 @@ export default function NewChatPage() {
             additionalLinks: undefined,
             attachmentIds:
               state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+            repoName: repoName.trim(),
+            branchName: branchName || "main",
           });
         };
         updateStatusAndProgress(parsingStatus);
@@ -804,7 +801,11 @@ export default function NewChatPage() {
             projectId &&
             state.input.trim()
           ) {
-            await createConversationAndNavigate(projectId);
+            await createConversationAndNavigate(
+              projectId,
+              repoName.trim(),
+              branchName || "main"
+            );
           }
           // Refetch repos and auto-select the parsed repo in the repo field
           try {
@@ -813,10 +814,10 @@ export default function NewChatPage() {
             const normalizedParsedName = normalizeRepoName(repoName);
             const matchingRepo = list.find((r: Repo) => {
               const repoFullName = normalizeRepoName(r.full_name || "");
-              const repoName = normalizeRepoName(r.name || "");
+              const repoNameOnly = normalizeRepoName(r.name || "");
               return (
                 repoFullName === normalizedParsedName ||
-                repoName === normalizedParsedName
+                repoNameOnly === normalizedParsedName
               );
             });
             if (matchingRepo) {
@@ -939,7 +940,11 @@ export default function NewChatPage() {
     await parseRepo(repoName, branchName);
   };
 
-  const createConversationAndNavigate = async (projectId: string) => {
+  const createConversationAndNavigate = async (
+    projectId: string,
+    repoName?: string,
+    branchName?: string
+  ) => {
     if (
       !state.selectedAgent ||
       (state.selectedAgent !== "ask" &&
@@ -974,6 +979,16 @@ export default function NewChatPage() {
         projectId,
         agentId
       );
+      if (repoName && branchName) {
+        dispatch(
+          setRepoAndBranchForTask({
+            taskId: projectId,
+            repoName,
+            branchName,
+            projectId,
+          })
+        );
+      }
       dispatch(setChat({ agentId }));
       if (state.input.trim()) {
         dispatch(setPendingMessage(getCleanInput(state.input)));
@@ -996,12 +1011,10 @@ export default function NewChatPage() {
       const repoNameOnly = repoFullName?.split("/").pop() || repoName;
       const readyProject = projects?.find((project: any) => {
         if (!project.repo_name || project.status !== "ready") return false;
-        const projectRepoName = project.repo_name;
-        return (
-          projectRepoName === repoFullName ||
-          projectRepoName === repoNameOnly ||
-          (repoFullName && repoFullName.includes(projectRepoName)) ||
-          projectRepoName.includes(repoNameOnly)
+        return projectRepoMatches(
+          project.repo_name,
+          repoFullName,
+          repoNameOnly
         );
       });
       if (readyProject?.id) return readyProject.id.toString();
@@ -1033,7 +1046,11 @@ export default function NewChatPage() {
         toast.error("Project ID is required. Please submit your idea first.");
         return;
       }
-      await createConversationAndNavigate(state.projectId);
+      await createConversationAndNavigate(
+        state.projectId,
+        repoName,
+        branchName
+      );
       return;
     }
     if (state.selectedAgent === "build") {
@@ -1147,12 +1164,10 @@ export default function NewChatPage() {
         repoFullName?.split("/").pop() || selectedRepoData.name;
       const readyProject = projects?.find((project: any) => {
         if (!project.repo_name || project.status !== "ready") return false;
-        const projectRepoName = project.repo_name;
-        return (
-          projectRepoName === repoFullName ||
-          projectRepoName === repoNameOnly ||
-          (repoFullName && repoFullName.includes(projectRepoName)) ||
-          projectRepoName.includes(repoNameOnly)
+        return projectRepoMatches(
+          project.repo_name,
+          repoFullName,
+          repoNameOnly
         );
       });
       const hasReadyProject = !!readyProject;
@@ -1214,7 +1229,7 @@ export default function NewChatPage() {
       const projectId = await getProjectIdForRepo(repoName, branchName);
       if (projectId) {
         setState((prev) => ({ ...prev, loading: false, projectId }));
-        await createConversationAndNavigate(projectId);
+        await createConversationAndNavigate(projectId, repoName, branchName);
         return;
       }
       setState((prev) => ({ ...prev, loading: false }));

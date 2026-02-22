@@ -414,6 +414,7 @@ export default function IdeaInputCard({
     { value: "ask", label: "Ask a question" },
     { value: "build", label: "Build a feature" },
     { value: "debug", label: "Debug an issue" },
+    { value: "code", label: "Make a change" },
   ];
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);

@@ -67,7 +67,11 @@ interface NodeOption {
   relevance: number;
 }
 
-const free_models = ["openai/gpt-5-mini", "openrouter/moonshotai/kimi-k2.5"];
+const free_models = [
+  "openai/gpt-5-mini",
+  "openrouter/moonshotai/kimi-k2.5",
+  "anthropic/sonnet-4.5",
+];
 
 const MessageComposer = ({
   projectId,
@@ -591,11 +595,11 @@ const ModelSelection: FC<{
         >
           <div className="flex flex-row justify-center items-center">
             <Image
-                height={20}
-                width={20}
-                src={`/chat/${currentModel.provider}.svg`}
-                alt={currentModel.provider.charAt(0)}
-              />
+              height={20}
+              width={20}
+              src={`/chat/${currentModel.provider}.svg`}
+              alt={currentModel.provider.charAt(0)}
+            />
 
             <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
           </div>
@@ -664,16 +668,16 @@ const ModelSelection: FC<{
                               onSelect={handleModelSelect(model.id)}
                               value={model.name + " " + model.provider}
                             >
-                                <Avatar className="overflow-hidden rounded-full w-10 h-10">
-                                  <AvatarImage
-                                    src={`/chat/${model.provider}.svg`}
-                                    alt={model.provider}
-                                    className="w-10 h-10"
-                                  />
-                                  <AvatarFallback>
-                                    {model.provider.charAt(0)}
-                                  </AvatarFallback>
-                                </Avatar>
+                              <Avatar className="overflow-hidden rounded-full w-10 h-10">
+                                <AvatarImage
+                                  src={`/chat/${model.provider}.svg`}
+                                  alt={model.provider}
+                                  className="w-10 h-10"
+                                />
+                                <AvatarFallback>
+                                  {model.provider.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
                               <div className="flex flex-col">
                                 <div className="flex flex-row items-center">
                                   <span className="ml-2">{model.name}</span>

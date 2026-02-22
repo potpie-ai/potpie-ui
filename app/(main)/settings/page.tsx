@@ -136,6 +136,8 @@ const [openRouterInput, setOpenRouterInput] = useState("");
 
   const savedProvider =
     (keySecrets?.inference_config?.provider ?? keySecrets?.chat_config?.provider)?.toLowerCase();
+  const savedApiKey =
+    keySecrets?.inference_config?.api_key ?? keySecrets?.chat_config?.api_key;
 
   return (
     <div className="p-6 w-full min-w-0 overflow-hidden">
@@ -225,7 +227,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 <Input
                   type="password"
                   className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "openai" && keySecrets?.inference_config?.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
+                  placeholder={savedProvider === "openai" && savedApiKey ? maskedKey(savedApiKey) : ""}
                   value={openAIInput}
                   onChange={(e) => setOpenAIInput(e.target.value)}
                 />
@@ -248,7 +250,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 <Input
                   type="password"
                   className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "anthropic" && keySecrets?.inference_config?.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
+                  placeholder={savedProvider === "anthropic" && savedApiKey ? maskedKey(savedApiKey) : ""}
                   value={anthropicInput}
                   onChange={(e) => setAnthropicInput(e.target.value)}
                 />
@@ -271,7 +273,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 <Input
                   type="password"
                   className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "openrouter" && keySecrets?.inference_config?.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
+                  placeholder={savedProvider === "openrouter" && savedApiKey ? maskedKey(savedApiKey) : ""}
                   value={openRouterInput}
                   onChange={(e) => setOpenRouterInput(e.target.value)}
                 />

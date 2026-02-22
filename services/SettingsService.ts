@@ -1,5 +1,6 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import ModelService from "@/services/ModelService";
 
 export default class SettingsService {
   static async getApiKey(): Promise<{ api_key: string }> {
@@ -51,18 +52,29 @@ export default class SettingsService {
     }
   }
 
-  // Default models used when saving a provider key for the first time.
-  // The backend requires model in "provider/model_name" format.
-  private static readonly DEFAULT_MODELS: Record<string, string> = {
+  // Fallback models used only when ModelService.listModels() is unavailable.
+  // OpenRouter IDs must follow the "openrouter/[provider]/[model]" 3-part pattern.
+  private static readonly FALLBACK_MODELS: Record<string, string> = {
     openai: "openai/gpt-4o",
-    anthropic: "anthropic/claude-3-5-sonnet-20241022",
-    openrouter: "openrouter/gpt-4o",
+    anthropic: "anthropic/claude-3-opus-20240229",
+    openrouter: "openrouter/openai/gpt-4o",
   };
+
+  private static async resolveModel(provider: string): Promise<string> {
+    try {
+      const { models } = await ModelService.listModels();
+      const match = models.find((m) => m.provider === provider);
+      if (match) return match.id;
+    } catch {
+      // fetch failed — fall through to fallback
+    }
+    return SettingsService.FALLBACK_MODELS[provider] ?? `${provider}/default`;
+  }
 
   static async saveProviderKey(provider: string, api_key: string): Promise<void> {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    const model = SettingsService.DEFAULT_MODELS[provider] ?? `${provider}/default`;
+    const model = await SettingsService.resolveModel(provider);
     try {
       await axios.post(
         `${baseUrl}/api/v1/secrets`,

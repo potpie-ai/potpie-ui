@@ -22,7 +22,6 @@
     <img src="https://img.shields.io/badge/Join%20our-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord">
 </a>
 
-
 </p>
 
 <p align="center">
@@ -50,22 +49,25 @@ This repository contains the User Interface for the Potpie platform.
 
 - **Custom AI Agents**: Create agents tailored to your specific codebase from a single prompt
 - **Pre-Built Agents**: Choose from available list of Q&A, Debugging, Unit Test, Integration Test, Low Level Design, Code Generation Agents
-- **Chat**: Easy to use chat interface to interact with your agents with streaming support.
+- **Chat**: Easy to use chat interface to interact with your agents, with streaming support.
 
 ## 🏁 Quick Start
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/potpie-ai/potpie-ui.git
    cd potpie-ui
    ```
 
 2. Copy the required configurations:
+
    ```bash
    cp .env.template .env
    ```
 
 3. Install dependencies and run the development server:
+
    ```bash
    pnpm install
    pnpm build
@@ -92,6 +94,7 @@ This project supports a local development mode that allows you to run the app wi
    - Formbricks: `NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID`, `NEXT_PUBLIC_FORMBRICKS_API_HOST`
 
 2. Run the application normally with:
+
    ```bash
    pnpm run dev
    ```

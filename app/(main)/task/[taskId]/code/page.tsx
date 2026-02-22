@@ -596,7 +596,7 @@ const TaskCard = ({
                       idx: number
                     ) => (
                       <div
-                        key={idx}
+                        key={change.path ?? idx}
                         className="bg-background rounded-lg border border-zinc-200 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
                         style={{ animationDelay: `${idx * 100}ms` }}
                       >

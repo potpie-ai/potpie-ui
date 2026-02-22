@@ -31,6 +31,7 @@ interface Repo {
   full_name: string;
   url: string;
   description?: string;
+  default_branch?: string;
 }
 
 interface Project {
@@ -578,7 +579,11 @@ export default function NewChatPage() {
           projectId &&
           state.input.trim()
         ) {
-          await createConversationAndNavigate(projectId);
+          await createConversationAndNavigate(
+            projectId,
+            repoName.trim(),
+            branchName || "main"
+          );
         }
         // Refetch repos and auto-select the parsed repo in the repo field
         try {
@@ -640,6 +645,8 @@ export default function NewChatPage() {
             additionalLinks: undefined,
             attachmentIds:
               state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+            repoName: repoName.trim(),
+            branchName: branchName || "main",
           });
           return;
         }
@@ -717,6 +724,8 @@ export default function NewChatPage() {
             additionalLinks: undefined,
             attachmentIds:
               state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+            repoName: repoName.trim(),
+            branchName: branchName || "main",
           });
         };
         updateStatusAndProgress(parsingStatus);
@@ -788,7 +797,11 @@ export default function NewChatPage() {
             projectId &&
             state.input.trim()
           ) {
-            await createConversationAndNavigate(projectId);
+            await createConversationAndNavigate(
+              projectId,
+              repoName.trim(),
+              branchName || "main"
+            );
           }
           // Refetch repos and auto-select the parsed repo in the repo field
           try {
@@ -797,10 +810,10 @@ export default function NewChatPage() {
             const normalizedParsedName = normalizeRepoName(repoName);
             const matchingRepo = list.find((r: Repo) => {
               const repoFullName = normalizeRepoName(r.full_name || "");
-              const repoName = normalizeRepoName(r.name || "");
+              const repoNameOnly = normalizeRepoName(r.name || "");
               return (
                 repoFullName === normalizedParsedName ||
-                repoName === normalizedParsedName
+                repoNameOnly === normalizedParsedName
               );
             });
             if (matchingRepo) {
@@ -923,7 +936,11 @@ export default function NewChatPage() {
     await parseRepo(repoName, branchName);
   };
 
-  const createConversationAndNavigate = async (projectId: string) => {
+  const createConversationAndNavigate = async (
+    projectId: string,
+    repoName?: string,
+    branchName?: string
+  ) => {
     if (
       !state.selectedAgent ||
       (state.selectedAgent !== "ask" && state.selectedAgent !== "debug")
@@ -951,6 +968,16 @@ export default function NewChatPage() {
         projectId,
         agentId
       );
+      if (repoName && branchName) {
+        dispatch(
+          setRepoAndBranchForTask({
+            taskId: projectId,
+            repoName,
+            branchName,
+            projectId,
+          })
+        );
+      }
       dispatch(setChat({ agentId }));
       if (state.input.trim()) {
         dispatch(setPendingMessage(getCleanInput(state.input)));
@@ -1004,7 +1031,11 @@ export default function NewChatPage() {
         toast.error("Project ID is required. Please submit your idea first.");
         return;
       }
-      await createConversationAndNavigate(state.projectId);
+      await createConversationAndNavigate(
+        state.projectId,
+        repoName,
+        branchName
+      );
       return;
     }
     if (state.selectedAgent === "build") {
@@ -1179,7 +1210,7 @@ export default function NewChatPage() {
       const projectId = await getProjectIdForRepo(repoName, branchName);
       if (projectId) {
         setState((prev) => ({ ...prev, loading: false, projectId }));
-        await createConversationAndNavigate(projectId);
+        await createConversationAndNavigate(projectId, repoName, branchName);
         return;
       }
       setState((prev) => ({ ...prev, loading: false }));

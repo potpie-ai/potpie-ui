@@ -1,123 +1,142 @@
 <p align="center">
   <a href="https://potpie.ai?utm_source=github">
-    <img src="https://github.com/user-attachments/assets/1a0b9824-833b-4c0a-b56d-ede5623295ca" width="318px" alt="Potpie logo" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/readme_logo_dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="assets/logo_light.svg" />
+      <img src="assets/logo_light.svg"  alt="Potpie AI logo" />
+    </picture>
   </a>
 </p>
 
-<h1 align="center">Prompt-To-Agent: Create custom engineering agents for your code</h1>
+
+## Potpie
+
 
 <p align="center">
-  <strong>User Interface</strong>
+<img width="700" alt="Potpie Dashboard" src="assets/dashboard.gif" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/potpie-ai/potpie/stargazers">
-    <img src="https://img.shields.io/github/stars/potpie-ai/potpie-ui" alt="Stars" />
-  </a>
-    <a href="https://twitter.com/potpiedotai">
-    <img src="https://img.shields.io/twitter/follow/potpiedotai?style=social" alt="Twitter" />
-  </a>
-<br/>
-<a href="https://discord.gg/ryk5CMD5v6">
-    <img src="https://img.shields.io/badge/Join%20our-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord">
-</a>
-
-
+  <a href="https://docs.potpie.ai"><img src="https://img.shields.io/badge/Docs-Read-blue?logo=readthedocs&logoColor=white" alt="Docs"></a>
+  <a href="https://github.com/potpie-ai/potpie/blob/main/LICENSE"><img src="https://img.shields.io/github/license/potpie-ai/potpie" alt="Apache 2.0"></a>
+  <a href="https://github.com/potpie-ai/potpie"><img src="https://img.shields.io/github/stars/potpie-ai/potpie" alt="GitHub Stars"></a>
+  <a href="https://discord.gg/ryk5CMD5v6"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
-<p align="center">
-  <img width="1506" alt="Potpie UI Screenshot" src="https://github.com/user-attachments/assets/a400b48f-dc4c-47b1-a42b-26eaf062adb2" />
-</p>
+---
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Quick Start](#-quick-start)
-- [Development](#-development)
+- [Overview](#overview)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Development](#development)
   - [Local Development Mode](#local-development-mode)
   - [Production Mode](#production-mode)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [Contributing](#contributing)
+- [License](#license)
 
-## 🚀 Overview
+---
 
-Potpie is an open-source platform that creates AI agents specialized in your codebase, enabling automated code analysis, testing, and development tasks. By building a comprehensive knowledge graph of your code, Potpie's agents can understand complex relationships and assist with everything from debugging to feature development.
+## Overview
 
-This repository contains the User Interface for the Potpie platform.
+Potpie turns your entire codebase into a **knowledge graph** - a structural index of every file, class, and function, capturing all their relationships and what each part of the code does in context of everything else. AI agents built on this graph can reason about your code with the precision of someone who wrote it.
 
-## ✨ Features
+This repository contains the **User Interface** for the Potpie platform.
 
-- **Custom AI Agents**: Create agents tailored to your specific codebase from a single prompt
-- **Pre-Built Agents**: Choose from available list of Q&A, Debugging, Unit Test, Integration Test, Low Level Design, Code Generation Agents
-- **Chat**: Easy to use chat interface to interact with your agents with streaming support.
+---
 
-## 🏁 Quick Start
+## Features
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/potpie-ai/potpie-ui.git
-   cd potpie-ui
-   ```
+<table>
+  <tr>
+    <td valign="top" width="33%">
+      <h3>Custom AI Agents</h3>
+      <p>Create agents tailored to your specific codebase from a single prompt.</p>
+    </td>
+    <td valign="top" width="33%">
+      <h3>Pre-Built Agents</h3>
+      <p>Choose from Debugging, Codebase Q&amp;A, Code Generation, and Code Changes agents.</p>
+    </td>
+    <td valign="top" width="33%">
+      <h3>Chat Interface</h3>
+      <p>Easy-to-use chat with streaming support — interact with your agents in real time.</p>
+    </td>
+  </tr>
+</table>
 
-2. Copy the required configurations:
-   ```bash
-   cp .env.template .env
-   ```
+---
 
-3. Install dependencies and run the development server:
-   ```bash
-   pnpm install
-   pnpm build
-   pnpm run dev
-   ```
+## Quick Start
 
-4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```bash
+# 1. Clone the repository
+git clone https://github.com/potpie-ai/potpie-ui.git
+cd potpie-ui
 
-## 💻 Development
+# 2. Copy environment config
+cp .env.template .env
+
+# 3. Install dependencies and start
+pnpm install
+pnpm build
+pnpm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## Development
 
 ### Local Development Mode
 
-This project supports a local development mode that allows you to run the app without external service dependencies. The app automatically detects if configuration for these services is missing and falls back to mock implementations:
+This project supports a local development mode — the app automatically detects missing configurations and falls back to mock implementations:
 
-- **Firebase Authentication**: Uses a mock user with predetermined credentials
-- **PostHog Analytics**: Uses a no-op implementation
-- **Formbricks Bug Reporting**: Disabled in local mode
+| Service | Local Mode Behaviour |
+|---|---|
+| **Firebase Authentication** | Mock user with preset credentials (`local-dev@example.com`) |
+| **PostHog Analytics** | No-op implementation — no data sent |
+| **Formbricks Bug Reporting** | Disabled |
 
 #### How to Use Local Development Mode
 
-1. Create a `.env` file without the following environment variables:
+1. Create a `.env` file **without** the following variables:
    - Firebase: `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, etc.
    - PostHog: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`
    - Formbricks: `NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID`, `NEXT_PUBLIC_FORMBRICKS_API_HOST`
 
-2. Run the application normally with:
+2. Run normally — the app detects missing config and uses mocks:
    ```bash
    pnpm run dev
    ```
 
-3. The app will automatically detect missing configurations and use mock implementations.
-
-4. You'll be automatically logged in with a mock user (uid: 'local-dev-user', email: 'local-dev@example.com')
+3. You'll be automatically logged in as:
+   - uid: `local-dev-user`
+   - email: `local-dev@example.com`
 
 ### Production Mode
 
-For production deployment, you'll need to set up the following services:
+For production, configure the following services:
 
-1. **Firebase Authentication**: Set up Firebase credentials for authentication
-2. **PostHog Analytics**: Configure PostHog for analytics tracking (optional)
-3. **Formbricks**: Set up for bug reporting (optional)
+| Service | Purpose | Required |
+|---|---|---|
+| **Firebase Authentication** | User auth | ✅ Yes |
+| **PostHog Analytics** | Usage tracking | Optional |
+| **Formbricks** | Bug reporting | Optional |
 
-Configure your environment variables in `.env` file and run:
+Set your values in `.env` and run:
 
 ```bash
 pnpm run build
 pnpm start
 ```
 
-## 👥 Contributing
+---
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](.github/CONTRIBUTING.md) before submitting a PR.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -125,6 +144,14 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+<p>
+  <a href=".github/CONTRIBUTING.md">
+    <img src="https://img.shields.io/badge/Read-Contributing%20Guide-22c55e?style=for-the-badge" alt="Contributing Guide"/>
+  </a>
+</p>
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+---
+
+## License
+
+This project is licensed under the Apache 2.0 License — see the [LICENSE](LICENSE) file for details.

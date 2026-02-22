@@ -62,7 +62,6 @@ export function AppSidebar() {
   const supportPopoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
-  const [progress, setProgress] = React.useState(90);
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
   const dispatch: AppDispatch = useDispatch();
@@ -130,19 +129,11 @@ export function AppSidebar() {
     window.location.href = "/newchat";
   };
 
-  useEffect(() => {
-    if (!usageLoading && !subscriptionLoading && userSubscription) {
-      const maxCredits = userSubscription.plan_type === planTypesEnum.PRO ? 500 : 50;
-      const usedCredits = total_human_messages || 0;
-
-      const calculatedProgress = Math.min(
-        (usedCredits / maxCredits) * 100,
-        100
-      );
-
-      setProgress(calculatedProgress);
-    }
-  }, [usageLoading, subscriptionLoading, total_human_messages, userSubscription]);
+  const maxCredits =
+    userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50;
+  const usedCredits = total_human_messages ?? 0;
+  const progress =
+    maxCredits > 0 ? Math.min((usedCredits / maxCredits) * 100, 100) : 0;
 
   const handleTrack = () => {
     formbricksApp.track("report-btn", {
@@ -389,6 +380,24 @@ export function AppSidebar() {
       <ProFeatureModal open={proModalOpen} onOpenChange={setProModalOpen} />
       <SidebarFooter className="flex flex-col gap-0">
         <SidebarSeparator className="my-0" />
+        {!subscriptionLoading && userSubscription && open && (
+          <div className="px-4 pt-3 pb-1">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-xs text-[#747575]">
+                {usedCredits} / {maxCredits} messages
+              </span>
+            </div>
+            <Progress.Root
+              value={progress}
+              className="h-1.5 w-full overflow-hidden rounded-full bg-[#E5EAE8]"
+            >
+              <Progress.Indicator
+                className="h-full bg-primary transition-[width] duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </Progress.Root>
+          </div>
+        )}
         <div className="pt-2">
           <NavUser
             user={{

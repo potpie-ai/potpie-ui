@@ -274,8 +274,16 @@ export default function NewChatPage() {
     };
   }, [refetchRepos, refetchProjects]);
 
+  // Sync linkedRepos from query; avoid clearing the list when we have a selection and
+  // the query returns empty (e.g. during refetch when search is cleared on Send/dropdown close),
+  // so the selected repo does not appear to "lose" its state in the UI.
   useEffect(() => {
-    setState((prev) => ({ ...prev, linkedRepos: repositories }));
+    setState((prev) => {
+      if (repositories.length === 0 && prev.selectedRepo) {
+        return prev;
+      }
+      return { ...prev, linkedRepos: repositories };
+    });
   }, [repositories]);
 
   useEffect(() => {

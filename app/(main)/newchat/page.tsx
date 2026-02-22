@@ -400,82 +400,54 @@ export default function NewChatPage() {
         loading: false,
       }));
       
-      // Use repoName/branchName from variables if provided, otherwise try to get from state
+      // Use repoName/branchName from variables if provided, otherwise from selected repo (so QnA gets the repo user picked)
       let repoName: string = "";
       let branchName: string = "main";
-      
+
       if (variables.repoName && variables.branchName) {
-        // Use the provided repoName and branchName
         repoName = variables.repoName;
         branchName = variables.branchName;
       } else if (state.selectedRepo) {
-        // Fall back to state.selectedRepo
         const selectedRepoData = repositories.find(
           (repo: Repo) => repo.id?.toString() === state.selectedRepo
         );
         if (selectedRepoData) {
-          const repoName =
-            selectedRepoData.full_name || selectedRepoData.name || "";
-          const branchName =
+          repoName = selectedRepoData.full_name || selectedRepoData.name || "";
+          branchName =
             state.selectedBranch || selectedRepoData.default_branch || "main";
-          localStorage.setItem(
-            `recipe_${recipeId}`,
-            JSON.stringify({
-              recipe_id: recipeId,
-              project_id: projectId || null,
-              repo_name: repoName,
-              branch_name: branchName,
-              user_prompt: state.input ? getCleanInput(state.input) : undefined,
-            })
-          );
-          dispatch(
-            setRepoAndBranchForTask({
-              taskId: recipeId,
-              repoName: repoName || "",
-              branchName,
-              projectId: projectId || undefined,
-            })
-          );
-          const params = new URLSearchParams();
-          if (repoName) params.append("repoName", repoName);
-          if (state.input) params.append("featureIdea", getCleanInput(state.input));
-          if (data.runId) params.set("run_id", data.runId);
-          router.push(`/task/${recipeId}/qna?${params.toString()}`);
-        } else {
-          toast.error("Repository data not found. Please try again.");
-          return;
         }
-      } else {
+      }
+
+      if (!repoName) {
         toast.error(
           "Repository not selected. Please select a repository and try again."
         );
         return;
       }
-      
-      if (repoName) {
-        localStorage.setItem(
-          `recipe_${recipeId}`,
-          JSON.stringify({
-            recipe_id: recipeId,
-            project_id: projectId || null,
-            repo_name: repoName,
-            branch_name: branchName,
-            user_prompt: state.input ? getCleanInput(state.input) : undefined,
-          })
-        );
-        dispatch(
-          setRepoAndBranchForTask({
-            taskId: recipeId,
-            repoName: repoName || "",
-            branchName,
-            projectId: projectId || undefined,
-          })
-        );
-        const params = new URLSearchParams({ recipeId });
-        if (repoName) params.append("repoName", repoName);
-        if (state.input) params.append("featureIdea", getCleanInput(state.input));
-        router.push(`/repo?${params.toString()}`);
-      }
+
+      localStorage.setItem(
+        `recipe_${recipeId}`,
+        JSON.stringify({
+          recipe_id: recipeId,
+          project_id: projectId || null,
+          repo_name: repoName,
+          branch_name: branchName,
+          user_prompt: state.input ? getCleanInput(state.input) : undefined,
+        })
+      );
+      dispatch(
+        setRepoAndBranchForTask({
+          taskId: recipeId,
+          repoName: repoName || "",
+          branchName,
+          projectId: projectId || undefined,
+        })
+      );
+      const params = new URLSearchParams();
+      if (repoName) params.append("repoName", repoName);
+      if (state.input) params.append("featureIdea", getCleanInput(state.input));
+      if (data.runId) params.set("run_id", data.runId);
+      router.push(`/task/${recipeId}/qna?${params.toString()}`);
     },
     onError: (error: any) => {
       console.error("Error creating recipe:", error);
@@ -537,6 +509,22 @@ export default function NewChatPage() {
    */
   const normalizeRepoName = (name: string): string => {
     return name.trim().toLowerCase().replace(/\.git$/i, "");
+  };
+
+  /**
+   * Returns whether a project's repo_name matches the selected repo (exact match only).
+   * Avoids matching e.g. potpie-ai/potpie to a project for potpie-ai/potpie-ui.
+   */
+  const projectRepoMatches = (
+    projectRepoName: string,
+    repoFullName: string,
+    repoNameOnly: string
+  ): boolean => {
+    if (!projectRepoName?.trim()) return false;
+    const p = normalizeRepoName(projectRepoName);
+    const full = normalizeRepoName(repoFullName);
+    const only = normalizeRepoName(repoNameOnly);
+    return p === full || p === only;
   };
 
   const parseRepo = async (repoName: string, branchName: string) => {
@@ -985,12 +973,10 @@ export default function NewChatPage() {
       const repoNameOnly = repoFullName?.split("/").pop() || repoName;
       const readyProject = projects?.find((project: any) => {
         if (!project.repo_name || project.status !== "ready") return false;
-        const projectRepoName = project.repo_name;
-        return (
-          projectRepoName === repoFullName ||
-          projectRepoName === repoNameOnly ||
-          (repoFullName && repoFullName.includes(projectRepoName)) ||
-          projectRepoName.includes(repoNameOnly)
+        return projectRepoMatches(
+          project.repo_name,
+          repoFullName,
+          repoNameOnly
         );
       });
       if (readyProject?.id) return readyProject.id.toString();
@@ -1132,12 +1118,10 @@ export default function NewChatPage() {
         repoFullName?.split("/").pop() || selectedRepoData.name;
       const readyProject = projects?.find((project: any) => {
         if (!project.repo_name || project.status !== "ready") return false;
-        const projectRepoName = project.repo_name;
-        return (
-          projectRepoName === repoFullName ||
-          projectRepoName === repoNameOnly ||
-          (repoFullName && repoFullName.includes(projectRepoName)) ||
-          projectRepoName.includes(repoNameOnly)
+        return projectRepoMatches(
+          project.repo_name,
+          repoFullName,
+          repoNameOnly
         );
       });
       const hasReadyProject = !!readyProject;

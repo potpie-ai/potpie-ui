@@ -1,194 +1,260 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 
-const REPO_CACHE_KEY = "user_repositories";
+const REPO_FULL_LIST_CACHE_KEY = "user_repositories_full_list";
 const REPO_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const MIN_SEARCH_CHARS = 2;
 const DEBOUNCE_MS = 300;
+const SEARCH_QUERY_MAX_LENGTH = 200;
+const PAGE_SIZE = 100;
+
+interface CachedRepoSearchResult {
+  repos: any[];
+  hasNextPage: boolean;
+  nextOffset: number;
+}
 
 function storageGet(key: string): any[] | null {
-    if (typeof window === "undefined") return null;
-    try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return null;
-        const item = JSON.parse(raw);
-        if (Date.now() > item.expiry) {
-            localStorage.removeItem(key);
-            return null;
-        }
-        return item.value;
-    } catch {
-        localStorage.removeItem(key);
-        return null;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const item = JSON.parse(raw);
+    if (Date.now() > item.expiry) {
+      localStorage.removeItem(key);
+      return null;
     }
+    return item.value;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
 }
 
 function storageSet(key: string, value: any[], ttl: number) {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(key, JSON.stringify({ value, expiry: Date.now() + ttl }));
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key, JSON.stringify({ value, expiry: Date.now() + ttl }));
+}
+
+function normalizeQuery(query: string): string {
+  return query.trim().toLowerCase();
+}
+
+/** Truncate to backend limit; use for API param only. */
+function truncateSearchQuery(query: string): string {
+  return query.trim().slice(0, SEARCH_QUERY_MAX_LENGTH);
 }
 
 export interface UseRepoSearchOptions {
-    /** Set to true (or a reactive boolean like `popoverOpen`) to trigger the initial fetch. */
-    enabled?: boolean;
+  /** Set to true (or a reactive boolean like `popoverOpen`) to trigger the initial fetch. */
+  enabled?: boolean;
 }
 
 export interface UseRepoSearchResult {
-    /** Filtered repos to display — already reflects the current search query. */
-    displayedRepos: any[];
-    /** True while the initial full repo list is being loaded. */
-    isLoading: boolean;
-    /** True while a server-side search request is in-flight. */
-    isSearching: boolean;
-    /** Current value of the search input — bind to <CommandInput value={...}> */
-    searchInput: string;
-    /** Call this from onValueChange of <CommandInput> */
-    handleSearchChange: (value: string) => void;
-    /** Clears all caches and re-fetches the full list. */
-    refresh: () => void;
+  /** Repos to display — from full-list cache (< 2 chars) or per-query cache / server (≥ 2 chars). */
+  displayedRepos: any[];
+  /** True while the initial full list (no search) is being loaded. */
+  isLoading: boolean;
+  /** True while a server-side search request is in-flight. */
+  isSearching: boolean;
+  /** Current search input value — bind to controlled input. */
+  searchInput: string;
+  /** Call from input onValueChange/onChange. Debounces and drives hybrid search. */
+  handleSearchChange: (value: string) => void;
+  /** Whether more paginated results are available for the current search. */
+  hasNextPage: boolean;
+  /** Fetches the next page of server-side search results and appends them. */
+  loadMore: () => void;
+  /** Clears full-list and per-query caches, re-fetches full list (no search). */
+  refresh: () => void;
 }
 
 /**
- * Hybrid repo search hook.
+ * Hybrid repo search: server-side filtering when user types 2+ chars, with caching.
  *
- * Search flow (fires after 2 chars, 300 ms debounce):
- *   1. Filter client-side from the in-memory full-list cache.
- *   2. If full list isn't cached yet → server-side search, cache result keyed by term.
- *
- * Caching layers:
- *   • localStorage – full list, 5-min TTL (survives page navigations in same tab)
- *   • In-memory ref – full list for instant access (session lifetime)
- *   • In-memory Map – per-search-term results (session lifetime)
+ * - Full-list cache: one fetch with no search param; used when input is empty or &lt; 2 chars.
+ *   Stored in memory + localStorage (5 min TTL).
+ * - Per-query cache: in-memory Map(normalizedQuery → { repos, hasNextPage, nextOffset }).
+ *   When user types 2+ chars we use searchUserRepositories (paginated); loadMore appends.
+ * - Search term sent to API is trimmed and truncated to 200 chars (backend contract).
  */
 export function useRepoSearch({ enabled = true }: UseRepoSearchOptions = {}): UseRepoSearchResult {
-    const [searchInput, setSearchInput] = useState("");
-    const [displayedRepos, setDisplayedRepos] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isSearching, setIsSearching] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [displayedRepos, setDisplayedRepos] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasNextPage, setHasNextPage] = useState(false);
 
-    // Full unfiltered repo list cached in-memory for the session
-    const fullCacheRef = useRef<any[] | null>(null);
-    // Per-search-term cache: lowercase term → filtered repos[]
-    const searchCacheRef = useRef<Map<string, any[]>>(new Map());
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const hasFetchedRef = useRef(false);
+  /** Full list (no search) — in-memory + optional localStorage. */
+  const fullListRef = useRef<any[] | null>(null);
+  /** Per-query cache: normalized key → { repos, hasNextPage, nextOffset }. */
+  const queryCacheRef = useRef<Map<string, CachedRepoSearchResult>>(new Map());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasFetchedFullListRef = useRef(false);
+  const currentSearchKeyRef = useRef<string | null>(null);
 
-    // ── Core search logic ────────────────────────────────────────────────────
-    const applySearch = useCallback(async (query: string) => {
-        const normalized = query.toLowerCase().trim();
+  const applySearch = useCallback(async (query: string) => {
+    const normalized = normalizeQuery(query);
 
-        // Below min chars: revert to full list
-        if (normalized.length < MIN_SEARCH_CHARS) {
-            if (fullCacheRef.current) setDisplayedRepos(fullCacheRef.current);
-            return;
-        }
+    if (normalized.length < MIN_SEARCH_CHARS) {
+      const list = fullListRef.current ?? [];
+      setDisplayedRepos(list);
+      setHasNextPage(false);
+      currentSearchKeyRef.current = null;
+      return;
+    }
 
-        // 1. Check per-term cache (previously searched this session or served from client filter)
-        if (searchCacheRef.current.has(normalized)) {
-            setDisplayedRepos(searchCacheRef.current.get(normalized)!);
-            return;
-        }
+    const cacheKey = normalized;
+    const cached = queryCacheRef.current.get(cacheKey);
+    if (cached !== undefined) {
+      currentSearchKeyRef.current = cacheKey;
+      setDisplayedRepos(cached.repos);
+      setHasNextPage(cached.hasNextPage);
+      return;
+    }
 
-        // 2. Client-side filter — available when full list is already in memory
-        if (fullCacheRef.current) {
-            const filtered = fullCacheRef.current.filter((repo: any) => {
-                const full = (repo.full_name ?? "").toLowerCase();
-                const name = (repo.name ?? "").toLowerCase();
-                return full.includes(normalized) || name.includes(normalized);
-            });
-            // Cache this filtered result so typing the same term again is instant
-            searchCacheRef.current.set(normalized, filtered);
-            setDisplayedRepos(filtered);
-            return;
-        }
+    const searchParam = truncateSearchQuery(query);
+    setIsSearching(true);
+    currentSearchKeyRef.current = cacheKey;
+    try {
+      const result = await BranchAndRepositoryService.searchUserRepositories({
+        search: searchParam,
+        limit: PAGE_SIZE,
+        offset: 0,
+      });
+      const repos = result.repositories ?? [];
+      const hasNext = result.has_next_page ?? false;
+      queryCacheRef.current.set(cacheKey, {
+        repos,
+        hasNextPage: hasNext,
+        nextOffset: PAGE_SIZE,
+      });
+      setDisplayedRepos(repos);
+      setHasNextPage(hasNext);
+    } catch {
+      currentSearchKeyRef.current = null;
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
 
-        // 3. Cache miss — server-side search (full list hasn't loaded yet)
-        setIsSearching(true);
-        try {
-            const results = await BranchAndRepositoryService.getUserRepositories(query);
-            searchCacheRef.current.set(normalized, results ?? []);
-            setDisplayedRepos(results ?? []);
-        } catch {
-            // Keep whatever is currently shown on error
-        } finally {
-            setIsSearching(false);
-        }
-    }, []);
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
 
-    // ── Debounced input handler ───────────────────────────────────────────────
-    const handleSearchChange = useCallback(
-        (value: string) => {
-            setSearchInput(value);
-            if (debounceRef.current) clearTimeout(debounceRef.current);
+      const normalized = normalizeQuery(value);
 
-            // Immediately revert to full list when query drops below threshold
-            if (!value || value.trim().length < MIN_SEARCH_CHARS) {
-                if (fullCacheRef.current) setDisplayedRepos(fullCacheRef.current);
-                return;
-            }
+      if (normalized.length < MIN_SEARCH_CHARS) {
+        setDisplayedRepos(fullListRef.current ?? []);
+        setHasNextPage(false);
+        currentSearchKeyRef.current = null;
+        return;
+      }
 
-            debounceRef.current = setTimeout(() => applySearch(value), DEBOUNCE_MS);
-        },
-        [applySearch]
-    );
+      debounceRef.current = setTimeout(() => applySearch(value), DEBOUNCE_MS);
+    },
+    [applySearch]
+  );
 
-    // ── Initial load (once per enabled=true) ─────────────────────────────────
-    useEffect(() => {
-        if (!enabled || hasFetchedRef.current) return;
-        hasFetchedRef.current = true;
+  // Initial load: full list (no search), once when enabled.
+  useEffect(() => {
+    if (!enabled || hasFetchedFullListRef.current) return;
+    hasFetchedFullListRef.current = true;
 
-        const cached = storageGet(REPO_CACHE_KEY);
-        if (cached) {
-            fullCacheRef.current = cached;
-            setDisplayedRepos(cached);
-            return;
-        }
+    const fromStorage = storageGet(REPO_FULL_LIST_CACHE_KEY);
+    if (fromStorage) {
+      fullListRef.current = fromStorage;
+      setDisplayedRepos(fromStorage);
+      return;
+    }
 
-        setIsLoading(true);
-        BranchAndRepositoryService.getUserRepositories()
-            .then((repos) => {
-                const list = repos ?? [];
-                fullCacheRef.current = list;
-                setDisplayedRepos(list);
-                storageSet(REPO_CACHE_KEY, list, REPO_CACHE_TTL);
-            })
-            .catch(() => {
-                fullCacheRef.current = [];
-                setDisplayedRepos([]);
-            })
-            .finally(() => setIsLoading(false));
-    }, [enabled]);
-
-    // ── Manual refresh ────────────────────────────────────────────────────────
-    const refresh = useCallback(() => {
-        if (typeof window !== "undefined") localStorage.removeItem(REPO_CACHE_KEY);
-        fullCacheRef.current = null;
-        searchCacheRef.current.clear();
-        hasFetchedRef.current = false;
-        setSearchInput("");
+    setIsLoading(true);
+    BranchAndRepositoryService.getUserRepositories()
+      .then((repos) => {
+        const list = repos ?? [];
+        fullListRef.current = list;
+        setDisplayedRepos(list);
+        storageSet(REPO_FULL_LIST_CACHE_KEY, list, REPO_CACHE_TTL);
+      })
+      .catch(() => {
+        fullListRef.current = [];
         setDisplayedRepos([]);
-        setIsLoading(true);
+      })
+      .finally(() => setIsLoading(false));
+  }, [enabled]);
 
-        BranchAndRepositoryService.getUserRepositories()
-            .then((repos) => {
-                const list = repos ?? [];
-                fullCacheRef.current = list;
-                setDisplayedRepos(list);
-                storageSet(REPO_CACHE_KEY, list, REPO_CACHE_TTL);
-            })
-            .catch(() => {
-                fullCacheRef.current = [];
-                setDisplayedRepos([]);
-            })
-            .finally(() => setIsLoading(false));
-    }, []);
+  const loadMore = useCallback(() => {
+    const key = currentSearchKeyRef.current;
+    if (!key || !hasNextPage || isSearching || !searchInput.trim()) return;
+    const cached = queryCacheRef.current.get(key);
+    if (!cached || !cached.hasNextPage) return;
 
-    // ── Cleanup ───────────────────────────────────────────────────────────────
-    useEffect(() => {
-        return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-        };
-    }, []);
+    setIsSearching(true);
+    BranchAndRepositoryService.searchUserRepositories({
+      search: truncateSearchQuery(searchInput),
+      limit: PAGE_SIZE,
+      offset: cached.nextOffset,
+    })
+      .then((result: { repositories: any[]; has_next_page: boolean }) => {
+        const newRepos = result.repositories ?? [];
+        const combined = [...cached.repos, ...newRepos];
+        const hasNext = result.has_next_page ?? false;
+        queryCacheRef.current.set(key, {
+          repos: combined,
+          hasNextPage: hasNext,
+          nextOffset: cached.nextOffset + PAGE_SIZE,
+        });
+        setDisplayedRepos(combined);
+        setHasNextPage(hasNext);
+      })
+      .finally(() => setIsSearching(false));
+  }, [hasNextPage, isSearching, searchInput]);
 
-    return { displayedRepos, isLoading, isSearching, searchInput, handleSearchChange, refresh };
+  const refresh = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(REPO_FULL_LIST_CACHE_KEY);
+    }
+    fullListRef.current = null;
+    queryCacheRef.current.clear();
+    hasFetchedFullListRef.current = false;
+    currentSearchKeyRef.current = null;
+    setSearchInput("");
+    setDisplayedRepos([]);
+    setHasNextPage(false);
+    setIsLoading(true);
+
+    BranchAndRepositoryService.getUserRepositories()
+      .then((repos) => {
+        const list = repos ?? [];
+        fullListRef.current = list;
+        setDisplayedRepos(list);
+        storageSet(REPO_FULL_LIST_CACHE_KEY, list, REPO_CACHE_TTL);
+      })
+      .catch(() => {
+        fullListRef.current = [];
+        setDisplayedRepos([]);
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  return {
+    displayedRepos,
+    isLoading,
+    isSearching,
+    searchInput,
+    handleSearchChange,
+    hasNextPage,
+    loadMore,
+    refresh,
+  };
 }

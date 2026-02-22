@@ -1,274 +1,292 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 
+const BRANCH_FULL_LIST_CACHE_KEY_PREFIX = "branches_full_list_";
 const BRANCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const MIN_SEARCH_CHARS = 2;
 const DEBOUNCE_MS = 300;
+const SEARCH_QUERY_MAX_LENGTH = 200;
 const PAGE_SIZE = 100;
 
-function branchCacheKey(repoName: string) {
-    return `branches_${repoName}`;
+interface CachedSearchResult {
+  branches: string[];
+  hasNextPage: boolean;
+  nextOffset: number;
+}
+
+function branchFullListCacheKey(repoName: string): string {
+  return `${BRANCH_FULL_LIST_CACHE_KEY_PREFIX}${repoName}`;
 }
 
 function storageGet(key: string): string[] | null {
-    if (typeof window === "undefined") return null;
-    try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return null;
-        const item = JSON.parse(raw);
-        if (Date.now() > item.expiry) {
-            localStorage.removeItem(key);
-            return null;
-        }
-        return item.value;
-    } catch {
-        localStorage.removeItem(key);
-        return null;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const item = JSON.parse(raw);
+    if (Date.now() > item.expiry) {
+      localStorage.removeItem(key);
+      return null;
     }
+    return item.value;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
 }
 
 function storageSet(key: string, value: string[], ttl: number) {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(key, JSON.stringify({ value, expiry: Date.now() + ttl }));
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key, JSON.stringify({ value, expiry: Date.now() + ttl }));
+}
+
+function normalizeQuery(query: string): string {
+  return query.trim().toLowerCase();
+}
+
+function truncateSearchQuery(query: string): string {
+  return query.trim().slice(0, SEARCH_QUERY_MAX_LENGTH);
 }
 
 export interface UseBranchSearchOptions {
-    repoName: string;
-    /** Set to true (or a reactive boolean like `popoverOpen && !!repoName`) to trigger the fetch. */
-    enabled?: boolean;
+  repoName: string;
+  /** Set to true (or a reactive boolean like `popoverOpen && !!repoName`) to trigger the fetch. */
+  enabled?: boolean;
 }
 
 export interface UseBranchSearchResult {
-    /** Filtered branches to display — already reflects the current search query. */
-    displayedBranches: string[];
-    /** True while the initial full branch list is being loaded. */
-    isLoading: boolean;
-    /** True while a server-side search request is in-flight. */
-    isSearching: boolean;
-    /** Current value of the search input — bind to <CommandInput value={...}> */
-    searchInput: string;
-    /** Call this from onValueChange of <CommandInput> */
-    handleSearchChange: (value: string) => void;
-    /** Whether more paginated results are available from the server. */
-    hasNextPage: boolean;
-    /** Fetches the next page of server-side search results and appends them. */
-    loadMore: () => void;
-    /** Clears all caches for this repo and re-fetches the branch list. */
-    refresh: () => void;
+  /** Branches to display — from full-list cache (< 2 chars) or per-query cache / server (≥ 2 chars). */
+  displayedBranches: string[];
+  /** True while the initial full list (no search) is being loaded. */
+  isLoading: boolean;
+  /** True while a server-side search request is in-flight. */
+  isSearching: boolean;
+  /** Current search input value — bind to controlled input. */
+  searchInput: string;
+  /** Call from input onValueChange/onChange. Debounces and drives hybrid search. */
+  handleSearchChange: (value: string) => void;
+  /** Whether more paginated results are available from the server for the current search. */
+  hasNextPage: boolean;
+  /** Fetches the next page of server-side search results and appends them. */
+  loadMore: () => void;
+  /** Clears full-list and per-query caches for this repo, re-fetches full list (no search). */
+  refresh: () => void;
 }
 
 /**
- * Hybrid branch search hook.
+ * Hybrid branch search: server-side filtering when user types 2+ chars, with caching.
  *
- * Search flow (fires after 2 chars, 300 ms debounce):
- *   1. Filter client-side from the in-memory full-list cache for this repo.
- *   2. If full list isn't cached → server-side search with pagination,
- *      cache results keyed by search term.
- *   3. If server returns has_next_page=true, expose loadMore() for pagination.
- *
- * Resets automatically when repoName changes.
- *
- * Caching layers:
- *   • localStorage – full branch list per repo, 5-min TTL
- *   • In-memory ref – full list for instant access (session lifetime)
- *   • In-memory Map – per-search-term results (session lifetime)
+ * - Full-list cache: one fetch with no search param per repo; used when input is empty or < 2 chars.
+ *   Stored in memory + localStorage (5 min TTL), keyed by repo.
+ * - Per-query cache: in-memory Map(normalizedQuery → { branches, hasNextPage, nextOffset }).
+ *   When user types 2+ chars we use searchBranches (paginated); cache stores first page and loadMore appends.
+ * - Search term sent to API is trimmed and truncated to 200 chars (backend contract).
+ * - Resets when repoName changes (clears caches and refetches for the new repo).
  */
 export function useBranchSearch({
-    repoName,
-    enabled = true,
+  repoName,
+  enabled = true,
 }: UseBranchSearchOptions): UseBranchSearchResult {
-    const [searchInput, setSearchInput] = useState("");
-    const [displayedBranches, setDisplayedBranches] = useState<string[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isSearching, setIsSearching] = useState(false);
-    const [hasNextPage, setHasNextPage] = useState(false);
-    const [currentOffset, setCurrentOffset] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [displayedBranches, setDisplayedBranches] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasNextPage, setHasNextPage] = useState(false);
 
-    // Full unfiltered branch list for this repo
-    const fullCacheRef = useRef<string[] | null>(null);
-    // Per-search-term cache: lowercase term → filtered branches[]
-    const searchCacheRef = useRef<Map<string, string[]>>(new Map());
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const hasFetchedRef = useRef(false);
-    // Track the repo we've fetched for, to reset on change
-    const currentRepoRef = useRef(repoName);
+  /** Full list (no search) for current repo — in-memory + optional localStorage. */
+  const fullListRef = useRef<string[] | null>(null);
+  /** Per-query cache: normalized key → { branches, hasNextPage, nextOffset }. */
+  const queryCacheRef = useRef<Map<string, CachedSearchResult>>(new Map());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasFetchedFullListRef = useRef(false);
+  const currentRepoRef = useRef(repoName);
+  /** Current search cache key when in search mode (for loadMore). */
+  const currentSearchKeyRef = useRef<string | null>(null);
 
-    // ── Reset when repoName changes ──────────────────────────────────────────
-    useEffect(() => {
-        if (currentRepoRef.current === repoName) return;
-        currentRepoRef.current = repoName;
-        fullCacheRef.current = null;
-        searchCacheRef.current.clear();
-        hasFetchedRef.current = false;
-        setSearchInput("");
-        setDisplayedBranches([]);
+  // Reset when repoName changes
+  useEffect(() => {
+    if (currentRepoRef.current === repoName) return;
+    currentRepoRef.current = repoName;
+    fullListRef.current = null;
+    queryCacheRef.current.clear();
+    hasFetchedFullListRef.current = false;
+    currentSearchKeyRef.current = null;
+    setSearchInput("");
+    setDisplayedBranches([]);
+    setHasNextPage(false);
+  }, [repoName]);
+
+  const applySearch = useCallback(async (query: string, repo: string) => {
+    const normalized = normalizeQuery(query);
+
+    // Below min chars: show full list from cache only; never call API with search.
+    if (normalized.length < MIN_SEARCH_CHARS) {
+      const list = fullListRef.current ?? [];
+      setDisplayedBranches(list);
+      setHasNextPage(false);
+      currentSearchKeyRef.current = null;
+      return;
+    }
+
+    const cacheKey = normalized;
+    const cached = queryCacheRef.current.get(cacheKey);
+    if (cached !== undefined) {
+      currentSearchKeyRef.current = cacheKey;
+      setDisplayedBranches(cached.branches);
+      setHasNextPage(cached.hasNextPage);
+      return;
+    }
+
+    const searchParam = truncateSearchQuery(query);
+    setIsSearching(true);
+    currentSearchKeyRef.current = cacheKey;
+    try {
+      const result = await BranchAndRepositoryService.searchBranches(repo, {
+        search: searchParam,
+        limit: PAGE_SIZE,
+        offset: 0,
+      });
+      const branches = result.branches ?? [];
+      const hasNext = result.has_next_page ?? false;
+      const nextOffset = PAGE_SIZE;
+      queryCacheRef.current.set(cacheKey, {
+        branches,
+        hasNextPage: hasNext,
+        nextOffset,
+      });
+      setDisplayedBranches(branches);
+      setHasNextPage(hasNext);
+    } catch {
+      currentSearchKeyRef.current = null;
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+
+      const normalized = normalizeQuery(value);
+
+      if (normalized.length < MIN_SEARCH_CHARS) {
+        setDisplayedBranches(fullListRef.current ?? []);
         setHasNextPage(false);
-        setCurrentOffset(0);
-    }, [repoName]);
+        currentSearchKeyRef.current = null;
+        return;
+      }
 
-    // ── Core search logic ────────────────────────────────────────────────────
-    const applySearch = useCallback(async (query: string, repo: string) => {
-        const normalized = query.toLowerCase().trim();
+      debounceRef.current = setTimeout(
+        () => applySearch(value, currentRepoRef.current),
+        DEBOUNCE_MS
+      );
+    },
+    [applySearch]
+  );
 
-        // Below min chars: revert to full list
-        if (normalized.length < MIN_SEARCH_CHARS) {
-            if (fullCacheRef.current) setDisplayedBranches(fullCacheRef.current);
-            setHasNextPage(false);
-            return;
-        }
+  // Initial load: full list (no search) for this repo, once when enabled and repoName set.
+  useEffect(() => {
+    if (!enabled || !repoName || hasFetchedFullListRef.current || currentRepoRef.current !== repoName) return;
+    hasFetchedFullListRef.current = true;
 
-        // 1. Check per-term cache
-        if (searchCacheRef.current.has(normalized)) {
-            setDisplayedBranches(searchCacheRef.current.get(normalized)!);
-            setHasNextPage(false);
-            return;
-        }
+    const key = branchFullListCacheKey(repoName);
+    const fromStorage = storageGet(key);
+    if (fromStorage) {
+      fullListRef.current = fromStorage;
+      setDisplayedBranches(fromStorage);
+      return;
+    }
 
-        // 2. Client-side filter from full list
-        if (fullCacheRef.current) {
-            const filtered = fullCacheRef.current.filter((b) =>
-                b.toLowerCase().includes(normalized)
-            );
-            searchCacheRef.current.set(normalized, filtered);
-            setDisplayedBranches(filtered);
-            setHasNextPage(false);
-            return;
-        }
-
-        // 3. Server-side search with pagination
-        setIsSearching(true);
-        try {
-            const result = await BranchAndRepositoryService.searchBranches(repo, {
-                search: query,
-                limit: PAGE_SIZE,
-                offset: 0,
-            });
-            const branches = result.branches ?? [];
-            searchCacheRef.current.set(normalized, branches);
-            setDisplayedBranches(branches);
-            setHasNextPage(result.has_next_page ?? false);
-            setCurrentOffset(PAGE_SIZE);
-        } catch {
-            // Keep whatever is currently shown on error
-        } finally {
-            setIsSearching(false);
-        }
-    }, []);
-
-    // ── Debounced input handler ───────────────────────────────────────────────
-    const handleSearchChange = useCallback(
-        (value: string) => {
-            setSearchInput(value);
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-
-            // Immediately revert to full list when query drops below threshold
-            if (!value || value.trim().length < MIN_SEARCH_CHARS) {
-                if (fullCacheRef.current) setDisplayedBranches(fullCacheRef.current);
-                setHasNextPage(false);
-                return;
-            }
-
-            debounceRef.current = setTimeout(
-                () => applySearch(value, currentRepoRef.current),
-                DEBOUNCE_MS
-            );
-        },
-        [applySearch]
-    );
-
-    // ── Initial load (once per repo, when enabled flips true) ────────────────
-    useEffect(() => {
-        if (!enabled || !repoName || hasFetchedRef.current) return;
-        hasFetchedRef.current = true;
-
-        const cached = storageGet(branchCacheKey(repoName));
-        if (cached) {
-            fullCacheRef.current = cached;
-            setDisplayedBranches(cached);
-            return;
-        }
-
-        setIsLoading(true);
-        BranchAndRepositoryService.getBranchList(repoName)
-            .then((data: any) => {
-                // Service returns string[] directly
-                const branches: string[] = Array.isArray(data) ? data : (data?.branches ?? []);
-                fullCacheRef.current = branches;
-                setDisplayedBranches(branches);
-                storageSet(branchCacheKey(repoName), branches, BRANCH_CACHE_TTL);
-            })
-            .catch(() => {
-                fullCacheRef.current = [];
-                setDisplayedBranches([]);
-            })
-            .finally(() => setIsLoading(false));
-    }, [enabled, repoName]);
-
-    // ── Load more (pagination for server-side search results) ────────────────
-    const loadMore = useCallback(() => {
-        if (!hasNextPage || !searchInput || isSearching) return;
-        const normalized = searchInput.toLowerCase().trim();
-
-        setIsSearching(true);
-        BranchAndRepositoryService.searchBranches(currentRepoRef.current, {
-            search: searchInput,
-            limit: PAGE_SIZE,
-            offset: currentOffset,
-        })
-            .then((result) => {
-                const newBranches = result.branches ?? [];
-                const combined = [...(searchCacheRef.current.get(normalized) ?? []), ...newBranches];
-                searchCacheRef.current.set(normalized, combined);
-                setDisplayedBranches(combined);
-                setHasNextPage(result.has_next_page ?? false);
-                setCurrentOffset((prev) => prev + PAGE_SIZE);
-            })
-            .finally(() => setIsSearching(false));
-    }, [hasNextPage, searchInput, isSearching, currentOffset]);
-
-    // ── Manual refresh ────────────────────────────────────────────────────────
-    const refresh = useCallback(() => {
-        if (!repoName) return;
-        const key = branchCacheKey(repoName);
-        if (typeof window !== "undefined") localStorage.removeItem(key);
-        fullCacheRef.current = null;
-        searchCacheRef.current.clear();
-        hasFetchedRef.current = false;
-        setSearchInput("");
+    setIsLoading(true);
+    BranchAndRepositoryService.getBranchList(repoName)
+      .then((data: any) => {
+        const branches: string[] = Array.isArray(data) ? data : (data?.branches ?? []);
+        fullListRef.current = branches;
+        setDisplayedBranches(branches);
+        storageSet(key, branches, BRANCH_CACHE_TTL);
+      })
+      .catch(() => {
+        fullListRef.current = [];
         setDisplayedBranches([]);
-        setHasNextPage(false);
-        setCurrentOffset(0);
-        setIsLoading(true);
+      })
+      .finally(() => setIsLoading(false));
+  }, [enabled, repoName]);
 
-        BranchAndRepositoryService.getBranchList(repoName)
-            .then((data: any) => {
-                const branches: string[] = Array.isArray(data) ? data : (data?.branches ?? []);
-                fullCacheRef.current = branches;
-                setDisplayedBranches(branches);
-                storageSet(key, branches, BRANCH_CACHE_TTL);
-            })
-            .catch(() => {
-                fullCacheRef.current = [];
-                setDisplayedBranches([]);
-            })
-            .finally(() => setIsLoading(false));
-    }, [repoName]);
+  const loadMore = useCallback(() => {
+    const key = currentSearchKeyRef.current;
+    if (!key || !hasNextPage || isSearching || !searchInput.trim()) return;
+    const cached = queryCacheRef.current.get(key);
+    if (!cached || !cached.hasNextPage) return;
 
-    // ── Cleanup ───────────────────────────────────────────────────────────────
-    useEffect(() => {
-        return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-        };
-    }, []);
+    const repo = currentRepoRef.current;
+    const searchParam = truncateSearchQuery(searchInput);
+    setIsSearching(true);
+    BranchAndRepositoryService.searchBranches(repo, {
+      search: searchParam,
+      limit: PAGE_SIZE,
+      offset: cached.nextOffset,
+    })
+      .then((result: { branches: string[]; has_next_page: boolean }) => {
+        const newBranches = result.branches ?? [];
+        const combined = [...cached.branches, ...newBranches];
+        const hasNext = result.has_next_page ?? false;
+        const nextOffset = cached.nextOffset + PAGE_SIZE;
+        queryCacheRef.current.set(key, {
+          branches: combined,
+          hasNextPage: hasNext,
+          nextOffset,
+        });
+        setDisplayedBranches(combined);
+        setHasNextPage(hasNext);
+      })
+      .finally(() => setIsSearching(false));
+  }, [hasNextPage, isSearching, searchInput]);
 
-    return {
-        displayedBranches,
-        isLoading,
-        isSearching,
-        searchInput,
-        handleSearchChange,
-        hasNextPage,
-        loadMore,
-        refresh,
+  const refresh = useCallback(() => {
+    if (!repoName) return;
+    const key = branchFullListCacheKey(repoName);
+    if (typeof window !== "undefined") localStorage.removeItem(key);
+    fullListRef.current = null;
+    queryCacheRef.current.clear();
+    hasFetchedFullListRef.current = false;
+    currentSearchKeyRef.current = null;
+    setSearchInput("");
+    setDisplayedBranches([]);
+    setHasNextPage(false);
+    setIsLoading(true);
+
+    BranchAndRepositoryService.getBranchList(repoName)
+      .then((data: any) => {
+        const branches: string[] = Array.isArray(data) ? data : (data?.branches ?? []);
+        fullListRef.current = branches;
+        setDisplayedBranches(branches);
+        storageSet(key, branches, BRANCH_CACHE_TTL);
+      })
+      .catch(() => {
+        fullListRef.current = [];
+        setDisplayedBranches([]);
+      })
+      .finally(() => setIsLoading(false));
+  }, [repoName]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
+  }, []);
+
+  return {
+    displayedBranches,
+    isLoading,
+    isSearching,
+    searchInput,
+    handleSearchChange,
+    hasNextPage,
+    loadMore,
+    refresh,
+  };
 }

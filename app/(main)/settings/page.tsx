@@ -58,11 +58,16 @@ function OpenRouterIcon() {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+interface ProviderConfig {
+  provider: string;
+  model: string;
+  api_key: string;
+}
+
 interface KeySecrets {
-  inference_config: {
-    api_key: string;
-    provider?: string;
-  };
+  chat_config: ProviderConfig | null;
+  inference_config: ProviderConfig | null;
+  integration_keys: Array<{ service: string; api_key: string }>;
 }
 
 interface ApiKeyState {
@@ -86,7 +91,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
     queryFn: () => SettingsService.getApiKey(),
   });
 
-  const { data: keySecrets } = useQuery<KeySecrets>({
+  const { data: keySecrets } = useQuery<KeySecrets | null>({
     queryKey: ["secrets"],
     queryFn: () => SettingsService.getSecrets(),
   });
@@ -129,7 +134,10 @@ const [openRouterInput, setOpenRouterInput] = useState("");
     return `${key.slice(0, visibleStart)}${"•".repeat(maskLen)}${key.slice(-visibleEnd)}`;
   };
 
-  const savedProvider = keySecrets?.inference_config?.provider?.toLowerCase();
+  const savedProvider =
+    (keySecrets?.inference_config?.provider ?? keySecrets?.chat_config?.provider)?.toLowerCase();
+  const savedApiKey =
+    keySecrets?.inference_config?.api_key ?? keySecrets?.chat_config?.api_key;
 
   return (
     <div className="p-6 w-full min-w-0 overflow-hidden">
@@ -219,7 +227,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 <Input
                   type="password"
                   className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "openai" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
+                  placeholder={savedProvider === "openai" && savedApiKey ? maskedKey(savedApiKey) : ""}
                   value={openAIInput}
                   onChange={(e) => setOpenAIInput(e.target.value)}
                 />
@@ -242,7 +250,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 <Input
                   type="password"
                   className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "anthropic" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
+                  placeholder={savedProvider === "anthropic" && savedApiKey ? maskedKey(savedApiKey) : ""}
                   value={anthropicInput}
                   onChange={(e) => setAnthropicInput(e.target.value)}
                 />
@@ -265,7 +273,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
                 <Input
                   type="password"
                   className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "openrouter" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
+                  placeholder={savedProvider === "openrouter" && savedApiKey ? maskedKey(savedApiKey) : ""}
                   value={openRouterInput}
                   onChange={(e) => setOpenRouterInput(e.target.value)}
                 />

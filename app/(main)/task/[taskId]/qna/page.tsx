@@ -1742,9 +1742,8 @@ export default function QnaPage() {
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans antialiased">
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left: questions area — same structure as spec chat */}
-        {/* Full width when no questions, half width when questions ready */}
         <div
-          className={`flex flex-col min-w-0 min-h-0 overflow-hidden transition-all duration-300 ${hasQuestionsReady ? 'flex-1' : 'w-full'}`}
+          className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
           style={{ backgroundColor: "#FAF8F7" }}
         >
           {/* Title on left side */}
@@ -1874,19 +1873,19 @@ export default function QnaPage() {
           </div>
         </div>
 
-        {/* Right: question list — only show when questions are ready */}
-        {hasQuestionsReady && (
-          <div
-            className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
-            style={{ backgroundColor: "#FAF8F7" }}
-          >
-            {/* Repo/branch badges on right side */}
-            <div className="flex justify-end items-center px-6 pt-6 pb-4 shrink-0 gap-2">
-              {repoName && repoName !== "Unknown Repository" && (
-                <Badge icon={Github}>{repoName}</Badge>
-              )}
-              {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
-            </div>
+        {/* Right: question list — half-and-half like spec */}
+        <div
+          className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
+          style={{ backgroundColor: "#FAF8F7" }}
+        >
+          {/* Repo/branch badges on right side — always visible */}
+          <div className="flex justify-end items-center px-6 pt-6 pb-4 shrink-0 gap-2">
+            {repoName && repoName !== "Unknown Repository" && (
+              <Badge icon={Github}>{repoName}</Badge>
+            )}
+            {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
+          </div>
+          {state.pageState === "questions" && questionsInOrder.length > 0 && (
             <aside className="flex-1 min-h-0 w-full min-w-[280px] flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto min-h-0 py-3 pl-6 pr-8">
                 <h2 className="text-sm font-bold mb-2 text-left text-primary-color">
@@ -1922,8 +1921,8 @@ export default function QnaPage() {
                 </ul>
               </div>
             </aside>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

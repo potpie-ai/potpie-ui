@@ -425,7 +425,7 @@ const ChatV2 = () => {
         showShare
         hidden={!showNavbar || errorState.isError}
       />
-      <div className="h-[calc(90vh)]">
+      <div className="flex-1 min-h-0">
         <AssistantRuntimeProvider runtime={runtime}>
           <Thread
             projectId={projectId}

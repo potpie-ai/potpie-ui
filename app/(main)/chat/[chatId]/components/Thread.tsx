@@ -64,6 +64,7 @@ export const Thread: FC<ThreadProps> = ({
   hasPendingMessage = false,
 }) => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isEmpty, setIsEmpty] = useState(true);
   const runtime = useThreadRuntime();
 
   // Move useMemo before any early returns to satisfy React Hooks rules
@@ -79,6 +80,9 @@ export const Thread: FC<ThreadProps> = ({
     const state = runtime.getState();
     const messagesLoaded = Array.isArray(state.messages) && state.messages.length > 0;
     const isEmptyChat = Array.isArray(state.messages) && state.messages.length === 0;
+
+    // Update empty state
+    setIsEmpty(isEmptyChat);
 
     // If messages have actual content, we're no longer in initial loading
     if (messagesLoaded) {
@@ -108,11 +112,13 @@ export const Thread: FC<ThreadProps> = ({
       if (Array.isArray(nextState.messages) && nextState.messages.length > 0) {
         clearTimeout(timeoutId);
         setIsInitialLoading(false);
+        setIsEmpty(false);
         unsubscribe();
         return;
       }
 
       if (Array.isArray(nextState.messages) && nextState.messages.length === 0) {
+        setIsEmpty(true);
         setTimeout(() => {
           const finalState = runtime.getState();
           if (Array.isArray(finalState.messages) && finalState.messages.length === 0) {
@@ -145,6 +151,7 @@ export const Thread: FC<ThreadProps> = ({
 
       if (messageCount > 0) {
         setIsInitialLoading(false);
+        setIsEmpty(false);
         unsubscribe();
       }
     });
@@ -166,38 +173,37 @@ export const Thread: FC<ThreadProps> = ({
                 <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
               </div>
             );
-          } else {
+          } else if (isEmpty) {
+            // Full screen welcome when no messages
             return (
-          <>
-            {/* Built-in loading state - no manual state needed */}
-            <ThreadPrimitive.If empty>
               <div className="w-full h-full flex justify-center items-center">
                 <ThreadWelcome showSuggestions={!writeDisabled} />
               </div>
-            </ThreadPrimitive.If>
+            );
+          } else {
+            // Normal chat layout when messages exist
+            return (
+              <>
+                <ThreadPrimitive.Viewport className="flex h-full flex-col items-center bg-background overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)] thread-viewport">
+                  <div className="pb-36 bg-inherit min-w-96 w-full flex-1">
+                    <ThreadPrimitive.Messages
+                      components={{
+                        UserMessage: userMessage,
+                        AssistantMessage: AssistantMessage,
+                      }}
+                    />
+                  </div>
+                </ThreadPrimitive.Viewport>
 
-            <ThreadPrimitive.If empty={false}>
-              <ThreadPrimitive.Viewport className="flex h-[calc(100%-80px)] flex-col items-center bg-background overflow-hidden overflow-y-scroll scroll-smooth inset-0 from-white via-transparent to-white [mask-image:linear-gradient(to_bottom,transparent_0%,white_5%,white_95%,transparent_100%)] thread-viewport">
-                <div className="pb-36 bg-inherit min-w-96 w-full">
-                  <ThreadPrimitive.Messages
-                    components={{
-                      UserMessage: userMessage,
-                      AssistantMessage: AssistantMessage,
-                    }}
+                <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center justify-center">
+                  <ThreadScrollToBottom />
+                  <Composer
+                    projectId={projectId}
+                    disabled={writeDisabled}
+                    conversation_id={conversation_id}
                   />
                 </div>
-              </ThreadPrimitive.Viewport>
-            </ThreadPrimitive.If>
-
-            <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center justify-center">
-              <ThreadScrollToBottom />
-              <Composer
-                projectId={projectId}
-                disabled={writeDisabled}
-                conversation_id={conversation_id}
-              />
-            </div>
-          </>
+              </>
             );
           }
         })()}
@@ -210,22 +216,20 @@ const ThreadWelcome: FC<{ showSuggestions: boolean }> = ({
   showSuggestions,
 }) => {
   return (
-    <ThreadPrimitive.Empty>
-      <div className="flex w-full h-full max-w-[var(--thread-max-width)] flex-grow flex-col">
-        <div className="flex w-full flex-grow flex-col items-center justify-center">
-          <Avatar className="rounded-none">
-            <AvatarImage src="/images/logo.svg" alt="Agent" />
-            <AvatarFallback className="bg-transparent">P</AvatarFallback>
-          </Avatar>
-          <p className="mt-4 font-medium">How can I help you today?</p>
-          {showSuggestions && (
-            <div className="mt-16">
-              <ThreadWelcomeSuggestions />
-            </div>
-          )}
-        </div>
+    <div className="flex w-full h-full max-w-[var(--thread-max-width)] flex-grow flex-col">
+      <div className="flex w-full flex-grow flex-col items-center justify-center">
+        <Avatar className="rounded-none">
+          <AvatarImage src="/images/logo.svg" alt="Agent" />
+          <AvatarFallback className="bg-transparent">P</AvatarFallback>
+        </Avatar>
+        <p className="mt-4 font-medium">How can I help you today?</p>
+        {showSuggestions && (
+          <div className="mt-16">
+            <ThreadWelcomeSuggestions />
+          </div>
+        )}
       </div>
-    </ThreadPrimitive.Empty>
+    </div>
   );
 };
 

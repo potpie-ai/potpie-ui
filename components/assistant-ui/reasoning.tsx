@@ -1,8 +1,7 @@
 "use client";
 
 import { type FC, type PropsWithChildren, useState, useEffect } from "react";
-import { ChevronDownIcon, Loader } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader } from "lucide-react";
 import type { ReasoningMessagePart } from "@assistant-ui/react";
 import { useThreadRuntime, useMessage } from "@assistant-ui/react";
 import {
@@ -13,10 +12,27 @@ import {
 } from "@/components/ui/accordion";
 
 export const Reasoning: FC<ReasoningMessagePart> = ({ text }) => {
+  const raw = text ?? "";
+  const lines = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="whitespace-pre-wrap text-sm text-muted-foreground italic leading-relaxed">
-      {text}
-    </div>
+    <ol className="mt-1 space-y-1 text-xs text-muted-foreground">
+      {lines.map((line, idx) => (
+        <li key={idx} className="flex items-start gap-1.5">
+          <span className="mt-[2px] text-[10px] font-medium text-muted-foreground/70">
+            {idx + 1}.
+          </span>
+          <span className="leading-snug">{line}</span>
+        </li>
+      ))}
+    </ol>
   );
 };
 
@@ -77,7 +93,7 @@ export const ReasoningGroup: FC<
   };
 
   return (
-    <div className="my-2 rounded-lg border border-muted bg-muted/30">
+    <div className="my-2 rounded-lg border border-muted bg-muted/40">
       <Accordion
         type="single"
         collapsible
@@ -86,19 +102,24 @@ export const ReasoningGroup: FC<
       >
         <AccordionItem value="reasoning" className="border-0">
           <AccordionTrigger className="px-3 py-2 hover:no-underline">
-            <span className="flex items-center gap-2 text-sm font-medium">
-              {isStreaming ? (
-                <>
-                  <Loader className="h-4 w-4 animate-spin" />
-                  <span>Reasoning in progress...</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-muted-foreground">🤔</span>
-                  <span>Reasoning completed</span>
-                </>
-              )}
-            </span>
+            <div className="flex flex-col items-start gap-0.5 text-left">
+              <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {isStreaming ? (
+                  <>
+                    <Loader className="h-3 w-3 animate-spin" />
+                    <span>Thinking (not part of answer)</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs">🤔</span>
+                    <span>Thinking log (not part of answer)</span>
+                  </>
+                )}
+              </span>
+              <span className="text-[11px] text-muted-foreground/80">
+                Internal steps the agent is taking to solve your request.
+              </span>
+            </div>
           </AccordionTrigger>
           <AccordionContent className="px-3 pb-3">
             <div className="space-y-2">{children}</div>

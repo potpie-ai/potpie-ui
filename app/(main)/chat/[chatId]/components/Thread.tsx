@@ -45,6 +45,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
 
+const stripGeneratedDiffMarkers = (text: string | undefined | null): string => {
+  if (!text) return "";
+  return text.replace(/--generated diff--/gi, "").trim();
+};
+
 const looksLikeUnifiedDiff = (text: string | undefined | null): boolean => {
   if (!text) return false;
   const trimmed = text.trimStart();
@@ -476,15 +481,22 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   const eventType = currentState?.event_type || "";
 
   // Status messages (tool_response from API)
-  const callStatusMessage = callState?.response || "";
-  const resultStatusMessage = resultStateLocal?.response || "";
+  const callStatusMessage = stripGeneratedDiffMarkers(callState?.response || "");
+  const resultStatusMessage = stripGeneratedDiffMarkers(
+    resultStateLocal?.response || ""
+  );
 
   // Detailed summaries (tool_call_details.summary from API)
-  const callSummary = callState?.details?.summary || "";
-  const resultSummary = resultStateLocal?.details?.summary || "";
+  const callSummary = stripGeneratedDiffMarkers(
+    callState?.details?.summary || ""
+  );
+  const resultSummary = stripGeneratedDiffMarkers(
+    resultStateLocal?.details?.summary || ""
+  );
 
   // Streaming content (accumulated stream_part)
-  const streamingContent = resultStateLocal?.accumulated_response || "";
+  const streamingContentRaw = resultStateLocal?.accumulated_response || "";
+  const streamingContent = streamingContentRaw;
   // Prefer streaming content for diffs; fall back to result summary if needed
   const diffCandidate =
     (streamingContent && looksLikeUnifiedDiff(streamingContent) && streamingContent) ||
@@ -652,13 +664,13 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
                     })()}
                   </div>
                 ) : (
-                  streamingContent && (
+                  streamingContentRaw && (
                     <div className="text-foreground/90 bg-white/50 dark:bg-neutral-900/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
                       {isToolCallStreaming && !isCompleted && (
                         <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
                       )}
                       <StandaloneMarkdown
-                        text={streamingContent}
+                        text={stripGeneratedDiffMarkers(streamingContentRaw)}
                         className="markdown-content break-words text-xs"
                       />
                     </div>
@@ -708,7 +720,7 @@ const InlineMessageContent: FC = () => {
     <div className="inline-message-content">
       {message.content.map((part, index) => {
         if (part.type === "text") {
-          const rawText = part.text ?? "";
+          const rawText = stripGeneratedDiffMarkers(part.text ?? "");
           // Only render non-empty text segments
           if (!rawText.trim()) {
             return null;
@@ -718,10 +730,10 @@ const InlineMessageContent: FC = () => {
 
           if (diffBlock) {
             return (
-              <div key={`text-${index}`} className="w-full my-1 space-y-2">
+              <div key={`text-${index}`} className="w-full my-8 space-y-8">
                 {diffBlock.before && (
                   <StandaloneMarkdown
-                    text={diffBlock.before}
+                    text={stripGeneratedDiffMarkers(diffBlock.before)}
                     className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
                   />
                 )}
@@ -751,7 +763,7 @@ const InlineMessageContent: FC = () => {
                 })()}
                 {diffBlock.after && (
                   <StandaloneMarkdown
-                    text={diffBlock.after}
+                    text={stripGeneratedDiffMarkers(diffBlock.after)}
                     className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
                   />
                 )}

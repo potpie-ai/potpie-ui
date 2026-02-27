@@ -5,6 +5,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const DEFAULT_MARKER_PATTERNS: (string | RegExp)[] = [
+  /--generated diff--/gi,
+];
+
+export function stripAssistantMarkers(
+  text: string | undefined | null,
+  markers: (string | RegExp)[] = DEFAULT_MARKER_PATTERNS
+): string {
+  if (text == null || typeof text !== "string" || !text) return "";
+  let out = text;
+  for (const marker of markers) {
+    if (typeof marker === "string") {
+      const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(escaped, "gi");
+      out = out.replace(re, "");
+    } else {
+      out = out.replace(marker, "");
+    }
+  }
+  return out.trim();
+}
+
 /**
  * Extract complete JSON objects from a stream buffer (same pattern as ChatService).
  * Used for parsing streaming JSON responses in SpecService and PlanService.

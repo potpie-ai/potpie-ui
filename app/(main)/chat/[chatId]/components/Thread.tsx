@@ -25,7 +25,7 @@ import {
   RefreshCwIcon,
   Loader,
 } from "lucide-react";
-import { isMultimodalEnabled } from "@/lib/utils";
+import { isMultimodalEnabled, stripAssistantMarkers } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import {
@@ -44,11 +44,6 @@ import {
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
-
-const stripGeneratedDiffMarkers = (text: string | undefined | null): string => {
-  if (!text) return "";
-  return text.replace(/--generated diff--/gi, "").trim();
-};
 
 const looksLikeUnifiedDiff = (text: string | undefined | null): boolean => {
   if (!text) return false;
@@ -497,16 +492,14 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   const eventType = currentState?.event_type || "";
 
   // Status messages (tool_response from API)
-  const callStatusMessage = stripGeneratedDiffMarkers(callState?.response || "");
-  const resultStatusMessage = stripGeneratedDiffMarkers(
+  const callStatusMessage = stripAssistantMarkers(callState?.response || "");
+  const resultStatusMessage = stripAssistantMarkers(
     resultStateLocal?.response || ""
   );
 
   // Detailed summaries (tool_call_details.summary from API)
-  const callSummary = stripGeneratedDiffMarkers(
-    callState?.details?.summary || ""
-  );
-  const resultSummary = stripGeneratedDiffMarkers(
+  const callSummary = stripAssistantMarkers(callState?.details?.summary || "");
+  const resultSummary = stripAssistantMarkers(
     resultStateLocal?.details?.summary || ""
   );
 
@@ -686,7 +679,7 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
                         <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
                       )}
                       <StandaloneMarkdown
-                        text={stripGeneratedDiffMarkers(streamingContentRaw)}
+                        text={stripAssistantMarkers(streamingContentRaw)}
                         className="markdown-content break-words text-xs"
                       />
                     </div>
@@ -735,8 +728,8 @@ const InlineMessageContent: FC = () => {
   return (
     <div className="inline-message-content">
       {message.content.map((part, index) => {
-        if (part.type === "text") {
-          const rawText = stripGeneratedDiffMarkers(part.text ?? "");
+          if (part.type === "text") {
+          const rawText = stripAssistantMarkers(part.text ?? "");
           // Only render non-empty text segments
           if (!rawText.trim()) {
             return null;
@@ -749,7 +742,7 @@ const InlineMessageContent: FC = () => {
               <div key={`text-${index}`} className="w-full my-8 space-y-8">
                 {diffBlock.before && (
                   <StandaloneMarkdown
-                    text={stripGeneratedDiffMarkers(diffBlock.before)}
+                    text={stripAssistantMarkers(diffBlock.before)}
                     className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
                   />
                 )}
@@ -779,7 +772,7 @@ const InlineMessageContent: FC = () => {
                 })()}
                 {diffBlock.after && (
                   <StandaloneMarkdown
-                    text={stripGeneratedDiffMarkers(diffBlock.after)}
+                    text={stripAssistantMarkers(diffBlock.after)}
                     className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
                   />
                 )}

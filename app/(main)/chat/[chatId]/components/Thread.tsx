@@ -69,18 +69,32 @@ const looksLikeUnifiedDiff = (text: string | undefined | null): boolean => {
 const extractPathFromDiff = (text: string | undefined | null): string => {
   if (!text) return "patch.diff";
   const lines = text.split("\n");
+  let candidatePath: string | null = null;
   for (const line of lines) {
     const trimmed = line.trim();
     if (trimmed.startsWith("+++ ")) {
       const parts = trimmed.split(/\s+/);
-      const pathPart = parts[1] ?? "";
-      return pathPart.replace(/^a\//, "").replace(/^b\//, "") || "patch.diff";
+      const pathPart = (parts[1] ?? "").replace(/^a\//, "").replace(/^b\//, "");
+      if (pathPart && pathPart !== "/dev/null") {
+        return pathPart;
+      }
+      if (!candidatePath && pathPart) {
+        candidatePath = pathPart;
+      }
     }
     if (trimmed.startsWith("--- ")) {
       const parts = trimmed.split(/\s+/);
-      const pathPart = parts[1] ?? "";
-      return pathPart.replace(/^a\//, "").replace(/^b\//, "") || "patch.diff";
+      const pathPart = (parts[1] ?? "").replace(/^a\//, "").replace(/^b\//, "");
+      if (pathPart && pathPart !== "/dev/null") {
+        return pathPart;
+      }
+      if (!candidatePath && pathPart) {
+        candidatePath = pathPart;
+      }
     }
+  }
+  if (candidatePath && candidatePath !== "/dev/null") {
+    return candidatePath;
   }
   return "patch.diff";
 };
@@ -91,12 +105,14 @@ const extractDiffBlockFromText = (
   if (!text) return null;
   const full = text;
 
-  const fenced = full.match(/```(?:diff|patch)?\s*\n([\s\S]*?)```/);
+  const fenced = full.match(/```(?:diff|patch)?\s*\n([\s\S]*?)```/i);
   if (fenced && typeof fenced.index === "number") {
+    const fenceHeader = fenced[0].split("\n", 1)[0] ?? "";
+    const isTaggedDiff = /^```(?:diff|patch)\b/i.test(fenceHeader);
     const before = full.slice(0, fenced.index).trim();
     const after = full.slice(fenced.index + fenced[0].length).trim();
     const diff = fenced[1] ?? "";
-    if (diff.trim()) {
+    if (diff.trim() && (isTaggedDiff || looksLikeUnifiedDiff(diff))) {
       return { before, diff, after };
     }
   }

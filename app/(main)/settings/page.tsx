@@ -16,10 +16,12 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/sonner";
 import getHeaders from "@/app/utils/headers.util";
+import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import SettingsService, {
   type TokensByDayItem,
   type AnalyticsSummary,
 } from "@/services/SettingsService";
+import dayjs from "dayjs";
 
 const StackedBarChart = dynamic(() => import("./StackedBarChart"), {
   ssr: false,
@@ -42,7 +44,7 @@ function intensityColor(val: number): string {
 }
 
 const HEATMAP_ROWS = 4;
-const HEATMAP_COLS = 7;
+const HEATMAP_COLS = 9;
 
 /** Build heatmap grid from daily token usage. Each cell = that day's tokens normalized 0–1 by max in period. */
 function buildIntensityData(
@@ -70,9 +72,9 @@ interface TokenIntensityGridProps {
 
 function TokenIntensityGrid({ intensityData }: TokenIntensityGridProps) {
   return (
-    <div className="mb-5 w-full flex items-center justify-center">
+    <div className="mb-5 pt-8 w-full flex items-center justify-start">
       <div
-        className="grid gap-x-2 gap-y-4 w-[400px] max-w-full"
+        className="grid gap-x-2 gap-y-2 w-fit max-w-full -ml+1"
         style={{
           gridTemplateColumns: `repeat(${HEATMAP_COLS}, auto)`,
         }}
@@ -81,7 +83,7 @@ function TokenIntensityGrid({ intensityData }: TokenIntensityGridProps) {
           row.map((val, ci) => (
             <div
               key={`${ri}-${ci}`}
-              className="rounded-sm w-11 h-11 sm:w-11 sm:h-11"
+              className="rounded-xs w-11 h-11 sm:w-11 sm:h-11"
               style={{ backgroundColor: intensityColor(val) }}
             />
           ))
@@ -112,38 +114,210 @@ function getDateRange(range: string): { startDate: string; endDate: string } {
 
 const CHART_COLORS = ["#2B1C37", "#366C9F", "#7FD7AF", "#D8F2DF"];
 
+function parseDateISO(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, (month ?? 1) - 1, day ?? 1);
+}
+
+function formatDateISO(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDisplayDate(dateStr: string): string {
+  const d = dayjs(dateStr);
+  if (!d.isValid()) return dateStr;
+  return d.format("D MMM").toUpperCase();
+}
+
+function getAllDatesInRange(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  let current = parseDateISO(startDate);
+  const end = parseDateISO(endDate);
+
+  while (current <= end) {
+    dates.push(formatDateISO(current));
+    current.setDate(current.getDate() + 1);
+  }
+
+  return dates;
+}
+
+function getWeekStartDatesInRange(startDate: string, endDate: string): string[] {
+  const weekStarts: string[] = [];
+  let current = parseDateISO(startDate);
+  const end = parseDateISO(endDate);
+
+  while (current <= end) {
+    weekStarts.push(formatDateISO(current));
+    current.setDate(current.getDate() + 7);
+  }
+
+  return weekStarts;
+}
+
 function buildChartData(
   items: TokensByDayItem[]
+,
+  range: string,
+  startDate?: string,
+  endDate?: string,
+  resolveProjectLabel?: (projectId: string) => string | undefined
 ): { labels: string[]; datasets: { label: string; data: number[]; backgroundColor: string }[] } {
   const byDate = new Map<string, Map<string, number>>();
-  const projectOrder: string[] = [];
+  const projectLastSeen = new Map<string, string>(); // projectId -> latest date (ISO)
+  const projectTotals = new Map<string, number>(); // projectId -> total tokens across range
   for (const item of items) {
     const projectKey = item.project_id ?? "__others__";
-    if (!projectOrder.includes(projectKey)) projectOrder.push(projectKey);
     if (!byDate.has(item.date)) byDate.set(item.date, new Map());
     const dayMap = byDate.get(item.date)!;
     dayMap.set(projectKey, (dayMap.get(projectKey) ?? 0) + item.total_tokens);
+
+    projectTotals.set(projectKey, (projectTotals.get(projectKey) ?? 0) + item.total_tokens);
+    const prevLast = projectLastSeen.get(projectKey);
+    if (!prevLast || item.date > prevLast) projectLastSeen.set(projectKey, item.date);
   }
   const sortedDates = Array.from(byDate.keys()).sort();
-  const othersLast = [...projectOrder].sort((a, b) => (a === "__others__" ? 1 : b === "__others__" ? -1 : 0));
-  const labels = sortedDates;
-  const datasets = othersLast.map((projectKey, i) => ({
-    label: projectKey === "__others__" ? "No project" : projectKey,
-    data: sortedDates.map((d) => byDate.get(d)?.get(projectKey) ?? 0),
-    backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
-  }));
+
+  let labels: string[];
+
+  if (range === "last_week" && startDate && endDate) {
+    // Ensure all 7 days in the selected week are represented on the x-axis.
+    labels = getAllDatesInRange(startDate, endDate);
+  } else if (range === "last_month" && startDate && endDate) {
+    // Aggregate into week buckets for the last-month view.
+    const weekStarts = getWeekStartDatesInRange(startDate, endDate);
+    labels = weekStarts;
+  } else {
+    // Default: use the dates that exist in the data.
+    labels = sortedDates;
+  }
+
+  // Pick the 3 most recently active (by lastSeen date) projects; aggregate the rest into "Others".
+  const projectKeys = Array.from(projectTotals.keys()).filter((k) => k !== "__others__");
+  projectKeys.sort((a, b) => {
+    const da = projectLastSeen.get(a) ?? "0000-00-00";
+    const db = projectLastSeen.get(b) ?? "0000-00-00";
+    if (da !== db) return db.localeCompare(da); // newest first
+    const ta = projectTotals.get(a) ?? 0;
+    const tb = projectTotals.get(b) ?? 0;
+    return tb - ta;
+  });
+
+  const top3 = projectKeys.slice(0, 3);
+  const includeOthers = projectTotals.has("__others__") || projectKeys.length > 3;
+  const datasetKeys = includeOthers ? [...top3, "__others__"] : top3;
+
+  const datasets = datasetKeys.map((projectKey, i) => {
+    // Per-label data depends on whether we're in daily or weekly aggregation mode.
+    let data: number[];
+
+    if (range === "last_week" && startDate && endDate) {
+      if (projectKey === "__others__") {
+        data = labels.map((d) => {
+          const day = byDate.get(d);
+          if (!day) return 0;
+          let sum = 0;
+          for (const [k, v] of day.entries()) {
+            if (k === "__others__" || !top3.includes(k)) sum += v ?? 0;
+          }
+          return sum;
+        });
+      } else {
+        data = labels.map((d) => byDate.get(d)?.get(projectKey) ?? 0);
+      }
+    } else if (range === "last_month" && startDate && endDate) {
+      data = labels.map((weekStart, idx) => {
+        const nextWeekStart = labels[idx + 1];
+        const startKey = weekStart;
+        const endKeyExclusive = nextWeekStart ?? formatDateISO(parseDateISO(endDate));
+
+        return sortedDates.reduce((sum, dateKey) => {
+          if (dateKey >= startKey && dateKey < endKeyExclusive) {
+            if (projectKey === "__others__") {
+              const day = byDate.get(dateKey);
+              if (!day) return sum;
+              let otherSum = 0;
+              for (const [k, v] of day.entries()) {
+                if (k === "__others__" || !top3.includes(k)) otherSum += v ?? 0;
+              }
+              return sum + otherSum;
+            }
+            return sum + (byDate.get(dateKey)?.get(projectKey) ?? 0);
+          }
+          return sum;
+        }, 0);
+      });
+    } else {
+      if (projectKey === "__others__") {
+        data = labels.map((d) => {
+          const day = byDate.get(d);
+          if (!day) return 0;
+          let sum = 0;
+          for (const [k, v] of day.entries()) {
+            if (k === "__others__" || !top3.includes(k)) sum += v ?? 0;
+          }
+          return sum;
+        });
+      } else {
+        data = labels.map((d) => byDate.get(d)?.get(projectKey) ?? 0);
+      }
+    }
+
+    return {
+      label:
+        projectKey === "__others__"
+          ? "Others"
+          : (resolveProjectLabel?.(projectKey) ?? projectKey),
+      data,
+      backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+    };
+  });
   return { labels, datasets };
 }
 
 function buildChartDataFromDailyCosts(
-  dailyCosts: AnalyticsSummary["daily_costs"] | undefined
+  dailyCosts: AnalyticsSummary["daily_costs"] | undefined,
+  range: string,
+  startDate?: string,
+  endDate?: string
 ): { labels: string[]; datasets: { label: string; data: number[]; backgroundColor: string }[] } {
   if (!dailyCosts || dailyCosts.length === 0) {
     return { labels: [], datasets: [] };
   }
   const sorted = [...dailyCosts].sort((a, b) => a.date.localeCompare(b.date));
-  const labels = sorted.map((d) => d.date);
-  const data = sorted.map((d) => d.tokens ?? 0);
+  const baseDates = sorted.map((d) => d.date);
+
+  let labels: string[];
+  let data: number[];
+
+  if (range === "last_week" && startDate && endDate) {
+    // Ensure all 7 days in the selected week are represented on the x-axis.
+    labels = getAllDatesInRange(startDate, endDate);
+    data = labels.map((dateKey) => {
+      const found = sorted.find((d) => d.date === dateKey);
+      return found?.tokens ?? 0;
+    });
+  } else if (range === "last_month" && startDate && endDate) {
+    // Aggregate into week buckets for the last-month view.
+    const weekStarts = getWeekStartDatesInRange(startDate, endDate);
+    labels = weekStarts;
+    data = labels.map((weekStart, idx) => {
+      const nextWeekStart = labels[idx + 1];
+      const startKey = weekStart;
+      const endKeyExclusive = nextWeekStart ?? formatDateISO(parseDateISO(endDate));
+
+      return baseDates.reduce((sum, dateKey, dateIdx) => {
+        if (dateKey >= startKey && dateKey < endKeyExclusive) {
+          return sum + (sorted[dateIdx]?.tokens ?? 0);
+        }
+        return sum;
+      }, 0);
+    });
+  } else {
+    labels = baseDates;
+    data = sorted.map((d) => d.tokens ?? 0);
+  }
+
   return {
     labels,
     datasets: [
@@ -190,6 +364,11 @@ export default function SettingsPage() {
 
   const [dateRange, setDateRange] = useState("today");
 
+  const { data: userProjects } = useQuery({
+    queryKey: ["user-projects"],
+    queryFn: () => BranchAndRepositoryService.getUserProjects(),
+  });
+
   // Provider key inputs
   const [openAIInput, setOpenAIInput] = useState("");
   const [anthropicInput, setAnthropicInput] = useState("");
@@ -222,6 +401,17 @@ const [openRouterInput, setOpenRouterInput] = useState("");
 
   const { startDate, endDate } = useMemo(() => getDateRange(dateRange), [dateRange]);
 
+  const projectIdToRepoName = useMemo(() => {
+    const m = new Map<string, string>();
+    const projects = Array.isArray(userProjects) ? userProjects : [];
+    for (const p of projects) {
+      if (p?.id && typeof p?.repo_name === "string" && p.repo_name.length > 0) {
+        m.set(p.id, p.repo_name);
+      }
+    }
+    return m;
+  }, [userProjects]);
+
   const {
     data: tokensByDay,
     isLoading: isLoadingTokens,
@@ -246,13 +436,19 @@ const [openRouterInput, setOpenRouterInput] = useState("");
 
   const chartData = useMemo(() => {
     if (tokensByDay && tokensByDay.length > 0) {
-      return buildChartData(tokensByDay);
+      return buildChartData(
+        tokensByDay,
+        dateRange,
+        startDate,
+        endDate,
+        (projectId) => projectIdToRepoName.get(projectId)
+      );
     }
     if (analyticsSummary?.daily_costs?.length) {
-      return buildChartDataFromDailyCosts(analyticsSummary.daily_costs);
+      return buildChartDataFromDailyCosts(analyticsSummary.daily_costs, dateRange, startDate, endDate);
     }
     return { labels: [], datasets: [] as { label: string; data: number[]; backgroundColor: string }[] };
-  }, [tokensByDay, analyticsSummary?.daily_costs]);
+  }, [tokensByDay, analyticsSummary?.daily_costs, dateRange, startDate, endDate, projectIdToRepoName]);
 
   const {
     totalTokens,
@@ -381,7 +577,10 @@ const [openRouterInput, setOpenRouterInput] = useState("");
               Loading analytics…
             </div>
           ) : chartData.labels.length > 0 ? (
-            <StackedBarChart labels={chartData.labels} datasets={chartData.datasets} />
+            <StackedBarChart
+              labels={chartData.labels.map((label) => formatDisplayDate(label))}
+              datasets={chartData.datasets}
+            />
           ) : (
             <div className="h-full flex items-center justify-center text-gray-500 text-sm">
               No token usage data for this period.
@@ -394,7 +593,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
           <div className="flex-1 flex flex-col justify-center px-6 py-5">
             <p className="text-sm font-semibold text-gray-500 mb-1">Total Tokens</p>
             <div className="flex items-end mt-1">
-              <span className="text-2xl font-bold text-gray-900">
+              <span className="text-2xl font-bold text-gray-900 font-uncut">
                 {totalTokens != null ? totalTokens.toLocaleString() : "—"}
               </span>
             </div>
@@ -402,7 +601,7 @@ const [openRouterInput, setOpenRouterInput] = useState("");
           <div className="flex-1 flex flex-col justify-center px-6 py-5">
             <p className="text-sm font-semibold text-gray-500 mb-1">Total Requests</p>
             <div className="flex items-end mt-1">
-              <span className="text-2xl font-bold text-gray-900">
+              <span className="text-2xl font-bold text-gray-900 font-uncut">
                 {totalRequests != null ? totalRequests.toLocaleString() : "—"}
               </span>
             </div>
@@ -518,18 +717,22 @@ const [openRouterInput, setOpenRouterInput] = useState("");
           <TokenIntensityGrid intensityData={intensityData} />
 
           {/* Stats – derived from analytics data */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 pt-[53px]">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-gray-900">
+              <span className="text-2xl font-bold text-gray-900 font-roboto-mono">
                 {totalRequests != null ? totalRequests.toLocaleString() : "—"}
               </span>
-              <span className="text-xs font-semibold text-gray-400 tracking-wider">MSGS</span>
+              <span className="text-xs font-semibold text-gray-400 tracking-wider font-roboto-mono">
+                MSGS
+              </span>
             </div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-gray-900">
+              <span className="text-2xl font-bold text-gray-900 font-roboto-mono">
                 {totalThreads != null ? totalThreads.toLocaleString() : "—"}
               </span>
-              <span className="text-xs font-semibold text-gray-400 tracking-wider">THREADS</span>
+              <span className="text-xs font-semibold text-gray-400 tracking-wider font-roboto-mono">
+                THREADS
+              </span>
             </div>
           </div>
         </div>

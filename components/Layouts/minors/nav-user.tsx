@@ -1,11 +1,14 @@
 "use client";
 
 import {
-  Bell,
   ChevronRight,
   CreditCard,
   LogOut,
   Receipt,
+  CheckCircle2,
+  AlertCircle,
+  Mail,
+  MessageCircle,
   Settings,
   SubscriptIcon,
 } from "lucide-react";
@@ -30,6 +33,8 @@ import { auth } from "@/configs/Firebase-config";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import posthog from "posthog-js";
+import { toast } from "sonner";
+import { useState } from "react";
 
 export function NavUser({
   user,
@@ -38,9 +43,91 @@ export function NavUser({
     name: string;
     email: string;
     avatar: string;
+    emailVerified?: boolean;
   };
 }) {
   const router = useRouter();
+  const [isSendingVerification, setIsSendingVerification] = useState(false);
+
+  const handleOpenPlainChat = () => {
+    // @ts-ignore
+    if (window.Plain) {
+      // @ts-ignore
+      if (window.Plain.isInitialized && window.Plain.isInitialized()) {
+        // @ts-ignore
+        window.Plain.open();
+      } else {
+        console.log("Plain chat not yet initialized, waiting...");
+        // Wait a bit and try again
+        setTimeout(() => {
+          // @ts-ignore
+          if (window.Plain && window.Plain.isInitialized && window.Plain.isInitialized()) {
+            // @ts-ignore
+            window.Plain.open();
+          } else {
+            toast.error("Chat is still loading. Please try again in a moment.");
+          }
+        }, 1000);
+      }
+    } else {
+      toast.error("Chat is not available. Please refresh the page.");
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!auth.currentUser) {
+      toast.error("No user found. Please sign in again.");
+      return;
+    }
+
+    // Check if email is already verified
+    if (user.emailVerified) {
+      toast.info("Your email is already verified!");
+      return;
+    }
+
+    setIsSendingVerification(true);
+    try {
+      // Get Firebase token for authentication
+      const token = await auth.currentUser.getIdToken();
+
+      // Call backend API to send verification email to work email
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8000'}/api/v1/account/resend-verification`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Check if this is a GitHub provider error
+        if (data.action === 'sign_in_with_work_email') {
+          toast.error(
+            data.message || "Please sign in with your work email (Google) to verify your email address.",
+            {
+              duration: 5000,
+            }
+          );
+          return;
+        }
+        throw new Error(data.error || data.message || 'Failed to send verification email');
+      }
+
+      toast.success(`Verification email sent to ${data.email || user.email}! Please check your inbox (and spam folder).`);
+      console.log("Verification email sent successfully to work email:", data.email || user.email);
+    } catch (error: any) {
+      console.error("Failed to send verification email:", error);
+      toast.error(error?.message || "Failed to send verification email. Please try again.");
+    } finally {
+      setIsSendingVerification(false);
+    }
+  };
 
   return (
     <SidebarMenu>
@@ -89,7 +176,7 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuGroup>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="hover:bg-[#F5F0EB] cursor-pointer"
                 onClick={() => router.push("/key-management")}
               >
@@ -110,15 +197,12 @@ export function NavUser({
                 <Settings />
                 Settings
               </DropdownMenuItem>
-              <DropdownMenuItem className="hover:bg-[#F5F0EB] cursor-pointer">
-                <Link
-                  href={"https://discord.gg/ryk5CMD5v6"}
-                  target="_blank"
-                  className="flex items-center gap-2"
-                >
-                  <Bell />
-                  Support
-                </Link>
+              <DropdownMenuItem
+                className="hover:bg-[#F5F0EB] cursor-pointer"
+                onClick={handleOpenPlainChat}
+              >
+                <MessageCircle />
+                Chat with Support
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

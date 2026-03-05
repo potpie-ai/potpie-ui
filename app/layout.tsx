@@ -1,10 +1,29 @@
 import type { Metadata } from "next";
-import MullishRegularFont from "next/font/local";
+import localFont from "next/font/local";
+import { Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import LayoutProviders from "@/providers/LayoutProviders";
 import { GeistSans } from "geist/font/sans";
+
+const UncutSans = localFont({
+  src: [
+    {
+      path: "../public/fonts/Uncut-Sans-VF.ttf",
+      weight: "100 900",
+      style: "normal",
+    },
+  ],
+  variable: "--font-uncut",
+  display: "swap",
+});
+
+const RobotoMono = Roboto_Mono({
+  subsets: ["latin"],
+  variable: "--font-roboto-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "potpie - ai agents for your codebase in minutes",
@@ -26,7 +45,9 @@ export default function RootLayout({
       <body
         className={cn(
           "min-h-screen font-mulish antialiased ",
-          GeistSans.className
+          GeistSans.className,
+          UncutSans.variable,
+          RobotoMono.variable
         )}
       >
         <LayoutProviders>{children}</LayoutProviders>

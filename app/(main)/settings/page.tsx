@@ -180,13 +180,9 @@ function buildChartData(
 
   let labels: string[];
 
-  if (range === "last_week" && startDate && endDate) {
-    // Ensure all 7 days in the selected week are represented on the x-axis.
+  if ((range === "last_week" || range === "last_month") && startDate && endDate) {
+    // Ensure all days in the selected period are represented on the x-axis.
     labels = getAllDatesInRange(startDate, endDate);
-  } else if (range === "last_month" && startDate && endDate) {
-    // Aggregate into week buckets for the last-month view.
-    const weekStarts = getWeekStartDatesInRange(startDate, endDate);
-    labels = weekStarts;
   } else {
     // Default: use the dates that exist in the data.
     labels = sortedDates;
@@ -211,7 +207,7 @@ function buildChartData(
     // Per-label data depends on whether we're in daily or weekly aggregation mode.
     let data: number[];
 
-    if (range === "last_week" && startDate && endDate) {
+    if ((range === "last_week" || range === "last_month") && startDate && endDate) {
       if (projectKey === "__others__") {
         data = labels.map((d) => {
           const day = byDate.get(d);
@@ -225,30 +221,6 @@ function buildChartData(
       } else {
         data = labels.map((d) => byDate.get(d)?.get(projectKey) ?? 0);
       }
-    } else if (range === "last_month" && startDate && endDate) {
-      data = labels.map((weekStart, idx) => {
-        const nextWeekStart = labels[idx + 1];
-        const startKey = weekStart;
-        const lastDatePlusOne = parseDateISO(endDate);
-        lastDatePlusOne.setDate(lastDatePlusOne.getDate() + 1);
-        const endKeyExclusive = nextWeekStart ?? formatDateISO(lastDatePlusOne);
-
-        return sortedDates.reduce((sum, dateKey) => {
-          if (dateKey >= startKey && dateKey < endKeyExclusive) {
-            if (projectKey === "__others__") {
-              const day = byDate.get(dateKey);
-              if (!day) return sum;
-              let otherSum = 0;
-              for (const [k, v] of day.entries()) {
-                if (k === "__others__" || !top3.includes(k)) otherSum += v ?? 0;
-              }
-              return sum + otherSum;
-            }
-            return sum + (byDate.get(dateKey)?.get(projectKey) ?? 0);
-          }
-          return sum;
-        }, 0);
-      });
     } else {
       if (projectKey === "__others__") {
         data = labels.map((d) => {
@@ -292,30 +264,12 @@ function buildChartDataFromDailyCosts(
   let labels: string[];
   let data: number[];
 
-  if (range === "last_week" && startDate && endDate) {
-    // Ensure all 7 days in the selected week are represented on the x-axis.
+  if ((range === "last_week" || range === "last_month") && startDate && endDate) {
+    // Ensure all days in the selected period are represented on the x-axis.
     labels = getAllDatesInRange(startDate, endDate);
     data = labels.map((dateKey) => {
       const found = sorted.find((d) => d.date === dateKey);
       return found?.tokens ?? 0;
-    });
-  } else if (range === "last_month" && startDate && endDate) {
-    // Aggregate into week buckets for the last-month view.
-    const weekStarts = getWeekStartDatesInRange(startDate, endDate);
-    labels = weekStarts;
-    data = labels.map((weekStart, idx) => {
-      const nextWeekStart = labels[idx + 1];
-      const startKey = weekStart;
-      const lastDatePlusOne = parseDateISO(endDate);
-      lastDatePlusOne.setDate(lastDatePlusOne.getDate() + 1);
-      const endKeyExclusive = nextWeekStart ?? formatDateISO(lastDatePlusOne);
-
-      return baseDates.reduce((sum, dateKey, dateIdx) => {
-        if (dateKey >= startKey && dateKey < endKeyExclusive) {
-          return sum + (sorted[dateIdx]?.tokens ?? 0);
-        }
-        return sum;
-      }, 0);
     });
   } else {
     labels = baseDates;

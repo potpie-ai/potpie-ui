@@ -88,10 +88,10 @@ export default function StackedBarChart({ labels, datasets }: StackedBarChartPro
     pointsCount === 0
       ? 0
       : Math.max(
-          ...Array.from({ length: pointsCount }, (_, idx) =>
-            datasets.reduce((sum, d) => sum + (d.data[idx] ?? 0), 0)
-          )
-        );
+        ...Array.from({ length: pointsCount }, (_, idx) =>
+          datasets.reduce((sum, d) => sum + (d.data[idx] ?? 0), 0)
+        )
+      );
 
   const scaledMax =
     maxStackedTotal === 0
@@ -109,14 +109,14 @@ export default function StackedBarChart({ labels, datasets }: StackedBarChartPro
         stacked: true,
         grid: { display: false },
         ticks: {
-          color: "#9ca3af",
+          color: "#4b5563",
           font: {
             size: 11,
             family:
               "'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
           },
           maxRotation: 0,
-          autoSkip: false,
+          autoSkip: true,
         },
         border: { display: false },
       },
@@ -125,11 +125,11 @@ export default function StackedBarChart({ labels, datasets }: StackedBarChartPro
         grid: { color: "#f3f4f6", drawTicks: false },
         ticks: {
           color: "#9ca3af",
-            font: {
-              size: 11,
-              family:
-                "'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-            },
+          font: {
+            size: 11,
+            family:
+              "'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+          },
           maxTicksLimit: 5,
           padding: 8,
         },
@@ -141,7 +141,7 @@ export default function StackedBarChart({ labels, datasets }: StackedBarChartPro
   };
 
   return (
-    <div className="h-[300px] w-full">
+    <div className="h-full w-full">
       <Bar data={chartData} options={options} />
     </div>
   );

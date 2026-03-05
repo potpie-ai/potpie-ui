@@ -152,9 +152,9 @@ export function AppSidebar() {
                 <Image
                   src={"/images/Logomark.svg"}
                   alt="Potpie"
-                  width={136}
-                  height={30}
-                  className="h-9 w-auto object-contain object-left"
+                  width={110}
+                  height={28}
+                  className="h-7 w-auto object-contain object-left"
                 />
               </Link>
               {open && (

@@ -150,10 +150,10 @@ export function AppSidebar() {
                 className="flex items-center font-semibold min-w-0"
               >
                 <Image
-                  src={"/images/Potpie Logomark.svg"}
+                  src={"/images/Logomark.svg"}
                   alt="Potpie"
-                  width={140}
-                  height={36}
+                  width={136}
+                  height={30}
                   className="h-9 w-auto object-contain object-left"
                 />
               </Link>

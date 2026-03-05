@@ -2,14 +2,12 @@
 
 import {
   ChevronRight,
-  LogOut,
   CheckCircle2,
   AlertCircle,
   Mail,
-  MessageCircle,
-  Settings,
   SubscriptIcon,
 } from "lucide-react";
+import Image from "next/image";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -156,7 +154,7 @@ export function NavUser({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-[#FFFBF7] text-[#091828] border-border shadow-md"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-[#FFFDFC] text-[#091828] border-border shadow-md"
             side={"right"}
             align="end"
             sideOffset={8}
@@ -179,18 +177,28 @@ export function NavUser({
                 className="hover:bg-[#F5F0EB] cursor-pointer"
                 onClick={() => router.push("/settings")}
               >
-                <Settings />
+                <Image
+                  src="/images/setting-07.svg"
+                  alt="Settings"
+                  width={18}
+                  height={18}
+                />
                 Settings
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="hover:bg-[#F5F0EB] cursor-pointer"
                 onClick={handleOpenPlainChat}
               >
-                <MessageCircle />
+                <Image
+                  src="/images/customer-support.svg"
+                  alt="Support"
+                  width={18}
+                  height={18}
+                />
                 Support
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="bg-zinc-200" />
             <DropdownMenuItem
               className="hover:bg-[#F5F0EB] cursor-pointer"
               onClick={() => {
@@ -199,7 +207,12 @@ export function NavUser({
                 router.push("/sign-in");
               }}
             >
-              <LogOut />
+              <Image
+                src="/images/logout-circle-02.svg"
+                alt="Log out"
+                width={18}
+                height={18}
+              />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -2,9 +2,7 @@
 
 import {
   ChevronRight,
-  CreditCard,
   LogOut,
-  Receipt,
   CheckCircle2,
   AlertCircle,
   Mail,
@@ -176,20 +174,7 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuGroup>
-              <DropdownMenuItem
-                className="hover:bg-[#F5F0EB] cursor-pointer"
-                onClick={() => router.push("/key-management")}
-              >
-                <CreditCard />
-                Key Management
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="hover:bg-[#F5F0EB] cursor-pointer"
-                onClick={() => router.push("/user-subscription")}
-              >
-                <Receipt />
-                Manage Subscription
-              </DropdownMenuItem>
+
               <DropdownMenuItem
                 className="hover:bg-[#F5F0EB] cursor-pointer"
                 onClick={() => router.push("/settings")}
@@ -202,7 +187,7 @@ export function NavUser({
                 onClick={handleOpenPlainChat}
               >
                 <MessageCircle />
-                Chat with Support
+                Support
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

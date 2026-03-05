@@ -107,8 +107,8 @@ function getDateRange(range: string): { startDate: string; endDate: string } {
     start.setHours(0, 0, 0, 0);
   }
   return {
-    startDate: start.toISOString().slice(0, 10),
-    endDate: end.toISOString().slice(0, 10),
+    startDate: start.toLocaleDateString("en-CA"),
+    endDate: end.toLocaleDateString("en-CA"),
   };
 }
 
@@ -120,7 +120,7 @@ function parseDateISO(dateStr: string): Date {
 }
 
 function formatDateISO(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return date.toLocaleDateString("en-CA");
 }
 
 function formatDisplayDate(dateStr: string): string {
@@ -157,7 +157,7 @@ function getWeekStartDatesInRange(startDate: string, endDate: string): string[] 
 
 function buildChartData(
   items: TokensByDayItem[]
-,
+  ,
   range: string,
   startDate?: string,
   endDate?: string,
@@ -229,7 +229,9 @@ function buildChartData(
       data = labels.map((weekStart, idx) => {
         const nextWeekStart = labels[idx + 1];
         const startKey = weekStart;
-        const endKeyExclusive = nextWeekStart ?? formatDateISO(parseDateISO(endDate));
+        const lastDatePlusOne = parseDateISO(endDate);
+        lastDatePlusOne.setDate(lastDatePlusOne.getDate() + 1);
+        const endKeyExclusive = nextWeekStart ?? formatDateISO(lastDatePlusOne);
 
         return sortedDates.reduce((sum, dateKey) => {
           if (dateKey >= startKey && dateKey < endKeyExclusive) {
@@ -304,7 +306,9 @@ function buildChartDataFromDailyCosts(
     data = labels.map((weekStart, idx) => {
       const nextWeekStart = labels[idx + 1];
       const startKey = weekStart;
-      const endKeyExclusive = nextWeekStart ?? formatDateISO(parseDateISO(endDate));
+      const lastDatePlusOne = parseDateISO(endDate);
+      lastDatePlusOne.setDate(lastDatePlusOne.getDate() + 1);
+      const endKeyExclusive = nextWeekStart ?? formatDateISO(lastDatePlusOne);
 
       return baseDates.reduce((sum, dateKey, dateIdx) => {
         if (dateKey >= startKey && dateKey < endKeyExclusive) {
@@ -372,7 +376,7 @@ export default function SettingsPage() {
   // Provider key inputs
   const [openAIInput, setOpenAIInput] = useState("");
   const [anthropicInput, setAnthropicInput] = useState("");
-const [openRouterInput, setOpenRouterInput] = useState("");
+  const [openRouterInput, setOpenRouterInput] = useState("");
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: apiKeyData, isLoading: isLoadingKey } = useQuery<ApiKeyState>({
@@ -492,20 +496,20 @@ const [openRouterInput, setOpenRouterInput] = useState("");
         : (null as number | null);
 
     const totalThreads =
-      daily.length > 0
-        ? daily.filter(
-            (d) => (d.tokens ?? 0) > 0 || (d.runCount ?? 0) > 0
-          ).length
-        : (null as number | null);
+      analyticsSummary?.conversation_stats?.length
+        ? analyticsSummary.conversation_stats.reduce((sum, d) => sum + (d.count ?? 0), 0)
+        : daily.length > 0
+          ? daily.filter((d) => (d.tokens ?? 0) > 0 || (d.runCount ?? 0) > 0).length
+          : (null as number | null);
 
     const intensityData =
       daily.length > 0
         ? buildIntensityData(
-            daily.map(({ date, tokens }) => ({ date, tokens }))
-          )
+          daily.map(({ date, tokens }) => ({ date, tokens }))
+        )
         : Array(HEATMAP_ROWS)
-            .fill(0)
-            .map(() => Array(HEATMAP_COLS).fill(0));
+          .fill(0)
+          .map(() => Array(HEATMAP_COLS).fill(0));
 
     return { totalTokens, totalRequests, totalThreads, intensityData };
   }, [analyticsSummary?.daily_costs, tokensByDay]);

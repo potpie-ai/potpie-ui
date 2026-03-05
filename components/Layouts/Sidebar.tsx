@@ -150,11 +150,11 @@ export function AppSidebar() {
                 className="flex items-center font-semibold min-w-0"
               >
                 <Image
-                  src={"/images/Potpie Logomark.svg"}
+                  src={"/images/Logomark.svg"}
                   alt="Potpie"
-                  width={140}
-                  height={36}
-                  className="h-9 w-auto object-contain object-left"
+                  width={110}
+                  height={28}
+                  className="h-7 w-auto object-contain object-left"
                 />
               </Link>
               {open && (
@@ -270,7 +270,7 @@ export function AppSidebar() {
       </SidebarContent>
       {!subscriptionLoading && userSubscription && open && (
         <div className="px-4 pt-3 pb-3">
-          <div className="bg-white rounded-lg border border-zinc-200 p-3">
+          <div className="bg-[#FFFDFC] rounded-lg border border-zinc-200 p-3">
             <p className="text-sm font-medium text-[#00291C] mb-1">
               {userSubscription?.plan_type === planTypesEnum.PRO ? "Pro Plan" : "Free Plan"}
             </p>
@@ -291,7 +291,7 @@ export function AppSidebar() {
             </Progress.Root>
             <button
               onClick={() => setProModalOpen(true)}
-              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-white text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
+              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFDFC] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
             >
               UPGRADE
             </button>

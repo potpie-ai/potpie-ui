@@ -47,16 +47,25 @@ export default function RootLayout({
       <AppSidebar />
       <SidebarInset>
         <SidebarOpenButton />
-        <main
-          className={cn(
-            "flex flex-1 flex-col gap-4 lg:gap-6",
-            `${GeistSans.variable} ${GeistMono.variable}`
-          )}
-        >
-          {children}
-        </main>
+        <MainContent>{children}</MainContent>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+function MainContent({ children }: { children: React.ReactNode }) {
+  const { state } = useSidebar();
+
+  return (
+    <main
+      className={cn(
+        "flex flex-1 flex-col gap-4 lg:gap-6 transition-all duration-300",
+        state === "collapsed" ? "pl-14 md:pl-16" : "",
+        `${GeistSans.variable} ${GeistMono.variable}`
+      )}
+    >
+      {children}
+    </main>
   );
 }
 
@@ -69,11 +78,11 @@ function SidebarOpenButton() {
   }
 
   return (
-    <div className="absolute top-4 left-4 z-[100]">
+    <div className="fixed top-6 left-4 z-[100]">
       <Button
         variant="ghost"
         size="icon"
-        className="h-9 w-9 bg-white border border-zinc-200 shadow-md hover:bg-white hover:shadow-lg transition-shadow"
+        className="h-9 w-9 bg-[#FFFDFC] border border-zinc-200 shadow-md hover:bg-[#FFFDFC] hover:shadow-lg transition-shadow"
         onClick={toggleSidebar}
       >
         <Image

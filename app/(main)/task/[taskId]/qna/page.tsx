@@ -1312,10 +1312,43 @@ export default function QnaPage() {
         answersPayload["additional_context"] = state.additionalContext.trim();
       }
 
+      // Submit answers (idempotent on backend)
       await SpecService.submitAnswers(recipeId, answersPayload);
-      const { runId } = await SpecService.startSpecGenerationStream(recipeId, {
-        consumeStream: false,
-      });
+
+      // Decide whether to start first-time spec generation or force a fresh regeneration.
+      let shouldRegenerate = false;
+      try {
+        const current = await SpecService.getSpecProgressByRecipeId(recipeId);
+        const genStatus =
+          "generation_status" in current
+            ? (current as any).generation_status
+            : "spec_gen_status" in current
+              ? (current as any).spec_gen_status
+              : "spec_generation_step_status" in current
+                ? (current as any).spec_generation_step_status
+                : null;
+        // If any spec generation has already been started (pending/processing/completed/failed),
+        // treat this click as an explicit request to regenerate.
+        if (genStatus && genStatus !== "not_started") {
+          shouldRegenerate = true;
+        }
+      } catch {
+        // If status lookup fails, assume first-time generation.
+      }
+
+      let runId: string | undefined;
+
+      if (shouldRegenerate) {
+        // Start a fresh spec generation run; SpecPage will poll /spec and, if provided,
+        // attach to the new run's stream via its own run_id handshake.
+        await SpecService.regenerateSpec(recipeId);
+      } else {
+        // First-time generation: start via generate-stream to get run_id for live updates.
+        const res = await SpecService.startSpecGenerationStream(recipeId, {
+          consumeStream: false,
+        });
+        runId = res.runId;
+      }
 
       // Clear localStorage only after both calls succeed so we don't lose answers on submission failure
       if (typeof window !== "undefined" && recipeId) {

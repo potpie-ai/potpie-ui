@@ -976,13 +976,27 @@ const SpecPage = () => {
     };
   }, [recipeId, regenerateSpecKey, runIdFromUrl]);
 
-  // Calculate status (support new API: generation_status, and legacy formats)
-  const status = (specProgress 
-    ? ('generation_status' in specProgress
-        ? ((specProgress as any).generation_status === 'completed' ? 'COMPLETED' : (specProgress as any).generation_status === 'failed' ? 'FAILED' : (specProgress as any).generation_status === 'processing' || (specProgress as any).generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
-        : ('spec_gen_status' in specProgress ? specProgress.spec_gen_status : ('spec_generation_step_status' in specProgress ? specProgress.spec_generation_step_status : null)))
-    : null) as 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null;
-  const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
+  // Calculate status from backend generation_status (source of truth).
+  // Treat only "pending" and "processing" as in-progress; "completed"/"failed" as terminal; anything else as idle.
+  const rawGenerationStatus: string | null = specProgress
+    ? ("generation_status" in specProgress
+        ? (specProgress as any).generation_status
+        : "spec_gen_status" in specProgress
+          ? (specProgress as any).spec_gen_status
+          : "spec_generation_step_status" in specProgress
+            ? (specProgress as any).spec_generation_step_status
+            : null)
+    : null;
+
+  const status = (rawGenerationStatus === "completed"
+    ? "COMPLETED"
+    : rawGenerationStatus === "failed"
+      ? "FAILED"
+      : rawGenerationStatus === "pending" || rawGenerationStatus === "processing"
+        ? "IN_PROGRESS"
+        : null) as "IN_PROGRESS" | "COMPLETED" | "FAILED" | null;
+
+  const isGenerating = status === "IN_PROGRESS";
   const errorMessageFromApi = specProgress && typeof (specProgress as any).error_message === 'string' ? (specProgress as any).error_message : null;
 
   // Normalize spec from potpie-workflows GET /api/v1/recipes/{id}/spec
@@ -1265,6 +1279,11 @@ const SpecPage = () => {
                     onClick={async () => {
                       if (!recipeId || isRegeneratingSpec) return;
                       setIsRegeneratingSpec(true);
+                      // Clear any previous spec/stream state so we don't show stale content during regeneration
+                      setSpecProgress(null);
+                      setError(null);
+                      setStreamProgress(null);
+                      setStreamItems([]);
                       try {
                         // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
@@ -1282,8 +1301,6 @@ const SpecPage = () => {
                         toast.success("Spec regeneration started");
                         if (!runId) {
                           // No run_id - fall back to polling
-                          setSpecProgress(null);
-                          setError(null);
                           setRegenerateSpecKey((k) => k + 1);
                         } else {
                           // Navigate with run_id for streaming
@@ -1334,9 +1351,33 @@ const SpecPage = () => {
             {status === "COMPLETED" && !isCancelled && hasSpecContent && (
               <div className="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-[#E5E8E6] flex justify-end">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    if (!recipeId) return;
                     startNavigation();
-                    router.push(`/task/${recipeId}/plan`);
+                    try {
+                      // Check current plan status to decide between first-time generation and regeneration.
+                      let shouldRegenerate = false;
+                      try {
+                        const current = await PlanService.getPlanStatusByRecipeId(recipeId);
+                        const genStatus = current?.generation_status;
+                        if (genStatus && genStatus !== "not_started") {
+                          shouldRegenerate = true;
+                        }
+                      } catch {
+                        // If status lookup fails, assume first-time generation.
+                      }
+
+                      if (shouldRegenerate) {
+                        await PlanService.regeneratePlan(recipeId);
+                      } else {
+                        await PlanService.submitPlanGeneration({ recipe_id: recipeId });
+                      }
+                    } catch (err: any) {
+                      console.error("Error starting plan generation:", err);
+                      toast.error(err?.message ?? "Failed to start plan generation");
+                    } finally {
+                      router.push(`/task/${recipeId}/plan`);
+                    }
                   }}
                   className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                 >

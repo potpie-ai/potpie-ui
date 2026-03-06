@@ -141,7 +141,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="[&>div[data-sidebar='sidebar']]:bg-[#FFFDFC]">
+    <Sidebar collapsible="icon" className="[&>div[data-sidebar='sidebar']]:bg-white">
       <SidebarHeader className="pt-6 group-data-[collapsible=icon]:px-0">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -174,10 +174,10 @@ export function AppSidebar() {
               >
                 {open ? (
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M2.34082 14.9792C2.50863 15.7188 2.78449 16.2805 3.23798 16.7341C4.39575 17.8918 6.25913 17.8918 9.98594 17.8918C13.7127 17.8918 15.5761 17.8918 16.7338 16.7341C17.8915 15.5763 17.8915 13.7128 17.8915 9.98611C17.8915 6.25934 17.8915 4.39596 16.7338 3.2382C15.5761 2.08044 13.7127 2.08044 9.98594 2.08044C6.25913 2.08044 4.39575 2.08044 3.23798 3.2382C2.78449 3.6917 2.50863 4.25346 2.34082 4.99306" stroke="#00291C" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M4.57661 7.48958L2.08008 9.98611L4.57661 12.4826M2.91225 9.98611H8.73749" stroke="#00291C" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M12.4824 2.07881V17.8901" stroke="#00291C" strokeWidth="1.24826" />
-                    <path d="M17.8916 7.07187H12.4824M17.8916 12.8971H12.4824" stroke="#00291C" strokeWidth="1.24826" />
+                    <path d="M2.34082 14.9792C2.50863 15.7188 2.78449 16.2805 3.23798 16.7341C4.39575 17.8918 6.25913 17.8918 9.98594 17.8918C13.7127 17.8918 15.5761 17.8918 16.7338 16.7341C17.8915 15.5763 17.8915 13.7128 17.8915 9.98611C17.8915 6.25934 17.8915 4.39596 16.7338 3.2382C15.5761 2.08044 13.7127 2.08044 9.98594 2.08044C6.25913 2.08044 4.39575 2.08044 3.23798 3.2382C2.78449 3.6917 2.50863 4.25346 2.34082 4.99306" className="stroke-emerald-950" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M4.57661 7.48958L2.08008 9.98611L4.57661 12.4826M2.91225 9.98611H8.73749" className="stroke-emerald-950" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12.4824 2.07881V17.8901" className="stroke-emerald-950" strokeWidth="1.24826" />
+                    <path d="M17.8916 7.07187H12.4824M17.8916 12.8971H12.4824" className="stroke-emerald-950" strokeWidth="1.24826" />
                   </svg>
                 ) : (
                   <Image
@@ -259,7 +259,7 @@ export function AppSidebar() {
                           {link.icons && <span className="shrink-0">{link.icons}</span>}
                           <span className="group-data-[collapsible=icon]:hidden truncate">{link.title}</span>
                           {link.description && (
-                            <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
+                            <span className="border border-primary text-emerald-950 group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
                               {link.description}
                             </span>
                           )}
@@ -272,7 +272,7 @@ export function AppSidebar() {
                           {link.icons && <span className="shrink-0">{link.icons}</span>}
                           <span className="group-data-[collapsible=icon]:hidden truncate">{link.title}</span>
                           {link.description && (
-                            <span className="border border-primary text-[#00291C] group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
+                            <span className="border border-primary text-emerald-950 group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
                               {link.description}
                             </span>
                           )}
@@ -288,8 +288,8 @@ export function AppSidebar() {
       </SidebarContent>
       {!subscriptionLoading && userSubscription && open && (
         <div className="px-4 pt-3 pb-3">
-          <div className="bg-[#FFFDFC] rounded-lg border border-zinc-200 p-3">
-            <p className="text-sm font-medium text-[#00291C] mb-1">
+          <div className="bg-white rounded-lg border border-zinc-200 p-3">
+            <p className="text-sm font-medium text-emerald-950 mb-1">
               {userSubscription?.plan_type === planTypesEnum.PRO ? "Pro Plan" : "Free Plan"}
             </p>
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -309,7 +309,7 @@ export function AppSidebar() {
             </Progress.Root>
             <button
               onClick={() => setProModalOpen(true)}
-              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFDFC] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
+              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-white text-xs font-medium text-emerald-950 hover:bg-zinc-50 transition-colors"
             >
               UPGRADE
             </button>

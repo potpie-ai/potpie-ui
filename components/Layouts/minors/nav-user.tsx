@@ -132,29 +132,29 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="w-full justify-between items-center px-6 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 data-[state=open]:bg-transparent data-[state=open]:text-[#00291C] hover:bg-transparent"
+              className="w-full justify-between items-center px-6 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 data-[state=open]:bg-transparent data-[state=open]:text-emerald-950 hover:bg-transparent"
             >
               <div className="flex items-center gap-2 flex-1 min-w-0 group-data-[collapsible=icon]:justify-center">
                 <Avatar className="h-9 w-9 rounded-full shrink-0">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-full bg-[#E5EAE8] text-[#00291C]">
+                  <AvatarFallback className="rounded-full bg-slate-200 text-emerald-950">
                     {user.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col flex-1 min-w-0 text-left group-data-[collapsible=icon]:hidden">
-                  <span className="truncate text-sm font-normal text-[#091828] leading-tight">
+                  <span className="truncate text-sm font-normal text-slate-900 leading-tight">
                     {user.name}
                   </span>
-                  <span className="truncate text-sm font-normal text-[#747575] leading-tight">
+                  <span className="truncate text-sm font-normal text-gray-500 leading-tight">
                     {user.email}
                   </span>
                 </div>
               </div>
-              <ChevronRight className="ml-auto size-5 text-[#00291C] flex-shrink-0 group-data-[collapsible=icon]:hidden" />
+              <ChevronRight className="ml-auto size-5 text-emerald-950 flex-shrink-0 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-[#FFFDFC] text-[#091828] border-border shadow-md"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-white text-slate-900 border-border shadow-md"
             side={"right"}
             align="end"
             sideOffset={8}
@@ -174,7 +174,7 @@ export function NavUser({
             <DropdownMenuGroup>
 
               <DropdownMenuItem
-                className="hover:bg-[#F5F0EB] cursor-pointer"
+                className="hover:bg-stone-100 cursor-pointer"
                 onClick={() => router.push("/settings")}
               >
                 <Image
@@ -186,7 +186,7 @@ export function NavUser({
                 Settings
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="hover:bg-[#F5F0EB] cursor-pointer"
+                className="hover:bg-stone-100 cursor-pointer"
                 onClick={handleOpenPlainChat}
               >
                 <Image
@@ -200,7 +200,7 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator className="bg-zinc-200" />
             <DropdownMenuItem
-              className="hover:bg-[#F5F0EB] cursor-pointer"
+              className="hover:bg-stone-100 cursor-pointer"
               onClick={() => {
                 posthog.reset();
                 signOut(auth);

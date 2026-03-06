@@ -27,11 +27,11 @@ const StackedBarChart = dynamic(() => import("./StackedBarChart"), {
 
 // ── Heatmap helpers ────────────────────────────────────────────────────────────
 function intensityColor(val: number): string {
-  if (val === 0) return "#e5e7eb";
-  if (val < 0.25) return "#d1fae5";
-  if (val < 0.5) return "#6ee7b7";
-  if (val < 0.75) return "#34d399";
-  return "#059669";
+  if (val === 0) return "bg-gray-200";
+  if (val < 0.25) return "bg-emerald-100";
+  if (val < 0.5) return "bg-emerald-300";
+  if (val < 0.75) return "bg-emerald-400";
+  return "bg-emerald-600";
 }
 
 const intensityData: number[][] = [
@@ -140,10 +140,10 @@ export default function SettingsPage() {
     keySecrets?.inference_config?.api_key ?? keySecrets?.chat_config?.api_key;
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FAF8F7] w-full">
+    <div className="flex flex-col min-h-screen bg-stone-50 w-full">
       {/* ── Top Bar ────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
-        <h1 className="text-xl font-bold text-[#00291C]">Settings</h1>
+        <h1 className="text-xl font-bold text-emerald-950">Settings</h1>
         <Select value={dateRange} onValueChange={setDateRange}>
           <SelectTrigger className="w-40 bg-white text-sm text-gray-600 border-gray-200">
             <CalendarIcon className="w-4 h-4 text-gray-400 shrink-0" />
@@ -302,8 +302,7 @@ export default function SettingsPage() {
                 row.map((val, ci) => (
                   <div
                     key={`${ri}-${ci}`}
-                    className="aspect-square rounded-sm w-full"
-                    style={{ backgroundColor: intensityColor(val) }}
+                    className={`aspect-square rounded-sm w-full ${intensityColor(val)}`}
                   />
                 ))
               )}

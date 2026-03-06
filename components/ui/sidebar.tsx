@@ -181,7 +181,7 @@ const Sidebar = React.forwardRef<
       return (
         <div
           className={cn(
-            "flex h-full w-[--sidebar-width] flex-col bg-[#FFFDFC] text-black border-r border-[rgba(0,41,28,0.1)]",
+            "flex h-full w-[--sidebar-width] flex-col bg-white text-black border-r border-emerald-950/10",
             className
           )}
           ref={ref}
@@ -198,7 +198,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-[#FFFDFC] p-0 text-black [&>button]:hidden"
+            className="w-[--sidebar-width] bg-white p-0 text-black [&>button]:hidden"
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -241,14 +241,14 @@ const Sidebar = React.forwardRef<
             // Adjust the padding for floating and inset variants.
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
-              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l border-[rgba(0,41,28,0.1)]",
+              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l border-emerald-950/10",
             className
           )}
           {...props}
         >
           <div
             data-sidebar="sidebar"
-            className="flex h-full w-full flex-col bg-[#FFFDFC] px-0 group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-[rgba(0,41,28,0.1)] group-data-[variant=floating]:shadow"
+            className="flex h-full w-full flex-col bg-white px-0 group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-emerald-950/10 group-data-[variant=floating]:shadow"
           >
             {children}
           </div>
@@ -373,7 +373,7 @@ const SidebarFooter = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="footer"
-      className={cn("flex flex-col gap-2 px-6 pb-3 border-t border-[#E6E8E9]", className)}
+      className={cn("flex flex-col gap-2 px-6 pb-3 border-t border-gray-200", className)}
       {...props}
     />
   )
@@ -421,7 +421,7 @@ const SidebarGroup = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="group"
-      className={cn("relative flex w-full min-w-0 flex-col px-6 py-3 border-b border-[#E5EAE8]", className)}
+      className={cn("relative flex w-full min-w-0 flex-col px-6 py-3 border-b border-slate-200", className)}
       {...props}
     />
   )
@@ -439,7 +439,7 @@ const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        "duration-200 flex h-8 shrink-0 items-center rounded-md px-3 text-xs font-medium text-[#747575] uppercase tracking-[0.04em] outline-none ring-sidebar-ring transition-[margin,opa] ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "duration-200 flex h-8 shrink-0 items-center rounded-md px-3 text-xs font-medium text-gray-500 uppercase tracking-[0.04em] outline-none ring-sidebar-ring transition-[margin,opa] ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
         className
       )}
@@ -516,7 +516,7 @@ const sidebarMenuButtonVariants = cva(
   {
     variants: {
       variant: {
-        default: "hover:bg-transparent hover:text-[#00291C] text-[#00291C]",
+        default: "hover:bg-transparent hover:text-emerald-950 text-emerald-950",
         outline:
           "bg-background shadow-[0_0_0_1px_hsl(var(--gray-200))] hover:bg-accent hover:text-black hover:shadow-[0_0_0_1px_hsl(var(--gray-300))]",
       },
@@ -564,8 +564,8 @@ const SidebarMenuButton = React.forwardRef<
         data-active={isActive}
         className={cn(
           sidebarMenuButtonVariants({ variant, size }),
-          isActive && "bg-[#F4F4F4] text-[#00291C] font-medium shadow-[inset_-2px_-2px_2px_0px_rgba(0,0,0,0.04),inset_2px_2px_2px_0px_rgba(255,255,255,0.12)] border border-[rgba(28,28,28,0.1)]",
-          !isActive && "text-[#00291C]",
+          isActive && "bg-neutral-100 text-emerald-950 font-medium shadow-[inset_-2px_-2px_2px_0px_rgba(0,0,0,0.04),inset_2px_2px_2px_0px_rgba(255,255,255,0.12)] border border-black/10",
+          !isActive && "text-emerald-950",
           className
         )}
         {...props}

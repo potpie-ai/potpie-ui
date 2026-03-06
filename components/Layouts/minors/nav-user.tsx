@@ -132,16 +132,16 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="w-full justify-between px-6 py-3 data-[state=open]:bg-transparent data-[state=open]:text-[#00291C] hover:bg-transparent"
+              className="w-full justify-between items-center px-6 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 data-[state=open]:bg-transparent data-[state=open]:text-[#00291C] hover:bg-transparent"
             >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <Avatar className="h-9 w-9 rounded-full">
+              <div className="flex items-center gap-2 flex-1 min-w-0 group-data-[collapsible=icon]:justify-center">
+                <Avatar className="h-9 w-9 rounded-full shrink-0">
                   <AvatarImage src={user.avatar} alt={user.name} />
                   <AvatarFallback className="rounded-full bg-[#E5EAE8] text-[#00291C]">
                     {user.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col flex-1 min-w-0 text-left">
+                <div className="flex flex-col flex-1 min-w-0 text-left group-data-[collapsible=icon]:hidden">
                   <span className="truncate text-sm font-normal text-[#091828] leading-tight">
                     {user.name}
                   </span>
@@ -150,7 +150,7 @@ export function NavUser({
                   </span>
                 </div>
               </div>
-              <ChevronRight className="ml-auto size-5 text-[#00291C] flex-shrink-0" />
+              <ChevronRight className="ml-auto size-5 text-[#00291C] flex-shrink-0 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

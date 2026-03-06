@@ -308,8 +308,8 @@ export function AppSidebar() {
               />
             </Progress.Root>
             <button
-              onClick={() => setProModalOpen(true)}
-              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-white text-xs font-medium text-emerald-950 hover:bg-zinc-50 transition-colors"
+              onClick={() => router.push("/user-subscription")}
+              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFDFC] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
             >
               UPGRADE
             </button>

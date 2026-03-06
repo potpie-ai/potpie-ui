@@ -46,53 +46,22 @@ export default function RootLayout({
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <SidebarOpenButton />
         <MainContent>{children}</MainContent>
       </SidebarInset>
     </SidebarProvider>
   );
 }
 
-function MainContent({ children }: { children: React.ReactNode }) {
-  const { state } = useSidebar();
 
+function MainContent({ children }: { children: React.ReactNode }) {
   return (
     <main
       className={cn(
         "flex flex-1 flex-col gap-4 lg:gap-6 transition-all duration-300",
-        state === "collapsed" ? "pl-14 md:pl-16" : "",
         `${GeistSans.variable} ${GeistMono.variable}`
       )}
     >
       {children}
     </main>
-  );
-}
-
-function SidebarOpenButton() {
-  const { state, toggleSidebar } = useSidebar();
-
-  // Only show when sidebar is collapsed
-  if (state === "expanded") {
-    return null;
-  }
-
-  return (
-    <div className="fixed top-6 left-4 z-[100]">
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-9 w-9 bg-[#FFFDFC] border border-zinc-200 shadow-md hover:bg-[#FFFDFC] hover:shadow-lg transition-shadow"
-        onClick={toggleSidebar}
-      >
-        <Image
-          src="/images/insert-column-left.svg"
-          alt="Open Sidebar"
-          width={20}
-          height={20}
-        />
-        <span className="sr-only">Open Sidebar</span>
-      </Button>
-    </div>
   );
 }

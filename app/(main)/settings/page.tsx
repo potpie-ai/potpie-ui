@@ -74,7 +74,7 @@ function TokenIntensityGrid({ intensityData }: TokenIntensityGridProps) {
   return (
     <div className="mb-5 pt-8 w-full flex items-center justify-start">
       <div
-        className="grid gap-x-2 gap-y-2 w-fit max-w-full -ml+1"
+        className="grid gap-x-2 gap-y-2 w-fit max-w-full -ml-1"
         style={{
           gridTemplateColumns: `repeat(${HEATMAP_COLS}, auto)`,
         }}
@@ -517,50 +517,53 @@ export default function SettingsPage() {
         </Select>
       </div>
 
-      {/* ── Tokens Used card ────────────────────────────────────────────────── */}
-      <div className="border border-gray-200 rounded-xl mb-5 flex overflow-hidden bg-white">
-        {/* Chart */}
-        <div className="flex-1 min-w-0 p-5 h-[300px]">
-          {isErrorTokens || isErrorSummary ? (
-            <div className="h-full flex items-center justify-center text-sm text-amber-600">
-              {typeof (errorTokens as any)?.response?.data?.detail === "string"
-                ? (errorTokens as any).response.data.detail
-                : typeof (errorSummary as any)?.response?.data?.detail === "string"
-                  ? (errorSummary as any).response.data.detail
-                  : "Analytics temporarily unavailable"}
-            </div>
-          ) : isLoadingTokens || isLoadingSummary ? (
-            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-              Loading analytics…
-            </div>
-          ) : chartData.labels.length > 0 ? (
-            <StackedBarChart
-              labels={chartData.labels.map((label) => formatDisplayDate(label))}
-              datasets={chartData.datasets}
-            />
-          ) : (
-            <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-              No token usage data for this period.
-            </div>
-          )}
-        </div>
+      <div className="p-8 w-full min-w-0">
 
-        {/* Stats */}
-        <div className="w-[22%] min-w-[190px] border-l border-gray-200 flex flex-col divide-y divide-gray-200">
-          <div className="flex-1 flex flex-col justify-center px-6 py-5">
-            <p className="text-sm font-semibold text-gray-500 mb-1">Total Tokens</p>
-            <div className="flex items-end mt-1">
-              <span className="text-2xl font-bold text-gray-900 font-uncut">
-                {totalTokens != null ? totalTokens.toLocaleString() : "—"}
-              </span>
-            </div>
+        {/* ── Tokens Used card ────────────────────────────────────────────────── */}
+        <div className="border border-gray-200 rounded-xl mb-5 flex overflow-hidden bg-white">
+          {/* Chart */}
+          <div className="flex-1 min-w-0 p-5 h-[300px]">
+            {isErrorTokens || isErrorSummary ? (
+              <div className="h-full flex items-center justify-center text-sm text-amber-600">
+                {typeof (errorTokens as any)?.response?.data?.detail === "string"
+                  ? (errorTokens as any).response.data.detail
+                  : typeof (errorSummary as any)?.response?.data?.detail === "string"
+                    ? (errorSummary as any).response.data.detail
+                    : "Analytics temporarily unavailable"}
+              </div>
+            ) : isLoadingTokens || isLoadingSummary ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Loading analytics…
+              </div>
+            ) : chartData.labels.length > 0 ? (
+              <StackedBarChart
+                labels={chartData.labels.map((label) => formatDisplayDate(label))}
+                datasets={chartData.datasets}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+                No token usage data for this period.
+              </div>
+            )}
           </div>
-          <div className="flex-1 flex flex-col justify-center px-6 py-5">
-            <p className="text-sm font-semibold text-gray-500 mb-1">Total Requests</p>
-            <div className="flex items-end mt-1">
-              <span className="text-2xl font-bold text-gray-900 font-uncut">
-                {totalRequests != null ? totalRequests.toLocaleString() : "—"}
-              </span>
+
+          {/* Stats */}
+          <div className="w-[22%] min-w-[190px] border-l border-gray-200 flex flex-col divide-y divide-gray-200">
+            <div className="flex-1 flex flex-col justify-center px-6 py-5">
+              <p className="text-sm font-semibold text-gray-500 mb-1">Total Tokens</p>
+              <div className="flex items-end mt-1">
+                <span className="text-2xl font-bold text-gray-900 font-uncut">
+                  {totalTokens != null ? totalTokens.toLocaleString() : "—"}
+                </span>
+              </div>
+            </div>
+            <div className="flex-1 flex flex-col justify-center px-6 py-5">
+              <p className="text-sm font-semibold text-gray-500 mb-1">Total Requests</p>
+              <div className="flex items-end mt-1">
+                <span className="text-2xl font-bold text-gray-900 font-uncut">
+                  {totalRequests != null ? totalRequests.toLocaleString() : "—"}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -604,34 +607,18 @@ export default function SettingsPage() {
                   <Input
                     type="password"
                     className="flex-1 bg-white text-sm"
-                    placeholder={savedProvider === "openai" && savedApiKey ? maskedKey(savedApiKey) : ""}
+                    placeholder={savedProvider === "openai" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
                     value={openAIInput}
                     onChange={(e) => setOpenAIInput(e.target.value)}
                   />
                   {openAIInput && (
-                    <Button size="sm" disabled={savingProvider === "openai"}
-                      onClick={() => saveProviderKey({ provider: "openai", api_key: openAIInput })}>
+                    <Button size="sm" disabled={isSavingProvider}
+                      onClick={() => { saveProviderKey({ provider: "openai", api_key: openAIInput }); setOpenAIInput(""); }}>
                       Save
                     </Button>
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  type="password"
-                  className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "anthropic" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
-                  value={anthropicInput}
-                  onChange={(e) => setAnthropicInput(e.target.value)}
-                />
-                {anthropicInput && (
-                  <Button size="sm" disabled={isSavingProvider}
-                    onClick={() => { saveProviderKey({ provider: "anthropic", api_key: anthropicInput }); setAnthropicInput(""); }}>
-                    Save
-                  </Button>
-                )}
-              </div>
-            </div>
 
               {/* Anthropic */}
               <div className="mb-5">
@@ -643,64 +630,71 @@ export default function SettingsPage() {
                   <Input
                     type="password"
                     className="flex-1 bg-white text-sm"
-                    placeholder={savedProvider === "anthropic" && savedApiKey ? maskedKey(savedApiKey) : ""}
+                    placeholder={savedProvider === "anthropic" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
                     value={anthropicInput}
                     onChange={(e) => setAnthropicInput(e.target.value)}
                   />
                   {anthropicInput && (
-                    <Button size="sm" disabled={savingProvider === "anthropic"}
-                      onClick={() => saveProviderKey({ provider: "anthropic", api_key: anthropicInput })}>
+                    <Button size="sm" disabled={isSavingProvider}
+                      onClick={() => { saveProviderKey({ provider: "anthropic", api_key: anthropicInput }); setAnthropicInput(""); }}>
                       Save
                     </Button>
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  type="password"
-                  className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "openrouter" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
-                  value={openRouterInput}
-                  onChange={(e) => setOpenRouterInput(e.target.value)}
-                />
-                {openRouterInput && (
-                  <Button size="sm" disabled={isSavingProvider}
-                    onClick={() => { saveProviderKey({ provider: "openrouter", api_key: openRouterInput }); setOpenRouterInput(""); }}>
-                    Save
-                  </Button>
-                )}
+
+              {/* OpenRouter */}
+              <div className="mb-5">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <OpenRouterIcon />
+                  <span className="text-sm text-gray-700">OpenRouter API Key</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    className="flex-1 bg-white text-sm"
+                    placeholder={savedProvider === "openrouter" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
+                    value={openRouterInput}
+                    onChange={(e) => setOpenRouterInput(e.target.value)}
+                  />
+                  {openRouterInput && (
+                    <Button size="sm" disabled={isSavingProvider}
+                      onClick={() => { saveProviderKey({ provider: "openrouter", api_key: openRouterInput }); setOpenRouterInput(""); }}>
+                      Save
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Right card – Token Use Intensity (from backend) */}
-        <div className="w-[28%] min-w-[260px] border border-gray-200 rounded-xl p-5 bg-white">
-          <p className="text-sm font-semibold text-gray-800 mb-4">Token Use Intensity</p>
+          {/* Right card – Token Use Intensity (from backend) */}
+          <div className="w-[28%] min-w-[260px] border border-gray-200 rounded-xl p-5 bg-white">
+            <p className="text-sm font-semibold text-gray-800 mb-4">Token Use Intensity</p>
 
-          {/* Heatmap grid – driven by daily token usage */}
-          <TokenIntensityGrid intensityData={intensityData} />
+            {/* Heatmap grid – driven by daily token usage */}
+            <TokenIntensityGrid intensityData={intensityData} />
 
-          {/* Stats – derived from analytics data */}
-          <div className="flex flex-col gap-2 pt-[53px]">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-gray-900 font-roboto-mono">
-                {totalRequests != null ? totalRequests.toLocaleString() : "—"}
-              </span>
-              <span className="text-xs font-semibold text-gray-400 tracking-wider font-roboto-mono">
-                MSGS
-              </span>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-gray-900 font-roboto-mono">
-                {totalThreads != null ? totalThreads.toLocaleString() : "—"}
-              </span>
-              <span className="text-xs font-semibold text-gray-400 tracking-wider font-roboto-mono">
-                THREADS
-              </span>
+            {/* Stats – derived from analytics data */}
+            <div className="flex flex-col gap-2 pt-[53px]">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-gray-900 font-roboto-mono">
+                  {totalRequests != null ? totalRequests.toLocaleString() : "—"}
+                </span>
+                <span className="text-xs font-semibold text-gray-400 tracking-wider font-roboto-mono">
+                  MSGS
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-gray-900 font-roboto-mono">
+                  {totalThreads != null ? totalThreads.toLocaleString() : "—"}
+                </span>
+                <span className="text-xs font-semibold text-gray-400 tracking-wider font-roboto-mono">
+                  THREADS
+                </span>
+              </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>

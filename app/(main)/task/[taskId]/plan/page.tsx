@@ -35,6 +35,7 @@ import {
   RotateCw,
   Wrench,
   ArrowLeft,
+  Download,
 } from "lucide-react";
 import {
   Accordion,
@@ -65,6 +66,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 import { useNavigationProgress } from "@/contexts/NavigationProgressContext";
 import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils";
+import { downloadPlanAsMarkdown } from "@/lib/utils/markdownExport";
 import {
   StreamTimeline,
   type StreamTimelineItem,
@@ -931,6 +933,20 @@ const PlanPage = () => {
                       <RotateCw className="w-4 h-4" style={{ color: "#022019" }} />
                     )}
                   </button>
+                  {isCompleted && planStatus?.plan && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadPlanAsMarkdown(planStatus.plan!, recipeId);
+                        toast.success("Plan downloaded as Markdown");
+                      }}
+                      className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0"
+                      aria-label="Export plan as Markdown"
+                      title="Export as Markdown"
+                    >
+                      <Download className="w-4 h-4" style={{ color: "#022019" }} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setSelectedPhaseIndex((i) => Math.max(0, i - 1))}
@@ -949,7 +965,7 @@ const PlanPage = () => {
                   >
                     <ChevronRight className="w-4 h-4" style={{ color: "#022019" }} />
                   </button>
-                
+
                 </div>
             </div>
           </div>

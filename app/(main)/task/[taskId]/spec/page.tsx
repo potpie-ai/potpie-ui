@@ -24,10 +24,12 @@ import {
   RotateCw,
   Wrench,
   ArrowLeft,
+  Download,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
 import { toast } from "@/components/ui/sonner";
+import { downloadSpecAsMarkdown } from "@/lib/utils/markdownExport";
 import { useNavigationProgress } from "@/contexts/NavigationProgressContext";
 import {
   SpecPlanStatusResponse,
@@ -1306,6 +1308,20 @@ const SpecPage = () => {
                       <RotateCw className="w-4 h-4" style={{ color: "#022019" }} />
                     )}
                   </button>
+                  {status === "COMPLETED" && rawSpecification && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadSpecAsMarkdown(rawSpecification, recipeId);
+                        toast.success("Specification downloaded as Markdown");
+                      }}
+                      className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0"
+                      aria-label="Export spec as Markdown"
+                      title="Export as Markdown"
+                    >
+                      <Download className="w-4 h-4" style={{ color: "#022019" }} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

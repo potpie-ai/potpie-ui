@@ -987,11 +987,13 @@ const SpecPage = () => {
             : null)
     : null;
 
-  const status = (rawGenerationStatus === "completed"
+  // Normalize to lowercase for case-insensitive comparison (handles legacy uppercase values)
+  const normalizedStatus = rawGenerationStatus?.toLowerCase();
+  const status = (normalizedStatus === "completed"
     ? "COMPLETED"
-    : rawGenerationStatus === "failed"
+    : normalizedStatus === "failed"
       ? "FAILED"
-      : rawGenerationStatus === "pending" || rawGenerationStatus === "processing"
+      : normalizedStatus === "pending" || normalizedStatus === "processing" || normalizedStatus === "in_progress"
         ? "IN_PROGRESS"
         : null) as "IN_PROGRESS" | "COMPLETED" | "FAILED" | null;
 
@@ -1358,11 +1360,10 @@ const SpecPage = () => {
                       } else {
                         await PlanService.submitPlanGeneration({ recipe_id: recipeId });
                       }
+                      router.push(`/task/${recipeId}/plan`);
                     } catch (err: any) {
                       console.error("Error starting plan generation:", err);
                       toast.error(err?.message ?? "Failed to start plan generation");
-                    } finally {
-                      router.push(`/task/${recipeId}/plan`);
                     }
                   }}
                   className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"

@@ -23,6 +23,7 @@ import {
   RotateCcw,
   RotateCw,
   Wrench,
+  ArrowLeft,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
@@ -1096,18 +1097,31 @@ const SpecPage = () => {
         {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
         <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-r-[1px] border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
           {/* Chat header */}
-          <div className="flex justify-between items-center px-6 py-4 shrink-0">
-            <h1 className="text-lg font-bold text-primary-color truncate capitalize">
-              {recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}
-              {(recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""}
-            </h1>
-            <div className="flex items-center gap-2 shrink-0">
-              <Badge icon={Github}>
-                {repoNameFromUrl || storedRepoContext?.repoName || projectData?.repo || "Unknown Repository"}
-              </Badge>
-              <Badge icon={GitBranch}>
-                {storedRepoContext?.branchName || projectData?.branch || "main"}
-              </Badge>
+          <div className="px-6 pt-4 pb-2 shrink-0 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (!recipeId) return;
+                router.push(`/task/${recipeId}/qna`);
+              }}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary-color px-0 py-0.5 rounded-md hover:underline w-fit"
+            >
+              <ArrowLeft className="w-3 h-3" />
+              Back to questions
+            </button>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <h1 className="text-lg font-bold text-primary-color truncate capitalize">
+                {recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}
+                {(recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""}
+              </h1>
+              <div className="flex items-center gap-2 shrink-0 mt-1 sm:mt-0">
+                <Badge icon={Github}>
+                  {repoNameFromUrl || storedRepoContext?.repoName || projectData?.repo || "Unknown Repository"}
+                </Badge>
+                <Badge icon={GitBranch}>
+                  {storedRepoContext?.branchName || projectData?.branch || "main"}
+                </Badge>
+              </div>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, startTransition } from "react";
 import Image from "next/image";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/sonner";
@@ -223,8 +223,10 @@ export default function QnaPage() {
           recipeDetails.branch_name?.trim() ||
           fromStorage?.branch_name?.trim() ||
           null;
-        setRecipeRepoName(repo);
-        setRecipeBranchName(branch ?? "main");
+        startTransition(() => {
+          setRecipeRepoName(repo);
+          setRecipeBranchName(branch ?? "main");
+        });
 
         // Don't overwrite Redux when user navigated with ?repoName= (explicit selection);
         // backend can return a different repo and would replace the user's choice.
@@ -240,12 +242,14 @@ export default function QnaPage() {
       } catch (error: any) {
         console.error("[QnA Page] Failed to fetch recipe details:", error);
         // On error, use localStorage so repo/branch can still show (same as spec)
-        setRecipeRepoName(
-          fromStorage?.repo_name?.trim() || null
-        );
-        setRecipeBranchName(
-          fromStorage?.branch_name?.trim() || "main"
-        );
+        startTransition(() => {
+          setRecipeRepoName(
+            fromStorage?.repo_name?.trim() || null
+          );
+          setRecipeBranchName(
+            fromStorage?.branch_name?.trim() || "main"
+          );
+        });
       }
     };
 
@@ -610,14 +614,8 @@ export default function QnaPage() {
     const maxAttempts = 60;
 
     const fetchQuestions = async () => {
-      setQuestionsPolling(true);
-      setState((prev) => ({
-        ...prev,
-        pageState: "generating",
-        questionGenerationStatus: null,
-        questionGenerationError: null,
-      }));
-
+      // Avoid redundant setState on start: pageState is already "generating" from initial state.
+      // Setting questionsPolling(true) here caused a re-render flicker; we set it only when polling.
       try {
         // Same as plan: try GET first; if backend includes run_id, add to URL so stream connects (no POST needed)
         let questionsData: RecipeQuestionsResponse;
@@ -756,6 +754,7 @@ export default function QnaPage() {
         }
 
         let attempts = 0;
+        setQuestionsPolling(true); // Show polling state only when we actually poll
         while (attempts < maxAttempts) {
           await new Promise((r) => setTimeout(r, pollInterval));
           attempts++;
@@ -1519,12 +1518,14 @@ export default function QnaPage() {
   }).length;
 
   // Drive thinking stream UI from parsing + question status (same layout as spec)
+  // Include pageState so generating UI shows from first frame (avoids flicker before fetch starts)
   const questionsCount = state.questions.length;
   const isGenerating =
     isStreamingActive ||
     (parsingStatus && parsingStatus !== ParsingStatusEnum.READY && parsingStatus !== ParsingStatusEnum.ERROR) ||
     questionsLoading ||
-    (questionsPolling && questionsCount === 0);
+    (questionsPolling && questionsCount === 0) ||
+    (state.pageState === "generating" && questionsCount === 0);
 
   const {
     streamProgress: derivedProgress,
@@ -1549,7 +1550,10 @@ export default function QnaPage() {
     }
 
     const qStatus = state.questionGenerationStatus;
-    const qLoading = questionsLoading || (questionsPolling && questionsCount === 0);
+    const qLoading =
+      questionsLoading ||
+      (questionsPolling && questionsCount === 0) ||
+      (state.pageState === "generating" && questionsCount === 0);
     if (qLoading) {
       const msg =
         qStatus === "pending"
@@ -1624,6 +1628,7 @@ export default function QnaPage() {
     questionsLoading,
     questionsPolling,
     questionsCount,
+    state.pageState,
     state.questionGenerationStatus,
     state.questions.length,
   ]);
@@ -1737,8 +1742,9 @@ export default function QnaPage() {
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans antialiased">
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left: questions area — same structure as spec chat */}
+        {/* Full width when no questions, half width when questions ready */}
         <div
-          className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
+          className={`flex flex-col min-w-0 min-h-0 overflow-hidden transition-all duration-300 ${hasQuestionsReady ? 'flex-1' : 'w-full'}`}
           style={{ backgroundColor: "#FAF8F7" }}
         >
           {/* Title on left side */}
@@ -1868,13 +1874,13 @@ export default function QnaPage() {
           </div>
         </div>
 
-        {/* Right: question list — half-and-half like spec */}
-        {state.pageState === "questions" && questionsInOrder.length > 0 && (
+        {/* Right: question list — only show when questions are ready */}
+        {hasQuestionsReady && (
           <div
             className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
             style={{ backgroundColor: "#FAF8F7" }}
           >
-            {/* Repo/branch badges on right side only */}
+            {/* Repo/branch badges on right side */}
             <div className="flex justify-end items-center px-6 pt-6 pb-4 shrink-0 gap-2">
               {repoName && repoName !== "Unknown Repository" && (
                 <Badge icon={Github}>{repoName}</Badge>

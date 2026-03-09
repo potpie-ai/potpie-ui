@@ -1,73 +1,86 @@
-"use client"
-import Link from 'next/link';
-import { useState, useEffect } from 'react';
+"use client";
+import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import MinorService from "@/services/minorService";
-import axios from 'axios';
 import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
+
+type PlanKey = "free" | "pro" | "enterprise";
+
+interface Plan {
+  key: PlanKey;
+  name: string;
+  priceDisplay: string;
+  showPerMonth: boolean;
+  description: string;
+  featuresHeader?: string;
+  features: string[];
+  isHighlighted?: boolean;
+}
+
+const PLANS: Plan[] = [
+  {
+    key: "free",
+    name: "Individual - Free",
+    priceDisplay: "$0",
+    showPerMonth: true,
+    description:
+      "For individual developers who want to explore the open-source potpie platform",
+    featuresHeader: "Everything in the Free plan...",
+    features: [
+      "Ready-to-use agents",
+      "50 requests/month",
+      "Unlimited if using your own keys",
+      "Only public repos",
+      "Multi-LLM Support",
+      "Tool library",
+      "Community support",
+    ],
+  },
+  {
+    key: "pro",
+    name: "Individual - Pro",
+    priceDisplay: "$39",
+    showPerMonth: true,
+    description:
+      "For developers who want to use agents extensively in their workflow",
+    featuresHeader: "Everything in the Free plan, plus...",
+    features: [
+      "500 requests/month",
+      "Unlimited if using your own keys",
+      "Custom agents",
+      "Agentic workflows",
+      "Custom tools",
+      "Community & Email support",
+    ],
+  },
+  {
+    key: "enterprise",
+    name: "Enterprise",
+    priceDisplay: "Custom Pricing",
+    showPerMonth: false,
+    description: "For companies wanting to build agents at scale",
+    featuresHeader: "Everything in the Free plan, plus...",
+    features: [
+      "500 requests/month",
+      "Unlimited if using your own keys",
+      "Custom agents",
+      "Agentic workflows",
+      "Custom tools",
+      "Community & Email support",
+    ],
+    isHighlighted: true,
+  },
+];
 
 const PricingPage = () => {
   const { user } = useAuthContext();
   const userId = user?.uid;
-  const plans = [
-    {
-      name: 'Individual - Free',
-      price: '0',
-      description: 'For individual developers who want to explore the open-source potpie platform',
-      features: [
-        'Ready-to-use agents',
-        '50 requests/month',
-        'Unlimited if using your own keys',
-        'Only public repos',
-        'Multi-LLM Support',
-        'Tool library',
-        'Community support'
-      ],
-      buttonText: 'Get Started',
-      borderColor: 'border-gray-200',
-      buttonColor: 'bg-blue-600 hover:bg-blue-700'
-    },
-    {
-      name: 'Individual - Pro',
-      price: '39',
-      description: 'For developers who want to use agents extensively in their workflow',
-      features: [
-        'Everything in the Free plan, plus:',
-        '500 requests/month',
-        'Unlimited if using your own keys',
-        'Custom agents',
-        'Agentic workflows',
-        'Custom tools',
-        'Community & Email support'
-      ],
-      buttonText: 'Get Started',
-      borderColor: 'border-gray-200',
-      buttonColor: 'bg-purple-600 hover:bg-purple-700'
-    },
-    {
-      name: 'Enterprise',
-      price: 'Custom',
-      description: 'For companies wanting to build agents at scale',
-      features: [
-        'Unlimited requests/month',
-        'Custom agents',
-        'Agentic workflows',
-        'Self hosted LLMs',
-        'Audit trails',
-        'On prem deployment',
-        'Dedicated forward deployment engineer'
-      ],
-      buttonText: 'Contact Us',
-      borderColor: 'border-gray-200',
-      buttonColor: 'bg-gray-800 hover:bg-gray-900'
-    }
-  ];
-
   const [subscription, setSubscription] = useState({
-    plan: 'Unknown Plan',
-    endDate: 'No end date',
+    plan: "Unknown Plan",
+    endDate: "No end date",
     isActive: false,
-    isCancelled: false
+    isCancelled: false,
   });
   const [showProModal, setShowProModal] = useState(false);
 
@@ -79,17 +92,17 @@ const PricingPage = () => {
           if (data.plan_type && data.end_date) {
             setSubscription({
               plan: getPlanDisplayName(data.plan_type),
-              endDate: new Date(data.end_date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
+              endDate: new Date(data.end_date).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
               }),
               isActive: new Date(data.end_date).getTime() > new Date().getTime(),
-              isCancelled: data.is_cancelled
+              isCancelled: data.is_cancelled,
             });
           }
         } catch (error) {
-          console.error('Error fetching subscription:', error);
+          console.error("Error fetching subscription:", error);
         }
       }
     };
@@ -97,195 +110,162 @@ const PricingPage = () => {
     fetchSubscriptionDetails();
   }, [userId]);
 
-  // Convert plan type to display name - keep startup support for existing users
   const getPlanDisplayName = (type: string) => {
-    switch(type.toLowerCase()) {
-      case 'pro':
-        return 'Individual - Pro';
-      case 'free':
-        return 'Individual - Free';
-      case 'startup':
-        return 'Early-Stage';
-      case 'enterprise':
-        return 'Enterprise';
+    switch (type.toLowerCase()) {
+      case "pro":
+        return "Individual - Pro";
+      case "free":
+        return "Individual - Free";
+      case "startup":
+        return "Early-Stage";
+      case "enterprise":
+        return "Enterprise";
       default:
-        return 'Unknown Plan';
+        return "Unknown Plan";
     }
   };
 
-  const handleCancelSubscription = async () => {
-    try {
-      const data = await MinorService.cancelUserSubscription(userId);
-      const fetchSubscriptionDetails = async () => {
-        if (userId) {
-          try {
-            const data = await MinorService.fetchUserSubscription(userId);
-            if (data.plan_type && data.end_date) {
-              setSubscription({
-                plan: getPlanDisplayName(data.plan_type),
-                endDate: new Date(data.end_date).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                }),
-                isActive: new Date(data.end_date).getTime() > new Date().getTime(),
-                isCancelled: data.is_cancelled
-              });
-            }
-          } catch (error) {
-            console.error('Error fetching subscription:', error);
-          }
-        }
-      };
-      
-      await fetchSubscriptionDetails();
-    } catch (error) {
-      console.error('Error canceling subscription:', error);
-    }
+  const getButtonText = (plan: Plan): string => {
+    if (plan.name === subscription.plan) return "Your Current Plan";
+    if (plan.key === "enterprise") return "Upgrade to Business";
+    if (plan.key === "pro") return "Upgrade to Pro";
+    return "Get Started";
   };
 
-  // Helper function to determine button text
-  const getButtonText = (planName: string) => {
-    if (planName === 'Enterprise') return 'Contact Us';
-    if (planName === subscription.plan) return 'ACTIVE';
-    
-    // Get indices to compare current plan vs this plan
-    const currentPlanIndex = plans.findIndex(p => p.name === subscription.plan);
-    const thisPlanIndex = plans.findIndex(p => p.name === planName);
-    
-    return thisPlanIndex < currentPlanIndex ? 'Downgrade' : 'Upgrade';
-  };
-
-  const handleCheckoutRedirect = async (planType: string) => {
-    console.log("planType", planType);
-    try {
-      const subUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
-      const response = await axios.get(
-        `${subUrl}/create-checkout-session?user_id=${userId}&plan_type=${planType}`,
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-      
-      if (response.data.url) {
-        window.location.href = response.data.url;
-      } else {
-        throw new Error('No checkout URL received');
-      }
-    } catch (error) {
-      console.error('Error getting checkout URL:', error);
-    }
-  };
-
-  // Helper function to get plan type from name - keep startup support for existing users
-  const getPlanType = (planName: string): string => {
-    switch(planName) {
-      case 'Individual - Pro': return 'pro';
-      case 'Individual - Free': return 'free';
-      case 'Early-Stage': return 'startup';
-      case 'Enterprise': return 'enterprise';
-      default: return 'free';
+  const handleCardAction = (plan: Plan) => {
+    const buttonText = getButtonText(plan);
+    if (plan.name === subscription.plan) return;
+    if (plan.key === "enterprise" || buttonText.startsWith("Upgrade")) {
+      setShowProModal(true);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Current Subscription Status */}
-        <div className="mb-12 p-6 border rounded-lg">
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-3">
-            Current Subscription
-            <span className={`inline-block px-3 py-1 rounded-full text-sm ${
-              subscription.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {subscription.isActive ? 'ACTIVE' : 'INACTIVE'}
-            </span>
-          </h2>
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-lg">Plan: {subscription.plan}</p>
-              <p className="text-gray-600">Expires: {subscription.endDate}</p>
-            </div>
-            {!subscription.isCancelled && subscription.plan !== 'Individual - Free' && (
-              <button
-                onClick={() => setShowProModal(true)}
-                className="bg-background text-red-600 border border-red-600 px-4 py-2 rounded hover:bg-red-50"
-              >
-                Cancel Subscription
-              </button>
-            )}
-          </div>
+    <div className="min-h-screen bg-white py-16 px-4 sm:px-6 lg:px-10">
+      <div className="w-full max-w-[1400px] mx-auto">
+        {/* Header */}
+        <div className="text-center mb-14">
+          <h1 className="text-3xl font-bold text-[#285848] mb-3">
+            Upgrade Your Plan
+          </h1>
+          <p className="text-base text-gray-500 max-w-2xl mx-auto">
+            Get access to advanced features, higher usage limits, priority
+            support, and enhanced customization options designed to help you get
+            the most out of your experience.
+          </p>
         </div>
 
-        {/* Pricing Plans Grid */}
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-          {plans.map((plan, index) => (
-            <div 
-              key={index} 
-              className={`border rounded-lg p-6 transition-all hover:shadow-lg ${
-                subscription.plan === plan.name ? 'bg-black text-white' : plan.borderColor
-              }`}
-              // onClick={() => setsubscription.plan(plan.name)}
-            >
-              <h3 className="text-lg font-semibold mb-2">{plan.name}</h3>
-              <p className={`text-sm mb-4 ${subscription.plan === plan.name ? 'text-gray-300' : 'text-gray-600'}`}>
-                {plan.description}
-              </p>
-              <div className="mb-6">
-                {getButtonText(plan.name) !== 'Contact Us' && (
-                  <>
-                    <span className="text-4xl font-bold">${plan.price}</span>
-                    <span className={subscription.plan === plan.name ? 'text-gray-300' : 'text-gray-600'}> /month</span>
-                  </>
-                )}
-              </div>
-              <Link
-                href={plan.name === 'Enterprise' ? '#' : ''}
-                onClick={(e) => {
-                  e.preventDefault();
-                  const buttonText = getButtonText(plan.name);
-                  if (buttonText === 'Upgrade' || buttonText === 'Contact Us') {
-                    setShowProModal(true);
+        {/* Pricing cards - equal width, equal height, buttons aligned */}
+        <div className="flex flex-col md:flex-row gap-8 md:gap-10 w-full">
+          {PLANS.map((plan) => {
+            const isCurrentPlan = plan.name === subscription.plan;
+            const isEnterprise = plan.key === "enterprise";
+            const useGreenBorder = isCurrentPlan || isEnterprise;
+
+            return (
+              <div
+                key={plan.key}
+                className={`
+                  rounded-xl border-2 bg-white p-10 flex flex-col flex-1 min-w-0 md:min-h-[620px]
+                  ${
+                    useGreenBorder
+                      ? "border-[#B6E343] shadow-md"
+                      : "border-gray-200"
                   }
-                }}
-                className={`${
-                  subscription.plan === plan.name 
-                    ? 'bg-primary hover:bg-red-700' 
-                    : 'bg-background text-black border border-gray-300 hover:bg-gray-50'
-                } rounded-md px-4 py-2 w-full block text-center transition-colors`}
+                `}
               >
-                {getButtonText(plan.name)}
-              </Link>
-              <ul className="mt-6 space-y-3">
-                {plan.features.map((feature, featureIndex) => (
-                  <li key={featureIndex} className="flex items-start">
-                    <svg
-                      className={`flex-shrink-0 w-5 h-5 mt-1 ${
-                        subscription.plan === plan.name ? 'text-white' : 'text-green-500'
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    <span className={`ml-2 ${
-                      subscription.plan === plan.name ? 'text-gray-300' : 'text-gray-700'
-                    }`}>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                {/* Fixed-height block so button always at same distance from top */}
+                <div className="min-h-[140px] flex flex-col">
+                  <h3 className="text-lg font-bold text-[#285848] mb-3">
+                    {plan.name}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-5">{plan.description}</p>
+
+                  {/* Price */}
+                  <div className="mt-auto">
+                    <span className="text-3xl font-bold text-[#285848]">
+                      {plan.priceDisplay}
+                    </span>
+                    {plan.showPerMonth && (
+                      <span className="text-gray-500 text-base ml-1">
+                        /month
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* CTA button - same position in every card */}
+                <Link
+                  href={isEnterprise ? "#" : ""}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleCardAction(plan);
+                  }}
+                  className={`
+                    rounded-lg px-4 py-3 w-full block text-center font-medium
+                    transition-colors flex-shrink-0 mt-8
+                    ${
+                      isCurrentPlan
+                        ? "bg-gray-200 text-[#00291C] cursor-default"
+                        : isEnterprise
+                          ? "bg-[#285848] text-[#B6E343] hover:opacity-90"
+                          : "bg-gray-200 text-[#00291C] hover:bg-gray-300"
+                    }
+                  `}
+                >
+                  {getButtonText(plan)}
+                </Link>
+
+                {/* Divider line after button - matches card border */}
+                <div
+                  className={`mt-8 pt-8 -mx-10 border-t-2 ${
+                    useGreenBorder ? "border-[#B6E343]" : "border-gray-200"
+                  }`}
+                />
+
+                {/* Features */}
+                {plan.featuresHeader && (
+                  <p className="text-sm text-gray-500 mb-3">
+                    {plan.featuresHeader}
+                  </p>
+                )}
+                <ul className="space-y-3">
+                  {plan.features.map((feature, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <svg
+                        className="flex-shrink-0 w-5 h-5 mt-0.5 text-[#02D480]"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      <span className="text-sm text-gray-700">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
+
+        {/* Optional: minimal current plan line */}
+        {subscription.plan !== "Unknown Plan" && (
+          <p className="text-center text-sm text-gray-500 mt-8">
+            Current plan: <span className="font-medium">{subscription.plan}</span>
+            {subscription.endDate !== "No end date" && (
+              <> · Expires {subscription.endDate}</>
+            )}
+          </p>
+        )}
       </div>
-      <ProFeatureModal 
-        open={showProModal} 
-        onOpenChange={setShowProModal}
-      />
+
+      <ProFeatureModal open={showProModal} onOpenChange={setShowProModal} />
     </div>
   );
 };

@@ -36,11 +36,11 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 // ── Heatmap helpers ────────────────────────────────────────────────────────────
 function intensityColor(val: number): string {
-  if (val === 0) return "#e5e7eb";
-  if (val < 0.25) return "#d1fae5";
-  if (val < 0.5) return "#6ee7b7";
-  if (val < 0.75) return "#34d399";
-  return "#059669";
+  if (val === 0) return "bg-gray-200";
+  if (val < 0.25) return "bg-emerald-100";
+  if (val < 0.5) return "bg-emerald-300";
+  if (val < 0.75) return "bg-emerald-400";
+  return "bg-emerald-600";
 }
 
 const HEATMAP_ROWS = 4;
@@ -500,11 +500,10 @@ export default function SettingsPage() {
   const savedProvider = keySecrets?.inference_config?.provider?.toLowerCase();
 
   return (
-    <div className="p-6 w-full min-w-0 overflow-hidden">
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+    <div className="flex flex-col min-h-screen bg-stone-50 w-full">
+      {/* ── Top Bar ────────────────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+        <h1 className="text-xl font-bold text-emerald-950">Settings</h1>
         <Select value={dateRange} onValueChange={setDateRange}>
           <SelectTrigger className="w-40 bg-white text-sm text-gray-600 border-gray-200">
             <CalendarIcon className="w-4 h-4 text-gray-400 shrink-0" />
@@ -565,65 +564,57 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ── Bottom row ──────────────────────────────────────────────────────── */}
-      <div className="flex gap-5 items-start">
+        {/* ── Bottom row ──────────────────────────────────────────────────────── */}
+        <div className="flex gap-5 items-start">
 
-        {/* Left column – two stacked cards */}
-        <div className="flex-1 min-w-0 flex flex-col gap-4">
+          {/* Left column – two stacked cards */}
+          <div className="flex-1 min-w-0 flex flex-col gap-4">
 
-          {/* Your API Key */}
-          <div className="border border-gray-200 rounded-xl p-5 bg-white">
-            <p className="text-sm font-semibold text-gray-800 mb-4">Your API Key</p>
-            <div className="flex items-center gap-3">
-              <Input
-                readOnly
-                className="flex-1 bg-gray-50 text-gray-400 text-sm"
-                value={isLoadingKey ? "Loading…" : apiKeyData?.api_key ? maskedKey(apiKeyData.api_key) : ""}
-                placeholder="No API key found. Generate one to get started."
-              />
-              {!apiKeyData?.api_key && (
-                <Button size="sm" onClick={() => generateApiKey()} disabled={isGenerating} className="whitespace-nowrap">
-                  <Plus className="w-3.5 h-3.5 mr-1" />
-                  {isGenerating ? "Generating…" : "Generate API Key"}
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* External Providers */}
-          <div className="border border-gray-200 rounded-xl p-5 bg-white">
-            <p className="text-sm font-semibold text-gray-800 mb-5">External Providers</p>
-
-            {/* OpenAI */}
-            <div className="mb-5">
-              <div className="flex items-center gap-1.5 mb-2">
-                <OpenAIIcon />
-                <span className="text-sm text-gray-700">OpenAI API Key</span>
-              </div>
-              <div className="flex gap-2">
+            {/* Your API Key */}
+            <div className="border border-gray-200 rounded-xl p-5 bg-white">
+              <p className="text-sm font-semibold text-gray-800 mb-4">Your API Key</p>
+              <div className="flex items-center gap-3">
                 <Input
-                  type="password"
-                  className="flex-1 bg-white text-sm"
-                  placeholder={savedProvider === "openai" && keySecrets?.inference_config.api_key ? maskedKey(keySecrets.inference_config.api_key) : ""}
-                  value={openAIInput}
-                  onChange={(e) => setOpenAIInput(e.target.value)}
+                  readOnly
+                  className="flex-1 bg-gray-50 text-gray-400 text-sm"
+                  value={isLoadingKey ? "Loading…" : apiKeyData?.api_key ? maskedKey(apiKeyData.api_key) : ""}
+                  placeholder="No API key found. Generate one to get started."
                 />
-                {openAIInput && (
-                  <Button size="sm" disabled={isSavingProvider}
-                    onClick={() => { saveProviderKey({ provider: "openai", api_key: openAIInput }); setOpenAIInput(""); }}>
-                    Save
+                {!apiKeyData?.api_key && (
+                  <Button size="sm" onClick={() => generateApiKey()} disabled={isGenerating} className="whitespace-nowrap">
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    {isGenerating ? "Generating…" : "Generate API Key"}
                   </Button>
                 )}
               </div>
             </div>
 
-            {/* Anthropic */}
-            <div className="mb-5">
-              <div className="flex items-center gap-1.5 mb-2">
-                <AnthropicIcon />
-                <span className="text-sm text-gray-700">Anthropic API Key</span>
+            {/* External Providers */}
+            <div className="border border-gray-200 rounded-xl p-5 bg-white">
+              <p className="text-sm font-semibold text-gray-800 mb-5">External Providers</p>
+
+              {/* OpenAI */}
+              <div className="mb-5">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <OpenAIIcon />
+                  <span className="text-sm text-gray-700">OpenAI API Key</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    className="flex-1 bg-white text-sm"
+                    placeholder={savedProvider === "openai" && savedApiKey ? maskedKey(savedApiKey) : ""}
+                    value={openAIInput}
+                    onChange={(e) => setOpenAIInput(e.target.value)}
+                  />
+                  {openAIInput && (
+                    <Button size="sm" disabled={savingProvider === "openai"}
+                      onClick={() => saveProviderKey({ provider: "openai", api_key: openAIInput })}>
+                      Save
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="flex gap-2">
                 <Input
@@ -642,11 +633,27 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* OpenRouter */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <OpenRouterIcon />
-                <span className="text-sm text-gray-700">OpenRouter API Key</span>
+              {/* Anthropic */}
+              <div className="mb-5">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <AnthropicIcon />
+                  <span className="text-sm text-gray-700">Anthropic API Key</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    className="flex-1 bg-white text-sm"
+                    placeholder={savedProvider === "anthropic" && savedApiKey ? maskedKey(savedApiKey) : ""}
+                    value={anthropicInput}
+                    onChange={(e) => setAnthropicInput(e.target.value)}
+                  />
+                  {anthropicInput && (
+                    <Button size="sm" disabled={savingProvider === "anthropic"}
+                      onClick={() => saveProviderKey({ provider: "anthropic", api_key: anthropicInput })}>
+                      Save
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="flex gap-2">
                 <Input
@@ -693,8 +700,8 @@ export default function SettingsPage() {
               </span>
             </div>
           </div>
-        </div>
 
+        </div>
       </div>
     </div>
   );

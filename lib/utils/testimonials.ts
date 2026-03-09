@@ -1,20 +1,27 @@
-export const testimonials = [
+export interface Testimonial {
+  quote: string;
+  name: string;
+  title: string;
+  image: string;
+}
+
+export const testimonials: Testimonial[] = [
   {
-    quote: "Potpie turns our codebase into a real advantage. Agents understand our context and work exactly how our engineering team does.",
-    name: "Mallikarjun Pootipedi",
-    title: "Senior Key Expert / Siemens Healthineers",
-    image: "/testimonials/Mallikarjun.jpeg"
-  },
-  {
-    quote: "The AI agents built with Potpie have transformed how we approach development. It's like having an expert on every part of our codebase.",
-    name: "Daniel Mishler",
-    title: "Head of Automation / Deepgram",
-    image: "/testimonials/Daniel.jpeg"
-  },
-  {
-    quote: "Potpie helps us maintain velocity without sacrificing code quality. Our team is shipping faster than ever.",
+    quote: "Our context was scattered across tools. Potpie brought everything together, sped up debugging and development, and helped our team ship faster.",
     name: "Rakesh Yadav",
     title: "Founder & CEO / FloBiz",
-    image: "/testimonials/Rakesh.jpeg"
+    image: "/images/Rakesh.jpeg"
+  },
+  {
+    quote: "Potpie feels like adding two senior engineers to every team. Our workflows improved overnight, and reviews are way more consistent.",
+    name: "Sudarshan Rampuria",
+    title: "Senior Software Engineer / Astronomer",
+    image: "/images/sudarshan.jpeg"
+  },
+  {
+    quote: "Potpie is clearly focused on solving one of the hardest problems in adopting agentic code generation: making it usable in real organizational settings. The platform simplfies experimentation while acknowledging the realities of large, context-heavy codebases.",
+    name: "Pavan Venkatesan",
+    title: "VP of Engineering / Moniepoint",
+    image: "/images/pavan.jpeg"
   }
 ];

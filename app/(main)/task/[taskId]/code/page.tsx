@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, startTransition } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Play,
@@ -45,6 +45,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { RootState } from "@/lib/state/store";
 import { setRepoAndBranchForTask } from "@/lib/state/Reducers/RepoAndBranch";
+import JSZip from "jszip";
 import TaskSplittingService from "@/services/TaskSplittingService";
 import PlanService from "@/services/PlanService";
 import SpecService from "@/services/SpecService";
@@ -56,6 +57,7 @@ import {
   TaskSplittingStatusResponse,
   TaskSplittingItemsResponse,
   TaskLayer,
+  TaskItem,
   PlanItem,
 } from "@/lib/types/spec";
 import { getStreamEventPayload } from "@/lib/utils";
@@ -215,6 +217,57 @@ function getAllNodeIds(nodes: TreeNode[]): string[] {
   }
   walk(nodes);
   return ids;
+}
+
+/**
+ * Merge newly fetched layers into previous state, reusing object references for
+ * unchanged layers/tasks. Reduces re-renders when codegen completes by avoiding
+ * a full tree replace (which causes a visible "refresh").
+ */
+function mergeLayersForCompletion(
+  prev: TaskLayer[],
+  next: TaskLayer[]
+): TaskLayer[] {
+  if (prev.length !== next.length) return next;
+  let usedPrev = true;
+  const merged: TaskLayer[] = [];
+  for (let i = 0; i < prev.length; i++) {
+    const pLayer = prev[i];
+    const nLayer = next[i];
+    if (
+      !pLayer ||
+      !nLayer ||
+      pLayer.id !== nLayer.id ||
+      (pLayer.tasks?.length ?? 0) !== (nLayer.tasks?.length ?? 0)
+    ) {
+      merged.push(nLayer);
+      usedPrev = false;
+      continue;
+    }
+    const mergedTasks: TaskItem[] = [];
+    const tasks = nLayer.tasks ?? [];
+    for (let t = 0; t < tasks.length; t++) {
+      const pTask = pLayer.tasks?.[t];
+      const nTask = tasks[t];
+      const taskUnchanged =
+        pTask &&
+        pTask.id === nTask.id &&
+        pTask.status === nTask.status &&
+        (pTask.changes?.length ?? 0) === (nTask.changes?.length ?? 0);
+      mergedTasks.push(taskUnchanged ? pTask : nTask);
+      if (!taskUnchanged) usedPrev = false;
+    }
+    const layerUnchanged =
+      pLayer.status === nLayer.status &&
+      mergedTasks.every((t, idx) => t === pLayer.tasks?.[idx]);
+    if (layerUnchanged) {
+      merged.push(pLayer);
+    } else {
+      merged.push({ ...pLayer, status: nLayer.status, tasks: mergedTasks });
+      usedPrev = false;
+    }
+  }
+  return usedPrev ? prev : merged;
 }
 
 // --- Sub-components ---
@@ -544,7 +597,7 @@ const TaskCard = ({
                       idx: number
                     ) => (
                       <div
-                        key={idx}
+                        key={change.path ?? idx}
                         className="bg-background rounded-lg border border-zinc-200 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
                         style={{ animationDelay: `${idx * 100}ms` }}
                       >
@@ -894,7 +947,6 @@ export default function VerticalTaskExecution() {
       return;
     }
     try {
-      const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
       for (const { path, content } of files) {
         zip.file(path, content);
@@ -1444,45 +1496,43 @@ export default function VerticalTaskExecution() {
 
         if (!mounted) return [];
 
-        // Only update if layers actually changed - use efficient comparison
-        setAllLayers((prev) => {
-          // Quick length check first
-          if (prev.length !== allLayersData.length) return allLayersData;
-          
-          // Compare by checking task statuses and changes (avoids full JSON.stringify)
-          const hasChanged = allLayersData.some((layer, idx) => {
-            const prevLayer = prev[idx];
-            if (!prevLayer) return true;
-            if (layer.status !== prevLayer.status) return true;
-            if (layer.tasks?.length !== prevLayer.tasks?.length) return true;
-            // Check if any task status or changes changed
-            return layer.tasks?.some((task, tIdx) => {
-              const prevTask = prevLayer.tasks?.[tIdx];
-              if (!prevTask) return true;
-              if (task.status !== prevTask.status) return true;
-              // Also check if changes were added (task completed)
-              const hasNewChanges = (task.changes?.length ?? 0) !== (prevTask.changes?.length ?? 0);
-              return hasNewChanges;
-            });
-          });
-          
-          return hasChanged ? allLayersData : prev;
-        });
-        setNextLayerOrder(null);
+        // Apply layer updates in a transition to avoid a visible "refresh" when codegen completes
+        startTransition(() => {
+          // Only update if layers actually changed - use merge to preserve refs
+          setAllLayers((prev) => {
+            if (prev.length !== allLayersData.length) return allLayersData;
 
-        // Update current DAG only when layers are newly added (not on every status change)
-        if (allLayersData.length > 0) {
-          setCurrentDag((prev) => {
-            // Only update DAG when new layers are added, not when existing ones change status
-            if (prev.length < allLayersData.length) {
-              return allLayersData;
-            }
-            return prev; // Keep existing DAG to avoid re-renders
+            const hasChanged = allLayersData.some((layer, idx) => {
+              const prevLayer = prev[idx];
+              if (!prevLayer) return true;
+              if (layer.status !== prevLayer.status) return true;
+              if (layer.tasks?.length !== prevLayer.tasks?.length) return true;
+              return layer.tasks?.some((task, tIdx) => {
+                const prevTask = prevLayer.tasks?.[tIdx];
+                if (!prevTask) return true;
+                if (task.status !== prevTask.status) return true;
+                return (
+                  (task.changes?.length ?? 0) !== (prevTask.changes?.length ?? 0)
+                );
+              });
+            });
+
+            return hasChanged
+              ? mergeLayersForCompletion(prev, allLayersData)
+              : prev;
           });
-          setGraphLoadIndex((prev) =>
-            prev < allLayersData.length ? allLayersData.length : prev
-          );
-        }
+          setNextLayerOrder(null);
+
+          if (allLayersData.length > 0) {
+            setCurrentDag((prev) => {
+              if (prev.length < allLayersData.length) return allLayersData;
+              return prev;
+            });
+            setGraphLoadIndex((prev) =>
+              prev < allLayersData.length ? allLayersData.length : prev
+            );
+          }
+        });
         return allLayersData;
       } catch (error) {
         console.error("[Code Page] Error fetching layers:", error);
@@ -2316,14 +2366,19 @@ export default function VerticalTaskExecution() {
                     handleSendChatMessage();
                   }
                 }}
-                placeholder="Ask about the code or request changes..."
+                placeholder={
+                  taskSplittingStatus?.codegen_status === "IN_PROGRESS"
+                    ? "Code generation in progress..."
+                    : "Ask about the code or request changes..."
+                }
                 rows={3}
-                className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-[#FFFDFC] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#102C2C]/20 focus:border-[#102C2C] resize-none"
+                disabled={taskSplittingStatus?.codegen_status === "IN_PROGRESS"}
+                className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-[#FFFDFC] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#102C2C]/20 focus:border-[#102C2C] resize-none disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
                 onClick={handleSendChatMessage}
-                disabled={isChatStreaming || !codegenConversationId}
+                disabled={isChatStreaming || !codegenConversationId || taskSplittingStatus?.codegen_status === "IN_PROGRESS"}
                 className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isChatStreaming ? (

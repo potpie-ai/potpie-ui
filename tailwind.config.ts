@@ -99,6 +99,26 @@ const config = {
   					height: '0'
   				}
   			},
+  			'collapsible-down': {
+  				from: {
+  					height: '0',
+  					opacity: '0'
+  				},
+  				to: {
+  					height: 'var(--radix-collapsible-content-height)',
+  					opacity: '1'
+  				}
+  			},
+  			'collapsible-up': {
+  				from: {
+  					height: 'var(--radix-collapsible-content-height)',
+  					opacity: '1'
+  				},
+  				to: {
+  					height: '0',
+  					opacity: '0'
+  				}
+  			},
   			'loading-dot': {
   				'0%, 80%, 100%': { transform: 'translateY(0) scale(0.8)', opacity: '0.5' },
   				'40%': { transform: 'translateY(-6px) scale(1)', opacity: '1' }
@@ -107,6 +127,8 @@ const config = {
   		animation: {
   			'accordion-down': 'accordion-down 0.28s ease-out',
   			'accordion-up': 'accordion-up 0.28s ease-out',
+  			'collapsible-down': 'collapsible-down 0.3s ease-out',
+  			'collapsible-up': 'collapsible-up 0.3s ease-out',
   			'loading-dot': 'loading-dot 1.4s ease-in-out infinite'
   		}
   	}

@@ -92,6 +92,39 @@ export default class BranchAndRepositoryService {
         }
     }
 
+    /**
+     * Paginated user repo search. Same endpoint as getUserRepositories but with limit/offset.
+     * Returns repositories and has_next_page for "Load more" support.
+     */
+    static async searchUserRepositories(
+        options: { search?: string; limit?: number; offset?: number } = {}
+    ): Promise<{ repositories: any[]; has_next_page: boolean }> {
+        const headers: Headers = await getHeaders();
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+        const params: Record<string, string | number> = {};
+        if (options.search) {
+            const trimmed = options.search.trim().slice(0, 200);
+            if (trimmed) params.search = trimmed;
+        }
+        if (options.limit != null) params.limit = options.limit;
+        if (options.offset != null) params.offset = options.offset;
+
+        try {
+            const response = await axios.get(`${baseUrl}/api/v1/github/user-repos`, {
+                headers,
+                params,
+            });
+            const data = response.data;
+            const repos = Array.isArray(data?.repositories) ? data.repositories : [];
+            const hasNextPage = data?.has_next_page ?? false;
+            return { repositories: repos, has_next_page: hasNextPage };
+        } catch (error) {
+            console.error("Error searching user repositories:", error);
+            throw new Error("Error fetching user repositories");
+        }
+    }
+
     static async getUserProjects() {
       const headers = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -163,6 +196,45 @@ export default class BranchAndRepositoryService {
         }
     }
 
+    /**
+     * Paginated branch search for a repo. Same endpoint as getBranchList but with limit/offset.
+     * Returns branches and has_next_page for "Load more" support.
+     */
+    static async searchBranches(
+        repoName: string,
+        options: { search?: string; limit?: number; offset?: number } = {}
+    ): Promise<{ branches: string[]; has_next_page: boolean; total_count?: number }> {
+        const headers = await getHeaders();
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+        const params: Record<string, string | number> = { repo_name: repoName };
+        if (options.search) {
+            const trimmed = options.search.trim().slice(0, 200);
+            if (trimmed) params.search = trimmed;
+        }
+        if (options.limit != null) params.limit = options.limit;
+        if (options.offset != null) params.offset = options.offset;
+
+        try {
+            const response = await axios.get(
+                `${baseUrl}/api/v1/github/get-branch-list`,
+                { params, headers }
+            );
+            const data = response.data;
+            if (Array.isArray(data?.branches)) {
+                return {
+                    branches: data.branches,
+                    has_next_page: data.has_next_page ?? false,
+                    total_count: data.total_count,
+                };
+            }
+            return { branches: Array.isArray(data) ? data : [], has_next_page: false };
+        } catch (error) {
+            console.error("Error searching branches:", error);
+            return { branches: [], has_next_page: false };
+        }
+    }
+
     static async getRepoStructure(repoName: string, branchName: string) {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -203,6 +275,7 @@ export default class BranchAndRepositoryService {
       } catch (error: any) {
         // Preserve the original error so the caller can access status code and response data
         if (axios.isAxiosError(error)) {
+
           throw error;
         }
         throw new Error("Error fetching Repository");

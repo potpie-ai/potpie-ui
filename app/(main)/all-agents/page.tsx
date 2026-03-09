@@ -806,11 +806,10 @@ const AllAgents = () => {
           {/* Shareable status indicator */}
           {!isLoadingSharedDetails && (
             <div
-              className={`py-2 px-4 rounded-md mb-2 ${
-                isPublic || sharedEmails.length > 0
-                  ? "bg-green-50 text-green-800 border border-green-200"
-                  : "bg-yellow-50 text-yellow-800 border border-yellow-200"
-              }`}
+              className={`py-2 px-4 rounded-md mb-2 ${isPublic || sharedEmails.length > 0
+                ? "bg-green-50 text-green-800 border border-green-200"
+                : "bg-yellow-50 text-yellow-800 border border-yellow-200"
+                }`}
             >
               <p className="text-sm">
                 {isPublic

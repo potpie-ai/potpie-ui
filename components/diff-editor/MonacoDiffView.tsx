@@ -43,7 +43,7 @@ export type MonacoDiffViewProps = {
   className?: string;
 };
 
-export function MonacoDiffView({
+function MonacoDiffViewInner({
   change,
   height = "100%",
   className = "",
@@ -67,6 +67,13 @@ export function MonacoDiffView({
 
   const editorHeight = typeof height === "number" ? `${height}px` : height;
 
+  // Stable key so DiffEditor only remounts when path or content identity changes,
+  // reducing flicker and avoiding disposal races when parent re-renders.
+  const diffEditorKey = useMemo(() => {
+    const c = change.content ?? "";
+    return `${change.path}-${c.length}-${c.slice(0, 40)}`;
+  }, [change.path, change.content]);
+
   if (!change.content?.trim()) {
     return (
       <div className="flex items-center justify-center h-64 text-zinc-500 text-sm">
@@ -77,12 +84,14 @@ export function MonacoDiffView({
 
   // Plain file content (not a unified diff): use single Editor so content always shows
   if (isPlainFile && plainContent) {
+    const plainEditorKey = `${change.path}-${plainContent.length}`;
     return (
       <div
         className={`min-h-[200px] ${className}`.trim()}
         style={{ height: editorHeight }}
       >
         <MonacoEditor
+          key={plainEditorKey}
           height={editorHeight}
           value={plainContent}
           language={languageId}
@@ -107,11 +116,14 @@ export function MonacoDiffView({
       style={{ height: editorHeight }}
     >
       <MonacoDiffEditor
+        key={diffEditorKey}
         height={editorHeight}
         original={original}
         modified={modified}
         language={languageId}
         theme="light"
+        keepCurrentOriginalModel
+        keepCurrentModifiedModel
         options={{
           readOnly: true,
           renderSideBySide: false,
@@ -127,3 +139,13 @@ export function MonacoDiffView({
     </div>
   );
 }
+
+export const MonacoDiffView = React.memo(MonacoDiffViewInner, (prev, next) => {
+  return (
+    prev.change.path === next.change.path &&
+    prev.change.lang === next.change.lang &&
+    prev.change.content === next.change.content &&
+    prev.height === next.height &&
+    prev.className === next.className
+  );
+});

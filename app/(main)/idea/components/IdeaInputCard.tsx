@@ -19,16 +19,9 @@ const FIGMA = {
   modelDropdownText: "#00291C",
 } as const;
 
-const UPGRADE_DROPDOWN_PLACEHOLDER_MODELS = [
-  "GPT-5.2",
-  "Claude Sonnet 4.5",
-  "DeepSeek V3",
-  "Gemini 2.0 Flash",
-];
-
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal, ExternalLink } from "lucide-react";
+import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal, ExternalLink, Crown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuthContext } from "@/contexts/AuthContext";
 import MinorService from "@/services/minorService";
-import ModelService from "@/services/ModelService";
+import ModelService, { type Model } from "@/services/ModelService";
 import { planTypesEnum } from "@/lib/Constants";
 import { useGithubAppPopup } from "../hooks/useGithubAppPopup";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
@@ -84,14 +77,12 @@ interface IdeaInputCardProps {
   onAttachmentChange?: (files: File[], removedIndex?: number) => void;
   /** True when any file in the list is being uploaded. */
   attachmentUploading?: boolean;
-  /** Repository search term */
-  repoSearchTerm?: string;
-  /** Handler for repository search term changes */
+  /** Handler for repository search term changes (debounced — called after user stops typing) */
   onRepoSearchChange?: (value: string) => void;
-  /** Branch search term */
-  branchSearchTerm?: string;
-  /** Handler for branch search term changes */
+  /** Handler for branch search term changes (debounced — called after user stops typing) */
   onBranchSearchChange?: (value: string) => void;
+  /** When true, show "Generate spec" option under Debug (e.g. only on localhost in new chat) */
+  showSpecGenOption?: boolean;
 }
 
 export default function IdeaInputCard({
@@ -120,10 +111,9 @@ export default function IdeaInputCard({
   attachedFiles: controlledFiles,
   onAttachmentChange,
   attachmentUploading = false,
-  repoSearchTerm = "",
   onRepoSearchChange,
-  branchSearchTerm = "",
   onBranchSearchChange,
+  showSpecGenOption = false,
 }: IdeaInputCardProps) {
   const router = useRouter();
   const { user } = useAuthContext();
@@ -131,6 +121,10 @@ export default function IdeaInputCard({
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localRepoSearch, setLocalRepoSearch] = useState("");
+  const [localBranchSearch, setLocalBranchSearch] = useState("");
+  const repoDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const branchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [localFiles, setLocalFiles] = useState<File[]>([]);
   const { openGithubPopup } = useGithubAppPopup();
   const [publicRepoDialogOpen, setPublicRepoDialogOpen] = useState(false);
@@ -139,14 +133,18 @@ export default function IdeaInputCard({
 
   // Clear search terms when dropdowns close
   useEffect(() => {
-    if (!repoDropdownOpen && onRepoSearchChange) {
-      onRepoSearchChange("");
+    if (!repoDropdownOpen) {
+      setLocalRepoSearch("");
+      if (repoDebounceRef.current) clearTimeout(repoDebounceRef.current);
+      onRepoSearchChange?.("");
     }
   }, [repoDropdownOpen, onRepoSearchChange]);
 
   useEffect(() => {
-    if (!branchDropdownOpen && onBranchSearchChange) {
-      onBranchSearchChange("");
+    if (!branchDropdownOpen) {
+      setLocalBranchSearch("");
+      if (branchDebounceRef.current) clearTimeout(branchDebounceRef.current);
+      onBranchSearchChange?.("");
     }
   }, [branchDropdownOpen, onBranchSearchChange]);
 
@@ -167,7 +165,14 @@ export default function IdeaInputCard({
     name: string;
     provider: string;
   } | null>({ id: "", name: "glm 4.7", provider: "z.ai" });
-  const [modelList, setModelList] = useState<{ id: string; name: string; provider: string }[]>([]);
+  const [modelList, setModelList] = useState<Model[]>([]);
+  /** Pro users: all models. Free users: all except OpenAI, Anthropic, Gemini (those show upgrade flag). */
+  const isModelAvailable = (model: Model) => {
+    if (!isFreeUser) return true;
+    const p = (model.provider || "").toLowerCase().replace(/[\s.-]/g, "");
+    if (p === "openai" || p === "anthropic" || p === "gemini") return false;
+    return true;
+  };
   const loadCurrentModel = useCallback(async () => {
     try {
       const res = await ModelService.getCurrentModel();
@@ -185,20 +190,24 @@ export default function IdeaInputCard({
   const loadModelList = useCallback(async () => {
     try {
       const res = await ModelService.listModels();
-      const list = (res.models ?? []).map((m) => ({
-        id: m.id,
-        name: m.name,
-        provider: m.provider,
-      }));
-      setModelList(list);
+      setModelList(res.models ?? []);
     } catch {
       setModelList([]);
     }
   }, []);
-  // Don't load current model on mount so we keep ZLM 4.7 as default; user can change via dropdown
+  // Load model list for all users so dropdown shows API models (free users see grayed + Upgrade for non-available)
   useEffect(() => {
-    if (!isFreeUser) loadModelList();
-  }, [isFreeUser, loadModelList]);
+    loadModelList();
+  }, [loadModelList]);
+
+  // For free users, show free models first and paid/locked models after.
+  const orderedModelList = useMemo(() => {
+    if (!modelList || modelList.length === 0) return [];
+    if (!isFreeUser) return modelList;
+    const freeModels = modelList.filter((m) => isModelAvailable(m));
+    const paidModels = modelList.filter((m) => !isModelAvailable(m));
+    return [...freeModels, ...paidModels];
+  }, [modelList, isFreeUser]);
 
   const attachedFiles =
     controlledFiles !== undefined ? controlledFiles : localFiles;
@@ -414,6 +423,8 @@ export default function IdeaInputCard({
     { value: "ask", label: "Ask a question" },
     { value: "build", label: "Build a feature" },
     { value: "debug", label: "Debug an issue" },
+    ...(showSpecGenOption ? [{ value: "spec_gen" as const, label: "Generate a spec" }] : []),
+    { value: "code", label: "Make a change" },
   ];
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
@@ -478,25 +489,31 @@ export default function IdeaInputCard({
                 <Search className="h-4 w-4 shrink-0 text-zinc-400" />
                 <Input
                   placeholder="Search repositories..."
-                  value={repoSearchTerm}
+                  value={localRepoSearch}
                   onChange={(e) => {
                     const value = e.target.value;
-                    // Max length validation (200 characters)
                     if (value.length <= 200) {
-                      onRepoSearchChange?.(value);
+                      setLocalRepoSearch(value);
+                      if (repoDebounceRef.current) clearTimeout(repoDebounceRef.current);
+                      repoDebounceRef.current = setTimeout(() => {
+                        onRepoSearchChange?.(value.trim());
+                      }, 350);
                     }
                   }}
                   maxLength={200}
                   className="flex-1 h-8 text-[10px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-0"
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
                 />
-                {repoSearchTerm?.trim() && (
+                {localRepoSearch.trim() && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-4 w-4 rounded-full hover:bg-zinc-100"
                     onClick={(e) => {
                       e.stopPropagation();
+                      setLocalRepoSearch("");
+                      if (repoDebounceRef.current) clearTimeout(repoDebounceRef.current);
                       onRepoSearchChange?.("");
                     }}
                   >
@@ -529,19 +546,19 @@ export default function IdeaInputCard({
                   <div className="p-7 text-center">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
                     <p className="text-[10px] text-zinc-500">
-                      {repoSearchTerm?.trim() ? "Searching repositories..." : "Loading repositories..."}
+                      {localRepoSearch.trim() ? "Searching repositories..." : "Loading repositories..."}
                     </p>
                   </div>
                 ) : repositories.length === 0 ? (
                   <div className="p-7 text-center">
                     <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
                     <p className="text-[10px] font-medium text-foreground mb-1">
-                      {repoSearchTerm?.trim()
-                        ? `No repositories found matching '${repoSearchTerm.trim()}'`
+                      {localRepoSearch.trim()
+                        ? `No repositories found matching '${localRepoSearch.trim()}'`
                         : "No parsed repositories found"}
                     </p>
                     <p className="text-[9px] text-zinc-400">
-                      {repoSearchTerm?.trim() ? "Try a different search term" : "Parse a repository to get started"}
+                      {localRepoSearch.trim() ? "Try a different search term" : "Parse a repository to get started"}
                     </p>
                   </div>
                 ) : (
@@ -594,7 +611,7 @@ export default function IdeaInputCard({
                     <DropdownMenuItem
                       onClick={() => {
                         setRepoDropdownOpen(false);
-                        onParseRepo?.();
+                        openGithubPopup();
                       }}
                       className="flex items-center gap-2 px-2.5 py-2.5 cursor-pointer rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
                     >
@@ -645,25 +662,31 @@ export default function IdeaInputCard({
                   <Search className="h-4 w-4 shrink-0 text-zinc-400" />
                   <Input
                     placeholder="Search branches..."
-                    value={branchSearchTerm}
+                    value={localBranchSearch}
                     onChange={(e) => {
                       const value = e.target.value;
-                      // Max length validation (200 characters)
                       if (value.length <= 200) {
-                        onBranchSearchChange?.(value);
+                        setLocalBranchSearch(value);
+                        if (branchDebounceRef.current) clearTimeout(branchDebounceRef.current);
+                        branchDebounceRef.current = setTimeout(() => {
+                          onBranchSearchChange?.(value.trim());
+                        }, 350);
                       }
                     }}
                     maxLength={200}
                     className="flex-1 h-8 text-[10px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-0"
                     onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                   />
-                  {branchSearchTerm?.trim() && (
+                  {localBranchSearch.trim() && (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-4 w-4 rounded-full hover:bg-zinc-100"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setLocalBranchSearch("");
+                        if (branchDebounceRef.current) clearTimeout(branchDebounceRef.current);
                         onBranchSearchChange?.("");
                       }}
                     >
@@ -701,19 +724,19 @@ export default function IdeaInputCard({
                   <div className="p-7 text-center">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
                     <p className="text-[10px] text-zinc-500">
-                      {branchSearchTerm?.trim() ? "Searching branches..." : "Loading branches..."}
+                      {localBranchSearch.trim() ? "Searching branches..." : "Loading branches..."}
                     </p>
                   </div>
                 ) : branches.length === 0 ? (
                   <div className="p-7 text-center">
                     <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
                     <p className="text-[10px] font-medium text-foreground mb-1">
-                      {branchSearchTerm?.trim()
-                        ? `No branches found matching '${branchSearchTerm.trim()}'`
+                      {localBranchSearch.trim()
+                        ? `No branches found matching '${localBranchSearch.trim()}'`
                         : "No branches found"}
                     </p>
                     <p className="text-[9px] text-zinc-400">
-                      {branchSearchTerm?.trim() ? "Try a different search term" : "Unable to load branches for this repository"}
+                      {localBranchSearch.trim() ? "Try a different search term" : "Unable to load branches for this repository"}
                     </p>
                   </div>
                 ) : (
@@ -917,39 +940,82 @@ export default function IdeaInputCard({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            {isFreeUser ? (
-              <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full border"
-                    style={{
-                      backgroundColor: FIGMA.claudeDropdownBg,
-                      borderColor: FIGMA.inputBorder,
-                      color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
-                      opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
-                    }}
-                    aria-label="Upgrade to change plan"
-                  >
-                    <Lock className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
-                    <span className="shrink-0">{displayModelName}</span>
-                    <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[200px] w-[200px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+            <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full border"
+                  style={{
+                    backgroundColor: FIGMA.claudeDropdownBg,
+                    borderColor: FIGMA.inputBorder,
+                    color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
+                    opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
+                  }}
+                  aria-label={isFreeUser ? "Upgrade to change plan" : "Change model"}
                 >
-                  <div className="py-1 max-h-[240px] overflow-y-auto">
-                    {UPGRADE_DROPDOWN_PLACEHOLDER_MODELS.map((name) => (
-                      <div
-                        key={name}
-                        className="px-4 py-2.5 text-sm text-zinc-400 cursor-default select-none"
-                      >
-                        {name}
-                      </div>
-                    ))}
-                  </div>
+                  <Lock className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
+                  <span className="shrink-0">{displayModelName}</span>
+                  <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="min-w-[280px] w-[280px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+                style={{ color: FIGMA.modelDropdownText }}
+              >
+                <div className="py-1 max-h-[320px] overflow-y-auto">
+                  {orderedModelList.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-zinc-500">Loading models…</div>
+                  ) : (
+                    orderedModelList.map((model) => {
+                      const available = isModelAvailable(model);
+                      return (
+                        <DropdownMenuItem
+                          key={model.id}
+                          title={model.description ?? undefined}
+                          onClick={async (e) => {
+                            if (!available) {
+                              e.preventDefault();
+                              setModelDropdownOpen(false);
+                              router.push("/user-subscription");
+                              return;
+                            }
+                            try {
+                              await ModelService.setCurrentModel(model.id);
+                              await loadCurrentModel();
+                            } catch {
+                              // keep current selection on error
+                            }
+                            setModelDropdownOpen(false);
+                          }}
+                          className={`flex flex-col items-start gap-0.5 py-2.5 ${available ? "cursor-pointer" : "cursor-default opacity-90"} ${currentModel?.id === model.id ? "bg-zinc-100 font-medium" : ""}`}
+                          style={{
+                            color: available ? FIGMA.modelDropdownText : "#9ca3af",
+                          }}
+                        >
+                          <div className="flex w-full items-center gap-2 flex-wrap">
+                            <span className={available ? "" : "text-gray-400"}>{model.name}</span>
+                            {!available && (
+                              <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-gray-700">
+                                <Crown className="h-3 w-3 shrink-0" />
+                                Upgrade Plan
+                              </span>
+                            )}
+                          </div>
+                          {model.description && (
+                            <span
+                              className="text-xs italic block mt-0.5"
+                              style={{ color: available ? FIGMA.textMuted : "#9ca3af" }}
+                            >
+                              {model.description}
+                            </span>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })
+                  )}
+                </div>
+                {isFreeUser && (
                   <div className="p-3 border-t border-zinc-100">
                     <button
                       type="button"
@@ -962,55 +1028,9 @@ export default function IdeaInputCard({
                       Upgrade to change plan
                     </button>
                   </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full border"
-                    style={{
-                      backgroundColor: FIGMA.claudeDropdownBg,
-                      borderColor: FIGMA.inputBorder,
-                      color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
-                      opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
-                    }}
-                    aria-label="Change model"
-                  >
-                    <Lock className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
-                    <span className="shrink-0">{displayModelName}</span>
-                    <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[200px] w-[200px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
-                  style={{ color: FIGMA.modelDropdownText }}
-                >
-                  <div className="py-1 max-h-[240px] overflow-y-auto">
-                    {modelList.map((model) => (
-                      <DropdownMenuItem
-                        key={model.id}
-                        onClick={async () => {
-                          try {
-                            await ModelService.setCurrentModel(model.id);
-                            await loadCurrentModel();
-                          } catch {
-                            // keep current selection on error
-                          }
-                          setModelDropdownOpen(false);
-                        }}
-                        className={`cursor-pointer ${currentModel?.id === model.id ? "bg-zinc-100 font-medium" : ""}`}
-                        style={{ color: FIGMA.modelDropdownText }}
-                      >
-                        {model.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               type="button"
               onClick={() => {

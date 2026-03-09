@@ -4,6 +4,32 @@ import { Visibility } from "@/lib/Constants";
 import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 
+/** Tool call from message history / stream API */
+export interface ToolCall {
+  call_id: string;
+  event_type: "call" | "result" | "delegation_call" | "delegation_result" | "error";
+  tool_name: string;
+  tool_response: string;
+  tool_call_details: {
+    summary?: string;
+    [key: string]: unknown;
+  };
+  stream_part?: string | null;
+  is_complete: boolean;
+}
+
+/** Message shape returned by loadMessages (includes thinking & tool_calls) */
+export interface LoadedMessage {
+  id: string;
+  text: string;
+  sender: "user" | "agent";
+  citations: string[];
+  has_attachments: boolean;
+  attachments: unknown[];
+  tool_calls: ToolCall[] | null;
+  thinking: string | null;
+}
+
 export default class ChatService {
   private static extractJsonObjects(input: string): {
     objects: string[];
@@ -287,7 +313,11 @@ export default class ChatService {
     chatId: string,
     sessionId: string,
     cursor: string,
-    onMessageUpdate: (message: string, tool_calls: any[]) => void,
+    onMessageUpdate: (
+      message: string,
+      tool_calls: any[],
+      thinking?: string | null
+    ) => void,
     abortSignal?: AbortSignal
   ): Promise<void> {
     try {
@@ -319,6 +349,7 @@ export default class ChatService {
       const decoder = new TextDecoder();
       let currentMessage = "";
       let currentToolCalls: any[] = [];
+      let currentThinking: string | null = null;
       let buffer = "";
 
       if (reader) {
@@ -337,12 +368,17 @@ export default class ChatService {
                   )
               );
               currentMessage += messageWithEmojis;
-              onMessageUpdate(currentMessage, currentToolCalls);
+              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
             }
 
             if (data.tool_calls !== undefined) {
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(currentMessage, currentToolCalls);
+              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
+            }
+
+            if (data.thinking !== undefined) {
+              currentThinking = data.thinking ?? null;
+              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
             }
           } catch (e) {
             const extracted = ChatService.extractJsonObjects(jsonStr);
@@ -424,7 +460,8 @@ export default class ChatService {
     onMessageUpdate: (
       message: string,
       tool_calls: any[],
-      citations: string[]
+      citations: string[],
+      thinking?: string | null
     ) => void,
     sessionId?: string, // New optional parameter
     abortSignal?: AbortSignal
@@ -517,7 +554,8 @@ export default class ChatService {
     onMessageUpdate: (
       message: string,
       tool_calls: any[],
-      citations: string[]
+      citations: string[],
+      thinking?: string | null
     ) => void,
     maxRetries: number,
     abortSignal?: AbortSignal
@@ -541,6 +579,7 @@ export default class ChatService {
         let currentMessage = "";
         let currentCitations: string[] = [];
         let currentToolCalls: any[] = [];
+        let currentThinking: string | null = null;
         let buffer = ""; // Buffer for incomplete JSON chunks
 
         const processJsonSegment = (jsonStr: string) => {
@@ -559,7 +598,8 @@ export default class ChatService {
               onMessageUpdate(
                 currentMessage,
                 currentToolCalls,
-                currentCitations
+                currentCitations,
+                currentThinking
               );
             }
 
@@ -578,7 +618,8 @@ export default class ChatService {
               onMessageUpdate(
                 currentMessage,
                 currentToolCalls,
-                currentCitations
+                currentCitations,
+                currentThinking
               );
             }
 
@@ -587,7 +628,18 @@ export default class ChatService {
               onMessageUpdate(
                 currentMessage,
                 currentToolCalls,
-                currentCitations
+                currentCitations,
+                currentThinking
+              );
+            }
+
+            if (data.thinking !== undefined) {
+              currentThinking = data.thinking ?? null;
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations,
+                currentThinking
               );
             }
           } catch (e) {
@@ -711,7 +763,7 @@ export default class ChatService {
     conversationId: string,
     start: number,
     limit: number
-  ) {
+  ): Promise<LoadedMessage[]> {
     const headers = await getHeaders();
     const response = await axios.get(
       `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/messages`,
@@ -723,19 +775,23 @@ export default class ChatService {
 
     return response.data.map(
       (message: {
-        id: any;
-        content: any;
+        id: string;
+        content: string;
         type: string;
-        citations: any;
+        citations?: string[] | null;
         has_attachments?: boolean;
-        attachments?: any[];
+        attachments?: unknown[];
+        tool_calls?: ToolCall[] | null;
+        thinking?: string | null;
       }) => ({
         id: message.id,
-        text: message.content,
+        text: message.content ?? "",
         sender: message.type === "HUMAN" ? "user" : "agent",
-        citations: message.citations || [],
-        has_attachments: message.has_attachments || false,
-        attachments: message.attachments || [],
+        citations: message.citations ?? [],
+        has_attachments: message.has_attachments ?? false,
+        attachments: message.attachments ?? [],
+        tool_calls: message.tool_calls ?? null,
+        thinking: message.thinking ?? null,
       })
     );
   }

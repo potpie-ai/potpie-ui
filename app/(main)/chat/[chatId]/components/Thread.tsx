@@ -492,11 +492,17 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
 
   // Combine all content for the collapsible block
   const hasAnyContent = hasCallInfo || hasResultInfo || !isCompleted;
-  const displayStatus = showResultStatus
+  const rawDisplayStatus = showResultStatus
     ? resultStatusMessage
     : showCallStatus
       ? callStatusMessage
       : toolName;
+  // Backend may send null/empty tool_response as the string "None" (e.g. Python); don't show that
+  const displayStatus =
+    rawDisplayStatus?.trim() &&
+    rawDisplayStatus.trim().toLowerCase() !== "none"
+      ? rawDisplayStatus
+      : (toolName?.trim() || "Tool call");
 
   return (
     <motion.div

@@ -34,6 +34,7 @@ import {
   SendHorizonal,
   RotateCw,
   Wrench,
+  ArrowLeft,
 } from "lucide-react";
 import {
   Accordion,
@@ -685,14 +686,27 @@ const PlanPage = () => {
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left: Chat (same pattern as spec page) */}
         <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7] chat-panel-contained">
-          <div className="flex justify-between items-center px-6 py-4 shrink-0">
-            <h1 className="text-lg font-bold text-[#022019] truncate capitalize">
-              {userPrompt?.slice(0, 50) || "Chat Name"}
-              {(userPrompt?.length ?? 0) > 50 ? "…" : ""}
-            </h1>
-            <div className="flex items-center gap-2 shrink-0">
-              <ChatBadge icon={Github}>{displayRepoName}</ChatBadge>
-              <ChatBadge icon={GitBranch}>{displayBranchName}</ChatBadge>
+          <div className="px-6 pt-4 pb-2 shrink-0 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (!recipeId) return;
+                router.push(`/task/${recipeId}/spec`);
+              }}
+              className="inline-flex items-center gap-1 text-xs font-medium text-[#022019] px-0 py-0.5 rounded-md hover:underline w-fit"
+            >
+              <ArrowLeft className="w-3 h-3" />
+              Back to spec
+            </button>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <h1 className="text-lg font-bold text-[#022019] truncate capitalize">
+                {userPrompt?.slice(0, 50) || "Chat Name"}
+                {(userPrompt?.length ?? 0) > 50 ? "…" : ""}
+              </h1>
+              <div className="flex items-center gap-2 shrink-0 mt-1 sm:mt-0">
+                <ChatBadge icon={Github}>{displayRepoName}</ChatBadge>
+                <ChatBadge icon={GitBranch}>{displayBranchName}</ChatBadge>
+              </div>
             </div>
           </div>
 

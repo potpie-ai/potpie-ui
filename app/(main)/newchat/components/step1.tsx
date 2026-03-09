@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/command";
 import { CommandSeparator } from "cmdk";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
+import { useRepoSearch } from "@/lib/hooks/useRepoSearch";
+import { useBranchSearch } from "@/lib/hooks/useBranchSearch";
 import { z } from "zod";
 import { toast } from "@/components/ui/sonner";
 import { Dialog } from "@radix-ui/react-dialog";
@@ -113,23 +115,92 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
   const [isValidLink, setIsValidLink] = useState(false);
   const [linkedRepoName, setLinkedRepoName] = useState<string | null>(null);
   const [isParseDisabled, setIsParseDisabled] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
   const [repoOpen, setRepoOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [useCommitId, setUseCommitId] = useState(false);
   const [commitIdInput, setCommitIdInput] = useState("");
-  const commitIdDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const commitIdDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const repoInputRef = useRef<HTMLInputElement>(null);
+  const branchInputRef = useRef<HTMLInputElement>(null);
   const COMMIT_ID_DEBOUNCE_MS = 400;
 
   useEffect(() => {
     return () => {
-      if (commitIdDebounceRef.current) {
-        clearTimeout(commitIdDebounceRef.current);
-      }
+      if (commitIdDebounceRef.current) clearTimeout(commitIdDebounceRef.current);
     };
   }, []);
+
+  // Resolve full GitHub URL → owner/repo format for branch fetching
+  const resolvedRepoName = (() => {
+    const regex = /https:\/\/github\.com\/([^/]+)\/([^/]+)/;
+    const match = repoName.match(regex);
+    return match ? `${match[1]}/${match[2]}` : repoName;
+  })();
+
+  const {
+    displayedRepos: UserRepositorys,
+    isLoading: UserRepositorysLoading,
+    isSearching,
+    searchInput: searchValue,
+    handleSearchChange: setSearchValue,
+    hasNextPage: repoHasNextPage,
+    loadMore: loadMoreRepos,
+  } = useRepoSearch({ enabled: true });
+  // Keep same name as before for the focus-refocus effect
+  const UserRepositorysFetching = isSearching;
+
+  const {
+    displayedBranches: UserBranch,
+    isLoading: UserBranchLoading,
+    isSearching: branchSearching,
+    searchInput: branchSearchValue,
+    handleSearchChange: setBranchSearchValue,
+    hasNextPage: branchHasNextPage,
+    loadMore: loadMoreBranches,
+  } = useBranchSearch({ repoName: resolvedRepoName, enabled: !!resolvedRepoName });
+
+  // Auto-select repo from ?repo= URL param once list loads
+  useEffect(() => {
+    if (!defaultRepo || UserRepositorys.length === 0 || repoName) return;
+    const decodedDefaultRepo = decodeURIComponent(defaultRepo).toLowerCase();
+    const matchingRepo = UserRepositorys.find((repo: RepoIdentifier) => {
+      const id = getRepoIdentifier(repo);
+      return id && id.toLowerCase() === decodedDefaultRepo;
+    });
+    dispatch(setRepoName(matchingRepo ? decodeURIComponent(defaultRepo) : ""));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [UserRepositorys]);
+
+  // Auto-select branch from ?branch= URL param or when only one branch exists
+  useEffect(() => {
+    if (!UserBranch || UserBranch.length === 0 || branchName) return;
+    if (UserBranch.length === 1) {
+      dispatch(setBranchName(UserBranch[0]));
+    } else if (defaultBranch) {
+      const matchingBranch = UserBranch.find(
+        (b: string) => b.toLowerCase() === decodeURIComponent(defaultBranch).toLowerCase(),
+      );
+      if (matchingBranch) dispatch(setBranchName(decodeURIComponent(defaultBranch)));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [UserBranch]);
+
+  // Refocus inputs after search results update (cmdk steals focus when items re-register)
+  useEffect(() => {
+    if (!repoOpen || UserRepositorysFetching) return;
+    const id = setTimeout(() => {
+      repoInputRef.current?.focus();
+    }, 0);
+    return () => clearTimeout(id);
+  }, [UserRepositorys, UserRepositorysFetching, repoOpen]);
+
+  useEffect(() => {
+    if (!branchOpen) return;
+    const id = setTimeout(() => {
+      branchInputRef.current?.focus();
+    }, 0);
+    return () => clearTimeout(id);
+  }, [UserBranch, branchOpen]);
 
   const searchParams = useSearchParams();
 
@@ -245,69 +316,6 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
     }
   };
 
-  const { data: UserRepositorys, isLoading: UserRepositorysLoading } = useQuery(
-    {
-      queryKey: ["user-repository"],
-      queryFn: async () => {
-        const repos =
-          await BranchAndRepositoryService.getUserRepositories().then(
-            (data) => {
-              if (defaultRepo && data.length > 0) {
-                const decodedDefaultRepo =
-                  decodeURIComponent(defaultRepo).toLowerCase();
-                const matchingRepo = data.find((repo: RepoIdentifier) => {
-                  const repoIdentifier = getRepoIdentifier(repo);
-                  return (
-                    repoIdentifier &&
-                    repoIdentifier.toLowerCase() === decodedDefaultRepo
-                  );
-                });
-                dispatch(
-                  setRepoName(
-                    matchingRepo ? decodeURIComponent(defaultRepo) : "",
-                  ),
-                );
-              }
-              return data;
-            },
-          );
-        return repos;
-      },
-    },
-  );
-
-  const { data: UserBranch, isLoading: UserBranchLoading } = useQuery({
-    queryKey: ["user-branch", repoName],
-    queryFn: () => {
-      const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
-      const match = repoName.match(regex);
-      if (match) {
-        const ownerRepo = `${match[1]}/${match[2]}`;
-        return BranchAndRepositoryService.getBranchList(ownerRepo);
-      }
-      return BranchAndRepositoryService.getBranchList(repoName).then((data) => {
-        // Auto-select branch if there's only one
-        if (data?.length === 1) {
-          dispatch(setBranchName(data[0]));
-        }
-        // Handle default branch selection if provided
-        else if (data?.length > 0 && defaultBranch) {
-          const matchingBranch = data.find(
-            (branch: string) =>
-              branch.toLowerCase() ===
-              decodeURIComponent(defaultBranch).toLowerCase(),
-          );
-          dispatch(
-            setBranchName(
-              matchingBranch ? decodeURIComponent(defaultBranch) : "",
-            ),
-          );
-        }
-        return data;
-      });
-    },
-    enabled: !!repoName && repoName !== "",
-  });
 
   const {
     data: PublicRepo,
@@ -546,11 +554,14 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
         Need help?
       </Link>
       <div className="flex items-center gap-4 mt-4">
-        {UserRepositorysLoading ? (
+        {UserRepositorysLoading && !UserRepositorys?.length && !repoOpen ? (
           <Skeleton className="flex-1 h-10" />
         ) : (
           <>
-            <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+            <Popover open={repoOpen} onOpenChange={(open) => {
+              setRepoOpen(open);
+              if (!open) setSearchValue("");
+            }}>
               <PopoverTrigger asChild className="flex-1">
                 {UserRepositorys?.length === 0 || !repoName ? (
                   <Button
@@ -588,15 +599,19 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                 )}
               </PopoverTrigger>
               <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                <Command defaultValue={defaultRepo ?? undefined}>
+                <Command shouldFilter={false} defaultValue={defaultRepo ?? undefined}>
                   <CommandInput
+                    ref={repoInputRef}
                     value={searchValue}
-                    onValueChange={(e) => {
-                      setSearchValue(e);
-                    }}
+                    onValueChange={setSearchValue}
                     placeholder="Search repo or paste local path (e.g., /Users/...)"
                   />
                   <CommandList>
+                    {UserRepositorysFetching && (
+                      <div className="flex items-center justify-center py-2 text-xs text-muted-foreground gap-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Searching…
+                      </div>
+                    )}
                     <CommandEmpty>
                       {searchValue.startsWith("https://github.com/") &&
                       !process.env.NEXT_PUBLIC_BASE_URL?.includes(
@@ -663,6 +678,18 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                         );
                       })}
                     </CommandGroup>
+                    {repoHasNextPage && (
+                      <CommandItem
+                        onSelect={loadMoreRepos}
+                        className="justify-center text-sm text-muted-foreground"
+                      >
+                        {UserRepositorysFetching ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Load more repositories..."
+                        )}
+                      </CommandItem>
+                    )}
                     <CommandSeparator className="my-1" />
                     <CommandItem
                       value="public"
@@ -737,7 +764,10 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
               </Button>
             </div>
             {!useCommitId ? (
-              <Popover open={branchOpen} onOpenChange={setBranchOpen}>
+              <Popover open={branchOpen} onOpenChange={(open) => {
+                setBranchOpen(open);
+                if (!open) setBranchSearchValue("");
+              }}>
                 <PopoverTrigger asChild className="flex-1">
                   {UserBranch?.length === 0 || !branchName ? (
                     <Button
@@ -766,10 +796,23 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                   )}
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                  <Command defaultValue={defaultBranch ?? undefined}>
-                    <CommandInput placeholder="Search branch..." />
+                  <Command shouldFilter={false} defaultValue={defaultBranch ?? undefined}>
+                    <CommandInput
+                      ref={branchInputRef}
+                      value={branchSearchValue}
+                      onValueChange={setBranchSearchValue}
+                      placeholder="Search branch..."
+                    />
                     <CommandList>
-                      <CommandEmpty>No branch found.</CommandEmpty>
+                      <CommandEmpty>
+                        {branchSearching ? (
+                          <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Searching…
+                          </div>
+                        ) : (
+                          "No branch found."
+                        )}
+                      </CommandEmpty>
                       <CommandGroup>
                         {UserBranch?.map((value: any) => (
                           <CommandItem
@@ -784,6 +827,18 @@ const Step1: React.FC<Step1Props> = ({ setProjectId, setChatStep }) => {
                           </CommandItem>
                         ))}
                       </CommandGroup>
+                      {branchHasNextPage && (
+                        <CommandItem
+                          onSelect={loadMoreBranches}
+                          className="justify-center text-sm text-muted-foreground"
+                        >
+                          {branchSearching ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Load more branches..."
+                          )}
+                        </CommandItem>
+                      )}
                     </CommandList>
                   </Command>
                 </PopoverContent>

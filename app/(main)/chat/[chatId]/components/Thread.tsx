@@ -25,7 +25,7 @@ import {
   RefreshCwIcon,
   Loader,
 } from "lucide-react";
-import { isMultimodalEnabled } from "@/lib/utils";
+import { isMultimodalEnabled, stripAssistantMarkers } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import {
@@ -33,6 +33,7 @@ import {
   StandaloneMarkdown,
 } from "@/components/assistant-ui/markdown-text";
 import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
+import { MonacoDiffView } from "@/components/diff-editor/MonacoDiffView";
 import MessageComposer from "./MessageComposer";
 import { motion } from "motion/react";
 import {
@@ -43,6 +44,80 @@ import {
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
+
+const looksLikeUnifiedDiff = (text: string | undefined | null): boolean => {
+  if (!text) return false;
+  const trimmed = text.trimStart();
+  if (!trimmed) return false;
+  const firstLines = trimmed.split("\n").slice(0, 10);
+  return firstLines.some((line) => {
+    const l = line.trimStart();
+    return (
+      l.startsWith("diff --git") ||
+      l.startsWith("--- ") ||
+      l.startsWith("+++ ") ||
+      l.startsWith("@@ ")
+    );
+  });
+};
+
+const extractPathFromDiff = (text: string | undefined | null): string => {
+  if (!text) return "patch.diff";
+  const lines = text.split("\n");
+  let candidatePath: string | null = null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("+++ ")) {
+      const parts = trimmed.split(/\s+/);
+      const pathPart = (parts[1] ?? "").replace(/^a\//, "").replace(/^b\//, "");
+      if (pathPart && pathPart !== "/dev/null") {
+        return pathPart;
+      }
+      if (!candidatePath && pathPart) {
+        candidatePath = pathPart;
+      }
+    }
+    if (trimmed.startsWith("--- ")) {
+      const parts = trimmed.split(/\s+/);
+      const pathPart = (parts[1] ?? "").replace(/^a\//, "").replace(/^b\//, "");
+      if (pathPart && pathPart !== "/dev/null") {
+        return pathPart;
+      }
+      if (!candidatePath && pathPart) {
+        candidatePath = pathPart;
+      }
+    }
+  }
+  if (candidatePath && candidatePath !== "/dev/null") {
+    return candidatePath;
+  }
+  return "patch.diff";
+};
+
+const extractDiffBlockFromText = (
+  text: string | undefined | null
+): { before: string; diff: string; after: string } | null => {
+  if (!text) return null;
+  const full = text;
+
+  const fenced = full.match(/```(?:diff|patch)?\s*\n([\s\S]*?)```/i);
+  if (fenced && typeof fenced.index === "number") {
+    const fenceHeader = fenced[0].split("\n", 1)[0] ?? "";
+    const isTaggedDiff = /^```(?:diff|patch)\b/i.test(fenceHeader);
+    const before = full.slice(0, fenced.index).trim();
+    const after = full.slice(fenced.index + fenced[0].length).trim();
+    const diff = fenced[1] ?? "";
+    if (diff.trim() && (isTaggedDiff || looksLikeUnifiedDiff(diff))) {
+      return { before, diff, after };
+    }
+  }
+
+  if (looksLikeUnifiedDiff(full)) {
+    return { before: "", diff: full, after: "" };
+  }
+
+  return null;
+};
 
 interface ThreadProps {
   projectId: string;
@@ -417,15 +492,28 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   const eventType = currentState?.event_type || "";
 
   // Status messages (tool_response from API)
-  const callStatusMessage = callState?.response || "";
-  const resultStatusMessage = resultStateLocal?.response || "";
+  const callStatusMessage = stripAssistantMarkers(callState?.response || "");
+  const resultStatusMessage = stripAssistantMarkers(
+    resultStateLocal?.response || ""
+  );
 
   // Detailed summaries (tool_call_details.summary from API)
-  const callSummary = callState?.details?.summary || "";
-  const resultSummary = resultStateLocal?.details?.summary || "";
+  const callSummary = stripAssistantMarkers(callState?.details?.summary || "");
+  const resultSummary = stripAssistantMarkers(
+    resultStateLocal?.details?.summary || ""
+  );
 
   // Streaming content (accumulated stream_part)
-  const streamingContent = resultStateLocal?.accumulated_response || "";
+  const streamingContentRaw = resultStateLocal?.accumulated_response || "";
+  const streamingContent = streamingContentRaw;
+  // Prefer streaming content for diffs; fall back to result summary if needed
+  const diffCandidate =
+    (streamingContent && looksLikeUnifiedDiff(streamingContent) && streamingContent) ||
+    (resultStateLocal?.details?.summary &&
+      looksLikeUnifiedDiff(resultStateLocal.details.summary) &&
+      resultStateLocal.details.summary) ||
+    "";
+  const hasDiffCandidate = !!diffCandidate;
 
   const isError = toolCallPart?.isError ?? currentState?.event_type === "error";
   const isCompleted =
@@ -559,17 +647,49 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
                     {resultStatusMessage}
                   </div>
                 )}
-                {/* Streaming content (from stream_part) */}
-                {streamingContent && (
+                {/* Streaming content (from stream_part) or unified diff */}
+                {hasDiffCandidate ? (
                   <div className="text-foreground/90 bg-white/50 dark:bg-neutral-900/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
                     {isToolCallStreaming && !isCompleted && (
                       <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
                     )}
-                    <StandaloneMarkdown
-                      text={streamingContent}
-                      className="markdown-content break-words text-xs"
-                    />
+                    {(() => {
+                      const diffPath = extractPathFromDiff(diffCandidate);
+                      const fileLabel = diffPath || "patch.diff";
+                      return (
+                        <div className="mt-1 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white">
+                          <div className="flex items-center px-3 py-1.5 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50">
+                            <p className="text-[11px] font-medium text-[#022019] truncate">
+                              {fileLabel}
+                            </p>
+                          </div>
+                          <div className="min-h-[200px]">
+                            <MonacoDiffView
+                              change={{
+                                path: diffPath,
+                                lang: "",
+                                content: diffCandidate,
+                              }}
+                              height={280}
+                              className="w-full"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
+                ) : (
+                  streamingContentRaw && (
+                    <div className="text-foreground/90 bg-white/50 dark:bg-neutral-900/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
+                      {isToolCallStreaming && !isCompleted && (
+                        <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
+                      )}
+                      <StandaloneMarkdown
+                        text={stripAssistantMarkers(streamingContentRaw)}
+                        className="markdown-content break-words text-xs"
+                      />
+                    </div>
+                  )
                 )}
                 {/* Result summary (from tool_call_details.summary) */}
                 {showResultSummary && (
@@ -614,15 +734,62 @@ const InlineMessageContent: FC = () => {
   return (
     <div className="inline-message-content">
       {message.content.map((part, index) => {
-        if (part.type === "text") {
+          if (part.type === "text") {
+          const rawText = stripAssistantMarkers(part.text ?? "");
           // Only render non-empty text segments
-          if (!part.text || !part.text.trim()) {
+          if (!rawText.trim()) {
             return null;
           }
+
+          const diffBlock = extractDiffBlockFromText(rawText);
+
+          if (diffBlock) {
+            return (
+              <div key={`text-${index}`} className="w-full my-8 space-y-8">
+                {diffBlock.before && (
+                  <StandaloneMarkdown
+                    text={stripAssistantMarkers(diffBlock.before)}
+                    className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
+                  />
+                )}
+                {(() => {
+                  const diffPath = extractPathFromDiff(diffBlock.diff);
+                  const fileLabel = diffPath || "patch.diff";
+                  return (
+                    <div className="rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white">
+                      <div className="flex items-center px-3 py-1.5 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50">
+                        <p className="text-[11px] font-medium text-[#022019] truncate">
+                          {fileLabel}
+                        </p>
+                      </div>
+                      <div className="min-h-[200px]">
+                        <MonacoDiffView
+                          change={{
+                            path: diffPath,
+                            lang: "",
+                            content: diffBlock.diff,
+                          }}
+                          height={280}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+                {diffBlock.after && (
+                  <StandaloneMarkdown
+                    text={stripAssistantMarkers(diffBlock.after)}
+                    className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
+                  />
+                )}
+              </div>
+            );
+          }
+
           return (
             <div key={`text-${index}`} className="w-full my-1">
               <StandaloneMarkdown
-                text={part.text}
+                text={rawText}
                 className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
               />
             </div>

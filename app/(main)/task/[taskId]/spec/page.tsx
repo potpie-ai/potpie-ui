@@ -978,13 +978,29 @@ const SpecPage = () => {
     };
   }, [recipeId, regenerateSpecKey, runIdFromUrl]);
 
-  // Calculate status (support new API: generation_status, and legacy formats)
-  const status = (specProgress 
-    ? ('generation_status' in specProgress
-        ? ((specProgress as any).generation_status === 'completed' ? 'COMPLETED' : (specProgress as any).generation_status === 'failed' ? 'FAILED' : (specProgress as any).generation_status === 'processing' || (specProgress as any).generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
-        : ('spec_gen_status' in specProgress ? specProgress.spec_gen_status : ('spec_generation_step_status' in specProgress ? specProgress.spec_generation_step_status : null)))
-    : null) as 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null;
-  const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
+  // Calculate status from backend generation_status (source of truth).
+  // Treat only "pending" and "processing" as in-progress; "completed"/"failed" as terminal; anything else as idle.
+  const rawGenerationStatus: string | null = specProgress
+    ? ("generation_status" in specProgress
+        ? (specProgress as any).generation_status
+        : "spec_gen_status" in specProgress
+          ? (specProgress as any).spec_gen_status
+          : "spec_generation_step_status" in specProgress
+            ? (specProgress as any).spec_generation_step_status
+            : null)
+    : null;
+
+  // Normalize to lowercase for case-insensitive comparison (handles legacy uppercase values)
+  const normalizedStatus = rawGenerationStatus?.toLowerCase();
+  const status = (normalizedStatus === "completed"
+    ? "COMPLETED"
+    : normalizedStatus === "failed"
+      ? "FAILED"
+      : normalizedStatus === "pending" || normalizedStatus === "processing" || normalizedStatus === "in_progress"
+        ? "IN_PROGRESS"
+        : null) as "IN_PROGRESS" | "COMPLETED" | "FAILED" | null;
+
+  const isGenerating = status === "IN_PROGRESS";
   const errorMessageFromApi = specProgress && typeof (specProgress as any).error_message === 'string' ? (specProgress as any).error_message : null;
 
   // Normalize spec from potpie-workflows GET /api/v1/recipes/{id}/spec
@@ -1270,6 +1286,11 @@ const SpecPage = () => {
                       try {
                         // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
+                        // Only clear state on success so stale content remains visible on failure
+                        setSpecProgress(null);
+                        setError(null);
+                        setStreamProgress(null);
+                        setStreamItems([]);
                         // Then try to start streaming to get run_id for live updates
                         let runId = "";
                         try {
@@ -1284,8 +1305,6 @@ const SpecPage = () => {
                         toast.success("Spec regeneration started");
                         if (!runId) {
                           // No run_id - fall back to polling
-                          setSpecProgress(null);
-                          setError(null);
                           setRegenerateSpecKey((k) => k + 1);
                         } else {
                           // Navigate with run_id for streaming
@@ -1293,6 +1312,7 @@ const SpecPage = () => {
                         }
                       } catch (err: any) {
                         console.error("Error regenerating spec:", err);
+                        setError(err?.message ?? "Failed to regenerate spec");
                         toast.error(err?.message ?? "Failed to regenerate spec");
                       } finally {
                         setIsRegeneratingSpec(false);
@@ -1350,9 +1370,37 @@ const SpecPage = () => {
             {status === "COMPLETED" && !isCancelled && hasSpecContent && (
               <div className="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-[#E5E8E6] flex justify-end">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    if (!recipeId) return;
                     startNavigation();
-                    router.push(`/task/${recipeId}/plan`);
+                    try {
+                      // Check current plan status to decide action:
+                      // - not_started: start new generation
+                      // - pending/processing: navigate directly (job already in progress)
+                      // - completed/failed: regenerate
+                      let planAction: "submit" | "navigate" | "regenerate" = "submit";
+                      try {
+                        const current = await PlanService.getPlanStatusByRecipeId(recipeId);
+                        const genStatus = current?.generation_status?.toLowerCase();
+                        if (genStatus === "pending" || genStatus === "processing" || genStatus === "in_progress") {
+                          planAction = "navigate";
+                        } else if (genStatus === "completed" || genStatus === "failed") {
+                          planAction = "regenerate";
+                        }
+                      } catch {
+                        // If status lookup fails, assume first-time generation.
+                      }
+
+                      if (planAction === "regenerate") {
+                        await PlanService.regeneratePlan(recipeId);
+                      } else if (planAction === "submit") {
+                        await PlanService.submitPlanGeneration({ recipe_id: recipeId });
+                      }
+                      router.push(`/task/${recipeId}/plan`);
+                    } catch (err: any) {
+                      console.error("Error starting plan generation:", err);
+                      toast.error(err?.message ?? "Failed to start plan generation");
+                    }
                   }}
                   className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                 >

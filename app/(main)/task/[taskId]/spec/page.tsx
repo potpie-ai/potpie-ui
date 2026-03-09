@@ -1267,14 +1267,14 @@ const SpecPage = () => {
                     onClick={async () => {
                       if (!recipeId || isRegeneratingSpec) return;
                       setIsRegeneratingSpec(true);
-                      // Clear any previous spec/stream state so we don't show stale content during regeneration
-                      setSpecProgress(null);
-                      setError(null);
-                      setStreamProgress(null);
-                      setStreamItems([]);
                       try {
                         // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
+                        // Only clear state on success so stale content remains visible on failure
+                        setSpecProgress(null);
+                        setError(null);
+                        setStreamProgress(null);
+                        setStreamItems([]);
                         // Then try to start streaming to get run_id for live updates
                         let runId = "";
                         try {
@@ -1296,6 +1296,7 @@ const SpecPage = () => {
                         }
                       } catch (err: any) {
                         console.error("Error regenerating spec:", err);
+                        setError(err?.message ?? "Failed to regenerate spec");
                         toast.error(err?.message ?? "Failed to regenerate spec");
                       } finally {
                         setIsRegeneratingSpec(false);
@@ -1343,21 +1344,26 @@ const SpecPage = () => {
                     if (!recipeId) return;
                     startNavigation();
                     try {
-                      // Check current plan status to decide between first-time generation and regeneration.
-                      let shouldRegenerate = false;
+                      // Check current plan status to decide action:
+                      // - not_started: start new generation
+                      // - pending/processing: navigate directly (job already in progress)
+                      // - completed/failed: regenerate
+                      let planAction: "submit" | "navigate" | "regenerate" = "submit";
                       try {
                         const current = await PlanService.getPlanStatusByRecipeId(recipeId);
-                        const genStatus = current?.generation_status;
-                        if (genStatus && genStatus !== "not_started") {
-                          shouldRegenerate = true;
+                        const genStatus = current?.generation_status?.toLowerCase();
+                        if (genStatus === "pending" || genStatus === "processing" || genStatus === "in_progress") {
+                          planAction = "navigate";
+                        } else if (genStatus === "completed" || genStatus === "failed") {
+                          planAction = "regenerate";
                         }
                       } catch {
                         // If status lookup fails, assume first-time generation.
                       }
 
-                      if (shouldRegenerate) {
+                      if (planAction === "regenerate") {
                         await PlanService.regeneratePlan(recipeId);
-                      } else {
+                      } else if (planAction === "submit") {
                         await PlanService.submitPlanGeneration({ recipe_id: recipeId });
                       }
                       router.push(`/task/${recipeId}/plan`);

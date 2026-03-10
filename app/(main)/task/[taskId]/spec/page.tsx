@@ -543,6 +543,7 @@ const SpecPage = () => {
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isRegeneratingSpec, setIsRegeneratingSpec] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [regenerateSpecKey, setRegenerateSpecKey] = useState(0);
   /** Live streaming progress when using spec generate-stream (step + message). */
   const [streamProgress, setStreamProgress] = useState<{ step: string; message: string } | null>(null);
@@ -1286,11 +1287,17 @@ const SpecPage = () => {
                       try {
                         // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
-                        // Only clear state on success so stale content remains visible on failure
-                        setSpecProgress(null);
+                        // Clear transient stream state and errors but keep specProgress populated
+                        // so the right pane remains open during regeneration
                         setError(null);
                         setStreamProgress(null);
                         setStreamItems([]);
+                        // Also clear persisted timeline so restore effect cannot rehydrate stale data
+                        try {
+                          sessionStorage.removeItem(`${THINKING_STORAGE_KEY}_${recipeId}`);
+                        } catch {
+                          // ignore storage errors
+                        }
                         // Then try to start streaming to get run_id for live updates
                         let runId = "";
                         try {
@@ -1371,7 +1378,8 @@ const SpecPage = () => {
               <div className="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-[#E5E8E6] flex justify-end">
                 <button
                   onClick={async () => {
-                    if (!recipeId) return;
+                    if (!recipeId || isGeneratingPlan) return;
+                    setIsGeneratingPlan(true);
                     startNavigation();
                     try {
                       // Check current plan status to decide action:
@@ -1400,8 +1408,11 @@ const SpecPage = () => {
                     } catch (err: any) {
                       console.error("Error starting plan generation:", err);
                       toast.error(err?.message ?? "Failed to start plan generation");
+                    } finally {
+                      setIsGeneratingPlan(false);
                     }
                   }}
+                  disabled={isGeneratingPlan}
                   className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                 >
                   GENERATE PLAN

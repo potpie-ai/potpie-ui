@@ -1322,18 +1322,16 @@ export default function QnaPage() {
         // If status lookup fails, we'll try to submit answers anyway
       }
 
-      // Only submit answers if recipe is in QUESTIONS_READY state
-      // If already in ANSWERS_SUBMITTED, SPEC_IN_PROGRESS, or SPEC_READY, skip to regeneration
-      const canSubmitAnswers = !recipeStatus || recipeStatus === "QUESTIONS_READY";
-      const alreadySubmitted = recipeStatus === "ANSWERS_SUBMITTED" ||
-        recipeStatus === "SPEC_IN_PROGRESS" ||
-        recipeStatus === "SPEC_READY";
+      // Only submit answers if recipe is in QUESTIONS_READY or ANSWERS_SUBMITTED state
+      // If already in SPEC_IN_PROGRESS or SPEC_READY, skip to regeneration
+      const canSubmitAnswers = !recipeStatus || recipeStatus === "QUESTIONS_READY" || recipeStatus === "ANSWERS_SUBMITTED";
+      const alreadyInSpecPhase = recipeStatus === "SPEC_IN_PROGRESS" || recipeStatus === "SPEC_READY";
 
       if (canSubmitAnswers) {
         // Submit answers (idempotent on backend)
         await SpecService.submitAnswers(recipeId, answersPayload);
-      } else if (alreadySubmitted) {
-        console.log("[QnA Page] Recipe already has answers submitted, skipping submitAnswers");
+      } else if (alreadyInSpecPhase) {
+        console.log("[QnA Page] Recipe already in spec phase, skipping submitAnswers");
         shouldRegenerate = true;
       }
 

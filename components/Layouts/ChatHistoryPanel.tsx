@@ -75,6 +75,7 @@ export function ChatHistoryPanel() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [pinnedChats, setPinnedChats] = useState<Set<string>>(new Set());
 
@@ -448,6 +449,7 @@ export function ChatHistoryPanel() {
               const isPinned = pinnedChats.has(chat.id);
               const isActive = isActiveChat(chat.id);
               const isHovered = hoveredChatId === chat.id;
+              const isDropdownOpen = openDropdownId === chat.id;
 
               return (
                 <div
@@ -474,14 +476,17 @@ export function ChatHistoryPanel() {
                     )}
                   </div>
 
-                  {/* 3-dots menu button - visible on hover */}
+                  {/* 3-dots menu button - visible on hover or when dropdown is open */}
                   <div
                     className={cn(
                       "relative shrink-0 transition-opacity duration-150",
-                      isHovered ? "opacity-100" : "opacity-0"
+                      (isHovered || isDropdownOpen) ? "opacity-100" : "opacity-0"
                     )}
                   >
-                    <DropdownMenu>
+                    <DropdownMenu
+                      open={isDropdownOpen}
+                      onOpenChange={(open) => setOpenDropdownId(open ? chat.id : null)}
+                    >
                       <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"

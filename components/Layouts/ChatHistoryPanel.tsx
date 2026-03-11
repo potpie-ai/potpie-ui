@@ -395,7 +395,7 @@ export function ChatHistoryPanel() {
     <div className="flex flex-col h-full">
       {/* Header with Search Icon */}
       <div className="px-6 py-2 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider" style={{ fontFamily: 'Uncut Sans, sans-serif' }}>
           Your Chats
         </h3>
         <Button
@@ -465,7 +465,7 @@ export function ChatHistoryPanel() {
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                    <span className="truncate text-xs block max-w-[160px]">
+                    <span className="truncate text-sm block max-w-[160px]" style={{ fontFamily: 'Uncut Sans, sans-serif' }}>
                       {chat.title || "Untitled Chat"}
                     </span>
                     {isPinned && (
@@ -535,7 +535,7 @@ export function ChatHistoryPanel() {
                           {isPinned ? (
                             <>
                               <Image
-                                src="/images/pin.svg"
+                                src="/images/unpin.svg"
                                 alt="Unpin"
                                 width={16}
                                 height={16}

@@ -288,7 +288,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Chat History Panel */}
-        <div className="flex-1 min-h-0 flex flex-col group-data-[collapsible=icon]:hidden">
+        <div className="flex-1 min-h-0 flex flex-col group-data-[collapsible=icon]:hidden mt-6">
           <ChatHistoryPanel />
         </div>
       </SidebarContent>

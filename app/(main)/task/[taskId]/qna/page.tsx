@@ -1312,28 +1312,49 @@ export default function QnaPage() {
         answersPayload["additional_context"] = state.additionalContext.trim();
       }
 
-      // Submit answers (idempotent on backend)
-      await SpecService.submitAnswers(recipeId, answersPayload);
-
-      // Decide whether to start first-time spec generation or force a fresh regeneration.
+      // Check recipe status to determine if we need to submit answers or just regenerate
       let shouldRegenerate = false;
+      let recipeStatus: string | null = null;
       try {
-        const current = await SpecService.getSpecProgressByRecipeId(recipeId);
-        const genStatus =
-          "generation_status" in current
-            ? (current as any).generation_status
-            : "spec_gen_status" in current
-              ? (current as any).spec_gen_status
-              : "spec_generation_step_status" in current
-                ? (current as any).spec_generation_step_status
-                : null;
-        // If any spec generation has already been started (pending/processing/completed/failed),
-        // treat this click as an explicit request to regenerate.
-        if (genStatus && genStatus !== "not_started") {
-          shouldRegenerate = true;
-        }
+        const recipeDetails = await SpecService.getRecipeDetails(recipeId);
+        recipeStatus = (recipeDetails as any)?.status || null;
       } catch {
-        // If status lookup fails, assume first-time generation.
+        // If status lookup fails, we'll try to submit answers anyway
+      }
+
+      // Only submit answers if recipe is in QUESTIONS_READY or ANSWERS_SUBMITTED state
+      // If already in SPEC_IN_PROGRESS or SPEC_READY, skip to regeneration
+      const canSubmitAnswers = !recipeStatus || recipeStatus === "QUESTIONS_READY" || recipeStatus === "ANSWERS_SUBMITTED";
+      const alreadyInSpecPhase = recipeStatus === "SPEC_IN_PROGRESS" || recipeStatus === "SPEC_READY";
+
+      if (canSubmitAnswers) {
+        // Submit answers (idempotent on backend)
+        await SpecService.submitAnswers(recipeId, answersPayload);
+      } else if (alreadyInSpecPhase) {
+        console.log("[QnA Page] Recipe already in spec phase, skipping submitAnswers");
+        shouldRegenerate = true;
+      }
+
+      // Check spec generation status to determine if we should regenerate
+      if (!shouldRegenerate) {
+        try {
+          const current = await SpecService.getSpecProgressByRecipeId(recipeId);
+          const genStatus =
+            "generation_status" in current
+              ? (current as any).generation_status
+              : "spec_gen_status" in current
+                ? (current as any).spec_gen_status
+                : "spec_generation_step_status" in current
+                  ? (current as any).spec_generation_step_status
+                  : null;
+          // If any spec generation has already been started (pending/processing/completed/failed),
+          // treat this click as an explicit request to regenerate.
+          if (genStatus && genStatus !== "not_started") {
+            shouldRegenerate = true;
+          }
+        } catch {
+          // If status lookup fails, assume first-time generation.
+        }
       }
 
       let runId: string | undefined;

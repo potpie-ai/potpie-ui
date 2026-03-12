@@ -92,6 +92,7 @@ export function ChatHistoryPanel() {
   const [shareWithLink, setShareWithLink] = useState(false);
   const [accessList, setAccessList] = useState<string[]>([]);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [shareInProgress, setShareInProgress] = useState(false);
 
   // Load pinned chats from localStorage on mount
   useEffect(() => {
@@ -222,6 +223,8 @@ export function ChatHistoryPanel() {
     setEmailError(null);
     setShareWithLink(false);
     setHasPendingChanges(false);
+    setShareInProgress(false);
+    setAccessList([]);
     setShareDialogOpen(true);
   }, []);
 
@@ -240,14 +243,17 @@ export function ChatHistoryPanel() {
         toast.success("Chat renamed successfully");
         queryClient.invalidateQueries({ queryKey: ["sidebar-chats"] });
         queryClient.invalidateQueries({ queryKey: ["all-chats"] });
-        dispatch(setChat({ title: renameValue }));
+        // Only update the global active chat state if the renamed chat is the currently active one
+        if (pathname === `/chat/${selectedChat.id}`) {
+          dispatch(setChat({ title: renameValue }));
+        }
         setRenameDialogOpen(false);
       }
     } catch (err) {
       console.error("Error renaming chat", err);
       toast.error("Failed to rename chat");
     }
-  }, [selectedChat, renameValue, queryClient, dispatch]);
+  }, [selectedChat, renameValue, queryClient, dispatch, pathname]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedChat) return;
@@ -288,14 +294,39 @@ export function ChatHistoryPanel() {
     }
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (!selectedChat) return;
+
+    // If share with link is selected but changes haven't been applied yet,
+    // we need to make the chat public first before copying the link
+    if (shareWithLink && hasPendingChanges) {
+      setShareInProgress(true);
+      try {
+        const res = await ChatService.shareConversation(
+          selectedChat.id,
+          [],
+          Visibility.PUBLIC
+        );
+        if (res.type === "error") {
+          toast.error(res.message || "Unable to share");
+          return;
+        }
+        setHasPendingChanges(false);
+      } catch (error) {
+        toast.error("An error occurred while making the chat public.");
+        return;
+      } finally {
+        setShareInProgress(false);
+      }
+    }
+
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/chat/${selectedChat.id}`;
     navigator.clipboard.writeText(shareUrl);
     toast.success("URL copied to clipboard");
   };
 
   const isShareDisabled = () => {
+    if (shareInProgress) return true;
     if (shareWithLink) return false;
     const emails = emailValue.split(",").map((email) => email.trim());
     return emails.some((email) => !/\S+@\S+\.\S+/.test(email));
@@ -328,6 +359,7 @@ export function ChatHistoryPanel() {
   const handleShare = async () => {
     if (!selectedChat) return;
 
+    setShareInProgress(true);
     try {
       if (shareWithLink) {
         const res = await ChatService.shareConversation(
@@ -342,7 +374,17 @@ export function ChatHistoryPanel() {
         handleCopyLink();
       } else {
         const emails = emailValue.split(",").map((email) => email.trim());
-        emails.forEach((email) => emailSchema.parse(email));
+        const validationErrors: string[] = [];
+        for (const email of emails) {
+          const result = emailSchema.safeParse(email);
+          if (!result.success) {
+            validationErrors.push(result.error.errors[0].message);
+          }
+        }
+        if (validationErrors.length > 0) {
+          setEmailError(validationErrors.join("; "));
+          throw new Error("Validation failed");
+        }
         const res = await ChatService.shareConversation(
           selectedChat.id,
           emails,
@@ -358,11 +400,13 @@ export function ChatHistoryPanel() {
       setHasPendingChanges(false);
       setShareDialogOpen(false);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        setEmailError(error.errors[0].message);
+      if (error instanceof Error && error.message === "Validation failed") {
+        // Validation errors are already set in state above
       } else {
         setEmailError("An error occurred while sharing the chat.");
       }
+    } finally {
+      setShareInProgress(false);
     }
   };
 
@@ -427,7 +471,7 @@ export function ChatHistoryPanel() {
       )}
 
       {/* Chat List */}
-      <ScrollArea className="h-[200px] px-4">
+      <ScrollArea className="h-[360px] px-4">
         <div className="space-y-0.5 pb-2">
           {isLoading ? (
             // Loading skeletons
@@ -699,7 +743,7 @@ export function ChatHistoryPanel() {
               className="gap-2"
               variant="outline"
               onClick={handleCopyLink}
-              disabled={!shareWithLink && hasPendingChanges}
+              disabled={shareInProgress || (!shareWithLink && hasPendingChanges)}
             >
               Copy Link
             </Button>

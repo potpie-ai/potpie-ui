@@ -208,9 +208,9 @@ export function AppSidebar() {
             </SidebarMenuItem>
           </SidebarMenu>
         </div>
-        <SidebarGroup className="border-b-0 group-data-[collapsible=icon]:hidden">
-          <SidebarGroupContent>
-            <SidebarMenu>
+        <SidebarGroup className="border-b-0 group-data-[collapsible=icon]:hidden !px-6">
+          <SidebarGroupContent className="!px-0">
+            <SidebarMenu className="!px-0">
               {SidebarItems[0].links.map((link) => {
                 const isActive = pathname === link.href.split("/").pop();
                 // Check if this is the workflows link
@@ -251,6 +251,7 @@ export function AppSidebar() {
                       disabled={link.disabled || (isWorkflowsLink && isCheckingBackend)}
                       onClick={link.showProModal || isWorkflowsLink ? handleClick : link.handleTrack ? handleTrack : undefined}
                       tooltip={link.title}
+                      className="!px-0"
                     >
                       {link.showProModal || isWorkflowsLink ? (
                         <button

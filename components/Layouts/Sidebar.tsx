@@ -50,6 +50,7 @@ import {
 
 import { ProFeatureModal } from "./ProFeatureModal";
 import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
+import { ChatHistoryPanel } from "./ChatHistoryPanel";
 
 export function AppSidebar() {
   const [proModalOpen, setProModalOpen] = useState(false);
@@ -285,6 +286,11 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Chat History Panel */}
+        <div className="flex-1 min-h-0 flex flex-col group-data-[collapsible=icon]:hidden mt-6">
+          <ChatHistoryPanel />
+        </div>
       </SidebarContent>
       {!subscriptionLoading && userSubscription && open && (
         <div className="px-4 pt-3 pb-3">

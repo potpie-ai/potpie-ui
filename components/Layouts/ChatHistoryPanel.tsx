@@ -609,22 +609,27 @@ export function ChatHistoryPanel() {
                     </span>
                   </div>
 
-                  {/* Pin icon - right aligned */}
-                  {isPinned && (
-                    <Image
-                      src="/images/pined_chat.svg"
-                      alt="Pinned"
-                      width={12}
-                      height={12}
-                      className="shrink-0 mr-2"
-                    />
-                  )}
+                  {/* Right side container - shows pin when not hovered, 3-dots when hovered */}
+                  <div className="relative shrink-0 w-6 flex items-center justify-center">
+                    {/* Pin icon - visible when pinned and not hovered */}
+                    {isPinned && (
+                      <Image
+                        src="/images/pined_chat.svg"
+                        alt="Pinned"
+                        width={12}
+                        height={12}
+                        className={cn(
+                          "absolute transition-opacity duration-150",
+                          isHovered ? "opacity-0" : "opacity-100"
+                        )}
+                      />
+                    )}
 
-                  {/* 3-dots menu button - visible on hover */}
-                  <div className={cn(
-                    "relative shrink-0 transition-opacity duration-150",
-                    isHovered ? "opacity-100" : "opacity-0"
-                  )}>
+                    {/* 3-dots menu button - visible on hover */}
+                    <div className={cn(
+                      "absolute transition-opacity duration-150",
+                      isHovered ? "opacity-100" : "opacity-0"
+                    )}>
                     <DropdownMenu
                       open={isDropdownOpen}
                       onOpenChange={(open) => setOpenDropdownId(open ? item.id : null)}
@@ -716,6 +721,7 @@ export function ChatHistoryPanel() {
                         </>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                  </div>
                   </div>
                 </div>
               );

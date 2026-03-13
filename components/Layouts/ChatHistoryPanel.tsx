@@ -497,6 +497,7 @@ export function ChatHistoryPanel() {
             return;
           }
         }
+        setHasPendingChanges(false);
         handleCopyLink();
       } else {
         const emails = emailValue.split(",").map((email) => email.trim());

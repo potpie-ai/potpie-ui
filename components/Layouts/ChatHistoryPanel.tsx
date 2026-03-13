@@ -155,9 +155,10 @@ export function ChatHistoryPanel() {
 
   // Fetch recipes/builds
   const { data: recipes, isLoading: recipesLoading } = useQuery<any[]>({
-    queryKey: ["sidebar-recipes"],
+    queryKey: ["sidebar-recipes", user?.uid],
     queryFn: () => RecipeService.getAllRecipes(0, 100),
     staleTime: 60000, // 1 minute
+    enabled: !!user?.uid,
   });
 
   // Combine chats and recipes into a single list
@@ -333,44 +334,64 @@ export function ChatHistoryPanel() {
     if (!selectedChat || !renameValue.trim()) return;
 
     try {
-      const result = await ChatService.renameChat(selectedChat.id, renameValue);
-      if (result.status === "success") {
-        toast.success("Chat renamed successfully");
-        queryClient.invalidateQueries({ queryKey: ["sidebar-chats"] });
-        queryClient.invalidateQueries({ queryKey: ["all-chats"] });
-        // Only update the global active chat state if the renamed chat is the currently active one
-        if (pathname === `/chat/${selectedChat.id}`) {
-          dispatch(setChat({ title: renameValue }));
+      if (selectedChat.type === 'recipe') {
+        await RecipeService.renameRecipe(selectedChat.id, renameValue);
+        toast.success("Build renamed successfully");
+        queryClient.invalidateQueries({ queryKey: ["sidebar-recipes", user?.uid] });
+        queryClient.invalidateQueries({ queryKey: ["all-recipes"] });
+      } else {
+        const result = await ChatService.renameChat(selectedChat.id, renameValue);
+        if (result.status === "success") {
+          toast.success("Chat renamed successfully");
+          queryClient.invalidateQueries({ queryKey: ["sidebar-chats"] });
+          queryClient.invalidateQueries({ queryKey: ["all-chats"] });
+          // Only update the global active chat state if the renamed chat is the currently active one
+          if (pathname === `/chat/${selectedChat.id}`) {
+            dispatch(setChat({ title: renameValue }));
+          }
         }
-        setRenameDialogOpen(false);
       }
+      setRenameDialogOpen(false);
     } catch (err) {
-      console.error("Error renaming chat", err);
-      toast.error("Failed to rename chat");
+      console.error("Error renaming", err);
+      toast.error(`Failed to rename ${selectedChat.type === 'recipe' ? 'build' : 'chat'}`);
     }
-  }, [selectedChat, renameValue, queryClient, dispatch, pathname]);
+  }, [selectedChat, renameValue, queryClient, dispatch, pathname, user?.uid]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedChat) return;
 
     try {
-      const result = await ChatService.deleteChat(selectedChat.id);
-      if (result) {
-        toast.success("Chat deleted successfully");
-        queryClient.invalidateQueries({ queryKey: ["sidebar-chats"] });
-        queryClient.invalidateQueries({ queryKey: ["all-chats"] });
+      if (selectedChat.type === 'recipe') {
+        await RecipeService.deleteRecipe(selectedChat.id);
+        toast.success("Build deleted successfully");
+        queryClient.invalidateQueries({ queryKey: ["sidebar-recipes", user?.uid] });
+        queryClient.invalidateQueries({ queryKey: ["all-recipes"] });
         setDeleteDialogOpen(false);
 
-        // If we're currently on the deleted chat's page, redirect to newchat
-        if (pathname === `/chat/${selectedChat.id}`) {
+        // If we're currently on the deleted recipe's page, redirect to newchat
+        if (pathname?.includes(`/task/${selectedChat.id}`)) {
           router.push("/newchat");
+        }
+      } else {
+        const result = await ChatService.deleteChat(selectedChat.id);
+        if (result) {
+          toast.success("Chat deleted successfully");
+          queryClient.invalidateQueries({ queryKey: ["sidebar-chats"] });
+          queryClient.invalidateQueries({ queryKey: ["all-chats"] });
+          setDeleteDialogOpen(false);
+
+          // If we're currently on the deleted chat's page, redirect to newchat
+          if (pathname === `/chat/${selectedChat.id}`) {
+            router.push("/newchat");
+          }
         }
       }
     } catch (err) {
-      console.error("Error deleting chat", err);
-      toast.error("Failed to delete chat");
+      console.error("Error deleting", err);
+      toast.error(`Failed to delete ${selectedChat.type === 'recipe' ? 'build' : 'chat'}`);
     }
-  }, [selectedChat, queryClient, pathname, router]);
+  }, [selectedChat, queryClient, pathname, router, user?.uid]);
 
   // Share functionality
   const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -393,29 +414,35 @@ export function ChatHistoryPanel() {
     if (!selectedChat) return;
 
     // If share with link is selected but changes haven't been applied yet,
-    // we need to make the chat public first before copying the link
+    // we need to make the item public first before copying the link
     if (shareWithLink && hasPendingChanges) {
       setShareInProgress(true);
       try {
-        const res = await ChatService.shareConversation(
-          selectedChat.id,
-          [],
-          Visibility.PUBLIC
-        );
-        if (res.type === "error") {
-          toast.error(res.message || "Unable to share");
-          return;
+        if (selectedChat.type === 'recipe') {
+          await RecipeService.shareRecipe(selectedChat.id, [], "public");
+        } else {
+          const res = await ChatService.shareConversation(
+            selectedChat.id,
+            [],
+            Visibility.PUBLIC
+          );
+          if (res.type === "error") {
+            toast.error(res.message || "Unable to share");
+            return;
+          }
         }
         setHasPendingChanges(false);
       } catch (error) {
-        toast.error("An error occurred while making the chat public.");
+        toast.error(`An error occurred while making the ${selectedChat.type === 'recipe' ? 'build' : 'chat'} public.`);
         return;
       } finally {
         setShareInProgress(false);
       }
     }
 
-    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/chat/${selectedChat.id}`;
+    const shareUrl = selectedChat.type === 'recipe'
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/task/${selectedChat.id}`
+      : `${process.env.NEXT_PUBLIC_APP_URL}/chat/${selectedChat.id}`;
     navigator.clipboard.writeText(shareUrl);
     toast.success("URL copied to clipboard");
   };
@@ -457,14 +484,18 @@ export function ChatHistoryPanel() {
     setShareInProgress(true);
     try {
       if (shareWithLink) {
-        const res = await ChatService.shareConversation(
-          selectedChat.id,
-          [],
-          Visibility.PUBLIC
-        );
-        if (res.type === "error") {
-          toast.error(res.message || "Unable to share");
-          return;
+        if (selectedChat.type === 'recipe') {
+          await RecipeService.shareRecipe(selectedChat.id, [], "public");
+        } else {
+          const res = await ChatService.shareConversation(
+            selectedChat.id,
+            [],
+            Visibility.PUBLIC
+          );
+          if (res.type === "error") {
+            toast.error(res.message || "Unable to share");
+            return;
+          }
         }
         handleCopyLink();
       } else {
@@ -480,16 +511,21 @@ export function ChatHistoryPanel() {
           setEmailError(validationErrors.join("; "));
           throw new Error("Validation failed");
         }
-        const res = await ChatService.shareConversation(
-          selectedChat.id,
-          emails,
-          Visibility.PRIVATE
-        );
-        if (res.type === "error") {
-          toast.error(res.message || "Unable to share");
-          return;
+        if (selectedChat.type === 'recipe') {
+          await RecipeService.shareRecipe(selectedChat.id, emails, "private");
+          toast.success("Build shared successfully");
+        } else {
+          const res = await ChatService.shareConversation(
+            selectedChat.id,
+            emails,
+            Visibility.PRIVATE
+          );
+          if (res.type === "error") {
+            toast.error(res.message || "Unable to share");
+            return;
+          }
+          toast.success("Chat shared successfully");
         }
-        toast.success("Chat shared successfully");
       }
 
       setHasPendingChanges(false);
@@ -498,7 +534,7 @@ export function ChatHistoryPanel() {
       if (error instanceof Error && error.message === "Validation failed") {
         // Validation errors are already set in state above
       } else {
-        setEmailError("An error occurred while sharing the chat.");
+        setEmailError(`An error occurred while sharing the ${selectedChat.type === 'recipe' ? 'build' : 'chat'}.`);
       }
     } finally {
       setShareInProgress(false);
@@ -586,7 +622,10 @@ export function ChatHistoryPanel() {
           ) : (
             filteredItems.map((item) => {
               const isPinned = pinnedChats.has(item.id);
-              const isActive = item.type === 'chat' && isActiveChat(item.id);
+              // Determine active state for both chats and builds
+              const isActive = item.type === 'chat'
+                ? isActiveChat(item.id)
+                : pathname?.includes(`/task/${item.id}`) || pathname?.includes('repo') && pathname?.includes(item.id);
               const isHovered = hoveredChatId === item.id;
               const isDropdownOpen = openDropdownId === item.id;
 
@@ -650,32 +689,36 @@ export function ChatHistoryPanel() {
                         className="w-40 bg-[#FFFFFF] border-[#E6E8E9]"
                       >
                         <>
-                          <DropdownMenuItem
-                            onClick={(e) => openShareDialog(item, e)}
-                            className="focus:bg-[#F4F4F4] cursor-pointer"
-                          >
-                            <Image
-                              src="/images/share-03.svg"
-                              alt="Share"
-                              width={16}
-                              height={16}
-                              className="mr-2"
-                            />
-                            <span>Share</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => openRenameDialog(item, e)}
-                            className="focus:bg-[#F4F4F4] cursor-pointer"
-                          >
-                            <Image
-                              src="/images/pen-01.svg"
-                              alt="Rename"
-                              width={16}
-                              height={16}
-                              className="mr-2"
-                            />
-                            <span>Rename</span>
-                          </DropdownMenuItem>
+                          {item.type === 'chat' && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={(e) => openShareDialog(item, e)}
+                                className="focus:bg-[#F4F4F4] cursor-pointer"
+                              >
+                                <Image
+                                  src="/images/share-03.svg"
+                                  alt="Share"
+                                  width={16}
+                                  height={16}
+                                  className="mr-2"
+                                />
+                                <span>Share</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => openRenameDialog(item, e)}
+                                className="focus:bg-[#F4F4F4] cursor-pointer"
+                              >
+                                <Image
+                                  src="/images/pen-01.svg"
+                                  alt="Rename"
+                                  width={16}
+                                  height={16}
+                                  className="mr-2"
+                                />
+                                <span>Rename</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           <DropdownMenuItem
                             onClick={(e) => handlePinChat(item.id, e)}
                             className="focus:bg-[#F4F4F4] cursor-pointer"
@@ -704,20 +747,24 @@ export function ChatHistoryPanel() {
                               </>
                             )}
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-[#E6E8E9]" />
-                          <DropdownMenuItem
-                            onClick={(e) => openDeleteDialog(item, e)}
-                            className="text-red-600 focus:text-red-600 focus:bg-[#F4F4F4] cursor-pointer"
-                          >
-                            <Image
-                              src="/images/delete-02.svg"
-                              alt="Delete"
-                              width={16}
-                              height={16}
-                              className="mr-2"
-                            />
-                            <span>Delete {item.type === 'recipe' ? 'Build' : 'Chat'}</span>
-                          </DropdownMenuItem>
+                          {item.type === 'chat' && (
+                            <>
+                              <DropdownMenuSeparator className="bg-[#E6E8E9]" />
+                              <DropdownMenuItem
+                                onClick={(e) => openDeleteDialog(item, e)}
+                                className="text-red-600 focus:text-red-600 focus:bg-[#F4F4F4] cursor-pointer"
+                              >
+                                <Image
+                                  src="/images/delete-02.svg"
+                                  alt="Delete"
+                                  width={16}
+                                  height={16}
+                                  className="mr-2"
+                                />
+                                <span>Delete Chat</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -734,13 +781,13 @@ export function ChatHistoryPanel() {
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent className="sm:max-w-[425px]" showX={false}>
           <DialogHeader>
-            <DialogTitle className="text-center">Rename chat</DialogTitle>
+            <DialogTitle className="text-center">Rename {selectedChat?.type === 'recipe' ? 'build' : 'chat'}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <Input
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
-              placeholder="Enter chat name"
+              placeholder={`Enter ${selectedChat?.type === 'recipe' ? 'build' : 'chat'} name`}
               className="col-span-3"
             />
           </div>
@@ -766,7 +813,7 @@ export function ChatHistoryPanel() {
         <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
           <DialogHeader>
             <DialogTitle className="text-center font-semibold text-xl">
-              Share Chat with Others
+              Share {selectedChat?.type === 'recipe' ? 'Build' : 'Chat'} with Others
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -868,11 +915,11 @@ export function ChatHistoryPanel() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[425px]" showX={false}>
           <DialogHeader>
-            <DialogTitle className="text-center">Delete chat</DialogTitle>
+            <DialogTitle className="text-center">Delete {selectedChat?.type === 'recipe' ? 'build' : 'chat'}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-muted-foreground text-center">
-              Are you sure you want to delete &quot;{selectedChat?.title || "this chat"}
+              Are you sure you want to delete &quot;{selectedChat?.title || `this ${selectedChat?.type === 'recipe' ? 'build' : 'chat'}`}
               &quot;? This action cannot be undone.
             </p>
           </div>

@@ -78,4 +78,45 @@ export default class RecipeService {
       throw new Error("Failed to fetch recipe details");
     }
   }
+
+  static async renameRecipe(recipeId: string, title: string) {
+    const headers = await getHeaders();
+    const response = await axios.patch(
+      `${this.getBaseUrl()}/api/v1/recipes/${recipeId}/rename`,
+      { title },
+      { headers }
+    );
+    return response.data;
+  }
+
+  static async deleteRecipe(recipeId: string) {
+    const headers = await getHeaders();
+    const response = await axios.delete(
+      `${this.getBaseUrl()}/api/v1/recipes/${recipeId}`,
+      { headers }
+    );
+    return response.data;
+  }
+
+  static async shareRecipe(
+    recipeId: string,
+    recipientEmails: string[],
+    visibility: "public" | "private"
+  ) {
+    const headers = await getHeaders();
+    const payload: any = {
+      recipe_id: recipeId,
+      visibility,
+    };
+    if (visibility === "private") {
+      const filteredEmails = recipientEmails.filter((email) => email.trim() !== "");
+      payload.recipient_emails = filteredEmails.length > 0 ? filteredEmails : null;
+    }
+    const response = await axios.post(
+      `${this.getBaseUrl()}/api/v1/recipes/share`,
+      payload,
+      { headers }
+    );
+    return response.data;
+  }
 }

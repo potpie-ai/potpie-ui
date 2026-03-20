@@ -151,8 +151,8 @@ export function AppSidebar() {
               className="flex items-center gap-3 font-semibold ml-2 mt-4"
             >
               <Image
-                src={"/images/potpie-blue.svg"}
-                alt="logo"
+                src="/images/Logomark.svg"
+                alt="Potpie"
                 width={35}
                 height={35}
               />

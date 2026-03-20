@@ -5,51 +5,58 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { planTypesEnum, SidebarItems } from "@/lib/Constants";
 import Image from "next/image";
 import Link from "next/link";
-import { Button } from "../ui/button";
-import React, { useEffect } from "react";
+import { cn } from "@/lib/utils";
+
+import React, { useEffect, useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
-import axios from "axios";
+
 import { useQuery } from "@tanstack/react-query";
 import { clearChat } from "@/lib/state/Reducers/chat";
 import { authClient } from "@/lib/sso/unified-auth";
 import type { UserAccount } from "@/types/auth";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
-import { Skeleton } from "../ui/skeleton";
 import * as Progress from "@radix-ui/react-progress";
-import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
+import { Button } from "@/components/ui/button";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import formbricksApp from "@formbricks/js";
 import MinorService from "@/services/minorService";
 import dayjs from "dayjs";
 import { AppDispatch, RootState } from "@/lib/state/store";
-import {
-  setTotalHumanMessages,
-  setUserPlanType,
-} from "@/lib/state/Reducers/User";
+import { setTotalHumanMessages } from "@/lib/state/Reducers/User";
+
+import { ProFeatureModal } from "./ProFeatureModal";
+import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
+import { ChatHistoryPanel } from "./ChatHistoryPanel";
 
 export function AppSidebar() {
-  const [progress, setProgress] = React.useState(90);
+  const [proModalOpen, setProModalOpen] = useState(false);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
+  const [, setIsBackendAccessible] = useState<boolean | null>(null);
+
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
   const dispatch: AppDispatch = useDispatch();
+  const { toggleSidebar, open } = useSidebar();
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkBackend = async () => {
+      const accessible = await isWorkflowsBackendAccessible();
+      setIsBackendAccessible(accessible);
+    };
+    checkBackend();
+  }, []);
 
   const userId = user?.uid;
   const { total_human_messages } = useSelector(
@@ -66,24 +73,22 @@ export function AppSidebar() {
     queryKey: ["userUsage", userId],
     queryFn: () =>
       MinorService.fetchUserUsage(
-        dayjs(userSubscription.end_date).subtract(30, "day").toISOString(),
-        userSubscription.end_date,
+        dayjs(userSubscription!.end_date).subtract(30, "day").toISOString(),
+        userSubscription!.end_date,
       ),
     enabled: !!userId && !!userSubscription,
   });
 
-  // Fetch account info from backend to get work email and verification status
   const { data: accountInfo } = useQuery<UserAccount>({
     queryKey: ["accountInfo", userId],
     queryFn: async () => {
       if (!user?.uid) throw new Error("No user ID");
-      // Guard: user may be from localStorage (mock mode) and lack getIdToken
       const token =
         typeof user.getIdToken === "function"
           ? await user.getIdToken()
-          : ((typeof window !== "undefined"
+          : (typeof window !== "undefined"
               ? localStorage.getItem("token")
-              : null) ?? undefined);
+              : null) ?? undefined;
       if (!token) throw new Error("No auth token available");
       return authClient.getAccount(token);
     },
@@ -97,12 +102,6 @@ export function AppSidebar() {
     }
   }, [usageLoading, dispatch, userUsage]);
 
-  // useEffect(() => {
-  //   if (!subscriptionLoading) {
-  //     dispatch(setUserPlanType(userSubscription.plan_type));
-  //   }
-  // }, [subscriptionLoading]);
-
   const redirectToNewChat = () => {
     dispatch(clearChat());
     dispatch(setBranchName(""));
@@ -110,25 +109,11 @@ export function AppSidebar() {
     window.location.href = "/newchat";
   };
 
-  useEffect(() => {
-    if (!usageLoading && !subscriptionLoading && userSubscription) {
-      const maxCredits =
-        userSubscription.plan_type === planTypesEnum.PRO ? 500 : 50;
-      const usedCredits = total_human_messages || 0;
-
-      const calculatedProgress = Math.min(
-        (usedCredits / maxCredits) * 100,
-        100,
-      );
-
-      setProgress(calculatedProgress);
-    }
-  }, [
-    usageLoading,
-    subscriptionLoading,
-    total_human_messages,
-    userSubscription,
-  ]);
+  const maxCredits =
+    userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50;
+  const usedCredits = total_human_messages ?? 0;
+  const creditProgress =
+    maxCredits > 0 ? Math.min((usedCredits / maxCredits) * 100, 100) : 0;
 
   const handleTrack = () => {
     formbricksApp.track("report-btn", {
@@ -142,175 +127,249 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader>
+    <Sidebar
+      collapsible="icon"
+      className="[&>div[data-sidebar='sidebar']]:bg-white"
+    >
+      <SidebarHeader className="pt-6 group-data-[collapsible=icon]:px-0">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link
-              href="/"
-              className="flex items-center gap-3 font-semibold ml-2 mt-4"
+            <div
+              className={cn(
+                "flex items-center w-full transition-all duration-300",
+                open ? "justify-between ml-2" : "justify-center ml-0",
+              )}
             >
-              <Image
-                src="/images/Logomark.svg"
-                alt="Potpie"
-                width={35}
-                height={35}
-              />
-              <span className="text-2xl">
-                <span className="text-foreground">potpie</span>
-                <span className="text-primary">.</span>
-                <span className="text-foreground">ai</span>
-              </span>
-            </Link>
+              {open && (
+                <Link
+                  href="/"
+                  className="flex items-center font-semibold min-w-0"
+                >
+                  <Image
+                    src="/images/Logomark.svg"
+                    alt="Potpie"
+                    width={110}
+                    height={28}
+                    className="h-7 w-auto object-contain object-left"
+                  />
+                </Link>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 hover:bg-transparent transition-all duration-300",
+                  open ? "mr-2" : "",
+                )}
+                onClick={toggleSidebar}
+              >
+                {open ? (
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M2.34082 14.9792C2.50863 15.7188 2.78449 16.2805 3.23798 16.7341C4.39575 17.8918 6.25913 17.8918 9.98594 17.8918C13.7127 17.8918 15.5761 17.8918 16.7338 16.7341C17.8915 15.5763 17.8915 13.7128 17.8915 9.98611C17.8915 6.25934 17.8915 4.39596 16.7338 3.2382C15.5761 2.08044 13.7127 2.08044 9.98594 2.08044C6.25913 2.08044 4.39575 2.08044 3.23798 3.2382C2.78449 3.6917 2.50863 4.25346 2.34082 4.99306"
+                      className="stroke-emerald-950"
+                      strokeWidth="1.24826"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M4.57661 7.48958L2.08008 9.98611L4.57661 12.4826M2.91225 9.98611H8.73749"
+                      className="stroke-emerald-950"
+                      strokeWidth="1.24826"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M12.4824 2.07881V17.8901"
+                      className="stroke-emerald-950"
+                      strokeWidth="1.24826"
+                    />
+                    <path
+                      d="M17.8916 7.07187H12.4824M17.8916 12.8971H12.4824"
+                      className="stroke-emerald-950"
+                      strokeWidth="1.24826"
+                    />
+                  </svg>
+                ) : (
+                  <Image
+                    src="/images/insert-column-left.svg"
+                    alt="Open Sidebar"
+                    width={20}
+                    height={20}
+                  />
+                )}
+                <span className="sr-only">Toggle Sidebar</span>
+              </Button>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarMenu>
-          <SidebarMenuItem className="mt-5">
-            <SidebarMenuButton
-              className="flex gap-3 text-white mx-auto py-5 w-[90%] items-center justify-center bg-[#0575E6] bg-gradient-to-r from-[#0575E6] to-[#021B79] hover:bg-[#0575E6] hover:text-white"
-              onClick={() => redirectToNewChat()}
-            >
-              <Plus className="size-4" /> <span>New Chat</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        {SidebarItems.map((item) => (
-          <SidebarGroup key={item.title}>
-            <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
-            <SidebarGroupContent className="ml-3 w-auto">
-              <SidebarMenu>
-                {item.links.map((link) => {
-                  const isActive = pathname === link.href.split("/").pop();
-                  return (
-                    <SidebarMenuItem key={link.title}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        disabled={link.disabled}
-                        onClick={link.handleTrack ? handleTrack : undefined}
-                      >
+        <div className="px-6 pt-6 pb-1 group-data-[collapsible=icon]:px-2">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                className="flex gap-2 text-primary-foreground text-sm font-medium w-full items-center justify-start bg-primary hover:bg-primary/90 px-3 py-2 rounded-lg group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:mx-auto"
+                onClick={() => redirectToNewChat()}
+                tooltip="New chat"
+              >
+                <Plus className="size-4 shrink-0" />{" "}
+                <span className="group-data-[collapsible=icon]:hidden">
+                  New chat
+                </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
+        <SidebarGroup className="border-b-0 group-data-[collapsible=icon]:hidden">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {SidebarItems[0].links.map((link) => {
+                const isActive = pathname === link.href.split("/").pop();
+                const isWorkflowsLink = link.href === "/workflows";
+
+                const handleClick = async (e: React.MouseEvent) => {
+                  if (link.showProModal) {
+                    e.preventDefault();
+                    setProModalOpen(true);
+                  } else if (isWorkflowsLink) {
+                    e.preventDefault();
+
+                    if (isCheckingBackend) {
+                      return;
+                    }
+
+                    setIsCheckingBackend(true);
+                    const accessible = await isWorkflowsBackendAccessible();
+                    setIsCheckingBackend(false);
+
+                    if (accessible) {
+                      router.push(link.href);
+                    } else {
+                      setProModalOpen(true);
+                    }
+                  } else if (link.handleTrack) {
+                    handleTrack();
+                  }
+                };
+                return (
+                  <SidebarMenuItem key={link.title}>
+                    <SidebarMenuButton
+                      asChild={!link.showProModal && !isWorkflowsLink}
+                      isActive={isActive}
+                      disabled={
+                        link.disabled ||
+                        (isWorkflowsLink && isCheckingBackend)
+                      }
+                      onClick={
+                        link.showProModal || isWorkflowsLink
+                          ? handleClick
+                          : link.handleTrack
+                            ? handleTrack
+                            : undefined
+                      }
+                      tooltip={link.title}
+                    >
+                      {link.showProModal || isWorkflowsLink ? (
+                        <button
+                          type="button"
+                          className="flex gap-2 items-center w-full overflow-hidden"
+                          onClick={handleClick}
+                        >
+                          {link.icons && (
+                            <span className="shrink-0">{link.icons}</span>
+                          )}
+                          <span className="group-data-[collapsible=icon]:hidden truncate">
+                            {link.title}
+                          </span>
+                          {link.description && (
+                            <span className="border border-primary text-emerald-950 group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
+                              {link.description}
+                            </span>
+                          )}
+                        </button>
+                      ) : (
                         <Link
                           href={link.href}
-                          className="flex gap-2 items-center w-full"
+                          className="flex gap-2 items-center w-full overflow-hidden"
                         >
-                          <div className="flex gap-2">
-                            {link.icons && <span>{link.icons}</span>}
-                            <span>{link.title}</span>
-                          </div>
+                          {link.icons && (
+                            <span className="shrink-0">{link.icons}</span>
+                          )}
+                          <span className="group-data-[collapsible=icon]:hidden truncate">
+                            {link.title}
+                          </span>
                           {link.description && (
-                            <span className="border border-primary text-black group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300">
+                            <span className="border border-primary text-emerald-950 group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
                               {link.description}
                             </span>
                           )}
                         </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
-      </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <Link
-              href={`/user-subscription?end_date=${userSubscription?.end_date ? new Date(userSubscription.end_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : ""}&plan_type=${userSubscription?.plan_type}`}
-              className="w-full"
-            >
-              <Card className="bg-background border border-gray-200 text-black">
-                <CardHeader className="p-2 pt-0 md:p-4">
-                  <CardTitle className="text-lg text-black">
-                    {(() => {
-                      const now = new Date();
-                      const subscriptionEndDate = new Date(
-                        userSubscription?.end_date || 0,
-                      );
-
-                      if (subscriptionLoading)
-                        return <Skeleton className="w-28 h-6" />;
-                      if (
-                        !userSubscription ||
-                        userSubscription.plan_type === planTypesEnum.FREE
-                      ) {
-                        return "Free Plan";
-                      } else if (
-                        userSubscription.plan_type === planTypesEnum.STARTUP &&
-                        subscriptionEndDate > now
-                      ) {
-                        return "Early-Stage";
-                      } else if (
-                        userSubscription.plan_type === planTypesEnum.PRO &&
-                        subscriptionEndDate > now
-                      ) {
-                        return "Individual - Pro";
-                      } else {
-                        return "Expired Plan";
-                      }
-                    })()}
-                  </CardTitle>
-                  <CardDescription className="flex flex-row justify-between text-gray-600">
-                    <span>Credits used</span>
-                    <span>
-                      {usageLoading ? (
-                        <Skeleton className="w-10 h-5" />
-                      ) : (
-                        `${total_human_messages || 0} / ${userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50}`
                       )}
-                    </span>
-                  </CardDescription>
-                </CardHeader>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-                <CardContent className="p-2 pt-0 md:p-4 md:pt-0 gap-3 flex-col flex">
-                  <Progress.Root
-                    className="relative overflow-hidden bg-[#7F7F7F] rounded-full w-full h-[5px]"
-                    style={{
-                      transform: "translateZ(0)",
-                    }}
-                    value={progress}
-                  >
-                    <Progress.Indicator
-                      className="bg-black w-full h-full transition-transform transition-duration-[660ms] ease-[cubic-bezier(0.65, 0, 0.35, 1)]"
-                      style={{ transform: `translateX(-${100 - progress}%)` }}
-                    />
-                  </Progress.Root>
-                  <Link
-                    href={"/user-subscription"}
-                    className="w-full inset-0"
-                    style={{
-                      display:
-                        userSubscription?.plan_type === planTypesEnum.PRO
-                          ? "none"
-                          : "block",
-                    }}
-                  >
-                    <Button
-                      size="sm"
-                      className="w-full bg-black hover:text-white text-white !border-none"
-                    >
-                      ✨ Upgrade
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            </Link>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <Separator />
-        <NavUser
-          user={{
-            avatar: user?.photoURL,
-            // Use work email from backend (database), fallback to Firebase email
-            email: accountInfo?.email || user?.email || "",
-            name: user?.displayName,
-            // Use verification status from backend (work email), fallback to Firebase status
-            emailVerified:
-              accountInfo?.email_verified ?? user?.emailVerified ?? false,
-          }}
-        />
+        <div className="flex-1 min-h-0 flex flex-col group-data-[collapsible=icon]:hidden mt-6">
+          <ChatHistoryPanel />
+        </div>
+      </SidebarContent>
+      {!subscriptionLoading && userSubscription && open && (
+        <div className="px-4 pt-3 pb-3">
+          <div className="bg-white rounded-lg border border-zinc-200 p-3">
+            <p className="text-sm font-medium text-emerald-950 mb-1">
+              {userSubscription?.plan_type === planTypesEnum.PRO
+                ? "Pro Plan"
+                : "Free Plan"}
+            </p>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-xs text-zinc-500">Credits used</span>
+              <span className="text-xs text-zinc-700">
+                {usedCredits}/{maxCredits}
+              </span>
+            </div>
+            <Progress.Root
+              value={creditProgress}
+              className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 mb-3"
+            >
+              <Progress.Indicator
+                className="h-full bg-zinc-900 transition-[width] duration-300"
+                style={{ width: `${creditProgress}%` }}
+              />
+            </Progress.Root>
+            <button
+              type="button"
+              onClick={() => router.push("/user-subscription")}
+              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFDFC] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
+            >
+              UPGRADE
+            </button>
+          </div>
+        </div>
+      )}
+      <ProFeatureModal open={proModalOpen} onOpenChange={setProModalOpen} />
+      <SidebarFooter className="flex flex-col gap-0 group-data-[collapsible=icon]:px-0">
+        <div className="pt-2">
+          <NavUser
+            user={{
+              avatar: user?.photoURL,
+              email: accountInfo?.email || user?.email || "",
+              name: user?.displayName,
+              emailVerified:
+                accountInfo?.email_verified ?? user?.emailVerified ?? false,
+            }}
+          />
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

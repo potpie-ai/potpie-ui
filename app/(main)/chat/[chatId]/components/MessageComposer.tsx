@@ -1,23 +1,23 @@
 import getHeaders from "@/app/utils/headers.util";
-import { Button } from "@/components/ui/button";
+// import { Button } from "@/components/ui/button";
 import { isMultimodalEnabled } from "@/lib/utils";
 import { toast } from "sonner";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+// import {
+//   Command,
+//   CommandEmpty,
+//   CommandGroup,
+//   CommandInput,
+//   CommandItem,
+//   CommandList,
+// } from "@/components/ui/command";
+// import {
+//   DialogContent,
+//   DialogDescription,
+//   DialogTitle,
+//   DialogTrigger,
+// } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import ModelService from "@/services/ModelService";
+// import ModelService from "@/services/ModelService";
 import {
   ComposerPrimitive,
   ThreadPrimitive,
@@ -25,16 +25,16 @@ import {
   useThreadRuntime,
 } from "@assistant-ui/react";
 import { ComposerAttachments } from "@/components/assistant-ui/attachment";
-import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
-import { Dialog } from "@radix-ui/react-dialog";
+// import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
+// import { Dialog } from "@radix-ui/react-dialog";
 import axios from "axios";
 import {
   SendHorizontalIcon,
   CircleStopIcon,
   X,
   Loader2Icon,
-  Crown,
-  Zap,
+  // Crown,
+  // Zap,
   Paperclip,
 } from "lucide-react";
 import {
@@ -43,13 +43,13 @@ import {
   useState,
   KeyboardEvent,
   useEffect,
-  useCallback,
+  // useCallback,
 } from "react";
 import ChatService from "@/services/ChatService";
-import Image from "next/image";
-import MinorService from "@/services/minorService";
-import { useAuthContext } from "@/contexts/AuthContext";
-import { useQuery } from "@tanstack/react-query";
+// import Image from "next/image";
+// import MinorService from "@/services/minorService";
+// import { useAuthContext } from "@/contexts/AuthContext";
+// import { useQuery } from "@tanstack/react-query";
 import { DocumentAttachment, ValidationResponse } from "@/lib/types/attachment";
 import {
   isDocumentTypeByFile,
@@ -83,7 +83,7 @@ interface NodeOption {
   relevance: number;
 }
 
-const free_models = ["openai/gpt-4.1", "openai/gpt-4o", "openai/gpt-4.1-mini"];
+// const free_models = ["openai/gpt-4.1", "openai/gpt-4o", "openai/gpt-4.1-mini"];
 
 const MessageComposer = ({
   projectId,
@@ -492,56 +492,56 @@ const MessageComposer = ({
     }
   };
 
-  // Model selection
-  const [currPlan, setCurrPlan] = useState<string | undefined>(undefined);
-  const { user } = useAuthContext();
-  const [currentModel, setCurrentModel] = useState<{
-    provider: string;
-    name: string;
-    id: string;
-  } | null>(null);
+  // Model selection (commented out)
+  // const [currPlan, setCurrPlan] = useState<string | undefined>(undefined);
+  // const { user } = useAuthContext();
+  // const [currentModel, setCurrentModel] = useState<{
+  //   provider: string;
+  //   name: string;
+  //   id: string;
+  // } | null>(null);
 
-  const { data: userSubscription } = useQuery({
-    queryKey: ["userSubscription", user?.uid],
-    queryFn: () => MinorService.fetchUserSubscription(user?.uid as string),
-    enabled: !!user?.uid,
-    retry: false,
-  });
+  // const { data: userSubscription } = useQuery({
+  //   queryKey: ["userSubscription", user?.uid],
+  //   queryFn: () => MinorService.fetchUserSubscription(user?.uid as string),
+  //   enabled: !!user?.uid,
+  //   retry: false,
+  // });
 
-  useEffect(() => {
-    if (userSubscription?.plan_type) {
-      setCurrPlan(userSubscription.plan_type);
-    }
-  }, [userSubscription?.plan_type]);
+  // useEffect(() => {
+  //   if (userSubscription?.plan_type) {
+  //     setCurrPlan(userSubscription.plan_type);
+  //   }
+  // }, [userSubscription?.plan_type]);
 
-  const loadCurrentModel = useCallback(async () => {
-    try {
-      const res = await ModelService.getCurrentModel();
-      if (res && res.chat_model) {
-        setCurrentModel({
-          provider: res.chat_model.provider,
-          name: res.chat_model.name,
-          id: res.chat_model.id,
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching current model: ", error);
-    }
-  }, []);
+  // const loadCurrentModel = useCallback(async () => {
+  //   try {
+  //     const res = await ModelService.getCurrentModel();
+  //     if (res && res.chat_model) {
+  //       setCurrentModel({
+  //         provider: res.chat_model.provider,
+  //         name: res.chat_model.name,
+  //         id: res.chat_model.id,
+  //       });
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching current model: ", error);
+  //   }
+  // }, []);
 
-  useEffect(() => {
-    loadCurrentModel();
-  }, [loadCurrentModel]);
+  // useEffect(() => {
+  //   loadCurrentModel();
+  // }, [loadCurrentModel]);
 
   const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
     return (
       <div className="flex flex-row w-full items-center justify-end space-x-4">
-        <ModelSelection
+        {/* <ModelSelection
           currentModel={currentModel}
           currPlan={currPlan}
           loadCurrentModel={loadCurrentModel}
           disabled={disabled}
-        />
+        /> */}
         <div className="flex items-center justify-end">
           <button
             type="button"
@@ -852,203 +852,203 @@ const truncateFilePath = (filePath: string) => {
   return truncatedPath;
 };
 
-const ModelSelection: FC<{
-  currentModel: { provider: string; name: string; id: string } | null;
-  disabled: boolean;
-  currPlan: string | undefined;
-  loadCurrentModel: () => Promise<void>;
-}> = ({ currentModel, disabled, currPlan, loadCurrentModel }) => {
-  const _models: {
-    [key: string]: {
-      provider: string;
-      name: string;
-      id: string;
-      description: string;
-    }[];
-  } = {};
-  const [models, setModels] = useState(_models);
-  const [loading, setLoading] = useState(true);
-
-  const handleModelList = async () => {
-    setLoading(true);
-    const res = await ModelService.listModels();
-
-    const response = res.models.map((model) => {
-      return {
-        provider: model.provider,
-        name: model.name,
-        id: model.id,
-        description: model.description,
-      };
-    });
-
-    let dict: {
-      [key: string]: {
-        provider: string;
-        name: string;
-        id: string;
-        description: string;
-      }[];
-    } = {};
-    for (let i = 0; i < response.length; i++) {
-      if (!dict[response[i].provider]) {
-        dict[response[i].provider] = [response[i]];
-      } else {
-        dict[response[i].provider].push(response[i]);
-      }
-    }
-
-    setModels(dict);
-    setLoading(false);
-  };
-
-  const [selectedId, setSelectedId] = useState("");
-
-  const handleModelSelect = (id: string) => {
-    if (currPlan == "free" && !free_models.includes(id)) {
-      return;
-    }
-    return async () => {
-      setSelectedId(id);
-      await ModelService.setCurrentModel(id);
-      await loadCurrentModel();
-    };
-  };
-
-  return (
-    <Dialog>
-      {currentModel ? (
-        <DialogTrigger
-          data-model-selector-trigger
-          className="p-2 transition ease-in bg-white hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
-          disabled={disabled}
-          onClick={handleModelList}
-        >
-          <div className="flex flex-row justify-center items-center">
-            {currentModel.provider === "zai" ? (
-              <Zap className="h-5 w-5" />
-            ) : (
-              <Image
-                height={20}
-                width={20}
-                src={`/chat/${currentModel.provider}.svg`}
-                alt={currentModel.provider.charAt(0)}
-              />
-            )}
-
-            <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
-          </div>
-        </DialogTrigger>
-      ) : (
-        <div className="flex flex-row items-center justify-center">
-          <Skeleton className="h-6 w-6 rounded-full" />
-          <Skeleton className="h-5 w-20 rounded-sm ml-1" />
-        </div>
-      )}
-      <DialogContent
-        showX={false}
-        className="bg-transparent p-0 w-1/2 max-w-full max-h-full"
-      >
-        <DialogTitle hidden={true}>Select Model</DialogTitle>
-        <DialogDescription hidden={true}>
-          List of llm models to select from
-        </DialogDescription>
-        <Command className="rounded-lg border shadow-md w-full">
-          <CommandInput placeholder="Type a command or search..." />
-          {loading ? (
-            <div className="m-4">
-              <div className="flex flex-row items-center mb-2">
-                <Skeleton className="w-10 h-10 rounded-full" />
-                <Skeleton className="w-2/3 h-6 ml-2" />
-              </div>
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <div className="flex flex-row items-center mb-2">
-                <Skeleton className="w-10 h-10 rounded-full" />
-                <Skeleton className="w-2/3 h-6 ml-2" />
-              </div>
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <div className="flex flex-row items-center mb-2">
-                <Skeleton className="w-10 h-10 rounded-full" />
-                <Skeleton className="w-2/3 h-6 ml-2" />
-              </div>
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <Skeleton className="w-2/3 h-6 mb-2" />
-            </div>
-          ) : (
-            <CommandList className="px-5">
-              <CommandEmpty>No models found</CommandEmpty>
-              {models &&
-                Object.keys(models).length > 0 &&
-                Object.values(models).map((models_) => {
-                  return (
-                    models_.length > 0 && (
-                      <CommandGroup
-                        key={models_[0].provider}
-                        heading={models_[0].provider}
-                      >
-                        {models_.map((model) => {
-                          return (
-                            <CommandItem
-                              key={model.id}
-                              className={`flex flex-row items-start ${
-                                selectedId === model.id ? "animate-pulse" : ""
-                              } ${
-                                !free_models.includes(model.id) &&
-                                currPlan == "free"
-                                  ? "opacity-50"
-                                  : ""
-                              }`}
-                              onSelect={handleModelSelect(model.id)}
-                              value={model.name + " " + model.provider}
-                            >
-                              {model.provider === "zai" ? (
-                                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800">
-                                  <Zap className="h-5 w-5" />
-                                </div>
-                              ) : (
-                                <Avatar className="overflow-hidden rounded-full w-10 h-10">
-                                  <AvatarImage
-                                    src={`/chat/${model.provider}.svg`}
-                                    alt={model.provider}
-                                    className="w-10 h-10"
-                                  />
-                                  <AvatarFallback>
-                                    {model.provider.charAt(0)}
-                                  </AvatarFallback>
-                                </Avatar>
-                              )}
-                              <div className="flex flex-col">
-                                <div className="flex flex-row items-center">
-                                  <span className="ml-2">{model.name}</span>
-                                  {selectedId === model.id && (
-                                    <Loader2Icon className="ml-2 h-3 w-3 animate-spin" />
-                                  )}
-                                  {!free_models.includes(model.id) &&
-                                    currPlan == "free" && (
-                                      <div className="text-xs shadow-sm flex items-center rounded-sm ml-2 p-0.5 px-1 bg-yellow-300">
-                                        {" "}
-                                        <Crown className="h-3 w-3 mr-1" />
-                                        Upgrade Plan
-                                      </div>
-                                    )}
-                                </div>
-                                <div className="text-xs italic ml-2 mt-1">
-                                  {model.description}
-                                </div>
-                              </div>
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    )
-                  );
-                })}
-            </CommandList>
-          )}
-        </Command>
-      </DialogContent>
-    </Dialog>
-  );
-};
+// const ModelSelection: FC<{
+//   currentModel: { provider: string; name: string; id: string } | null;
+//   disabled: boolean;
+//   currPlan: string | undefined;
+//   loadCurrentModel: () => Promise<void>;
+// }> = ({ currentModel, disabled, currPlan, loadCurrentModel }) => {
+//   const _models: {
+//     [key: string]: {
+//       provider: string;
+//       name: string;
+//       id: string;
+//       description: string;
+//     }[];
+//   } = {};
+//   const [models, setModels] = useState(_models);
+//   const [loading, setLoading] = useState(true);
+//
+//   const handleModelList = async () => {
+//     setLoading(true);
+//     const res = await ModelService.listModels();
+//
+//     const response = res.models.map((model) => {
+//       return {
+//         provider: model.provider,
+//         name: model.name,
+//         id: model.id,
+//         description: model.description,
+//       };
+//     });
+//
+//     let dict: {
+//       [key: string]: {
+//         provider: string;
+//         name: string;
+//         id: string;
+//         description: string;
+//       }[];
+//     } = {};
+//     for (let i = 0; i < response.length; i++) {
+//       if (!dict[response[i].provider]) {
+//         dict[response[i].provider] = [response[i]];
+//       } else {
+//         dict[response[i].provider].push(response[i]);
+//       }
+//     }
+//
+//     setModels(dict);
+//     setLoading(false);
+//   };
+//
+//   const [selectedId, setSelectedId] = useState("");
+//
+//   const handleModelSelect = (id: string) => {
+//     if (currPlan == "free" && !free_models.includes(id)) {
+//       return;
+//     }
+//     return async () => {
+//       setSelectedId(id);
+//       await ModelService.setCurrentModel(id);
+//       await loadCurrentModel();
+//     };
+//   };
+//
+//   return (
+//     <Dialog>
+//       {currentModel ? (
+//         <DialogTrigger
+//           data-model-selector-trigger
+//           className="p-2 transition ease-in bg-white hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
+//           disabled={disabled}
+//           onClick={handleModelList}
+//         >
+//           <div className="flex flex-row justify-center items-center">
+//             {currentModel.provider === "zai" ? (
+//               <Zap className="h-5 w-5" />
+//             ) : (
+//               <Image
+//                 height={20}
+//                 width={20}
+//                 src={`/chat/${currentModel.provider}.svg`}
+//                 alt={currentModel.provider.charAt(0)}
+//               />
+//             )}
+//
+//             <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
+//           </div>
+//         </DialogTrigger>
+//       ) : (
+//         <div className="flex flex-row items-center justify-center">
+//           <Skeleton className="h-6 w-6 rounded-full" />
+//           <Skeleton className="h-5 w-20 rounded-sm ml-1" />
+//         </div>
+//       )}
+//       <DialogContent
+//         showX={false}
+//         className="bg-transparent p-0 w-1/2 max-w-full max-h-full"
+//       >
+//         <DialogTitle hidden={true}>Select Model</DialogTitle>
+//         <DialogDescription hidden={true}>
+//           List of llm models to select from
+//         </DialogDescription>
+//         <Command className="rounded-lg border shadow-md w-full">
+//           <CommandInput placeholder="Type a command or search..." />
+//           {loading ? (
+//             <div className="m-4">
+//               <div className="flex flex-row items-center mb-2">
+//                 <Skeleton className="w-10 h-10 rounded-full" />
+//                 <Skeleton className="w-2/3 h-6 ml-2" />
+//               </div>
+//               <Skeleton className="w-2/3 h-6 mb-2" />
+//               <Skeleton className="w-2/3 h-6 mb-2" />
+//               <div className="flex flex-row items-center mb-2">
+//                 <Skeleton className="w-10 h-10 rounded-full" />
+//                 <Skeleton className="w-2/3 h-6 ml-2" />
+//               </div>
+//               <Skeleton className="w-2/3 h-6 mb-2" />
+//               <Skeleton className="w-2/3 h-6 mb-2" />
+//               <div className="flex flex-row items-center mb-2">
+//                 <Skeleton className="w-10 h-10 rounded-full" />
+//                 <Skeleton className="w-2/3 h-6 ml-2" />
+//               </div>
+//               <Skeleton className="w-2/3 h-6 mb-2" />
+//               <Skeleton className="w-2/3 h-6 mb-2" />
+//             </div>
+//           ) : (
+//             <CommandList className="px-5">
+//               <CommandEmpty>No models found</CommandEmpty>
+//               {models &&
+//                 Object.keys(models).length > 0 &&
+//                 Object.values(models).map((models_) => {
+//                   return (
+//                     models_.length > 0 && (
+//                       <CommandGroup
+//                         key={models_[0].provider}
+//                         heading={models_[0].provider}
+//                       >
+//                         {models_.map((model) => {
+//                           return (
+//                             <CommandItem
+//                               key={model.id}
+//                               className={`flex flex-row items-start ${
+//                                 selectedId === model.id ? "animate-pulse" : ""
+//                               } ${
+//                                 !free_models.includes(model.id) &&
+//                                 currPlan == "free"
+//                                   ? "opacity-50"
+//                                   : ""
+//                               }`}
+//                               onSelect={handleModelSelect(model.id)}
+//                               value={model.name + " " + model.provider}
+//                             >
+//                               {model.provider === "zai" ? (
+//                                 <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800">
+//                                   <Zap className="h-5 w-5" />
+//                                 </div>
+//                               ) : (
+//                                 <Avatar className="overflow-hidden rounded-full w-10 h-10">
+//                                   <AvatarImage
+//                                     src={`/chat/${model.provider}.svg`}
+//                                     alt={model.provider}
+//                                     className="w-10 h-10"
+//                                   />
+//                                   <AvatarFallback>
+//                                     {model.provider.charAt(0)}
+//                                   </AvatarFallback>
+//                                 </Avatar>
+//                               )}
+//                               <div className="flex flex-col">
+//                                 <div className="flex flex-row items-center">
+//                                   <span className="ml-2">{model.name}</span>
+//                                   {selectedId === model.id && (
+//                                     <Loader2Icon className="ml-2 h-3 w-3 animate-spin" />
+//                                   )}
+//                                   {!free_models.includes(model.id) &&
+//                                     currPlan == "free" && (
+//                                       <div className="text-xs shadow-sm flex items-center rounded-sm ml-2 p-0.5 px-1 bg-yellow-300">
+//                                         {" "}
+//                                         <Crown className="h-3 w-3 mr-1" />
+//                                         Upgrade Plan
+//                                       </div>
+//                                     )}
+//                                 </div>
+//                                 <div className="text-xs italic ml-2 mt-1">
+//                                   {model.description}
+//                                 </div>
+//                               </div>
+//                             </CommandItem>
+//                           );
+//                         })}
+//                       </CommandGroup>
+//                     )
+//                   );
+//                 })}
+//             </CommandList>
+//           )}
+//         </Command>
+//       </DialogContent>
+//     </Dialog>
+//   );
+// };

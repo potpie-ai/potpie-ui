@@ -19,9 +19,9 @@ const FIGMA = {
   modelDropdownText: "#00291C",
 } as const;
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal, ExternalLink, Crown } from "lucide-react";
+import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, SendHorizonal, ExternalLink } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuthContext } from "@/contexts/AuthContext";
 import MinorService from "@/services/minorService";
-import ModelService, { type Model } from "@/services/ModelService";
+// import ModelService, { type Model } from "@/services/ModelService";
 import { planTypesEnum } from "@/lib/Constants";
 import { useGithubAppPopup } from "../hooks/useGithubAppPopup";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
@@ -160,54 +160,54 @@ export default function IdeaInputCard({
     !userSubscription ||
     userSubscription.plan_type === planTypesEnum.FREE;
 
-  const [currentModel, setCurrentModel] = useState<{
-    id: string;
-    name: string;
-    provider: string;
-  } | null>({ id: "", name: "glm 4.7", provider: "z.ai" });
-  const [modelList, setModelList] = useState<Model[]>([]);
-  /** Pro users: all models. Free users: all except OpenAI, Anthropic, Gemini (those show upgrade flag). */
-  const isModelAvailable = (model: Model) => {
-    if (!isFreeUser) return true;
-    const p = (model.provider || "").toLowerCase().replace(/[\s.-]/g, "");
-    if (p === "openai" || p === "anthropic" || p === "gemini") return false;
-    return true;
-  };
-  const loadCurrentModel = useCallback(async () => {
-    try {
-      const res = await ModelService.getCurrentModel();
-      if (res?.chat_model) {
-        setCurrentModel({
-          id: res.chat_model.id,
-          name: res.chat_model.name,
-          provider: res.chat_model.provider,
-        });
-      }
-    } catch {
-      setCurrentModel({ id: "", name: "ZLM 4.7", provider: "zai" });
-    }
-  }, []);
-  const loadModelList = useCallback(async () => {
-    try {
-      const res = await ModelService.listModels();
-      setModelList(res.models ?? []);
-    } catch {
-      setModelList([]);
-    }
-  }, []);
-  // Load model list for all users so dropdown shows API models (free users see grayed + Upgrade for non-available)
-  useEffect(() => {
-    loadModelList();
-  }, [loadModelList]);
+  // const [currentModel, setCurrentModel] = useState<{
+  //   id: string;
+  //   name: string;
+  //   provider: string;
+  // } | null>({ id: "", name: "glm 4.7", provider: "z.ai" });
+  // const [modelList, setModelList] = useState<Model[]>([]);
+  // /** Pro users: all models. Free users: all except OpenAI, Anthropic, Gemini (those show upgrade flag). */
+  // const isModelAvailable = (model: Model) => {
+  //   if (!isFreeUser) return true;
+  //   const p = (model.provider || "").toLowerCase().replace(/[\s.-]/g, "");
+  //   if (p === "openai" || p === "anthropic" || p === "gemini") return false;
+  //   return true;
+  // };
+  // const loadCurrentModel = useCallback(async () => {
+  //   try {
+  //     const res = await ModelService.getCurrentModel();
+  //     if (res?.chat_model) {
+  //       setCurrentModel({
+  //         id: res.chat_model.id,
+  //         name: res.chat_model.name,
+  //         provider: res.chat_model.provider,
+  //       });
+  //     }
+  //   } catch {
+  //     setCurrentModel({ id: "", name: "ZLM 4.7", provider: "zai" });
+  //   }
+  // }, []);
+  // const loadModelList = useCallback(async () => {
+  //   try {
+  //     const res = await ModelService.listModels();
+  //     setModelList(res.models ?? []);
+  //   } catch {
+  //     setModelList([]);
+  //   }
+  // }, []);
+  // // Load model list for all users so dropdown shows API models (free users see grayed + Upgrade for non-available)
+  // useEffect(() => {
+  //   loadModelList();
+  // }, [loadModelList]);
 
-  // For free users, show free models first and paid/locked models after.
-  const orderedModelList = useMemo(() => {
-    if (!modelList || modelList.length === 0) return [];
-    if (!isFreeUser) return modelList;
-    const freeModels = modelList.filter((m) => isModelAvailable(m));
-    const paidModels = modelList.filter((m) => !isModelAvailable(m));
-    return [...freeModels, ...paidModels];
-  }, [modelList, isFreeUser]);
+  // // For free users, show free models first and paid/locked models after.
+  // const orderedModelList = useMemo(() => {
+  //   if (!modelList || modelList.length === 0) return [];
+  //   if (!isFreeUser) return modelList;
+  //   const freeModels = modelList.filter((m) => isModelAvailable(m));
+  //   const paidModels = modelList.filter((m) => !isModelAvailable(m));
+  //   return [...freeModels, ...paidModels];
+  // }, [modelList, isFreeUser]);
 
   const attachedFiles =
     controlledFiles !== undefined ? controlledFiles : localFiles;
@@ -427,9 +427,9 @@ export default function IdeaInputCard({
     { value: "code", label: "Make a change" },
   ];
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  // const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
 
-  const displayModelName = currentModel?.name ?? "ZLM 4.7";
+  // const displayModelName = currentModel?.name ?? "ZLM 4.7";
 
   return (
     <div className={`relative space-y-4 transition-opacity duration-200 ${(loading || isSubmitting) ? "opacity-90 pointer-events-none" : ""}`}>
@@ -940,6 +940,7 @@ export default function IdeaInputCard({
             </button>
           </div>
           <div className="flex items-center gap-2">
+            {/* Model selector (commented out)
             <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <button
@@ -1031,6 +1032,7 @@ export default function IdeaInputCard({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            */}
             <button
               type="button"
               onClick={() => {

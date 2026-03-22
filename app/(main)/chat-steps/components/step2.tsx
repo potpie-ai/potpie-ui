@@ -90,7 +90,9 @@ const Step2: React.FC<Step2Props> = ({ projectId, title, setChatStep, gotoChat }
   const createConversation = async (agentId: string) => {
     try {
       const response = await ChatService.createConversation(userId, title, projectId, agentId);
-      dispatch(setChat({ agentId }));
+      dispatch(
+        setChat({ agentId: ChatService.effectiveAgentIdForNewChat(agentId) })
+      );
       setChatStep(3);
       gotoChat(response.conversation_id);
     } catch (err) {

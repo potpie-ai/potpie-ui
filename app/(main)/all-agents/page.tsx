@@ -31,6 +31,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import AgentService from "@/services/AgentService";
+import ChatService from "@/services/ChatService";
 import {
   Dialog,
   DialogClose,
@@ -194,6 +195,9 @@ const AllAgents = () => {
 
   const deleteCustomAgentForm = useMutation({
     mutationFn: async (agentId: string) => {
+      if (agentId === ChatService.getDefaultChatAgentId()) {
+        throw new Error("This agent is required for chat and cannot be deleted.");
+      }
       const header = await getHeaders();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       return (await axios.delete(
@@ -211,8 +215,8 @@ const AllAgents = () => {
       toast.success("Agent deleted successfully");
       setDeleteDialogOpen(false);
     },
-    onError: () => {
-      toast.error("Failed to delete agent");
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to delete agent");
     },
   });
 
@@ -624,6 +628,8 @@ const AllAgents = () => {
               index: React.Key
             ) => {
               const deploymentStatus = statuses[content.id];
+              const isDefaultChatAgent =
+                content.id === ChatService.getDefaultChatAgentId();
               return (
                 <Card
                   key={index}
@@ -698,58 +704,71 @@ const AllAgents = () => {
                       <Share2 className="size-5" />
                     </Button>
 
-                    <Dialog
-                      open={deleteDailogOpen}
-                      onOpenChange={(open) => {
-                        setDeleteDialogOpen(open);
-                        if (!open) setAgentToDelete(null);
-                      }}
-                    >
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="hover:text-primary"
-                          onClick={() => setAgentToDelete(content.id)}
-                        >
-                          <Trash className="size-5" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle className="truncate max-w-[400px] flex items-center">
-                            Are you sure you want to delete&nbsp;
-                            <span className="font-semibold inline-block max-w-[200px] truncate">
-                              {
-                                data?.find(
-                                  (agent: { id: string; name: string }) =>
-                                    agent.id === agentToDelete
-                                )?.name
-                              }
-                            </span>
-                            ?
-                          </DialogTitle>
-                        </DialogHeader>
-                        <DialogFooter>
-                          <DialogClose asChild>
-                            <Button variant="outline" className="bg-primary-color text-accent-color">Cancel</Button>
-                          </DialogClose>
+                    {isDefaultChatAgent ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground cursor-not-allowed opacity-50"
+                        disabled
+                        title="This agent is used as the default for chat and cannot be deleted"
+                        aria-label="Delete unavailable: default chat agent"
+                      >
+                        <Trash className="size-5" />
+                      </Button>
+                    ) : (
+                      <Dialog
+                        open={deleteDailogOpen}
+                        onOpenChange={(open) => {
+                          setDeleteDialogOpen(open);
+                          if (!open) setAgentToDelete(null);
+                        }}
+                      >
+                        <DialogTrigger asChild>
                           <Button
-                            variant="destructive"
-                            onClick={() =>
-                              agentToDelete &&
-                              deleteCustomAgentForm.mutate(agentToDelete)
-                            }
-                            className="gap-2 bg-primary-color text-accent-color"
+                            variant="ghost"
+                            size="icon"
+                            className="hover:text-primary"
+                            onClick={() => setAgentToDelete(content.id)}
                           >
-                            {deleteCustomAgentForm.isPending ? (
-                              <Loader className="w-5 h-5 animate-spin" />
-                            ) : null}{" "}
-                            <span>Delete</span>
+                            <Trash className="size-5" />
                           </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle className="truncate max-w-[400px] flex items-center">
+                              Are you sure you want to delete&nbsp;
+                              <span className="font-semibold inline-block max-w-[200px] truncate">
+                                {
+                                  data?.find(
+                                    (agent: { id: string; name: string }) =>
+                                      agent.id === agentToDelete
+                                  )?.name
+                                }
+                              </span>
+                              ?
+                            </DialogTitle>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <DialogClose asChild>
+                              <Button variant="outline" className="bg-primary-color text-accent-color">Cancel</Button>
+                            </DialogClose>
+                            <Button
+                              variant="destructive"
+                              onClick={() =>
+                                agentToDelete &&
+                                deleteCustomAgentForm.mutate(agentToDelete)
+                              }
+                              className="gap-2 bg-primary-color text-accent-color"
+                            >
+                              {deleteCustomAgentForm.isPending ? (
+                                <Loader className="w-5 h-5 animate-spin" />
+                              ) : null}{" "}
+                              <span>Delete</span>
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    )}
 
                     <Button
                       variant="ghost"

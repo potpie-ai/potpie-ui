@@ -86,6 +86,41 @@ export default class ChatService {
     return { objects, remaining };
   }
 
+  /** UUID v4-style id (custom agents); system agents use snake_case strings. */
+  private static readonly UUID_AGENT_ID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  /** Used when NEXT_PUBLIC_DEFAULT_CHAT_AGENT_ID is unset. */
+  private static readonly FALLBACK_DEFAULT_CHAT_AGENT_ID =
+    "07f1eac2-ae49-44b6-ae6d-443144ba47c2";
+
+  /**
+   * Custom agent UUID used for default chat routing (env or built-in fallback).
+   * UI (e.g. all-agents) uses this to protect the agent from deletion.
+   */
+  static getDefaultChatAgentId(): string {
+    return (
+      process.env.NEXT_PUBLIC_DEFAULT_CHAT_AGENT_ID?.trim() ||
+      ChatService.FALLBACK_DEFAULT_CHAT_AGENT_ID
+    );
+  }
+
+  /**
+   * Resolves the agent id for new conversations: built-in system agent ids are
+   * replaced by NEXT_PUBLIC_DEFAULT_CHAT_AGENT_ID, or the fallback UUID above if
+   * unset. Explicit custom-agent UUIDs (shared links, agent builder test chat)
+   * are left unchanged.
+   */
+  static effectiveAgentIdForNewChat(requestedAgentId: string): string {
+    return ChatService.resolveConversationAgentId(requestedAgentId);
+  }
+
+  private static resolveConversationAgentId(requestedAgentId: string): string {
+    if (ChatService.UUID_AGENT_ID_RE.test(requestedAgentId.trim()))
+      return requestedAgentId;
+    return ChatService.getDefaultChatAgentId();
+  }
+
   // Method for creating a chat with a shared agent
   static async createChat(params: {
     agent_id: string;
@@ -94,10 +129,11 @@ export default class ChatService {
   }) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
+    const agent_id = ChatService.resolveConversationAgentId(params.agent_id);
     try {
       // Prepare the request body
       const requestBody: any = {
-        agent_id: params.agent_id,
+        agent_id,
         repo_id: params.repo_id,
       };
 
@@ -998,6 +1034,7 @@ export default class ChatService {
   ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
+    const resolvedAgentId = ChatService.resolveConversationAgentId(agentId);
     try {
       // Build request body with all required fields
       const requestBody: any = {
@@ -1005,7 +1042,7 @@ export default class ChatService {
         title: title,
         status: "active",
         project_ids: projectId ? [projectId] : [],
-        agent_ids: [agentId],
+        agent_ids: [resolvedAgentId],
       };
 
       // CRITICAL: Add repo_name and branch_name if provided

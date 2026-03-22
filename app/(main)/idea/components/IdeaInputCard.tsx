@@ -81,8 +81,6 @@ interface IdeaInputCardProps {
   onRepoSearchChange?: (value: string) => void;
   /** Handler for branch search term changes (debounced — called after user stops typing) */
   onBranchSearchChange?: (value: string) => void;
-  /** When true, show "Generate spec" option under Debug (e.g. only on localhost in new chat) */
-  showSpecGenOption?: boolean;
 }
 
 export default function IdeaInputCard({
@@ -113,7 +111,6 @@ export default function IdeaInputCard({
   attachmentUploading = false,
   onRepoSearchChange,
   onBranchSearchChange,
-  showSpecGenOption = false,
 }: IdeaInputCardProps) {
   const router = useRouter();
   const { user } = useAuthContext();
@@ -419,13 +416,15 @@ export default function IdeaInputCard({
     onInputChange(e.target.value);
   };
 
-  const agentOptions = [
-    { value: "ask", label: "Ask a question" },
-    { value: "build", label: "Build a feature" },
-    { value: "debug", label: "Debug an issue" },
-    ...(showSpecGenOption ? [{ value: "spec_gen" as const, label: "Generate a spec" }] : []),
-    { value: "code", label: "Make a change" },
-  ];
+  const agentOptions = [{ value: "ask", label: "Ask a question" }];
+
+  useEffect(() => {
+    if (selectedAgent != null && selectedAgent !== "ask") {
+      onAgentSelect("ask");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to agent value; parent may pass inline onAgentSelect
+  }, [selectedAgent]);
+
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   // const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
 

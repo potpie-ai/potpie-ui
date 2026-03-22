@@ -104,15 +104,6 @@ export default function NewChatPage() {
   const [repoSearch, setRepoSearch] = useState<string>("");
   const [branchSearch, setBranchSearch] = useState<string>("");
 
-  const [isLocalhost, setIsLocalhost] = useState(false);
-  useEffect(() => {
-    setIsLocalhost(
-      typeof window !== "undefined" &&
-        (window.location.hostname === "localhost" ||
-          window.location.hostname === "127.0.0.1")
-    );
-  }, []);
-
   const isDemoMode = searchParams.get("demo") === "true";
 
 
@@ -959,7 +950,9 @@ export default function NewChatPage() {
           })
         );
       }
-      dispatch(setChat({ agentId }));
+      dispatch(
+        setChat({ agentId: ChatService.effectiveAgentIdForNewChat(agentId) })
+      );
       if (state.input.trim()) {
         dispatch(setPendingMessage(getCleanInput(state.input)));
       }
@@ -1316,7 +1309,6 @@ export default function NewChatPage() {
               onRetryBranches={refetchBranches}
               selectedAgent={state.selectedAgent}
               onAgentSelect={handleAgentSelect}
-              showSpecGenOption={isLocalhost}
               onParseRepo={handleParseRepo}
               onParseRepoWithName={(repoName: string, branchName: string) => {
                 // Try to find a matching repo in the repositories array and update state

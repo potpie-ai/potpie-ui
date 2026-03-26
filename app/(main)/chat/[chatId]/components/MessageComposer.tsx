@@ -335,7 +335,7 @@ const MessageComposer = ({
 
   const NodeSelection = () => {
     return (
-      <div className="max-h-40 overflow-scroll border-2 rounded-sm border-gray-400/40">
+      <div className="max-h-40 overflow-scroll rounded-lg border border-gray-200 bg-[#FFFDFC] shadow-lg">
         <ul>
           {isSearchingNode ? (
             <Skeleton className="w-full h-20 m-4" />
@@ -632,7 +632,6 @@ const MessageComposer = ({
 
   return (
     <>
-      {/* Validation Error Modal */}
       {validationError && (
         <ValidationErrorModal
           open={!!validationError}
@@ -653,7 +652,7 @@ const MessageComposer = ({
             handleCloseValidationModal();
             requestAnimationFrame(() => {
               const modelTrigger = document.querySelector(
-                '[data-model-selector-trigger]'
+                "[data-model-selector-trigger]"
               ) as HTMLButtonElement | null;
               if (modelTrigger && !modelTrigger.hasAttribute("disabled")) {
                 modelTrigger.click();
@@ -700,10 +699,8 @@ const MessageComposer = ({
           tabIndex={0}
           style={{ outline: "none" }}
         >
-          {/* Attachment Previews */}
           {isMultimodalEnabled() && <ComposerAttachments />}
 
-          {/* Document Attachments - compact tile, does not span full width */}
           {documents.length > 0 && (
             <div className="w-max max-w-sm px-4 space-y-2">
               <div className="text-xs font-medium text-gray-600">
@@ -722,13 +719,13 @@ const MessageComposer = ({
             </div>
           )}
 
-          {/* Validation/Upload Loading State - compact, same width as documents tile */}
           {validating && (
             <div className="w-max max-w-sm px-4 py-2 text-sm text-gray-600 flex items-center gap-2">
               <Loader2Icon className="w-4 h-4 animate-spin" />
               <span>Validating document...</span>
             </div>
           )}
+
           {uploadingDocument && (
             <div className="w-max max-w-sm px-4 py-2">
               <div className="flex items-center justify-between text-sm text-gray-600 mb-1">

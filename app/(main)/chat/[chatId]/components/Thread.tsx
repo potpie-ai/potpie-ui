@@ -6,7 +6,6 @@ import {
   ThreadPrimitive,
   useThreadRuntime,
   useMessage,
-  type ToolCallMessagePartComponent,
 } from "@assistant-ui/react";
 import type { PropsWithChildren } from "react";
 import {
@@ -21,10 +20,14 @@ import {
   AlertTriangle,
   ArrowDownIcon,
   CheckIcon,
+  ChevronDown,
   CopyIcon,
+  Lightbulb,
+  Loader2,
   RefreshCwIcon,
-  Loader,
+  Wrench,
 } from "lucide-react";
+import { cn, isMultimodalEnabled, stripAssistantMarkers } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import {
@@ -36,13 +39,13 @@ import MessageComposer from "./MessageComposer";
 import { motion } from "motion/react";
 import {
   Accordion,
-  AccordionTrigger,
   AccordionContent,
   AccordionItem,
+  AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
-import type { DocumentAttachment } from "@/lib/types/attachment";
+import { ToolResultContent } from "@/components/stream/ToolResultContent";
+
 
 interface ThreadProps {
   projectId: string;
@@ -51,8 +54,7 @@ interface ThreadProps {
   conversation_id: string;
   isSessionResuming: boolean;
   isBackgroundTaskActive: boolean;
-  /** Set by chat page when a pending message is being injected into the thread. */
-  hasPendingMessage?: boolean;
+  hasPendingMessage?: boolean; // New prop to detect pending message
 }
 
 export const Thread: FC<ThreadProps> = ({
@@ -62,112 +64,69 @@ export const Thread: FC<ThreadProps> = ({
   conversation_id,
   isSessionResuming,
   isBackgroundTaskActive,
-  hasPendingMessage: _hasPendingMessage,
+  hasPendingMessage = false,
 }) => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [pendingDocumentAttachments, setPendingDocumentAttachments] = useState<
-    DocumentAttachment[] | null
-  >(null);
-  // Once we show pending docs on a message, store by message id so they stay visible after clearing pending
-  const [committedDocumentAttachmentsByMessageId, setCommittedDocumentAttachmentsByMessageId] =
-    useState<Record<string, DocumentAttachment[]>>({});
   const runtime = useThreadRuntime();
-  const [messagesSnapshot, setMessagesSnapshot] = useState(
-    () => runtime.getState().messages ?? []
-  );
-  const prevLastUserMessageIdRef = useRef<string | null>(null);
-
-  // Subscribe to thread so we see new messages (e.g. just-sent user message)
-  useEffect(() => {
-    setMessagesSnapshot(runtime.getState().messages ?? []);
-    const unsub = runtime.subscribe(() => {
-      setMessagesSnapshot(runtime.getState().messages ?? []);
-    });
-    return unsub;
-  }, [runtime]);
-
-  // Commit pending only when a *new* user message appears (last user message id changed)
-  // so we don't wrongly attach pending docs to the previous message
-  const lastUserMessageId = useMemo(() => {
-    const messages = messagesSnapshot;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user") return messages[i].id;
-    }
-    return null;
-  }, [messagesSnapshot]);
-
-  useEffect(() => {
-    if (
-      lastUserMessageId != null &&
-      lastUserMessageId !== prevLastUserMessageIdRef.current &&
-      pendingDocumentAttachments != null &&
-      pendingDocumentAttachments.length > 0
-    ) {
-      setCommittedDocumentAttachmentsByMessageId((prev) => ({
-        ...prev,
-        [lastUserMessageId]: pendingDocumentAttachments,
-      }));
-      setPendingDocumentAttachments(null);
-    }
-    prevLastUserMessageIdRef.current = lastUserMessageId;
-  }, [lastUserMessageId, pendingDocumentAttachments]);
 
   // Move useMemo before any early returns to satisfy React Hooks rules
   const userMessage = useMemo(() => {
     const UserMessageComponent = () => (
-      <UserMessage
-        userPhotoURL={userImageURL}
-        pendingDocumentAttachments={pendingDocumentAttachments}
-        setPendingDocumentAttachments={setPendingDocumentAttachments}
-        committedDocumentAttachmentsByMessageId={
-          committedDocumentAttachmentsByMessageId
-        }
-        setCommittedDocumentAttachmentsByMessageId={
-          setCommittedDocumentAttachmentsByMessageId
-        }
-      />
+      <UserMessage userPhotoURL={userImageURL} />
     );
     UserMessageComponent.displayName = "UserMessageComponent";
     return UserMessageComponent;
-  }, [
-    userImageURL,
-    pendingDocumentAttachments,
-    committedDocumentAttachmentsByMessageId,
-  ]);
+  }, [userImageURL]);
 
   useEffect(() => {
     const state = runtime.getState();
-    // Check if messages array exists (even if empty) - this means history load has completed
-    const messagesLoaded = Array.isArray(state.messages);
+    const messagesLoaded = Array.isArray(state.messages) && state.messages.length > 0;
+    const isEmptyChat = Array.isArray(state.messages) && state.messages.length === 0;
 
-    // If messages have been loaded (array exists), we're no longer in initial loading
-    // This handles both empty chats ([]) and chats with messages
+    // If messages have actual content, we're no longer in initial loading
     if (messagesLoaded) {
       setIsInitialLoading(false);
-      return; // Early return if already loaded
+      return;
+    }
+
+    // If empty array AND has pending message, keep loading to avoid showing empty chat
+    if (isEmptyChat && hasPendingMessage) {
+      return;
     }
 
     // Safety timeout: Clear loading after 10 seconds if history never loads
-    // This prevents infinite loading in case of network errors or adapter failures
     const timeoutId = setTimeout(() => {
       setIsInitialLoading((prev) => {
-        // Only clear if still loading
         if (prev) {
-          console.warn("History load timeout - clearing initial loading state");
           return false;
         }
         return prev;
       });
     }, 10000);
 
-    // Messages haven't loaded yet, subscribe to changes
+    // Subscribe to runtime changes
     const unsubscribe = runtime.subscribe(() => {
       const nextState = runtime.getState();
-      // Once messages array exists (history load completed), clear loading
-      // This works for both empty chats ([]) and chats with messages
-      if (Array.isArray(nextState.messages)) {
+
+      if (Array.isArray(nextState.messages) && nextState.messages.length > 0) {
         clearTimeout(timeoutId);
         setIsInitialLoading(false);
+        unsubscribe();
+        return;
+      }
+
+      if (Array.isArray(nextState.messages) && nextState.messages.length === 0) {
+        setTimeout(() => {
+          const finalState = runtime.getState();
+          if (Array.isArray(finalState.messages) && finalState.messages.length === 0) {
+            if (hasPendingMessage) {
+              return;
+            }
+            clearTimeout(timeoutId);
+            setIsInitialLoading(false);
+            unsubscribe();
+          }
+        }, 500);
       }
     });
 
@@ -175,32 +134,43 @@ export const Thread: FC<ThreadProps> = ({
       clearTimeout(timeoutId);
       unsubscribe();
     };
-  }, [runtime]);
+  }, [runtime, hasPendingMessage]);
 
-  // Loading state for background tasks (not for normal streaming)
-  if (isBackgroundTaskActive && !isSessionResuming) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <Loader className="h-6 w-6 animate-spin mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">
-            Background task in progress...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Watch for message additions to clear loading when pending message sends
+  useEffect(() => {
+    if (!hasPendingMessage || !isInitialLoading) {
+      return;
+    }
+
+    const unsubscribe = runtime.subscribe(() => {
+      const state = runtime.getState();
+      const messageCount = Array.isArray(state.messages) ? state.messages.length : 0;
+
+      if (messageCount > 0) {
+        setIsInitialLoading(false);
+        unsubscribe();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [hasPendingMessage, isInitialLoading, runtime]);
 
   return (
     <ThreadPrimitive.Root className="px-10 bg-background box-border h-full text-sm flex justify-center items-center">
-      <div className="h-full w-full bg-background">
-        {isInitialLoading ? (
-          <div className="flex items-center justify-center h-full space-x-1 mt-2">
-            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
-            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
-            <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
-          </div>
-        ) : (
+      <div className="relative h-full w-full bg-background">
+        {(() => {
+          if (isInitialLoading) {
+            return (
+              <div className="flex items-center justify-center h-full space-x-1 mt-2">
+                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse"></span>
+                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-100"></span>
+                <span className="h-2 w-2 bg-gray-500 rounded-full animate-pulse delay-200"></span>
+              </div>
+            );
+          } else {
+            return (
           <>
             {/* Built-in loading state - no manual state needed */}
             <ThreadPrimitive.If empty>
@@ -222,17 +192,18 @@ export const Thread: FC<ThreadProps> = ({
               </ThreadPrimitive.Viewport>
             </ThreadPrimitive.If>
 
-            <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center justify-center">
+            <div className="sticky bottom-0 left-0 right-0 z-20 flex flex-col items-center justify-center border-t border-border/60 bg-background px-4 py-3">
               <ThreadScrollToBottom />
               <Composer
                 projectId={projectId}
                 disabled={writeDisabled}
                 conversation_id={conversation_id}
-                setPendingDocumentAttachments={setPendingDocumentAttachments}
               />
             </div>
           </>
-        )}
+            );
+          }
+        })()}
       </div>
     </ThreadPrimitive.Root>
   );
@@ -299,81 +270,22 @@ const Composer: FC<{
   projectId: string;
   disabled: boolean;
   conversation_id: string;
-  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
-}> = ({ projectId, disabled, conversation_id, setPendingDocumentAttachments }) => {
+}> = ({ projectId, disabled, conversation_id }) => {
+  // REMOVED: Manual runtime subscriptions and state
+  // REMOVED: isStreaming check - assistant-ui handles this
+
   return (
-    <ComposerPrimitive.Root className="bg-white z-10 w-3/4 focus-within:border-ring/50 flex flex-wrap items-end rounded-lg border px-2.5 shadow-xl focus-within:shadow-2xl transition-all ease-in-out">
+    <ComposerPrimitive.Root className="relative z-10 w-3/4 bg-[#FFFDFC] flex flex-wrap items-end rounded-lg border border-gray-200 px-2.5 shadow-xl transition-all ease-in-out">
       <MessageComposer
         projectId={projectId}
         conversation_id={conversation_id}
         disabled={disabled}
-        setPendingDocumentAttachments={setPendingDocumentAttachments}
       />
     </ComposerPrimitive.Root>
   );
 };
 
-const UserMessage: FC<{
-  userPhotoURL: string;
-  pendingDocumentAttachments: DocumentAttachment[] | null;
-  setPendingDocumentAttachments: (docs: DocumentAttachment[] | null) => void;
-  committedDocumentAttachmentsByMessageId: Record<
-    string,
-    DocumentAttachment[]
-  >;
-  setCommittedDocumentAttachmentsByMessageId: React.Dispatch<
-    React.SetStateAction<Record<string, DocumentAttachment[]>>
-  >;
-}> = ({
-  userPhotoURL,
-  pendingDocumentAttachments,
-  setPendingDocumentAttachments,
-  committedDocumentAttachmentsByMessageId,
-  setCommittedDocumentAttachmentsByMessageId,
-}) => {
-  const message = useMessage();
-  const runtime = useThreadRuntime();
-  const [messagesSnapshot, setMessagesSnapshot] = useState(
-    () => runtime.getState().messages ?? []
-  );
-
-  useEffect(() => {
-    setMessagesSnapshot(runtime.getState().messages ?? []);
-    const unsub = runtime.subscribe(() => {
-      setMessagesSnapshot(runtime.getState().messages ?? []);
-    });
-    return unsub;
-  }, [runtime]);
-
-  const metadataDocumentAttachments =
-    (message.metadata as any)?.custom?.documentAttachments ?? [];
-
-  // For just-sent messages, metadata may not be populated yet; use pending or committed docs
-  const lastUserMessage = useMemo(() => {
-    const messages = messagesSnapshot;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user") return messages[i];
-    }
-    return null;
-  }, [messagesSnapshot]);
-
-  const isLastUserMessage = lastUserMessage?.id === message.id;
-  const committedForThisMessage = committedDocumentAttachmentsByMessageId[message.id];
-  const showPending =
-    metadataDocumentAttachments.length === 0 &&
-    !(committedForThisMessage?.length) &&
-    isLastUserMessage &&
-    (pendingDocumentAttachments?.length ?? 0) > 0;
-
-  const documentAttachments =
-    metadataDocumentAttachments.length > 0
-      ? metadataDocumentAttachments
-      : committedForThisMessage?.length
-        ? committedForThisMessage
-        : showPending
-          ? pendingDocumentAttachments!
-          : [];
-
+const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -383,51 +295,12 @@ const UserMessage: FC<{
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          {/* Document Attachments */}
-          {documentAttachments.length > 0 && (
-            <div className="space-y-2 mb-3">
-              {documentAttachments.map((attachment: any, index: number) => {
-                const tokenCount =
-                  attachment.token_count || attachment.file_metadata?.token_count;
-                const metadata = attachment.metadata || attachment.file_metadata;
-
-                return (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 text-xs bg-white rounded-lg p-2 border"
-                  >
-                    <span className="text-lg">
-                      {attachment.attachment_type === "pdf" && "📄"}
-                      {attachment.attachment_type === "spreadsheet" && "📊"}
-                      {attachment.attachment_type === "code" && "💻"}
-                      {attachment.attachment_type === "document" && "📝"}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">
-                        {attachment.file_name}
-                      </div>
-                      {tokenCount && (
-                        <div className="text-gray-500">
-                          {tokenCount.toLocaleString()} tokens
-                        </div>
-                      )}
-                      {metadata?.page_count && (
-                        <div className="text-gray-400 text-xs">
-                          {metadata.page_count} pages
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <UserMessageAttachments />
+          {/* Display attachments using assistant-ui component */}
+          {isMultimodalEnabled() && <UserMessageAttachments />}
 
           <MessagePrimitive.Parts
             components={{
-              Image: () => null,
+              Image: () => null, //UserMessageAttachments already handles images
             }}
           />
         </div>
@@ -486,25 +359,39 @@ const ThreadScrollToBottom: FC = () => {
   );
 };
 
+
 // Custom ToolCall component for assistant-ui
 interface ToolCallStreamState {
   event_type: string;
   response: string; // Maps to tool_response from API (status message)
-  details: { summary: string }; // Maps to tool_call_details.summary from API
+  details: {
+    summary?: string;
+    command?: string;
+    [key: string]: unknown;
+  }; // Maps to tool_call_details from API (shape varies by tool)
+  is_complete?: boolean;
+  stream_part?: string | null;
+  accumulated_stream_part?: string;
   accumulated_response?: string; // Accumulated from stream_part chunks
-  is_complete?: boolean; // Whether this is the final part
   is_streaming?: boolean; // Whether this tool call is currently streaming
+  latest_tool_response?: string;
+  derived_preview?: string;
+  preview_text?: string;
 }
 
-const CustomToolCall: ToolCallMessagePartComponent = ({
+const CustomToolCall = ({
   toolCallId,
   toolName,
   argsText,
   result,
+  args,
+}: {
+  toolCallId: string;
+  toolName: string;
+  argsText?: string;
+  result?: unknown;
+  args?: unknown;
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
-  const threadRuntime = useThreadRuntime();
-
   // Get the full message to access the complete tool call part with streamState
   const message = useMessage();
   const toolCallPart = message.content.find(
@@ -512,50 +399,24 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   ) as any;
 
   // Extract tool call state - check streamState first (for streaming), then result (for completed)
-  const streamState = toolCallPart?.streamState as
-    | ToolCallStreamState
-    | undefined;
-  const resultState = result as any as ToolCallStreamState | undefined;
-  // Use streamState if available (current streaming state), otherwise use resultState (final state)
-  const currentState = streamState ?? resultState;
+  const streamState = toolCallPart?.streamState as ToolCallStreamState | undefined;
+  const resultStateRaw = result as any as ToolCallStreamState | undefined;
+  const currentState = streamState ?? resultStateRaw;
 
-  // Track call and result events separately
-  // According to API docs:
-  // - "call" event: tool_response = status message, summary = what tool will do
-  // - "result" event: tool_response = completion message, summary = result details, stream_part = streaming content
-  const [callState, setCallState] = useState<ToolCallStreamState | null>(null);
-  const [resultStateLocal, setResultStateLocal] =
-    useState<ToolCallStreamState | null>(null);
+  // Snapshot result event for result content
+  const [resultStateLocal, setResultStateLocal] = useState<ToolCallStreamState | null>(null);
 
-  // Update state based on event_type from the current state
   useEffect(() => {
     if (!currentState) return;
-
     const eventType = currentState.event_type || "";
-
-    if (eventType === "call" || eventType === "delegation_call") {
-      setCallState(currentState);
-    } else if (eventType === "result" || eventType === "delegation_result") {
+    if (eventType === "result" || eventType === "delegation_result") {
       setResultStateLocal(currentState);
     }
   }, [currentState]);
 
-  // Use accumulated_response if streaming, otherwise use response
-  const isStreamingFromState = currentState?.is_streaming ?? false;
   const isComplete =
     currentState?.is_complete !== undefined ? currentState.is_complete : true;
   const eventType = currentState?.event_type || "";
-
-  // Status messages (tool_response from API)
-  const callStatusMessage = callState?.response || "";
-  const resultStatusMessage = resultStateLocal?.response || "";
-
-  // Detailed summaries (tool_call_details.summary from API)
-  const callSummary = callState?.details?.summary || "";
-  const resultSummary = resultStateLocal?.details?.summary || "";
-
-  // Streaming content (accumulated stream_part)
-  const streamingContent = resultStateLocal?.accumulated_response || "";
 
   const isError = toolCallPart?.isError ?? currentState?.event_type === "error";
   const isCompleted =
@@ -563,146 +424,120 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
       eventType === "delegation_result" ||
       isComplete) &&
     !isError;
-  const hasCallInfo = !!(callStatusMessage || callSummary);
-  const hasResultInfo = !!(
-    resultStatusMessage ||
-    resultSummary ||
-    streamingContent
-  );
 
-  // Track thread running state
-  const [threadIsRunning, setThreadIsRunning] = useState(false);
+  // Build result string for preview/expandable content
+  const completedState = resultStateLocal ?? (isCompleted ? currentState : null);
+  const resultContent =
+    completedState?.accumulated_response?.trim() ||
+    (typeof completedState?.details?.command === "string"
+      ? completedState.details.command.trim()
+      : undefined) ||
+    completedState?.details?.summary?.trim() ||
+    completedState?.latest_tool_response?.trim() ||
+    completedState?.response?.trim() ||
+    "";
 
-  // Subscribe to thread runtime to track streaming state
-  useEffect(() => {
-    if (!message.isLast) {
-      setThreadIsRunning(false);
-      return;
-    }
+  // Preview: first 52 chars, collapsed to one line
+  const resultPreview = resultContent
+    ? (() => {
+        const oneLine = resultContent.replace(/\s+/g, " ").trim();
+        return oneLine.length <= 52 ? oneLine : oneLine.slice(0, 52) + "…";
+      })()
+    : "";
 
-    const unsubscribe = threadRuntime.subscribe(() => {
-      const runtimeState = threadRuntime.getState();
-      const lastMessage = runtimeState.messages.at(-1);
-      const running = lastMessage?.id === message.id && runtimeState.isRunning;
-      setThreadIsRunning(running);
-    });
+  const rawPreviewFromArgs = argsText?.trim() || "";
+  const runningPreviewText =
+    currentState?.preview_text?.trim() ||
+    currentState?.latest_tool_response?.trim() ||
+    currentState?.response?.trim() ||
+    currentState?.derived_preview?.trim() ||
+    rawPreviewFromArgs ||
+    "Calling tool...";
 
-    // Set initial state
-    const initialState = threadRuntime.getState();
-    const lastMessage = initialState.messages.at(-1);
-    const running = lastMessage?.id === message.id && initialState.isRunning;
-    setThreadIsRunning(running);
-
-    return unsubscribe;
-  }, [message.isLast, message.id, threadRuntime]);
-
-  // Check if streaming is ongoing for this tool call
-  // Streaming if: has streamState (actively receiving updates), not completed, not error, and thread is running
-  // Also check the is_streaming flag from the state
-  const isToolCallStreaming =
-    (isStreamingFromState || (!!streamState && !isCompleted && !isError)) &&
-    message.isLast &&
-    threadIsRunning;
-
-  // Deduplicate status messages - if result message is same as call message, don't show both
-  const showCallStatus =
-    callStatusMessage && callStatusMessage !== resultStatusMessage;
-  const showResultStatus =
-    resultStatusMessage && resultStatusMessage !== callStatusMessage;
-
-  // Deduplicate summaries - if they're the same, only show one
-  const showCallSummary =
-    callSummary &&
-    callSummary !== resultSummary &&
-    callSummary !== streamingContent;
-  const showResultSummary =
-    resultSummary &&
-    resultSummary !== callSummary &&
-    resultSummary !== streamingContent;
-
-  // Combine all content for the collapsible block
-  const hasAnyContent = hasCallInfo || hasResultInfo || !isCompleted;
-  const displayStatus = showResultStatus
-    ? resultStatusMessage
-    : showCallStatus
-      ? callStatusMessage
-      : toolName;
+  const streamPreview = (() => {
+    const oneLine = runningPreviewText.replace(/\s+/g, " ").trim();
+    if (!oneLine) return "";
+    return oneLine.length <= 72 ? oneLine : oneLine.slice(0, 69) + "…";
+  })();
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -5 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="w-full max-w-2xl my-2 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 border-l-4 border-l-neutral-400 dark:border-l-neutral-500 shadow-sm"
+      className={cn(
+        "rounded-lg border border-zinc-200/90 bg-white min-w-0 overflow-hidden",
+        "shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+        isError && "border-red-200"
+      )}
     >
-      {hasAnyContent && (
-        <Accordion
-          type="single"
-          collapsible
-          value={isExpanded ? toolCallId : ""}
-          onValueChange={(value) => {
-            setIsExpanded(value === toolCallId);
-          }}
-          className="w-full"
-        >
-          <AccordionItem value={toolCallId} className="border-0">
-            <AccordionTrigger className="py-2 px-3 hover:no-underline text-xs text-muted-foreground flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                {isError ? (
-                  <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
-                ) : isCompleted ? (
-                  <CheckIcon className="h-3 w-3 text-green-600 flex-shrink-0" />
-                ) : (
-                  <Loader className="h-3 w-3 animate-spin flex-shrink-0" />
-                )}
-                <span className="text-xs text-foreground/70">
-                  {displayStatus}
+      {!isCompleted && !isError ? (
+        /* Running state */
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          <Loader2 className="h-4 w-4 shrink-0 text-amber-600 animate-spin" aria-hidden />
+          <span className="font-mono text-xs font-medium text-zinc-700 truncate">{toolName}</span>
+          {streamPreview && (
+            <span
+              className="font-mono text-[10px] text-zinc-500 truncate min-w-0"
+              title={runningPreviewText}
+            >
+              {streamPreview}
+            </span>
+          )}
+          <span className="ml-auto rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+            Running
+          </span>
+        </div>
+      ) : isError ? (
+        /* Error state */
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-red-50">
+            <AlertTriangle className="h-3.5 w-3.5 text-red-500" aria-hidden />
+          </span>
+          <span className="font-mono text-xs font-medium text-zinc-700 truncate">{toolName}</span>
+          <span className="ml-auto rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+            Failed
+          </span>
+        </div>
+      ) : (
+        /* Done state — accordion */
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value={toolCallId} className="border-none">
+            <AccordionTrigger
+              className={cn(
+                "py-2.5 pr-3 pl-3 hover:no-underline hover:bg-zinc-50/80",
+                "[&[data-state=open]>svg]:rotate-180"
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1 text-left">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-50">
+                  <Wrench className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
                 </span>
+                <span className="font-mono text-xs font-medium text-zinc-800 shrink-0">
+                  {toolName}
+                </span>
+                {resultPreview && (
+                  <span
+                    className="text-[10px] italic text-zinc-400 truncate min-w-0"
+                    title={resultContent.replace(/\s+/g, " ").trim().slice(0, 200)}
+                  >
+                    {resultPreview}
+                  </span>
+                )}
               </div>
             </AccordionTrigger>
-            <AccordionContent className="pt-0 pb-2 px-3">
-              <div className="space-y-2 text-xs">
-                {/* Call Event - Tool execution info */}
-                {showCallStatus && (
-                  <div className="text-foreground/80 italic">
-                    {callStatusMessage}
-                  </div>
+            <AccordionContent className="overflow-hidden">
+              <div
+                className={cn(
+                  "max-h-48 overflow-y-auto overflow-x-hidden",
+                  "border-t border-zinc-100 bg-zinc-50/80 p-3 text-xs text-zinc-700",
+                  "[scrollbar-width:thin]"
                 )}
-                {showCallSummary && (
-                  <div className="text-foreground/70 bg-white/30 dark:bg-neutral-900/30 rounded px-2 py-1.5 border border-neutral-200/50 dark:border-neutral-700/50">
-                    <StandaloneMarkdown
-                      text={callSummary}
-                      className="markdown-content break-words text-xs"
-                    />
-                  </div>
-                )}
-
-                {/* Result Event - Tool result */}
-                {showResultStatus && (
-                  <div className="text-foreground/90 font-medium">
-                    {resultStatusMessage}
-                  </div>
-                )}
-                {/* Streaming content (from stream_part) */}
-                {streamingContent && (
-                  <div className="text-foreground/90 bg-white/50 dark:bg-neutral-900/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
-                    {isToolCallStreaming && !isCompleted && (
-                      <span className="inline-block w-1 h-4 mr-1 bg-current animate-pulse" />
-                    )}
-                    <StandaloneMarkdown
-                      text={streamingContent}
-                      className="markdown-content break-words text-xs"
-                    />
-                  </div>
-                )}
-                {/* Result summary (from tool_call_details.summary) */}
-                {showResultSummary && (
-                  <div className="text-foreground/80 bg-white/30 dark:bg-neutral-900/30 rounded px-2 py-1.5 border border-neutral-200/50 dark:border-neutral-700/50">
-                    <StandaloneMarkdown
-                      text={resultSummary}
-                      className="markdown-content break-words text-xs"
-                    />
-                  </div>
+              >
+                {resultContent ? (
+                  <ToolResultContent result={resultContent} />
+                ) : (
+                  <span className="text-zinc-500">No output</span>
                 )}
               </div>
             </AccordionContent>
@@ -713,64 +548,98 @@ const CustomToolCall: ToolCallMessagePartComponent = ({
   );
 };
 
-// Wrapper for tool call that works outside MessagePrimitive.Parts context
-const InlineToolCall: FC<{ part: any }> = ({ part }) => {
-  // CustomToolCall uses useMessage() internally, so it should work
-  // We just need to ensure the part is in the message content
-  const ToolCallComponent = CustomToolCall as any;
 
-  return (
-    <div className="w-full my-4">
-      <ToolCallComponent
-        toolCallId={part.toolCallId}
-        toolName={part.toolName || "tool"}
-        argsText={part.argsText || ""}
-        result={part.result}
-      />
-    </div>
-  );
+const renderReasoningParagraphs = (text: string) => {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph, index) => (
+      <p key={`reasoning-paragraph-${index}`} className="leading-relaxed">
+        {paragraph}
+      </p>
+    ));
 };
 
-// Custom inline message content renderer - renders parts in order, interleaving tool calls with text
 const InlineMessageContent: FC = () => {
   const message = useMessage();
+  const parts = message.content;
+  const firstToolIndex = parts.findIndex((part) => part.type === "tool-call");
+
+  const reasoningText =
+    (
+      parts.find((part) => part.type === "reasoning") as
+        | { type: "reasoning"; text: string }
+        | undefined
+    )?.text ?? "";
+
+  const collectText = (predicate: (_: any, index: number) => boolean) =>
+    parts
+      .map((part, index) => ({ part, index }))
+      .filter(({ part, index }) => part.type === "text" && predicate(part, index))
+      .map(({ part }) =>
+        stripAssistantMarkers((part as any).text ?? "")
+      )
+      .filter((text) => text.trim())
+      .join("\n\n");
+
+  const initialText =
+    firstToolIndex === -1
+      ? collectText(() => true)
+      : collectText((_, index) => index < firstToolIndex);
+
+  const finalText =
+    firstToolIndex === -1
+      ? ""
+      : collectText((_, index) => index > firstToolIndex);
+
+  const toolCalls = parts.filter((part) => part.type === "tool-call") as any[];
 
   return (
-    <div className="inline-message-content">
-      {message.content.map((part, index) => {
-        if (part.type === "text") {
-          // Only render non-empty text segments
-          if (!part.text || !part.text.trim()) {
-            return null;
-          }
-          return (
-            <div key={`text-${index}`} className="w-full my-1">
-              <StandaloneMarkdown
-                text={part.text}
-                className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
-              />
-            </div>
-          );
-        } else if (part.type === "tool-call") {
-          const toolCallPart = part as any;
-          return (
-            <InlineToolCall
-              key={`tool-${toolCallPart.toolCallId}`}
-              part={toolCallPart}
+    <div className="inline-message-content space-y-4">
+      {reasoningText.trim() && (
+        <details className="group rounded-xl border border-neutral-200 bg-neutral-100/70">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm text-neutral-700 marker:content-['']">
+            <span className="flex items-center gap-2 font-medium">
+              <Lightbulb className="h-4 w-4 text-neutral-500" />
+              Think
+            </span>
+            <ChevronDown className="h-4 w-4 text-neutral-500 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="space-y-3 border-t border-neutral-200 px-4 py-4 text-[15px] text-neutral-700">
+            {renderReasoningParagraphs(reasoningText)}
+          </div>
+        </details>
+      )}
+
+      {initialText.trim() && (
+        <StandaloneMarkdown
+          text={initialText}
+          className="markdown-content break-words [&_p]:!my-2"
+        />
+      )}
+
+      {toolCalls.length > 0 && (
+        <div className="space-y-1">
+          {toolCalls.map((tool, index) => (
+            <CustomToolCall
+              key={`tool-call-${tool.toolCallId || index}`}
+              toolCallId={tool.toolCallId}
+              toolName={tool.toolName}
+              argsText={tool.argsText}
+              result={tool.result}
+              args={tool.args}
             />
-          );
-        } else if (part.type === "reasoning") {
-          // Reasoning parts are handled by MessagePrimitive.Parts
-          // We'll render them using the Reasoning component directly
-          const reasoningPart = part as any;
-          return (
-            <div key={`reasoning-${index}`} className="w-full my-2">
-              <Reasoning type="reasoning" text={reasoningPart.text || ""} />
-            </div>
-          );
-        }
-        return null;
-      })}
+          ))}
+        </div>
+      )}
+
+      {finalText.trim() && (
+        <StandaloneMarkdown
+          text={finalText}
+          className="markdown-content break-words [&_p]:!my-2"
+        />
+      )}
     </div>
   );
 };
@@ -808,21 +677,17 @@ const AssistantMessage: FC = () => {
   const message = useMessage();
   const threadRuntime = useThreadRuntime();
 
-  // Check if message is loading (has no text content yet) and thread is running
   const textContent = message.content.find((c) => c.type === "text");
-  const hasText =
-    textContent &&
-    textContent.type === "text" &&
-    textContent.text.trim().length > 0;
-
-  // Check if there are any tool calls (reasoning) in the message
+  const hasText = textContent?.type === "text" && textContent.text.trim().length > 0;
   const hasToolCalls = message.content.some((c) => c.type === "tool-call");
+  const hasReasoning = message.content.some((c) => c.type === "reasoning");
+  const hasAnyContent = hasText || hasToolCalls || hasReasoning;
 
-  const isRunning = threadRuntime.getState().isRunning;
   const isLastMessage = message.isLast;
+  const isRunning = isLastMessage && threadRuntime.getState().isRunning;
 
-  // Only show skeleton when running, no text, and no tool calls (no streaming has started)
-  const showSkeleton = isLastMessage && isRunning && !hasText && !hasToolCalls;
+  const showSkeleton = isLastMessage && isRunning && !hasAnyContent;
+  const showPulsatingDots = isLastMessage && isRunning && hasAnyContent;
 
   return (
     <motion.div
@@ -864,6 +729,19 @@ const AssistantMessage: FC = () => {
 
           {/* Render message content inline - tool calls appear between text segments */}
           <InlineMessageContent />
+
+          {/* Pulsating dots while streaming after content has started arriving */}
+          {showPulsatingDots && (
+            <div className="flex items-center gap-1.5 mt-4" role="status" aria-label="Agent is responding">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="h-2 w-2 rounded-full bg-foreground/30 animate-loading-dot"
+                  style={{ animationDelay: `${i * 0.16}s` }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         <AssistantActionBar />

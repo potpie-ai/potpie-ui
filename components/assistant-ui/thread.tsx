@@ -1,13 +1,11 @@
 import {
   ArrowDownIcon,
-  ArrowUpIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
   PencilIcon,
   RefreshCwIcon,
-  Square,
 } from "lucide-react";
 
 import {
@@ -17,6 +15,8 @@ import {
   ErrorPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useMessage,
+  useThreadRuntime,
 } from "@assistant-ui/react";
 
 import type { FC } from "react";
@@ -25,24 +25,36 @@ import * as m from "motion/react-m";
 
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Reasoning,
+  ReasoningGroup,
+} from "@/components/assistant-ui/reasoning";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import {
-  ComposerAddAttachment,
-  ComposerAttachments,
-  UserMessageAttachments,
-} from "@/components/assistant-ui/attachment";
+import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
+import MessageComposer from "@/app/(main)/chat/[chatId]/components/MessageComposer";
 
 import { cn } from "@/lib/utils";
 
-export const Thread: FC = () => {
+interface ThreadProps {
+  projectId?: string;
+  conversationId?: string;
+  writeDisabled?: boolean;
+}
+
+export const Thread: FC<ThreadProps> = ({
+  projectId = "",
+  conversationId = "",
+  writeDisabled = false,
+}) => {
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user">
         <ThreadPrimitive.Root
           className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
           style={{
-            ["--thread-max-width" as string]: "44rem",
+            ["--thread-max-width" as string]: "56rem",
           }}
         >
           <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
@@ -62,7 +74,11 @@ export const Thread: FC = () => {
               <div className="aui-thread-viewport-spacer min-h-8 grow" />
             </ThreadPrimitive.If>
 
-            <Composer />
+            <Composer
+              projectId={projectId}
+              conversationId={conversationId}
+              writeDisabled={writeDisabled}
+            />
           </ThreadPrimitive.Viewport>
         </ThreadPrimitive.Root>
       </MotionConfig>
@@ -170,59 +186,21 @@ const ThreadSuggestions: FC = () => {
   );
 };
 
-const Composer: FC = () => {
+const Composer: FC<{
+  projectId: string;
+  conversationId: string;
+  writeDisabled: boolean;
+}> = ({ projectId, conversationId, writeDisabled }) => {
   return (
-    <div className="aui-composer-wrapper sticky bottom-0 mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col gap-4 overflow-visible rounded-t-3xl bg-background pb-4 md:pb-6">
+    <div className="aui-composer-wrapper sticky bottom-0 z-20 mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col gap-4 overflow-visible rounded-t-3xl border-t border-border/60 bg-[#FFFDFC] opacity-100 pb-4 md:pb-6">
       <ThreadScrollToBottom />
-      <ComposerPrimitive.Root className="aui-composer-root group/input-group relative flex w-full flex-col rounded-3xl border border-input bg-background px-1 pt-2 shadow-xs transition-[color,box-shadow] outline-none has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-[3px] has-[textarea:focus-visible]:ring-ring/50 dark:bg-background">
-        <ComposerAttachments />
-        <ComposerPrimitive.Input
-          placeholder="Send a message..."
-          className="aui-composer-input mb-1 max-h-32 min-h-16 w-full resize-none bg-transparent px-3.5 pt-1.5 pb-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-0"
-          rows={1}
-          autoFocus
-          aria-label="Message input"
+      <ComposerPrimitive.Root className="aui-composer-root group/input-group relative flex w-full flex-col rounded-3xl border border-input bg-[#FFFDFC] px-1 pt-2 shadow-xs transition-[color,box-shadow] opacity-100 outline-none">
+        <MessageComposer
+          projectId={projectId}
+          disabled={writeDisabled}
+          conversation_id={conversationId}
         />
-        <ComposerAction />
       </ComposerPrimitive.Root>
-    </div>
-  );
-};
-
-const ComposerAction: FC = () => {
-  return (
-    <div className="aui-composer-action-wrapper relative mx-1 mt-2 mb-2 flex items-center justify-between">
-      <ComposerAddAttachment />
-
-      <ThreadPrimitive.If running={false}>
-        <ComposerPrimitive.Send asChild>
-          <TooltipIconButton
-            tooltip="Send message"
-            side="bottom"
-            type="submit"
-            variant="default"
-            size="icon"
-            className="aui-composer-send size-[34px] rounded-full p-1"
-            aria-label="Send message"
-          >
-            <ArrowUpIcon className="aui-composer-send-icon size-5" />
-          </TooltipIconButton>
-        </ComposerPrimitive.Send>
-      </ThreadPrimitive.If>
-
-      <ThreadPrimitive.If running>
-        <ComposerPrimitive.Cancel asChild>
-          <Button
-            type="button"
-            variant="default"
-            size="icon"
-            className="aui-composer-cancel size-[34px] rounded-full border border-muted-foreground/60 hover:bg-primary/75 dark:border-muted-foreground/90"
-            aria-label="Stop generating"
-          >
-            <Square className="aui-composer-cancel-icon size-3.5 fill-white dark:fill-black" />
-          </Button>
-        </ComposerPrimitive.Cancel>
-      </ThreadPrimitive.If>
     </div>
   );
 };
@@ -238,6 +216,22 @@ const MessageError: FC = () => {
 };
 
 const AssistantMessage: FC = () => {
+  const message = useMessage();
+  const threadRuntime = useThreadRuntime();
+
+  const textContent = message.content.find((c) => c.type === "text");
+  const hasText =
+    textContent?.type === "text" && textContent.text.trim().length > 0;
+  const hasToolCalls = message.content.some((c) => c.type === "tool-call");
+  const hasReasoning = message.content.some((c) => c.type === "reasoning");
+  const hasAnyContent = hasText || hasToolCalls || hasReasoning;
+
+  const isLastMessage = message.isLast;
+  const isRunning = isLastMessage && threadRuntime.getState().isRunning;
+
+  const showSkeleton = isLastMessage && isRunning && !hasAnyContent;
+  const showPulsatingDots = isLastMessage && isRunning && hasAnyContent;
+
   return (
     <MessagePrimitive.Root asChild>
       <div
@@ -245,9 +239,27 @@ const AssistantMessage: FC = () => {
         data-role="assistant"
       >
         <div className="aui-assistant-message-content mx-2 leading-7 break-words text-foreground">
+          {showSkeleton && (
+            <m.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{
+                duration: 0.2,
+                ease: "backInOut",
+                staggerChildren: 0.3,
+              }}
+            >
+              <Skeleton key={1} className="h-4 w-1/2 mb-2" />
+              <Skeleton key={2} className="h-4 w-1/2 mb-2" />
+              <Skeleton key={3} className="h-4 w-1/3" />
+            </m.div>
+          )}
+
           <MessagePrimitive.Parts
             components={{
               Text: MarkdownText,
+              Reasoning,
+              ReasoningGroup,
               tools: { Fallback: ToolFallback },
             }}
           />
@@ -256,6 +268,19 @@ const AssistantMessage: FC = () => {
 
         <div className="aui-assistant-message-footer mt-2 ml-2 flex">
           <BranchPicker />
+          <div className="flex items-center gap-1.5" aria-hidden={!showPulsatingDots}>
+            {showPulsatingDots && (
+              <>
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="h-2 w-2 rounded-full bg-foreground/30 animate-loading-dot"
+                    style={{ animationDelay: `${i * 0.16}s` }}
+                  />
+                ))}
+              </>
+            )}
+          </div>
           <AssistantActionBar />
         </div>
       </div>

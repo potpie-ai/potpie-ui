@@ -22,7 +22,7 @@ import Navbar from "./components/Navbar";
 import { list_system_agents } from "@/lib/utils";
 import { ParsingStatusEnum } from "@/lib/Constants";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "./components/Thread";
+import { Thread } from "@/components/assistant-ui/thread";
 import { useChatRuntime } from "./runtime";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -419,7 +419,7 @@ const ChatV2 = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-[#FAF8F7] dark:bg-background">
       <Navbar
         disableShare={!isCreator}
         showShare
@@ -429,12 +429,8 @@ const ChatV2 = () => {
         <AssistantRuntimeProvider runtime={runtime}>
           <Thread
             projectId={projectId}
+            conversationId={currentConversationId}
             writeDisabled={false}
-            userImageURL={profilePicUrl}
-            conversation_id={currentConversationId}
-            isSessionResuming={activeSession !== null}
-            isBackgroundTaskActive={isBackgroundTaskActive}
-            hasPendingMessage={!!pendingMessage && !hasSentPendingMessage.current}
           />
         </AssistantRuntimeProvider>
       </div>

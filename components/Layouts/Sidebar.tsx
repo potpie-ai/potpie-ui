@@ -9,10 +9,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { planTypesEnum, SidebarItems } from "@/lib/Constants";
+import { SidebarItems } from "@/lib/Constants";
 import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -20,33 +19,19 @@ import { cn } from "@/lib/utils";
 import React, { useEffect, useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 
 import { useQuery } from "@tanstack/react-query";
 import { clearChat } from "@/lib/state/Reducers/chat";
 import { authClient } from "@/lib/sso/unified-auth";
 import type { UserAccount } from "@/types/auth";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
-import { Skeleton } from "../ui/skeleton";
 import * as Progress from "@radix-ui/react-progress";
-import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
 import { Button } from "@/components/ui/button";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import formbricksApp from "@formbricks/js";
-import MinorService from "@/services/minorService";
-import dayjs from "dayjs";
-import { AppDispatch, RootState } from "@/lib/state/store";
-import {
-  setTotalHumanMessages,
-  setUserPlanType,
-} from "@/lib/state/Reducers/User";
+import MinorService, { CreditBalanceResponse } from "@/services/minorService";
+import { AppDispatch } from "@/lib/state/store";
 
 import { ProFeatureModal } from "./ProFeatureModal";
 import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
@@ -73,24 +58,14 @@ export function AppSidebar() {
   }, []);
 
   const userId = user?.uid;
-  const { total_human_messages } = useSelector(
-    (state: RootState) => state.UserInfo
-  );
-  const { data: userSubscription, isLoading: subscriptionLoading } = useQuery({
-    queryKey: ["userSubscription", userId],
-    queryFn: () => MinorService.fetchUserSubscription(userId as string),
+
+  // Fetch credit balance from Dodo (includes messages + recipes)
+  const { data: creditBalance, isLoading: creditLoading } = useQuery<CreditBalanceResponse | null>({
+    queryKey: ["creditBalance", userId],
+    queryFn: () => MinorService.fetchCreditBalance(userId as string),
     enabled: !!userId,
     retry: false,
-  });
-
-  const { data: userUsage, isLoading: usageLoading } = useQuery({
-    queryKey: ["userUsage", userId],
-    queryFn: () =>
-      MinorService.fetchUserUsage(
-        dayjs(userSubscription.end_date).subtract(30, "day").toISOString(),
-        userSubscription.end_date
-      ),
-    enabled: !!userId && !!userSubscription,
+    refetchInterval: 30000, // Refetch every 30 seconds to keep credits up to date
   });
 
   // Fetch account info from backend to get work email
@@ -105,18 +80,6 @@ export function AppSidebar() {
     retry: false,
   });
 
-  useEffect(() => {
-    if (!usageLoading) {
-      dispatch(setTotalHumanMessages(userUsage));
-    }
-  }, [usageLoading, dispatch, userUsage]);
-
-  // useEffect(() => {
-  //   if (!subscriptionLoading) {
-  //     dispatch(setUserPlanType(userSubscription.plan_type));
-  //   }
-  // }, [subscriptionLoading]);
-
   const redirectToNewChat = () => {
     dispatch(clearChat());
     dispatch(setBranchName(""));
@@ -124,11 +87,12 @@ export function AppSidebar() {
     window.location.href = "/newchat";
   };
 
-  const maxCredits =
-    userSubscription?.plan_type === planTypesEnum.PRO ? 500 : 50;
-  const usedCredits = total_human_messages ?? 0;
+  // Use credit balance from Dodo (fetched from backend which gets it from Dodo API)
+  const maxCredits = creditBalance?.credits_total ?? 50;
+  const usedCredits = creditBalance?.credits_used ?? 0;
   const creditProgress =
     maxCredits > 0 ? Math.min((usedCredits / maxCredits) * 100, 100) : 0;
+  const planType = creditBalance?.plan_type ?? "free";
 
   const handleTrack = () => {
     formbricksApp.track("report-btn", {
@@ -292,11 +256,11 @@ export function AppSidebar() {
           <ChatHistoryPanel />
         </div>
       </SidebarContent>
-      {!subscriptionLoading && userSubscription && open && (
+      {!creditLoading && open && (
         <div className="px-4 pt-3 pb-3">
           <div className="bg-white rounded-lg border border-zinc-200 p-3">
             <p className="text-sm font-medium text-emerald-950 mb-1">
-              {userSubscription?.plan_type === planTypesEnum.PRO ? "Pro Plan" : "Free Plan"}
+              {planType === "pro" ? "Pro Plan" : "Free Plan"}
             </p>
             <div className="flex items-center justify-between gap-2 mb-2">
               <span className="text-xs text-zinc-500">Credits used</span>

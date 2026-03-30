@@ -256,6 +256,22 @@ const upsertStreamingToolCall = (
                 : JSON.stringify(rawArgs ?? {}, null, 2),
       } as StreamingToolCallPart);
 
+    const normalizedEventType =
+      typeof event_type === "string" ? event_type.toLowerCase() : "";
+    const isDeltaEvent = normalizedEventType.includes("delta");
+    const previousEventType = (previous.streamState as ToolCallResult | undefined)
+      ?.event_type;
+    const previousWasDelta =
+      typeof previousEventType === "string"
+        ? previousEventType.toLowerCase().includes("delta")
+        : false;
+    const shouldAccumulateDelta =
+      isDeltaEvent &&
+      typeof streamPart === "string" &&
+      streamPart.trim().length > 0 &&
+      isComplete !== true;
+    const resetOnFirstDelta = shouldAccumulateDelta && !previousWasDelta;
+
     const argsValue =
       rawArgs === undefined
         ? command
@@ -270,11 +286,15 @@ const upsertStreamingToolCall = (
         ? command
           ? command
           : streamPart
-            ? (hadEntry && typeof previous.argsText === "string"
-                ? previous.argsText === "{}"
+            ? (shouldAccumulateDelta
+                ? resetOnFirstDelta
                   ? streamPart
-                  : previous.argsText + streamPart
-                : streamPart)
+                  : hadEntry && typeof previous.argsText === "string"
+                    ? previous.argsText === "{}"
+                      ? streamPart
+                      : previous.argsText + streamPart
+                    : streamPart
+                : previous.argsText)
             : previous.argsText
         : typeof rawArgs === "string"
           ? rawArgs
@@ -287,8 +307,11 @@ const upsertStreamingToolCall = (
         ? (previous.streamState as ToolCallResult).accumulated_stream_part
         : "";
 
-    const accumulated_stream_part =
-      (previousAccumulated ?? "") + (streamPart ?? "");
+    const accumulated_stream_part = shouldAccumulateDelta
+      ? resetOnFirstDelta
+        ? streamPart ?? previousAccumulated
+        : (previousAccumulated ?? "") + (streamPart ?? "")
+      : previousAccumulated;
 
     const latestToolResponse =
       trimToNonEmpty(tool_response) ??
@@ -310,8 +333,7 @@ const upsertStreamingToolCall = (
       details: tool_call_details,
       is_complete: isComplete,
       stream_part: streamPart,
-      accumulated_stream_part:
-        streamPart != null ? accumulated_stream_part : previousAccumulated,
+      accumulated_stream_part: accumulated_stream_part,
       latest_tool_response: latestToolResponse ?? undefined,
       derived_preview: derivedPreview ?? undefined,
       preview_text: previewText,

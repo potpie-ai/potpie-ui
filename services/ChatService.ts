@@ -274,6 +274,7 @@ export default class ChatService {
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -282,34 +283,20 @@ export default class ChatService {
                   String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
               );
               currentMessage += messageWithEmojis;
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations
-              );
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
-              // DEBUG: Log raw tool calls from backend (resume)
-              console.log(
-                "[SubAgent Stream] Raw tool_calls received (resume):",
-                {
-                  count: data.tool_calls.length,
-                  tool_calls: data.tool_calls,
-                  full_data: data,
-                }
-              );
-
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations
-              );
+              didUpdate = true;
             }
 
             if (data.citations !== undefined) {
               currentCitations = data.citations;
+              didUpdate = true;
+            }
+
+            if (didUpdate) {
               onMessageUpdate(
                 currentMessage,
                 currentToolCalls,
@@ -428,6 +415,7 @@ export default class ChatService {
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -449,12 +437,12 @@ export default class ChatService {
               if (thinkingSegment) {
                 currentThinking = `${currentThinking ?? ""}${thinkingSegment}`;
               }
-              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
+              didUpdate = true;
             }
 
             if (data.thinking !== undefined) {
@@ -463,8 +451,12 @@ export default class ChatService {
               );
               if (normalizedThinking !== null) {
                 currentThinking = `${currentThinking ?? ""}${normalizedThinking}`;
-                onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
+                didUpdate = true;
               }
+            }
+
+            if (didUpdate) {
+              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
             }
           } catch (e) {
             const extracted = ChatService.extractJsonObjects(jsonStr);
@@ -687,6 +679,7 @@ export default class ChatService {
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -706,42 +699,17 @@ export default class ChatService {
               if (thinkingSegment) {
                 currentThinking = `${currentThinking ?? ""}${thinkingSegment}`;
               }
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations,
-                currentThinking
-              );
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
-              // DEBUG: Log raw tool calls from backend (streamMessage)
-              console.log(
-                "[SubAgent Stream] Raw tool_calls received (stream):",
-                {
-                  count: data.tool_calls.length,
-                  tool_calls: data.tool_calls,
-                  full_data: data,
-                }
-              );
-
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations,
-                currentThinking
-              );
+              didUpdate = true;
             }
 
             if (data.citations !== undefined) {
               currentCitations = data.citations;
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations,
-                currentThinking
-              );
+              didUpdate = true;
             }
 
             if (data.thinking !== undefined) {
@@ -750,13 +718,17 @@ export default class ChatService {
               );
               if (normalizedThinking !== null) {
                 currentThinking = `${currentThinking ?? ""}${normalizedThinking}`;
-                onMessageUpdate(
-                  currentMessage,
-                  currentToolCalls,
-                  currentCitations,
-                  currentThinking
-                );
+                didUpdate = true;
               }
+            }
+
+            if (didUpdate) {
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations,
+                currentThinking
+              );
             }
           } catch (e) {
             // Try to recover by extracting multiple JSON objects
@@ -1031,6 +1003,7 @@ export default class ChatService {
 
         try {
           const data = JSON.parse(jsonStr);
+          let didUpdate = false;
 
           if (data.message !== undefined) {
             const messageWithEmojis = data.message.replace(
@@ -1039,16 +1012,20 @@ export default class ChatService {
                 String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
             );
             currentMessage += messageWithEmojis;
-            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            didUpdate = true;
           }
 
           if (data.tool_calls !== undefined) {
             currentToolCalls.push(...data.tool_calls);
-            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            didUpdate = true;
           }
 
           if (data.citations !== undefined) {
             currentCitations = data.citations;
+            didUpdate = true;
+          }
+
+          if (didUpdate) {
             onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
           }
         } catch (e) {

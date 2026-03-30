@@ -15,6 +15,7 @@ import {
   useRef,
   type FC,
   useCallback,
+  memo,
 } from "react";
 import {
   AlertTriangle,
@@ -104,19 +105,23 @@ export const Thread: FC<ThreadProps> = ({
       });
     }, 10000);
 
+    let innerTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
     // Subscribe to runtime changes
     const unsubscribe = runtime.subscribe(() => {
       const nextState = runtime.getState();
 
       if (Array.isArray(nextState.messages) && nextState.messages.length > 0) {
         clearTimeout(timeoutId);
+        clearTimeout(innerTimeoutId);
         setIsInitialLoading(false);
         unsubscribe();
         return;
       }
 
       if (Array.isArray(nextState.messages) && nextState.messages.length === 0) {
-        setTimeout(() => {
+        clearTimeout(innerTimeoutId);
+        innerTimeoutId = setTimeout(() => {
           const finalState = runtime.getState();
           if (Array.isArray(finalState.messages) && finalState.messages.length === 0) {
             if (hasPendingMessage) {
@@ -132,6 +137,7 @@ export const Thread: FC<ThreadProps> = ({
 
     return () => {
       clearTimeout(timeoutId);
+      clearTimeout(innerTimeoutId);
       unsubscribe();
     };
   }, [runtime, hasPendingMessage]);
@@ -315,17 +321,22 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
 
 const ThreadScrollToBottom: FC = () => {
   const threadRuntime = useThreadRuntime();
-  const [showButton, setShowButton] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const rafIdRef = useRef<number | null>(null);
 
   const checkScrollPosition = useCallback(() => {
-    const viewport = document.querySelector(".thread-viewport");
-    if (!viewport) return;
+    if (rafIdRef.current !== null) return;
 
-    const { scrollTop, scrollHeight, clientHeight } = viewport as HTMLElement;
-    const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 20;
-    setIsAtBottom(isBottom);
-    setShowButton(!isBottom);
+    rafIdRef.current = window.requestAnimationFrame(() => {
+      rafIdRef.current = null;
+
+      const viewport = document.querySelector(".thread-viewport");
+      if (!viewport) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = viewport as HTMLElement;
+      const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 20;
+      setIsAtBottom(isBottom);
+    });
   }, []);
 
   useEffect(() => {
@@ -333,7 +344,13 @@ const ThreadScrollToBottom: FC = () => {
     if (!viewport) return;
 
     viewport.addEventListener("scroll", checkScrollPosition);
-    return () => viewport.removeEventListener("scroll", checkScrollPosition);
+    return () => {
+      viewport.removeEventListener("scroll", checkScrollPosition);
+      if (rafIdRef.current !== null) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
   }, [checkScrollPosition]);
 
   const scrollToBottom = () => {
@@ -346,7 +363,7 @@ const ThreadScrollToBottom: FC = () => {
     });
   };
 
-  if (!showButton) return null;
+  if (isAtBottom) return null;
 
   return (
     <button
@@ -379,7 +396,7 @@ interface ToolCallStreamState {
   preview_text?: string;
 }
 
-const CustomToolCall = ({
+const CustomToolCall = memo(({
   toolCallId,
   toolName,
   argsText,
@@ -546,7 +563,9 @@ const CustomToolCall = ({
       )}
     </motion.div>
   );
-};
+});
+
+CustomToolCall.displayName = "CustomToolCall";
 
 
 const renderReasoningParagraphs = (text: string) => {
@@ -561,7 +580,7 @@ const renderReasoningParagraphs = (text: string) => {
     ));
 };
 
-const InlineMessageContent: FC = () => {
+const InlineMessageContent = memo(() => {
   const message = useMessage();
   const parts = message.content;
   const firstToolIndex = parts.findIndex((part) => part.type === "tool-call");
@@ -642,7 +661,9 @@ const InlineMessageContent: FC = () => {
       )}
     </div>
   );
-};
+});
+
+InlineMessageContent.displayName = "InlineMessageContent";
 
 // Custom ToolGroup component - renders tool calls inline with message content
 // This is kept for compatibility but should not be used with InlineMessageContent

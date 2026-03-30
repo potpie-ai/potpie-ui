@@ -433,42 +433,7 @@ const MessageComposer = ({
   };
 
   return (
-    <>
-      {validationError && (
-        <ValidationErrorModal
-          open={!!validationError}
-          onClose={handleCloseValidationModal}
-          validation={validationError.validation}
-          fileName={validationError.file.name}
-          fileSize={validationError.file.size}
-          onViewAttachments={() => {
-            handleCloseValidationModal();
-            if (documents.length > 0) {
-              containerRef.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }
-          }}
-          onChangeModel={() => {
-            handleCloseValidationModal();
-            requestAnimationFrame(() => {
-              const modelTrigger = document.querySelector(
-                "[data-model-selector-trigger]"
-              ) as HTMLButtonElement | null;
-              if (modelTrigger && !modelTrigger.hasAttribute("disabled")) {
-                modelTrigger.click();
-              } else {
-                toast.info(
-                  "Open the model selector (model name next to the send button) to switch to a model with a larger context window."
-                );
-              }
-            });
-          }}
-        />
-      )}
-
-      <div className="flex flex-col w-full p-2">
+    <div className="flex flex-col w-full p-2">
         {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
 
         {selectedNodes.length > 0 && (
@@ -497,135 +462,38 @@ const MessageComposer = ({
 
         <div
           ref={containerRef}
-          className="flex flex-col w-full items-start gap-4"
+          className="flex flex-col w-full items-start gap-4 outline-none"
           tabIndex={0}
-          style={{ outline: "none" }}
         >
           {isMultimodalEnabled() && <ComposerAttachments />}
 
-          {documents.length > 0 && (
-            <div className="w-max max-w-sm px-4 space-y-2">
-              <div className="text-xs font-medium text-gray-600">
-                Documents ({documents.length})
-              </div>
-              {documents.map((doc, index) => (
-                <DocumentAttachmentCard
-                  key={doc.id}
-                  attachment={doc}
-                  onRemove={() => handleRemoveDocument(index)}
-                  onDownload={() => {
-                    ChatService.downloadAttachment(doc.id, doc.file_name);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          {validating && (
-            <div className="w-max max-w-sm px-4 py-2 text-sm text-gray-600 flex items-center gap-2">
-              <Loader2Icon className="w-4 h-4 animate-spin" />
-              <span>Validating document...</span>
-            </div>
-          )}
-
-          {uploadingDocument && (
-            <div className="w-max max-w-sm px-4 py-2">
-              <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
-                <div className="flex items-center gap-2">
-                  <Loader2Icon className="w-4 h-4 animate-spin" />
-                  <span>Uploading... {uploadProgress}%</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCancelUpload}
-                  className="text-xs text-red-500 hover:text-red-700 hover:underline"
-                >
-                  Cancel
-                </button>
-              </div>
-              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden min-w-[140px]">
-                <div
-                  className="h-full bg-blue-500 transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
           <div className="flex flex-row w-full items-end gap-2">
-            <div className="flex items-center pb-4 gap-2">
-              <input
-                type="file"
-                ref={documentInputRef}
-                onChange={async (e) => {
-                  const files = e.target.files;
-                  if (!files || files.length === 0) return;
-
-                  const file = files[0];
-                  if (isImageTypeByFile(file)) {
-                    if (isMultimodalEnabled()) {
-                      await composer.addAttachment(file);
-                    } else {
-                      toast.info("Image upload is not available in this chat.");
-                    }
-                  } else if (isDocumentTypeByFile(file)) {
-                    void handleDocumentSelect(files);
-                  } else {
-                    toast.error("Unsupported file type", {
-                      description:
-                        "Supported: images (JPEG, PNG, WebP, GIF), documents (PDF, DOCX, CSV, code files, etc.).",
-                    });
-                  }
-
-                  e.target.value = "";
-                }}
-                accept={getSupportedFileExtensions()}
-                multiple={false}
-                className="hidden"
+            {isMultimodalEnabled() && (
+              <div className="flex items-center pb-4">
+                <ComposerAddAttachment />
+              </div>
+            )}
+            <div className="w-full">
+              <ComposerPrimitive.Input
+                submitOnEnter={!isDisabled}
+                ref={textareaRef}
+                value={message}
+                rows={1}
+                autoFocus
+                placeholder="Type @ followed by file or function name, or paste/upload images"
+                onChange={handleMessageChange}
+                onKeyDown={handleKeyPress}
+                disabled={isDisabled}
+                className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
               />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="size-8 p-2 transition-opacity ease-in hover:bg-gray-100 rounded-md flex items-center justify-center"
-                      onClick={() => documentInputRef.current?.click()}
-                      aria-label="Attach file (image or document)"
-                    >
-                      <Paperclip className="w-4 h-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Attach file (image or document)</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
-
-            <ComposerPrimitive.Input
-              submitOnEnter={!isDisabled}
-              ref={textareaRef}
-              value={message}
-              rows={1}
-              autoFocus
-              placeholder="Type @ followed by file or function name, or paste/upload images"
-              onChange={handleMessageChange}
-              onKeyDown={handleKeyPress}
-              disabled={isDisabled}
-              className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
-            />
           </div>
 
-          <div className="flex items-center justify-between w-full">
-            <ContextUsageIndicator
-              conversationId={conversation_id}
-              refreshTrigger={contextRefreshTrigger}
-            />
+          <div className="flex items-center justify-end w-full">
             <ComposerAction disabled={isDisabled} />
           </div>
         </div>
-      </div>
-    </>
+    </div>
   );
 };
 

@@ -1,19 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle, FileText, ExternalLink } from "lucide-react";
-import MinorService from "@/services/minorService";
+import MinorService, { CreditBalanceResponse } from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
+
+interface SubscriptionInfo {
+  type: string;
+  subscription_id?: string;
+  status?: string;
+}
 
 export default function PaymentSuccessPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuthContext();
   const [portalLoading, setPortalLoading] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [creditBalance, setCreditBalance] = useState<CreditBalanceResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const subscriptionId = searchParams.get("subscription_id");
   const status = searchParams.get("status");
+
+  useEffect(() => {
+    const fetchSubscriptionDetails = async () => {
+      if (!user?.uid) return;
+
+      try {
+        const [subData, creditData] = await Promise.all([
+          MinorService.fetchUserSubscription(user.uid),
+          MinorService.fetchCreditBalance(user.uid)
+        ]);
+        setSubscription(subData);
+        setCreditBalance(creditData);
+      } catch (error) {
+        console.error("Error fetching subscription details:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSubscriptionDetails();
+  }, [user?.uid]);
 
   const handleOpenPortal = async () => {
     if (!user?.uid) return;
@@ -41,33 +71,37 @@ export default function PaymentSuccessPage() {
         </div>
 
         <h1 className="text-2xl font-bold text-[#285848] mb-2">
-          You&apos;re on Pro!
+          You&apos;re on {subscription?.type === "pro" ? "Pro" : subscription?.type ? subscription.type.charAt(0).toUpperCase() + subscription.type.slice(1) : "Pro"}!
         </h1>
         <p className="text-gray-500 mb-8">
-          Your subscription is active. You now have access to all Pro features.
+          Your subscription is active. You now have access to all {subscription?.type === "pro" ? "Pro" : "plan"} features.
         </p>
 
         {/* Plan details */}
         <div className="bg-gray-50 rounded-xl p-5 mb-6 text-left space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Plan</span>
-            <span className="font-semibold text-[#285848]">Individual - Pro</span>
+            <span className="font-semibold text-[#285848]">
+              {loading ? "Loading..." : subscription?.type ? `Individual - ${subscription.type.charAt(0).toUpperCase() + subscription.type.slice(1)}` : "Individual - Pro"}
+            </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Credits</span>
-            <span className="font-semibold text-[#285848]">500 / month</span>
+            <span className="font-semibold text-[#285848]">
+              {loading ? "Loading..." : creditBalance ? `${creditBalance.credits_available} / ${creditBalance.credits_total}` : "500 / month"}
+            </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Status</span>
             <span className="font-semibold text-green-600 capitalize">
-              {status || "active"}
+              {status || subscription?.status || "active"}
             </span>
           </div>
-          {subscriptionId && (
+          {(subscriptionId || subscription?.subscription_id) && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Subscription ID</span>
               <span className="font-mono text-xs text-gray-600 truncate max-w-[180px]">
-                {subscriptionId}
+                {subscriptionId || subscription?.subscription_id}
               </span>
             </div>
           )}

@@ -31,6 +31,72 @@ export interface LoadedMessage {
 }
 
 export default class ChatService {
+  private static readonly THINK_OPEN_TAG = "<think>";
+  private static readonly THINK_CLOSE_TAG = "</think>";
+
+  private static normalizeThinkingField(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    if (!value || value === "None") return null;
+    return value;
+  }
+
+  private static getSafeStreamSplitIndex(input: string, marker: string): number {
+    const maxCandidateLength = Math.min(marker.length - 1, input.length);
+    for (let i = maxCandidateLength; i > 0; i--) {
+      if (input.endsWith(marker.slice(0, i))) {
+        return input.length - i;
+      }
+    }
+    return input.length;
+  }
+
+  private static parseThinkTaggedChunk(
+    chunk: string,
+    state: { insideThinkBlock: boolean; pendingTagBuffer: string }
+  ): { messageSegment: string; thinkingSegment: string } {
+    let input = `${state.pendingTagBuffer}${chunk}`;
+    state.pendingTagBuffer = "";
+
+    let messageSegment = "";
+    let thinkingSegment = "";
+
+    while (input.length > 0) {
+      if (state.insideThinkBlock) {
+        const closeIdx = input.indexOf(ChatService.THINK_CLOSE_TAG);
+        if (closeIdx === -1) {
+          const splitIdx = ChatService.getSafeStreamSplitIndex(
+            input,
+            ChatService.THINK_CLOSE_TAG
+          );
+          thinkingSegment += input.slice(0, splitIdx);
+          state.pendingTagBuffer = input.slice(splitIdx);
+          break;
+        }
+
+        thinkingSegment += input.slice(0, closeIdx);
+        input = input.slice(closeIdx + ChatService.THINK_CLOSE_TAG.length);
+        state.insideThinkBlock = false;
+      } else {
+        const openIdx = input.indexOf(ChatService.THINK_OPEN_TAG);
+        if (openIdx === -1) {
+          const splitIdx = ChatService.getSafeStreamSplitIndex(
+            input,
+            ChatService.THINK_OPEN_TAG
+          );
+          messageSegment += input.slice(0, splitIdx);
+          state.pendingTagBuffer = input.slice(splitIdx);
+          break;
+        }
+
+        messageSegment += input.slice(0, openIdx);
+        input = input.slice(openIdx + ChatService.THINK_OPEN_TAG.length);
+        state.insideThinkBlock = true;
+      }
+    }
+
+    return { messageSegment, thinkingSegment };
+  }
+
   private static extractJsonObjects(input: string): {
     objects: string[];
     remaining: string;
@@ -208,6 +274,7 @@ export default class ChatService {
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -216,34 +283,20 @@ export default class ChatService {
                   String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
               );
               currentMessage += messageWithEmojis;
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations
-              );
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
-              // DEBUG: Log raw tool calls from backend (resume)
-              console.log(
-                "[SubAgent Stream] Raw tool_calls received (resume):",
-                {
-                  count: data.tool_calls.length,
-                  tool_calls: data.tool_calls,
-                  full_data: data,
-                }
-              );
-
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations
-              );
+              didUpdate = true;
             }
 
             if (data.citations !== undefined) {
               currentCitations = data.citations;
+              didUpdate = true;
+            }
+
+            if (didUpdate) {
               onMessageUpdate(
                 currentMessage,
                 currentToolCalls,
@@ -351,6 +404,10 @@ export default class ChatService {
       let currentToolCalls: any[] = [];
       let currentThinking: string | null = null;
       let buffer = "";
+      const thinkParserState = {
+        insideThinkBlock: false,
+        pendingTagBuffer: "",
+      };
 
       if (reader) {
         const processJsonSegment = (jsonStr: string) => {
@@ -358,6 +415,7 @@ export default class ChatService {
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -367,17 +425,37 @@ export default class ChatService {
                     parseInt(match.replace(/\\u/g, ""), 16)
                   )
               );
-              currentMessage += messageWithEmojis;
-              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
+              const { messageSegment, thinkingSegment } =
+                ChatService.parseThinkTaggedChunk(
+                  messageWithEmojis,
+                  thinkParserState
+                );
+
+              if (messageSegment) {
+                currentMessage += messageSegment;
+              }
+              if (thinkingSegment) {
+                currentThinking = `${currentThinking ?? ""}${thinkingSegment}`;
+              }
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
+              didUpdate = true;
             }
 
             if (data.thinking !== undefined) {
-              currentThinking = data.thinking ?? null;
+              const normalizedThinking = ChatService.normalizeThinkingField(
+                data.thinking
+              );
+              if (normalizedThinking !== null) {
+                currentThinking = `${currentThinking ?? ""}${normalizedThinking}`;
+                didUpdate = true;
+              }
+            }
+
+            if (didUpdate) {
               onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
             }
           } catch (e) {
@@ -428,6 +506,16 @@ export default class ChatService {
           const extracted = ChatService.extractJsonObjects(buffer);
           buffer = extracted.remaining;
           extracted.objects.forEach(processJsonSegment);
+
+          if (thinkParserState.pendingTagBuffer) {
+            if (thinkParserState.insideThinkBlock) {
+              currentThinking = `${currentThinking ?? ""}${thinkParserState.pendingTagBuffer}`;
+            } else {
+              currentMessage += thinkParserState.pendingTagBuffer;
+            }
+            thinkParserState.pendingTagBuffer = "";
+            onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
+          }
 
           if (buffer.trim()) {
             console.warn("Unprocessed JSON buffer after resumeWithCursor stream end:", buffer);
@@ -581,12 +669,17 @@ export default class ChatService {
         let currentToolCalls: any[] = [];
         let currentThinking: string | null = null;
         let buffer = ""; // Buffer for incomplete JSON chunks
+        const thinkParserState = {
+          insideThinkBlock: false,
+          pendingTagBuffer: "",
+        };
 
         const processJsonSegment = (jsonStr: string) => {
           if (!jsonStr) return;
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -594,47 +687,42 @@ export default class ChatService {
                 (match: string) =>
                   String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
               );
-              currentMessage += messageWithEmojis;
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations,
-                currentThinking
-              );
+              const { messageSegment, thinkingSegment } =
+                ChatService.parseThinkTaggedChunk(
+                  messageWithEmojis,
+                  thinkParserState
+                );
+
+              if (messageSegment) {
+                currentMessage += messageSegment;
+              }
+              if (thinkingSegment) {
+                currentThinking = `${currentThinking ?? ""}${thinkingSegment}`;
+              }
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
-              // DEBUG: Log raw tool calls from backend (streamMessage)
-              console.log(
-                "[SubAgent Stream] Raw tool_calls received (stream):",
-                {
-                  count: data.tool_calls.length,
-                  tool_calls: data.tool_calls,
-                  full_data: data,
-                }
-              );
-
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations,
-                currentThinking
-              );
+              didUpdate = true;
             }
 
             if (data.citations !== undefined) {
               currentCitations = data.citations;
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations,
-                currentThinking
-              );
+              didUpdate = true;
             }
 
             if (data.thinking !== undefined) {
-              currentThinking = data.thinking ?? null;
+              const normalizedThinking = ChatService.normalizeThinkingField(
+                data.thinking
+              );
+              if (normalizedThinking !== null) {
+                currentThinking = `${currentThinking ?? ""}${normalizedThinking}`;
+                didUpdate = true;
+              }
+            }
+
+            if (didUpdate) {
               onMessageUpdate(
                 currentMessage,
                 currentToolCalls,
@@ -692,6 +780,21 @@ export default class ChatService {
             const extracted = ChatService.extractJsonObjects(buffer);
             buffer = extracted.remaining;
             extracted.objects.forEach(processJsonSegment);
+
+            if (thinkParserState.pendingTagBuffer) {
+              if (thinkParserState.insideThinkBlock) {
+                currentThinking = `${currentThinking ?? ""}${thinkParserState.pendingTagBuffer}`;
+              } else {
+                currentMessage += thinkParserState.pendingTagBuffer;
+              }
+              thinkParserState.pendingTagBuffer = "";
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations,
+                currentThinking
+              );
+            }
 
             if (buffer.trim()) {
               console.warn("Unprocessed JSON buffer after stream end:", buffer);
@@ -900,6 +1003,7 @@ export default class ChatService {
 
         try {
           const data = JSON.parse(jsonStr);
+          let didUpdate = false;
 
           if (data.message !== undefined) {
             const messageWithEmojis = data.message.replace(
@@ -908,16 +1012,20 @@ export default class ChatService {
                 String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
             );
             currentMessage += messageWithEmojis;
-            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            didUpdate = true;
           }
 
           if (data.tool_calls !== undefined) {
             currentToolCalls.push(...data.tool_calls);
-            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            didUpdate = true;
           }
 
           if (data.citations !== undefined) {
             currentCitations = data.citations;
+            didUpdate = true;
+          }
+
+          if (didUpdate) {
             onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
           }
         } catch (e) {

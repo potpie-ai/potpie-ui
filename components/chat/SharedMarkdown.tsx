@@ -20,7 +20,7 @@ export const SharedMarkdown: FC<SharedMarkdownProps> = ({
   return (
     <div className="min-w-0 max-w-full overflow-hidden">
       <ReactMarkdown
-        className={cn("markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink min-w-0 max-w-full", className)}
+        className={cn("markdown-content break-words break-before-avoid [&_p]:!leading-relaxed [&_p]:!my-2 [&_li]:!my-1 animate-blink min-w-0 max-w-full", className)}
         components={{
           p: ({ children }) => <p className="text-slate-900 break-words overflow-hidden" style={{ overflowWrap: "anywhere" }}>{children}</p>,
           pre: ({ children }) => {

@@ -396,6 +396,28 @@
   word-break: break-all;
 }
 
+/* Markdown table styles (used by ReactMarkdown output) */
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--border-light);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.markdown-content th {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
 /* All direct children should respect parent bounds */
 .markdown-content>* {
   max-width: 100%;

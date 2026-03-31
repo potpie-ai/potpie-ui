@@ -97,7 +97,7 @@ const LinkComponent: FC<{
 
 // Inline code component
 const InlineCode: FC<{ children?: ReactNode }> = ({ children }) => (
-  <code className="bg-green-200 rounded px-1 text-sm font-medium text-slate-900">
+  <code className="bg-gray-300/60 rounded px-1 text-sm font-medium text-slate-900">
     {children}
   </code>
 );
@@ -107,7 +107,7 @@ const MarkdownTextPrimitiveWrapper: TextMessagePartComponent = () => {
   return (
     <MarkdownTextPrimitive
       remarkPlugins={[remarkGfm]}
-      className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"
+      className="markdown-content break-words break-before-avoid [&_p]:!leading-relaxed [&_p]:!my-2 [&_li]:!my-1"
       components={{
         p: ({ children }: { children?: ReactNode }) => (
           <p className="text-slate-900">{children}</p>
@@ -141,7 +141,7 @@ const StandaloneMarkdownImpl: FC<StandaloneMarkdownProps> = ({ text, className }
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      className={className || "markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5"}
+      className={className || "markdown-content break-words break-before-avoid [&_p]:!leading-relaxed [&_p]:!my-2 [&_li]:!my-1"}
       components={{
         p: ({ children }) => <p className="text-slate-900">{children}</p>,
         a: ({ href, children }) => (

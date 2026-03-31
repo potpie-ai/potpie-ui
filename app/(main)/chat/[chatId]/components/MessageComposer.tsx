@@ -292,7 +292,7 @@ const MessageComposer = ({
 
   const NodeSelection = () => {
     return (
-      <div className="max-h-40 overflow-scroll border-2 rounded-sm border-gray-400/40">
+      <div className="max-h-40 overflow-scroll rounded-lg border border-gray-200 bg-[#FFFDFC] shadow-lg">
         <ul>
           {isSearchingNode ? (
             <Skeleton className="w-full h-20 m-4" />
@@ -433,65 +433,66 @@ const MessageComposer = ({
   };
 
   return (
-    <div className="flex flex-col w-full py-2 bg-white rounded-lg">
-      {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
+    <div className="flex flex-col w-full p-2">
+        {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
 
-      {selectedNodes.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-2">
-          <span className="text-xs uppercase tracking-wide text-muted-foreground">
-            Context
-          </span>
-          {selectedNodes.map((node) => (
-            <span
-              key={node.node_id}
-              className="flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-800 shadow-sm"
-            >
-              {node.name}
-              <button
-                type="button"
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-background/80 text-rose-600 transition hover:bg-background hover:text-rose-800"
-                onClick={() => handleNodeDeselect(node)}
-                aria-label={`Remove ${node.name}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
+        {selectedNodes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+              Context
             </span>
-          ))}
-        </div>
-      )}
+            {selectedNodes.map((node) => (
+              <span
+                key={node.node_id}
+                className="flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-800 shadow-sm"
+              >
+                {node.name}
+                <button
+                  type="button"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-rose-600 transition hover:bg-white hover:text-rose-800"
+                  onClick={() => handleNodeDeselect(node)}
+                  aria-label={`Remove ${node.name}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
-      <div
-        ref={containerRef}
-        className="flex flex-col w-full items-start gap-4 outline-none"
-        tabIndex={0}
-      >
-        {/* Attachment Previews - using assistant-ui components */}
-        {isMultimodalEnabled() && <ComposerAttachments />}
+        <div
+          ref={containerRef}
+          className="flex flex-col w-full items-start gap-4 outline-none"
+          tabIndex={0}
+        >
+          {isMultimodalEnabled() && <ComposerAttachments />}
 
-        <div className="flex flex-row w-full items-end gap-2">
-          {/* Attachment Button - using assistant-ui component */}
-          {isMultimodalEnabled() && (
-            <div className="flex items-center pb-4">
-              <ComposerAddAttachment />
+          <div className="flex flex-row w-full items-end gap-2">
+            {isMultimodalEnabled() && (
+              <div className="flex items-center pb-4">
+                <ComposerAddAttachment />
+              </div>
+            )}
+            <div className="w-full">
+              <ComposerPrimitive.Input
+                submitOnEnter={!isDisabled}
+                ref={textareaRef}
+                value={message}
+                rows={1}
+                autoFocus
+                placeholder="Type @ followed by file or function name, or paste/upload images"
+                onChange={handleMessageChange}
+                onKeyDown={handleKeyPress}
+                disabled={isDisabled}
+                className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+              />
             </div>
-          )}
+          </div>
 
-          <ComposerPrimitive.Input
-            submitOnEnter={!isDisabled}
-            ref={textareaRef}
-            value={message}
-            rows={1}
-            autoFocus
-            placeholder="Type @ followed by file or function name, or paste/upload images"
-            onChange={handleMessageChange}
-            onKeyDown={handleKeyPress}
-            disabled={isDisabled}
-            className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
-          />
+          <div className="flex items-center justify-end w-full">
+            <ComposerAction disabled={isDisabled} />
+          </div>
         </div>
-
-        <ComposerAction disabled={isDisabled} />
-      </div>
     </div>
   );
 };

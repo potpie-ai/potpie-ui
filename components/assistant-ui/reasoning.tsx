@@ -1,7 +1,7 @@
 "use client";
 
 import { type FC, type PropsWithChildren, useState, useEffect } from "react";
-import { Loader } from "lucide-react";
+import { ChevronsUpDown, Loader } from "lucide-react";
 import type { ReasoningMessagePart } from "@assistant-ui/react";
 import { useThreadRuntime, useMessage } from "@assistant-ui/react";
 import {
@@ -13,26 +13,19 @@ import {
 
 export const Reasoning: FC<ReasoningMessagePart> = ({ text }) => {
   const raw = text ?? "";
-  const lines = raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const normalized = raw
+    .replace(/<\/?think>/gi, "\n")
+    .replace(/^\s*thinking[\s:-]*/i, "")
+    .trim();
 
-  if (lines.length === 0) {
+  if (!normalized) {
     return null;
   }
 
   return (
-    <ol className="mt-1 space-y-1 text-xs text-muted-foreground">
-      {lines.map((line, idx) => (
-        <li key={idx} className="flex items-start gap-1.5">
-          <span className="mt-[2px] text-[10px] font-medium text-muted-foreground/70">
-            {idx + 1}.
-          </span>
-          <span className="leading-snug">{line}</span>
-        </li>
-      ))}
-    </ol>
+    <div className="whitespace-pre-wrap rounded-md bg-white/45 px-3 py-2 text-xs leading-relaxed text-zinc-700 backdrop-blur-sm">
+      {normalized}
+    </div>
   );
 };
 
@@ -93,39 +86,27 @@ export const ReasoningGroup: FC<
   };
 
   return (
-    <div className="my-2 rounded-lg border border-muted bg-muted/40">
-      <Accordion
-        type="single"
-        collapsible
-        value={isStreaming ? "reasoning" : accordionValue}
-        onValueChange={handleValueChange}
-      >
-        <AccordionItem value="reasoning" className="border-0">
-          <AccordionTrigger className="px-3 py-2 hover:no-underline">
-            <div className="flex flex-col items-start gap-0.5 text-left">
-              <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {isStreaming ? (
-                  <>
-                    <Loader className="h-3 w-3 animate-spin" />
-                    <span>Thinking (not part of answer)</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs">🤔</span>
-                    <span>Thinking log (not part of answer)</span>
-                  </>
-                )}
-              </span>
-              <span className="text-[11px] text-muted-foreground/80">
-                Internal steps the agent is taking to solve your request.
-              </span>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="px-3 pb-3">
-            <div className="space-y-2">{children}</div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-    </div>
+    <Accordion
+      type="single"
+      collapsible
+      value={isStreaming ? "reasoning" : accordionValue}
+      onValueChange={handleValueChange}
+      className="my-2"
+    >
+      <AccordionItem value="reasoning" className="rounded-xl border border-transparent py-2 data-[state=open]:border-white/35 data-[state=open]:bg-white/45 data-[state=open]:backdrop-blur-sm">
+        <AccordionTrigger className="w-fit px-0 py-0 text-sm text-zinc-700 hover:no-underline [&>svg]:hidden">
+          <span className="flex items-center gap-1.5 font-semibold">
+            {isStreaming && <Loader className="h-3.5 w-3.5 animate-spin" />}
+            <span>Thinking</span>
+            <ChevronsUpDown className="h-3.5 w-3.5 opacity-70" />
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="pt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+          <div className="max-h-52 space-y-2 overflow-y-auto rounded-lg border border-zinc-300/70 bg-white/70 px-3 pr-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.5)_rgba(244,244,245,0.8)]">
+            {children}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 };

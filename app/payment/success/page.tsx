@@ -25,24 +25,36 @@ export default function PaymentSuccessPage() {
   const status = searchParams.get("status");
 
   useEffect(() => {
+    let mounted = true;
+
     const fetchSubscriptionDetails = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
 
       try {
         const [subData, creditData] = await Promise.all([
           MinorService.fetchUserSubscription(user.uid),
           MinorService.fetchCreditBalance(user.uid)
         ]);
+        if (!mounted) return;
         setSubscription(subData);
         setCreditBalance(creditData);
       } catch (error) {
         console.error("Error fetching subscription details:", error);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchSubscriptionDetails();
+
+    return () => {
+      mounted = false;
+    };
   }, [user?.uid]);
 
   const handleOpenPortal = async () => {

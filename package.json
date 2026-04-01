@@ -44,7 +44,7 @@
     "@types/uuid": "^9.0.8",
     "ai": "^5.0.107",
     "ajv": "6.14.0",
-    "axios": "^1.13.5",
+    "axios": "1.13.5",
     "chart.js": "^4.4.7",
     "class-variance-authority": "^0.7.1",
     "claude": "^0.1.1",
@@ -116,6 +116,7 @@
   },
   "pnpm": {
     "overrides": {
+      "axios": "1.13.5",
       "form-data": "^4.0.4",
       "glob": "10.5.0",
       "mdast-util-to-hast": "13.2.1",

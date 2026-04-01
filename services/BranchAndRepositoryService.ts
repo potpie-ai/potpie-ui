@@ -140,6 +140,29 @@ export default class BranchAndRepositoryService {
       }
   }
 
+    static async getProjectContextGraph(
+      projectId: string,
+      options: { pr_number?: number; limit?: number } = {}
+    ) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+      try {
+        const response = await axios.post(
+          `${baseUrl}/api/v1/context/query/project-graph`,
+          {
+            project_id: projectId,
+            pr_number: options.pr_number,
+            limit: options.limit ?? 12,
+          },
+          { headers }
+        );
+        return response.data;
+      } catch (error) {
+        throw new Error("Error fetching project context graph");
+      }
+    }
+
     static async getBranchList(repoName: string, search?: string) {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;

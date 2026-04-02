@@ -486,6 +486,17 @@ export function looksLikeMarkdown(text: string): boolean {
  * Format tool result for display: valid JSON is pretty-printed; otherwise return as-is.
  * Caller should use JSON view for parseable JSON and markdown/plain for the rest.
  */
+const AGENT_MODE_LABELS: Record<string, string> = {
+  codebase_qna_agent: "QnA mode",
+  debugging_agent: "Debug mode",
+  spec_generation_agent: "SpecGen mode",
+  code_generation_agent: "CodeGen mode",
+};
+
+export function getAgentDisplayLabel(agentId: string, fallbackName?: string): string {
+  return AGENT_MODE_LABELS[agentId] || fallbackName || agentId;
+}
+
 export function formatToolResultForDisplay(raw: string): {
   kind: "json" | "markdown" | "plain";
   content: string;

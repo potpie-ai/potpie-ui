@@ -1,6 +1,6 @@
 import getHeaders from "@/app/utils/headers.util";
 import { Button } from "@/components/ui/button";
-import { isMultimodalEnabled } from "@/lib/utils";
+import { isMultimodalEnabled, getAgentDisplayLabel } from "@/lib/utils";
 import {
   Command,
   CommandEmpty,
@@ -37,6 +37,7 @@ import {
   Loader2Icon,
   Crown,
   Zap,
+  ChevronDown,
 } from "lucide-react";
 import {
   FC,
@@ -51,6 +52,16 @@ import Image from "next/image";
 import MinorService from "@/services/minorService";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import { setChat } from "@/lib/state/Reducers/chat";
+import { toast } from "@/components/ui/sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface MessageComposerProps {
   projectId: string;
@@ -69,6 +80,19 @@ interface NodeOption {
 
 const free_models = ["openai/gpt-5-mini", "openrouter/moonshotai/kimi-k2.5"];
 
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "";
+const IS_LOCALHOST =
+  BASE_URL.startsWith("http://localhost") ||
+  BASE_URL.startsWith("http://127.0.0.1");
+
+// Agent IDs that can be switched to
+const SWITCHABLE_AGENT_IDS = [
+  "codebase_qna_agent",
+  "debugging_agent",
+  "code_generation_agent",
+  ...(IS_LOCALHOST ? ["spec_generation_agent"] : []),
+];
+
 const MessageComposer = ({
   projectId,
   disabled,
@@ -80,6 +104,10 @@ const MessageComposer = ({
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isSwitchingModel, setIsSwitchingModel] = useState(false);
+
+  const dispatch = useDispatch();
+  const { agentId, allAgents } = useSelector((state: RootState) => state.chat);
 
   // Use thread runtime to check if streaming is in progress
   const threadRuntime = useThreadRuntime();
@@ -390,15 +418,81 @@ const MessageComposer = ({
     loadCurrentModel();
   }, [loadCurrentModel]);
 
+  // Agent switch handlers
+  const handleSelectAgent = async (selectedAgentId: string) => {
+    if (isSwitchingModel) return;
+    try {
+      setIsSwitchingModel(true);
+      await ChatService.updateAgent(conversation_id, selectedAgentId);
+      dispatch(setChat({ agentId: selectedAgentId }));
+      toast.success("Model switched successfully");
+    } catch (error) {
+      console.error("Error switching agent:", error);
+      toast.error("Failed to switch model");
+    } finally {
+      setIsSwitchingModel(false);
+    }
+  };
+
+  // Build agent options for dropdown
+  const agentOptions = allAgents
+    ? allAgents
+        .filter((agent) =>
+          SWITCHABLE_AGENT_IDS.includes(agent.id) || agent.status !== "SYSTEM"
+        )
+        .map((agent) => ({
+          id: agent.id,
+          label: getAgentDisplayLabel(agent.id, agent.name),
+          isCustom: agent.status !== "SYSTEM",
+        }))
+    : [];
+
   const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
     return (
-      <div className="flex flex-row w-full items-center justify-end space-x-4">
-        <ModelSelection
-          currentModel={currentModel}
-          currPlan={currPlan}
-          loadCurrentModel={loadCurrentModel}
-          disabled={disabled}
-        />
+      <div className="flex flex-row w-full items-center justify-between space-x-4">
+        {/* Agent Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-3 text-xs font-medium"
+              disabled={isSwitchingModel}
+            >
+              {getAgentDisplayLabel(
+                agentId,
+                allAgents?.find((a) => a.id === agentId)?.name
+              )}
+              <ChevronDown className="ml-2 h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-48">
+            {agentOptions.map((option) => (
+              <DropdownMenuItem
+                key={option.id}
+                onClick={() => handleSelectAgent(option.id)}
+                className={`cursor-pointer flex items-center justify-between ${
+                  agentId === option.id ? "bg-zinc-100 font-medium" : ""
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {option.isCustom && (
+                  <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-zinc-200 rounded text-zinc-700">
+                    Custom
+                  </span>
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="flex flex-row items-center justify-end space-x-4">
+          <ModelSelection
+            currentModel={currentModel}
+            currPlan={currPlan}
+            loadCurrentModel={loadCurrentModel}
+            disabled={disabled}
+          />
         <div className="flex items-center justify-end">
           <button
             type="button"
@@ -428,6 +522,7 @@ const MessageComposer = ({
             <CircleStopIcon />
           </ComposerPrimitive.Cancel>
         </ThreadPrimitive.If>
+        </div>
       </div>
     );
   };

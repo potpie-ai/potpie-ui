@@ -1272,4 +1272,14 @@ export default class ChatService {
       // Don't throw - we still want to clean up even if stop endpoint fails
     }
   }
+
+  static async updateAgent(conversationId: string, agentId: string) {
+    const headers = await getHeaders();
+    const response = await axios.patch(
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/agent`,
+      { agent_id: agentId },
+      { headers }
+    );
+    return response.data;
+  }
 }

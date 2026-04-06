@@ -16,8 +16,8 @@ overrides:
   lodash-es: ^4.17.23
   minimatch: ^10.2.3
   flatted: ^3.4.2
-  picomatch: '>=4.0.4'
-  yaml: '>=2.8.3'
+  picomatch: ^4.0.4
+  yaml: ^2.8.3
 
 importers:
 
@@ -3403,7 +3403,7 @@ packages:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
     peerDependencies:
-      picomatch: '>=4.0.4'
+      picomatch: ^4.0.4
     peerDependenciesMeta:
       picomatch:
         optional: true
@@ -4439,7 +4439,7 @@ packages:
       jiti: '>=1.21.0'
       postcss: '>=8.0.9'
       tsx: ^4.8.1
-      yaml: '>=2.8.3'
+      yaml: ^2.8.3
     peerDependenciesMeta:
       jiti:
         optional: true

@@ -439,18 +439,6 @@ const Navbar = ({
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-              {agentId && allAgents && (
-                <div className="flex items-center gap-3 px-4 py-2 shadow-md rounded-lg cursor-pointer bg-gray-100">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-ping flex-shrink-0"></span>
-                  <span className="text-gray-700 truncate max-w-[200px]">
-                    {allAgents.find((agent) => agent.id === agentId)?.name ||
-                      agentId
-                        .replace(/_/g, " ")
-                        .replace(/([a-z])([A-Z])/g, "$1 $2")
-                        .replace(/\b\w/g, (char) => char.toUpperCase())}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
         </div>

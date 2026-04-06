@@ -25,6 +25,18 @@ const RobotoMono = Roboto_Mono({
   display: "swap",
 });
 
+const DmMono = localFont({
+  src: [
+    {
+      path: "../public/fonts/DMMono-Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  variable: "--font-dm-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "potpie - ai agents for your codebase in minutes",
   description: "Build task-oriented custom agents for your codebase that perform engineering tasks with high precision powered by intelligence and context from your data. Build agents for use cases like system design, debugging, integration testing, onboarding etc.",
@@ -47,7 +59,8 @@ export default function RootLayout({
           "min-h-screen font-mulish antialiased ",
           GeistSans.className,
           UncutSans.variable,
-          RobotoMono.variable
+          RobotoMono.variable,
+          DmMono.variable
         )}
       >
         <LayoutProviders>{children}</LayoutProviders>

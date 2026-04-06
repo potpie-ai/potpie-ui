@@ -2,10 +2,11 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import dayjs from "dayjs";
 import { SessionInfo } from "@/lib/types/session";
 
-interface Agent {
+export interface Agent {
   id?: string;
   name?: string;
   description?: string;
+  status?: string;
 }
 
 interface TemporaryContext {

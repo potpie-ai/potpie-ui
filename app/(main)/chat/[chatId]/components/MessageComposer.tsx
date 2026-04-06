@@ -85,42 +85,28 @@ const SWITCHABLE_AGENT_IDS = [
 // SVG icons for agent modes
 const AgentModeIcons: Record<string, React.ReactNode> = {
   codebase_qna_agent: (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M6 10.25C9.5664 10.25 11 8.2353 11 5.75C11 3.26472 10.0664 1.25 6 1.25C2.06641 1.25 1 3.26472 1 5.75C1 6.7856 1.18517 7.73955 1.6858 8.5C2.3164 9.5 1.99626 10.4166 1.5 10.75C2.30774 10.75 2.85105 10.4929 3.19619 10.2383C3.44126 10.0575 3.75344 9.9682 4.0492 10.0407C4.60345 10.1766 5.24955 10.25 6 10.25Z" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M5 4.5C5 3.94771 5.4477 3.5 6 3.5C6.5523 3.5 7 3.94771 7 4.5C7 4.78888 6.8775 5.04915 6.6816 5.2317C6.3786 5.5141 6 5.8358 6 6.25M6.0625 7.875H6M6.125 7.875C6.125 7.94405 6.06905 8 6 8C5.93095 8 5.875 7.94405 5.875 7.875C5.875 7.80595 5.93095 7.75 6 7.75C6.06905 7.75 6.125 7.80595 6.125 7.875Z" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round"/>
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/message-question.svg" />
     </svg>
   ),
   debugging_agent: (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M1.50661 2.49512C1.44668 3.02512 1.77631 4.21112 3.24468 4.21112" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
-      <path d="M8.79688 4.19046C9.41717 4.28946 10.5559 3.74946 10.4972 2.50146" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
-      <path d="M10.4957 10.4994C10.5257 9.97143 10.0882 8.77743 8.79883 8.71143" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
-      <path d="M3.22514 8.73572C2.82439 8.61572 1.50586 9.16772 1.50586 10.4997" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
-      <path d="M4.66428 3.05951C4.67627 2.54951 4.92199 1.49951 6.00078 1.49951C6.95973 1.49951 7.29238 2.30951 7.33733 3.05951M3.12998 4.70951C3.18992 4.31951 3.64541 3.40751 4.68226 3.31751C5.73108 3.27791 7.16948 3.29351 7.43918 3.33551C7.79278 3.36698 8.64688 3.71951 8.87463 4.70951C8.95553 5.21949 8.91358 5.93949 8.92553 6.35949C8.90758 6.77949 8.95968 7.63124 8.87758 8.06949C8.81768 8.54949 8.49403 9.23349 8.05053 9.65349C7.39123 10.3615 5.58128 11.1055 4.017 9.72549C3.20789 8.94549 3.15395 8.18949 3.09402 7.88949C3.07795 7.72864 3.0787 6.93824 3.08203 6.17949C3.07005 5.52309 3.0855 4.89041 3.12998 4.70951Z" stroke="#00291C" strokeWidth="0.75"/>
-      <path d="M1.50586 6.44922H2.97423" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
-      <path d="M10.497 6.44922H9.05859" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
-      <path d="M6.00195 8.24951V10.1395" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/bug-01.svg" />
     </svg>
   ),
   custom_agent: (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M6.8638 1.72209L7.7437 3.49644C7.8637 3.74343 8.18365 3.98035 8.45365 4.02571L10.0485 4.29287C11.0684 4.46426 11.3083 5.2103 10.5734 5.94625L9.33355 7.19635C9.12355 7.40805 9.0086 7.81635 9.07355 8.10875L9.42855 9.65625C9.7085 10.8811 9.06355 11.355 7.9887 10.7148L6.49385 9.8226C6.2239 9.6613 5.77895 9.6613 5.50395 9.8226L4.00913 10.7148C2.93925 11.355 2.28932 10.8761 2.56929 9.65625L2.92425 8.10875C2.98924 7.81635 2.87426 7.40805 2.66428 7.19635L1.42442 5.94625C0.6945 5.2103 0.929475 4.46426 1.94936 4.29287L3.54418 4.02571C3.80915 3.98035 4.12912 3.74343 4.2491 3.49644L5.129 1.72209C5.60895 0.759304 6.38885 0.759304 6.8638 1.72209Z" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round"/>
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/star.svg" />
     </svg>
   ),
   spec_generation_agent: (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M7.49023 3.50781C7.49023 3.50781 7.74023 3.75781 7.99023 4.25781C7.99023 4.25781 8.78433 3.00781 9.49023 2.75781" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M4.99743 1.0107C3.74819 0.957812 2.78306 1.10172 2.78306 1.10172C2.17364 1.1453 1.00573 1.48696 1.00574 3.4823C1.00575 5.46068 0.99282 7.89968 1.00574 8.87198C1.00574 9.46603 1.37355 10.8517 2.64663 10.9259C4.19405 11.0162 6.98137 11.0354 8.26022 10.9259C8.60257 10.9066 9.74232 10.6379 9.88657 9.39783C10.036 8.11318 10.0063 7.22038 10.0063 7.00788" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M10.9999 3.50781C10.9999 4.88852 9.87957 6.00783 8.49752 6.00783C7.11547 6.00783 5.99512 4.88852 5.99512 3.50781C5.99512 2.1271 7.11547 1.00781 8.49752 1.00781C9.87957 1.00781 10.9999 2.1271 10.9999 3.50781Z" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
-      <path d="M3.49023 6.50781H5.49022" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
-      <path d="M3.49023 8.50781H7.49022" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round"/>
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/document-validation.svg" />
     </svg>
   ),
   code_generation_agent: (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M4.99998 9C4.99998 9 3.75 8.0794 3.75 7.75C3.75 7.4206 4.99998 6.5 4.99998 6.5" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M7 9C7 9 8.25 8.0794 8.25 7.75C8.25 7.4206 7 6.5 7 6.5" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M6.5 1.25V1.5C6.5 2.91421 6.5 3.62132 6.93935 4.06066C7.3787 4.5 8.0858 4.5 9.5 4.5H9.75M10 5.32845V7C10 8.8856 10 9.82845 9.4142 10.4142C8.82845 11 7.8856 11 6 11C4.11438 11 3.17157 11 2.58578 10.4142C2 9.82845 2 8.8856 2 7V4.72792C2 3.10541 2 2.29416 2.44303 1.74467C2.53254 1.63366 2.63365 1.53254 2.74466 1.44304C3.29415 1 4.10541 1 5.7279 1C6.0807 1 6.25705 1 6.4186 1.05701C6.4522 1.06886 6.4851 1.0825 6.51725 1.09787C6.6718 1.17177 6.7965 1.2965 7.04595 1.54594L9.4142 3.91422C9.70325 4.20325 9.84775 4.34776 9.9239 4.53153C10 4.7153 10 4.91968 10 5.32845Z" stroke="#00291C" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round"/>
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/file-code.svg" />
     </svg>
   ),
 };
@@ -530,7 +516,7 @@ const MessageComposer = ({
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-100">
+            <DropdownMenuContent side="top" align="start" className="w-100 px-2">
               {/* Modes Section */}
               {modeOptions.length > 0 && (
                 <>
@@ -591,8 +577,8 @@ const MessageComposer = ({
             aria-label="Attach files"
             onClick={handleAttachClick}
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 4V3C4 1.89543 4.89543 1 6 1C7.10455 1 8 1.89543 8 3V9C8 10.1046 7.10455 11 6 11C4.89543 11 4 10.1046 4 9V6.75C4 6.05965 4.55964 5.5 5.25 5.5C5.94035 5.5 6.5 6.05965 6.5 6.75V8" stroke="#00291C" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+              <use href="/images/attachment-02.svg" />
             </svg>
             <span className="text-xs font-medium">Attach</span>
           </button>
@@ -717,7 +703,7 @@ const MessageComposer = ({
                 onChange={handleMessageChange}
                 onKeyDown={handleKeyPress}
                 disabled={isDisabled}
-                className="w-full placeholder-dm-mono placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+                className="w-full placeholder-Geist-Regular placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
               />
             </div>
           </div>

@@ -26,10 +26,7 @@ import * as m from "motion/react-m";
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Reasoning,
-  ReasoningGroup,
-} from "@/components/assistant-ui/reasoning";
+import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
@@ -268,7 +265,10 @@ const AssistantMessage: FC = () => {
 
         <div className="aui-assistant-message-footer mt-2 ml-2 flex">
           <BranchPicker />
-          <div className="flex items-center gap-1.5" aria-hidden={!showPulsatingDots}>
+          <div
+            className="flex items-center gap-1.5"
+            aria-hidden={!showPulsatingDots}
+          >
             {showPulsatingDots && (
               <>
                 {[0, 1, 2].map((i) => (
@@ -325,7 +325,7 @@ const UserMessage: FC = () => {
         <UserMessageAttachments />
 
         <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
-          <div className="aui-user-message-content rounded-3xl bg-muted px-5 py-2.5 break-words text-foreground">
+          <div className="aui-user-message-content rounded-3xl rounded-br-none bg-[#FFFFFF] border border-[#CCD3CF] px-5 py-2.5 break-words text-foreground">
             <MessagePrimitive.Parts />
           </div>
           <div className="aui-user-action-bar-wrapper absolute top-1/2 left-0 -translate-x-full -translate-y-1/2 pr-2">

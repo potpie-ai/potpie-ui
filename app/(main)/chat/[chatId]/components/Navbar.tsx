@@ -59,6 +59,7 @@ const Navbar = ({
   const { title, agentId, allAgents } = useSelector(
     (state: RootState) => state.chat
   );
+  const repoName = useSelector((state: RootState) => state.RepoAndBranch.repoName);
   const pathname = usePathname();
   const { user } = useAuthContext();
   const dispatch = useDispatch();
@@ -280,22 +281,30 @@ const Navbar = ({
       {showTitle && (
         <div className="flex h-[52px] w-full">
           <div className="flex items-center justify-between w-full px-4 lg:px-6">
-            <div className="flex items-center gap-5 min-w-0 flex-1">
-              <Image
-                src={"/images/msg-grey.svg"}
-                alt="logo"
-                width={20}
-                height={20}
-                className="flex-shrink-0"
-              />
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <Dialog
                 open={isTitleDialogOpen}
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger className="min-w-0 flex-1 text-left">
-                  <span className="text-black text-xl truncate block">
-                    {displayTitle}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="text-black text-xl truncate block">
+                      {displayTitle}
+                    </span>
+                    {repoName?.trim() && (
+                      <span className="text-xs text-zinc-500 truncate block mt-0.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Image
+                            src="/images/github.svg"
+                            alt="Repository"
+                            width={12}
+                            height={12}
+                          />
+                          <span className="truncate">{repoName}</span>
+                        </span>
+                      </span>
+                    )}
+                  </div>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
@@ -334,7 +343,11 @@ const Navbar = ({
             <div className="flex items-center gap-4">
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger hidden={!showShare}>
-                  <Button size="icon" variant="outline">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="border-none bg-transparent shadow-none hover:bg-transparent"
+                  >
                     <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
                   </Button>
                 </DialogTrigger>

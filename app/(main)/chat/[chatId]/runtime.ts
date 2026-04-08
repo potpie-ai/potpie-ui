@@ -19,6 +19,7 @@ import ChatService, {
   type ToolCall,
   type LoadedMessage,
 } from "@/services/ChatService";
+import MediaService from "@/services/MediaService";
 import { SessionInfo } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 import { useDispatch, useSelector } from "react-redux";
@@ -390,6 +391,10 @@ export interface ChatRuntimeResult {
   isBackgroundTaskActive: boolean;
 }
 
+// Pre-uploaded attachment IDs (composer local id -> server id) so the stream
+// can send attachment_ids even when the thread message no longer carries File blobs.
+const attachmentLocalIdToServerId = new Map<string, string>();
+
 // Create the adapter that bridges our Redis backend to assistant-ui
 const createChatAdapter = (
   chatId: string,
@@ -552,27 +557,40 @@ const createChatAdapter = (
       const runConfig = (context as { runConfig?: RunConfig }).runConfig;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
-      const attachmentIds =
+      const runConfigAttachmentIds =
         (runConfig?.custom?.attachmentIds as string[]) || [];
 
-      // Extract attachments from message (images and other files)
+      const userMessage = lastMessage as ThreadUserMessage;
+      const userAttachments = userMessage.attachments ?? [];
+
+      // Server IDs from adapter pre-upload (see createAttachmentsAdapter.send)
+      const serverIdsFromPreUpload = userAttachments
+        .map((a) => attachmentLocalIdToServerId.get(a.id))
+        .filter((id): id is string => !!id);
+
+      const mergedAttachmentIds = [
+        ...new Set([...runConfigAttachmentIds, ...serverIdsFromPreUpload]),
+      ];
+
+      // Extract File objects for multipart upload, skipping attachments that were
+      // already uploaded in send() (avoids double upload on the backend).
       const images: File[] = [];
       if (isMultimodalEnabled() && lastMessage.role === "user") {
-        const userMessage = lastMessage as ThreadUserMessage;
-        if (userMessage.attachments) {
-          userMessage.attachments.forEach((attachment) => {
-            // Handle image, file, and document types
-            if (
-              (attachment.type === "image" ||
-                attachment.type === "file" ||
-                attachment.type === "document") &&
-              "file" in attachment &&
-              attachment.file
-            ) {
-              images.push(attachment.file);
-            }
-          });
-        }
+        userAttachments.forEach((attachment) => {
+          if (
+            attachment.type !== "image" &&
+            attachment.type !== "file" &&
+            attachment.type !== "document"
+          ) {
+            return;
+          }
+          if (attachmentLocalIdToServerId.has(attachment.id)) {
+            return;
+          }
+          if ("file" in attachment && attachment.file) {
+            images.push(attachment.file);
+          }
+        });
       }
 
       // Initialize streaming state
@@ -694,15 +712,21 @@ const createChatAdapter = (
           },
           streamingStateRef.current.sessionId || undefined,
           abortSignal ?? undefined,
-          attachmentIds
+          mergedAttachmentIds
         )
           .then((result) => {
+            userAttachments.forEach((a) =>
+              attachmentLocalIdToServerId.delete(a.id)
+            );
             // Store final session ID
             streamingStateRef.current.sessionId = result.sessionId;
             streamingStateRef.current.isStreaming = false;
             return result;
           })
           .catch((error) => {
+            userAttachments.forEach((a) =>
+              attachmentLocalIdToServerId.delete(a.id)
+            );
             streamingStateRef.current.isStreaming = false;
             if (!aborted && rejectStream) {
               rejectStream(error);
@@ -1016,6 +1040,7 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
       return attachment;
     },
     async remove(attachment: PendingAttachment) {
+      attachmentLocalIdToServerId.delete(attachment.id);
       // Revoke the object URL to free memory
       const objectUrl = objectUrls.get(attachment.id);
       if (objectUrl) {
@@ -1025,6 +1050,18 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
       return Promise.resolve();
     },
     async send(attachment: PendingAttachment): Promise<CompleteAttachment> {
+      if (attachment.file && isMultimodalEnabled()) {
+        try {
+          const result = await MediaService.uploadFile(attachment.file);
+          attachmentLocalIdToServerId.set(attachment.id, result.id);
+        } catch (err) {
+          console.error(
+            "[AttachmentsAdapter] Pre-upload failed; will retry via FormData if the file is still on the message:",
+            err
+          );
+        }
+      }
+
       // Revoke the object URL now that the attachment is sent
       const objectUrl = objectUrls.get(attachment.id);
       if (objectUrl) {

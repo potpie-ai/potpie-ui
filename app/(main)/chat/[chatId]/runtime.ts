@@ -395,6 +395,32 @@ export interface ChatRuntimeResult {
 // can send attachment_ids even when the thread message no longer carries File blobs.
 const attachmentLocalIdToServerId = new Map<string, string>();
 
+const getAttachmentKind = (
+  file: File
+): "image" | "document" | "file" => {
+  if (file.type.startsWith("image/")) {
+    return "image";
+  }
+
+  const lowerName = file.name.toLowerCase();
+  if (
+    lowerName.endsWith(".pdf") ||
+    lowerName.endsWith(".doc") ||
+    lowerName.endsWith(".docx") ||
+    lowerName.endsWith(".txt") ||
+    lowerName.endsWith(".md") ||
+    lowerName.endsWith(".csv") ||
+    lowerName.endsWith(".json") ||
+    lowerName.endsWith(".xml") ||
+    lowerName.endsWith(".yaml") ||
+    lowerName.endsWith(".yml")
+  ) {
+    return "document";
+  }
+
+  return "file";
+};
+
 // Create the adapter that bridges our Redis backend to assistant-ui
 const createChatAdapter = (
   chatId: string,
@@ -1017,6 +1043,7 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
       // Create object URL for preview
       const objectUrl = URL.createObjectURL(file);
       const attachmentId = crypto.randomUUID();
+      const attachmentType = getAttachmentKind(file);
 
       // Store the URL so we can revoke it later
       objectUrls.set(attachmentId, objectUrl);
@@ -1024,17 +1051,20 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
       // Return the pending attachment object
       const attachment: PendingAttachment = {
         id: attachmentId,
-        type: "image",
+        type: attachmentType,
         name: file.name,
         contentType: file.type,
         status: { type: "requires-action", reason: "composer-send" },
         file,
-        content: [
-          {
-            type: "image",
-            image: objectUrl,
-          },
-        ],
+        content:
+          attachmentType === "image"
+            ? [
+                {
+                  type: "image",
+                  image: objectUrl,
+                },
+              ]
+            : [],
       };
 
       return attachment;

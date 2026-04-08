@@ -4,13 +4,17 @@ import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import type { TextMessagePartComponent } from "@assistant-ui/react";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighterLib } from "react-syntax-highlighter";
-import { coldarkCold } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { materialDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { MermaidDiagram } from "@/components/chat/MermaidDiagram";
 import { useState, type FC, type ReactNode, memo } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { LucideCopy, LucideCopyCheck, ExternalLinkIcon } from "lucide-react";
+import { LucideCopyCheck, ExternalLinkIcon } from "lucide-react";
 import type { SyntaxHighlighterProps, CodeHeaderProps } from "@assistant-ui/react-markdown";
 import ReactMarkdown from "react-markdown";
+
+const CODE_FONT_FAMILY =
+  'var(--font-roboto-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Liberation Mono", Consolas, monospace';
 
 // Code header component with copy button
 const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
@@ -23,23 +27,30 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   };
 
   return (
-    <div className="flex justify-between items-center bg-gray-300 px-4 py-1 rounded-t-lg">
-      <span className="text-sm font-semibold text-gray-800">
-        {language || "text"}
+    <div className="flex items-center justify-between rounded-t-xl border border-[#E8E8E8] border-b-0 bg-[#F5F5F5] px-3 py-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+        {language || "plaintext"}
       </span>
       <Button
-        variant="secondary"
+        variant="outline"
         size="sm"
         onClick={handleCopy}
-        className="text-xs font-semibold px-2 py-1 h-6 rounded text-gray-800"
+        className="h-7 gap-1.5 rounded-md border-[#E4E4E7] bg-white px-2.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
       >
         {copied ? (
-          <div className="flex gap-2 items-center">
-            <LucideCopyCheck className="size-4" /> Copied!
+          <div className="flex items-center gap-1.5">
+            <LucideCopyCheck className="size-3.5" /> Copied
           </div>
         ) : (
-          <div className="flex gap-2 items-center">
-            <LucideCopy className="size-4" /> Copy
+          <div className="flex items-center gap-1.5">
+            <Image
+              src="/images/copy-02.svg"
+              alt="Copy"
+              width={14}
+              height={14}
+              className="shrink-0"
+            />
+            Copy
           </div>
         )}
       </Button>
@@ -52,18 +63,27 @@ const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({ language, code }) => {
   return (
     <SyntaxHighlighterLib
       language={language?.toLowerCase() || "text"}
-      style={coldarkCold}
+      style={materialDark}
       customStyle={{
-        backgroundColor: "hsl(var(--muted))",
-        fontFamily:
-          'ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Liberation Mono", Consolas, monospace',
+        backgroundColor: "#FCFCFD",
+        border: "1px solid #E8E8E8",
+        borderTop: "1px solid #E8E8E8",
+        borderBottomLeftRadius: "0.75rem",
+        borderBottomRightRadius: "0.75rem",
+        fontFamily: CODE_FONT_FAMILY,
         fontFeatureSettings: "normal",
-        fontSize: "0.8rem",
+        fontSize: "0.78rem",
         fontVariationSettings: "normal",
-        fontWeight: "500",
+        fontWeight: "400",
+        lineHeight: "1.5",
         margin: 0,
-        borderTopLeftRadius: 0,
-        borderTopRightRadius: 0,
+        padding: "0.9rem",
+      }}
+      codeTagProps={{
+        style: {
+          fontFamily: CODE_FONT_FAMILY,
+          fontWeight: 400,
+        },
       }}
     >
       {code}
@@ -198,22 +218,31 @@ const StandaloneMarkdownImpl: FC<StandaloneMarkdownProps> = ({ text, className }
 
           // Code blocks with syntax highlighting
           return (
-            <div className="relative bg-gray-100 rounded-lg shadow-lg mt-4">
+            <div className="relative mt-4 overflow-hidden rounded-xl shadow-sm">
               <CodeHeader language={language} code={code} />
               <SyntaxHighlighterLib
                 language={language?.toLowerCase() || "text"}
-                style={coldarkCold}
+                style={materialDark}
                 customStyle={{
-                  backgroundColor: "hsl(var(--muted))",
-                  fontFamily:
-                    'ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Liberation Mono", Consolas, monospace',
+                  backgroundColor: "#FCFCFD",
+                  border: "1px solid #E8E8E8",
+                  borderTop: "1px solid #E8E8E8",
+                  borderBottomLeftRadius: "0.75rem",
+                  borderBottomRightRadius: "0.75rem",
+                  fontFamily: CODE_FONT_FAMILY,
                   fontFeatureSettings: "normal",
-                  fontSize: "0.8rem",
+                  fontSize: "0.78rem",
                   fontVariationSettings: "normal",
-                  fontWeight: "500",
+                  fontWeight: "400",
+                  lineHeight: "1.5",
                   margin: 0,
-                  borderTopLeftRadius: 0,
-                  borderTopRightRadius: 0,
+                  padding: "0.9rem",
+                }}
+                codeTagProps={{
+                  style: {
+                    fontFamily: CODE_FONT_FAMILY,
+                    fontWeight: 400,
+                  },
                 }}
               >
                 {code}

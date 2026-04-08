@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
@@ -19,8 +18,14 @@ const UncutSans = localFont({
   display: "swap",
 });
 
-const RobotoMono = Roboto_Mono({
-  subsets: ["latin"],
+const RobotoMono = localFont({
+  src: [
+    {
+      path: "../public/fonts/RobotoMono-VariableFont_wght.ttf",
+      weight: "100 700",
+      style: "normal",
+    },
+  ],
   variable: "--font-roboto-mono",
   display: "swap",
 });

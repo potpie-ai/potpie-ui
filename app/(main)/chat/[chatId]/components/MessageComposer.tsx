@@ -1,5 +1,3 @@
-console.log("[MessageComposer] isMultimodalEnabled:", isMultimodalEnabled());
-
 import getHeaders from "@/app/utils/headers.util";
 import MediaService from "@/services/MediaService";
 import { Button } from "@/components/ui/button";
@@ -200,6 +198,7 @@ const MessageComposer = ({
         composer.setRunConfig({
           custom: {
             selectedNodes: [],
+            attachmentIds: [],
           },
         });
         // Clear React state

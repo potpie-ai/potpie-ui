@@ -987,7 +987,8 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
   const objectUrls = new Map<string, string>();
 
   return {
-    accept: "image/*",
+    accept:
+      ".doc,.docx,.pdf,.txt,.md,.csv,.json,.xml,.yaml,.yml,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg",
     async add({ file }: { file: File }): Promise<PendingAttachment> {
       // Create object URL for preview
       const objectUrl = URL.createObjectURL(file);
@@ -1298,13 +1299,13 @@ export function usePendingMessageHandler(
   const hasSentPendingMessage = useRef(false);
 
   useEffect(() => {
-    if (!pendingMessage || !chatId || hasSentPendingMessage.current) {
+    if (!pendingMessage?.text || !chatId || hasSentPendingMessage.current) {
       return;
     }
 
     console.log(
       "[PendingMessage] Detected pending message, sending via runtime:",
-      pendingMessage
+      pendingMessage.text
     );
     hasSentPendingMessage.current = true;
 
@@ -1330,7 +1331,14 @@ export function usePendingMessageHandler(
           return;
         }
 
-        composer.setText(pendingMessage);
+        composer.setText(pendingMessage.text);
+        if (pendingMessage.attachmentIds?.length) {
+          composer.setRunConfig({
+            custom: {
+              attachmentIds: pendingMessage.attachmentIds,
+            },
+          });
+        }
 
         // Trigger send
         await composer.send();

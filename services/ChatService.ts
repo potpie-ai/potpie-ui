@@ -601,8 +601,8 @@ export default class ChatService {
         });
       });
 
-      // Append pre-uploaded attachment IDs (non-multimodal path)
-      console.log("[ChatService] Preparing non-image attachment IDs", {
+      // Append pre-uploaded attachment IDs (from docs pre-uploaded via MediaService)
+      console.log("[ChatService] Preparing attachment IDs", {
         attachmentIdCount: attachmentIds?.length ?? 0,
       });
       if (attachmentIds && attachmentIds.length > 0) {

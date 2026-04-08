@@ -4,7 +4,7 @@ import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import type { TextMessagePartComponent } from "@assistant-ui/react";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighterLib } from "react-syntax-highlighter";
-import { materialDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { MermaidDiagram } from "@/components/chat/MermaidDiagram";
 import { useState, type FC, type ReactNode, memo } from "react";
 import Image from "next/image";
@@ -63,7 +63,7 @@ const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({ language, code }) => {
   return (
     <SyntaxHighlighterLib
       language={language?.toLowerCase() || "text"}
-      style={materialDark}
+      style={oneLight}
       customStyle={{
         backgroundColor: "#FCFCFD",
         border: "1px solid #E8E8E8",
@@ -222,7 +222,7 @@ const StandaloneMarkdownImpl: FC<StandaloneMarkdownProps> = ({ text, className }
               <CodeHeader language={language} code={code} />
               <SyntaxHighlighterLib
                 language={language?.toLowerCase() || "text"}
-                style={materialDark}
+                style={oneLight}
                 customStyle={{
                   backgroundColor: "#FCFCFD",
                   border: "1px solid #E8E8E8",

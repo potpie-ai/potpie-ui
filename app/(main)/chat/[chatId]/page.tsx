@@ -3,6 +3,7 @@ import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { setChat, clearPendingMessage } from "@/lib/state/Reducers/chat";
+import { setRepoName, setBranchName } from "@/lib/state/Reducers/RepoAndBranch";
 import {
   Dialog,
   DialogClose,
@@ -323,6 +324,18 @@ const ChatV2 = () => {
           title: info.title,
         })
       );
+      // Populate global repo/branch context for existing chats so Navbar
+      // can consistently render the repo subtitle on direct chat loads.
+      const infoWithRepo = info as {
+        repo_name?: string | null;
+        branch_name?: string | null;
+      };
+      if (infoWithRepo.repo_name?.trim()) {
+        dispatch(setRepoName(infoWithRepo.repo_name.trim()));
+      }
+      if (infoWithRepo.branch_name?.trim()) {
+        dispatch(setBranchName(infoWithRepo.branch_name.trim()));
+      }
 
       setProjectId(info.project_ids[0]);
       setInfoLoadedForChat(currentConversationId);

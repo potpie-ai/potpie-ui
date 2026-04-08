@@ -583,14 +583,32 @@ export default class ChatService {
 
       // Only process images if multimodal is enabled
       const enabledImages = isMultimodalEnabled() ? images : [];
+      console.log(
+        "[ChatService] Preparing image attachments",
+        {
+          multimodalEnabled: isMultimodalEnabled(),
+          providedImageCount: images.length,
+          enabledImageCount: enabledImages.length,
+        }
+      );
       enabledImages.forEach((image, index) => {
         formData.append("images", image);
+        console.log("[ChatService] Appended image attachment", {
+          index,
+          name: image.name,
+          type: image.type,
+          size: image.size,
+        });
       });
 
       // Append pre-uploaded attachment IDs (non-multimodal path)
+      console.log("[ChatService] Preparing non-image attachment IDs", {
+        attachmentIdCount: attachmentIds?.length ?? 0,
+      });
       if (attachmentIds && attachmentIds.length > 0) {
         attachmentIds.forEach((id) => {
           formData.append("attachment_ids", id);
+          console.log("[ChatService] Appended attachment_id", { id });
         });
       }
 

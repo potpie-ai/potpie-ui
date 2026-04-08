@@ -1,5 +1,4 @@
 import getHeaders from "@/app/utils/headers.util";
-import MediaService from "@/services/MediaService";
 import { Button } from "@/components/ui/button";
 import { isMultimodalEnabled, getAgentDisplayLabel } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,7 +10,6 @@ import {
   useThreadRuntime,
 } from "@assistant-ui/react";
 import {
-  ComposerAddAttachment,
   ComposerAttachments,
 } from "@/components/assistant-ui/attachment";
 import axios from "axios";
@@ -148,7 +146,6 @@ const MessageComposer = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const composer = useComposerRuntime();
 
@@ -383,44 +380,6 @@ const MessageComposer = ({
     composer.send();
   };
 
-  const handleAttachClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      // If multimodal is enabled, use the composer's native attachment handling
-      if (isMultimodalEnabled()) {
-        return;
-      }
-      // Otherwise handle upload ourselves
-      const newFiles: AttachedFile[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        try {
-          const result = await MediaService.uploadFile(file);
-          newFiles.push({
-            id: result.id,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            file,
-          });
-        } catch (err) {
-          console.error("Failed to upload file:", err);
-          toast.error(`Failed to upload ${file.name}`);
-        }
-      }
-      setAttachedFiles((prev) => [...prev, ...newFiles]);
-      if (newFiles.length > 0) {
-        toast.success(`Attached ${newFiles.length} file(s)`);
-      }
-    }
-    // Reset the input so the same file can be selected again
-    e.target.value = "";
-  };
-
   const handleRemoveAttachedFile = (index: number) => {
     setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   };
@@ -592,30 +551,22 @@ const MessageComposer = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Attach Trigger - only show when multimodal is disabled */}
-          {!isMultimodalEnabled() && (
-            <>
+          {isMultimodalEnabled() && (
+            <ComposerPrimitive.AddAttachment asChild>
               <button
                 type="button"
                 className="flex h-8 items-center justify-start gap-2 border-0 bg-transparent"
                 aria-label="Attach files"
-                onClick={handleAttachClick}
               >
-                <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
-                  <use href="/images/attachment-02.svg" />
-                </svg>
+                <img
+                  src="/images/attachment-02.svg"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-3 w-3"
+                />
                 <span className="text-xs font-medium">Attach</span>
               </button>
-              {/* Hidden file input for attachments */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept=".docx,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg"
-                multiple
-                onChange={handleFileChange}
-              />
-            </>
+            </ComposerPrimitive.AddAttachment>
           )}
         </div>
 
@@ -713,11 +664,6 @@ const MessageComposer = ({
           {isMultimodalEnabled() && <ComposerAttachments />}
 
           <div className="flex flex-row w-full items-end gap-2">
-            {isMultimodalEnabled() && (
-              <div className="flex items-center pb-4">
-                <ComposerAddAttachment />
-              </div>
-            )}
             <div className="w-full">
               <ComposerPrimitive.Input
                 submitOnEnter={!isDisabled}

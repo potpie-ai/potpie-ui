@@ -903,6 +903,29 @@ function dedupeToolCalls(toolCalls: ToolCall[]): ToolCall[] {
   return Array.from(byId.values());
 }
 
+/** API may return attachment_type as enum string; also allow document+image/* from mis-tagged uploads */
+function isImageLikeAttachment(att: {
+  attachment_type?: string;
+  mime_type?: string;
+}): boolean {
+  const t = String(att.attachment_type ?? "").toLowerCase();
+  const mime = String(att.mime_type ?? "").toLowerCase();
+  return t === "image" || mime.startsWith("image/");
+}
+
+/** Signed URLs are absolute; fallback paths need the API origin */
+function resolveAttachmentDownloadUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const base =
+    process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    "";
+  if (!base) return url;
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${base.replace(/\/$/, "")}${path}`;
+}
+
 // Helper function to convert messages to ThreadMessage format
 const convertToThreadMessage = (msg: BackendMessage): ThreadMessage => {
   const role = msg.sender === "user" ? "user" : "assistant";
@@ -915,37 +938,36 @@ const convertToThreadMessage = (msg: BackendMessage): ThreadMessage => {
     ];
     const attachments: CompleteAttachment[] = [];
 
-    if (
-      isMultimodalEnabled() &&
-      msg.has_attachments &&
-      msg.attachments &&
-      msg.attachments.length > 0
-    ) {
+    // Loaded API attachments: images go into message *content* parts so
+    // MessagePrimitive.Parts (Image) renders them. Non-image files use the
+    // attachments array for UserMessageAttachments tiles (PDF, etc.).
+    if (msg.has_attachments && msg.attachments && msg.attachments.length > 0) {
       const attachmentList = msg.attachments as Array<{
-        attachment_type: string;
+        attachment_type?: string;
+        mime_type?: string;
         download_url?: string;
+        file_name?: string;
       }>;
-      const imageAttachments = attachmentList.filter(
-        (attachment) =>
-          attachment.attachment_type === "image" && attachment.download_url
-      );
-      imageAttachments.forEach((attachment, index) => {
-        if (attachment.download_url) {
+      let docIndex = 0;
+      attachmentList.forEach((attachment) => {
+        const rawUrl = attachment.download_url as string | undefined;
+        if (!rawUrl) return;
+        const displayUrl = resolveAttachmentDownloadUrl(rawUrl);
+        if (isImageLikeAttachment(attachment)) {
           content.push({
             type: "image",
-            image: attachment.download_url,
+            image: displayUrl,
           });
-          attachments.push({
-            id: `${msg.id}-attachment-${index}`,
-            type: "image",
-            name: `Image ${index + 1}`,
-            contentType: "image/*",
-            status: { type: "complete" },
-            content: [
-              { type: "image", image: attachment.download_url },
-            ],
-          });
+          return;
         }
+        attachments.push({
+          id: `${msg.id}-doc-${docIndex++}`,
+          type: "document",
+          name: attachment.file_name || "Attachment",
+          contentType: attachment.mime_type || "application/octet-stream",
+          status: { type: "complete" },
+          content: [],
+        });
       });
     }
 

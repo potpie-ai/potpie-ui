@@ -28,7 +28,7 @@ import {
   RefreshCwIcon,
   Wrench,
 } from "lucide-react";
-import { cn, isMultimodalEnabled, stripAssistantMarkers } from "@/lib/utils";
+import { cn, stripAssistantMarkers } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import {
@@ -292,6 +292,40 @@ const Composer: FC<{
   );
 };
 
+/** Directly renders image parts from message content. This avoids relying on
+ * assistant-ui internals for history-loaded user images. */
+const UserMessageInlineImages: FC = () => {
+  const content = useMessage((state) => state.content);
+  const imageParts = content.filter(
+    (
+      part
+    ): part is {
+      type: "image";
+      image: string | URL;
+    } => part.type === "image"
+  );
+
+  if (imageParts.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {imageParts.map((part, index) => {
+        const src =
+          typeof part.image === "string" ? part.image : String(part.image ?? "");
+        if (!src) return null;
+        return (
+          <img
+            key={`${src}-${index}`}
+            src={src}
+            alt=""
+            className="max-h-64 max-w-full rounded-lg border border-border/40 object-contain"
+          />
+        );
+      })}
+    </div>
+  );
+};
+
 const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
   return (
     <motion.div
@@ -302,12 +336,13 @@ const UserMessage: FC<{ userPhotoURL: string }> = ({ userPhotoURL }) => {
     >
       <MessagePrimitive.Root className="w-auto pr-5 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 max-w-[var(--thread-max-width)] py-4">
         <div className="bg-gray-100 text-black max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
-          {/* Display attachments using assistant-ui component */}
-          {isMultimodalEnabled() && <UserMessageAttachments />}
+          {/* File tiles (composer + non-image docs); images also appear as content parts below */}
+          <UserMessageAttachments />
 
+          <UserMessageInlineImages />
           <MessagePrimitive.Parts
             components={{
-              Image: () => null, //UserMessageAttachments already handles images
+              Image: () => null,
             }}
           />
         </div>

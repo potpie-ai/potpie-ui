@@ -947,7 +947,11 @@ export default function NewChatPage() {
         user.uid,
         title,
         projectId,
-        agentId
+        agentId,
+        false,
+        undefined,
+        undefined,
+        state.attachmentIds.length > 0 ? state.attachmentIds : undefined
       );
       if (repoName && branchName) {
         dispatch(

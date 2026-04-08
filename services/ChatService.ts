@@ -552,7 +552,8 @@ export default class ChatService {
       thinking?: string | null
     ) => void,
     sessionId?: string, // New optional parameter
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    attachmentIds?: string[] // Pre-uploaded attachment IDs (non-multimodal path)
   ): Promise<{ message: string; citations: string[]; sessionId: string }> {
     let currentSessionId = sessionId;
 
@@ -585,6 +586,13 @@ export default class ChatService {
       enabledImages.forEach((image, index) => {
         formData.append("images", image);
       });
+
+      // Append pre-uploaded attachment IDs (non-multimodal path)
+      if (attachmentIds && attachmentIds.length > 0) {
+        attachmentIds.forEach((id) => {
+          formData.append("attachment_ids", id);
+        });
+      }
 
       // Build URL with query parameters
       const url = new URL(
@@ -1095,7 +1103,8 @@ export default class ChatService {
     agentId: string,
     isHidden: boolean = false,
     repoName?: string | null,
-    branchName?: string | null
+    branchName?: string | null,
+    attachmentIds?: string[]
   ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
@@ -1116,6 +1125,9 @@ export default class ChatService {
       }
       if (branchName) {
         requestBody.branch_name = branchName;
+      }
+      if (attachmentIds && attachmentIds.length > 0) {
+        requestBody.attachment_ids = attachmentIds;
       }
 
       const response = await axios.post(

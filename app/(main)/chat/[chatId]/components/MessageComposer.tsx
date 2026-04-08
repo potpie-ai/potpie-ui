@@ -1,4 +1,7 @@
+console.log("[MessageComposer] isMultimodalEnabled:", isMultimodalEnabled());
+
 import getHeaders from "@/app/utils/headers.util";
+import MediaService from "@/services/MediaService";
 import { Button } from "@/components/ui/button";
 import { isMultimodalEnabled, getAgentDisplayLabel } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,6 +66,7 @@ interface NodeOption {
 }
 
 interface AttachedFile {
+  id: string;
   name: string;
   size: number;
   type: string;
@@ -182,9 +186,10 @@ const MessageComposer = ({
     composer.setRunConfig({
       custom: {
         selectedNodes: selectedNodes,
+        attachmentIds: attachedFiles.map((f) => f.id),
       },
     });
-  }, [selectedNodes, composer]);
+  }, [selectedNodes, attachedFiles, composer]);
 
   useEffect(() => {
     const unsubscribe =
@@ -383,17 +388,35 @@ const MessageComposer = ({
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      const newFiles: AttachedFile[] = Array.from(files).map((file) => ({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        file,
-      }));
+      // If multimodal is enabled, use the composer's native attachment handling
+      if (isMultimodalEnabled()) {
+        return;
+      }
+      // Otherwise handle upload ourselves
+      const newFiles: AttachedFile[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        try {
+          const result = await MediaService.uploadFile(file);
+          newFiles.push({
+            id: result.id,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            file,
+          });
+        } catch (err) {
+          console.error("Failed to upload file:", err);
+          toast.error(`Failed to upload ${file.name}`);
+        }
+      }
       setAttachedFiles((prev) => [...prev, ...newFiles]);
-      toast.success(`Attached ${files.length} file(s)`);
+      if (newFiles.length > 0) {
+        toast.success(`Attached ${newFiles.length} file(s)`);
+      }
     }
     // Reset the input so the same file can be selected again
     e.target.value = "";
@@ -570,27 +593,31 @@ const MessageComposer = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Attach Trigger */}
-          <button
-            type="button"
-            className="flex h-8 items-center justify-start gap-2 border-0 bg-transparent"
-            aria-label="Attach files"
-            onClick={handleAttachClick}
-          >
-            <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
-              <use href="/images/attachment-02.svg" />
-            </svg>
-            <span className="text-xs font-medium">Attach</span>
-          </button>
-          {/* Hidden file input for attachments */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            accept=".docx,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg"
-            multiple
-            onChange={handleFileChange}
-          />
+          {/* Attach Trigger - only show when multimodal is disabled */}
+          {!isMultimodalEnabled() && (
+            <>
+              <button
+                type="button"
+                className="flex h-8 items-center justify-start gap-2 border-0 bg-transparent"
+                aria-label="Attach files"
+                onClick={handleAttachClick}
+              >
+                <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+                  <use href="/images/attachment-02.svg" />
+                </svg>
+                <span className="text-xs font-medium">Attach</span>
+              </button>
+              {/* Hidden file input for attachments */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".docx,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg"
+                multiple
+                onChange={handleFileChange}
+              />
+            </>
+          )}
         </div>
 
         {/* Right: Model Selection + Send */}
@@ -817,7 +844,7 @@ const ModelSelection: FC<{
               return (
                 <DropdownMenuItem
                   key={model.id}
-                  title={model.description ?? undefined}
+                  title={!isMultimodalEnabled() ? "Model doesn't support multimodal input" : (model.description ?? undefined)}
                   onClick={async (e) => {
                     if (!available) {
                       e.preventDefault();

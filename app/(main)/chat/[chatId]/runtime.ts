@@ -542,24 +542,30 @@ const createChatAdapter = (
         throw new Error("Message must contain text");
       }
 
-      // Extract custom config (selectedNodes)
+      // Extract custom config (selectedNodes and attachmentIds)
       interface RunConfig {
         custom?: {
           selectedNodes?: unknown[];
+          attachmentIds?: string[];
         };
       }
       const runConfig = (context as { runConfig?: RunConfig }).runConfig;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
+      const attachmentIds =
+        (runConfig?.custom?.attachmentIds as string[]) || [];
 
-      // Extract images from message attachments (the assistant-ui way)
+      // Extract attachments from message (images and other files)
       const images: File[] = [];
       if (isMultimodalEnabled() && lastMessage.role === "user") {
         const userMessage = lastMessage as ThreadUserMessage;
         if (userMessage.attachments) {
           userMessage.attachments.forEach((attachment) => {
+            // Handle image, file, and document types
             if (
-              attachment.type === "image" &&
+              (attachment.type === "image" ||
+                attachment.type === "file" ||
+                attachment.type === "document") &&
               "file" in attachment &&
               attachment.file
             ) {
@@ -687,7 +693,8 @@ const createChatAdapter = (
             }
           },
           streamingStateRef.current.sessionId || undefined,
-          abortSignal ?? undefined
+          abortSignal ?? undefined,
+          attachmentIds
         )
           .then((result) => {
             // Store final session ID

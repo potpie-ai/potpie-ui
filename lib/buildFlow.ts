@@ -199,3 +199,8 @@ export function getCodegenHrefForRecipe(recipeId: string): string {
   }
   return base;
 }
+
+/** React Query key for recipe details in BuildFlowStepNav; invalidate when plan (or recipe) progress updates status. */
+export function buildFlowNavRecipeDetailsQueryKey(recipeId: string) {
+  return ["recipe-details", recipeId, "build-flow-nav"] as const;
+}

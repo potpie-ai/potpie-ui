@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FC, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import SpecService from "@/services/SpecService";
@@ -9,6 +9,7 @@ import {
   buildFlowStepFromPathname,
   canNavigateToBuildFlowStep,
   CODEGEN_STARTED_EVENT,
+  buildFlowNavRecipeDetailsQueryKey,
   computeMaxReachableStepIndex,
   getCodegenHrefForRecipe,
   hasCodegenStartedForRecipe,
@@ -21,12 +22,15 @@ type BuildFlowStepNavProps = {
   className?: string;
 };
 
-export function BuildFlowStepNav({ recipeId, className }: BuildFlowStepNavProps) {
+export const BuildFlowStepNav: FC<BuildFlowStepNavProps> = ({
+  recipeId,
+  className,
+}) => {
   const pathname = usePathname();
   const router = useRouter();
 
   const { data: recipeDetails } = useQuery({
-    queryKey: ["recipe-details", recipeId, "build-flow-nav"],
+    queryKey: buildFlowNavRecipeDetailsQueryKey(recipeId),
     queryFn: () => SpecService.getRecipeDetails(recipeId),
     enabled: Boolean(recipeId),
     staleTime: 10_000,
@@ -116,4 +120,4 @@ export function BuildFlowStepNav({ recipeId, className }: BuildFlowStepNavProps)
       })}
     </nav>
   );
-}
+};

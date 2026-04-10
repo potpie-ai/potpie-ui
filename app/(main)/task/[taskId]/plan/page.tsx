@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MermaidDiagram, looksLikeMermaid } from "@/components/chat/MermaidDiagram";
 import {
@@ -66,6 +66,7 @@ import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils"
 import { downloadPlanAsMarkdown } from "@/lib/utils/markdownExport";
 import {
   CODEGEN_STARTED_EVENT,
+  buildFlowNavRecipeDetailsQueryKey,
   hasCodegenStartedForRecipe,
   hasImplementationBeenStartedBefore,
   markCodegenStartedForRecipe,
@@ -250,6 +251,14 @@ const PlanPage = () => {
   const runIdFromUrl = searchParams.get("run_id");
   const repoNameFromUrl = searchParams.get("repoName");
 
+  const invalidatePlanStatusAndBuildFlowNav = useCallback(() => {
+    if (!recipeId) return;
+    queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] });
+    queryClient.invalidateQueries({
+      queryKey: buildFlowNavRecipeDetailsQueryKey(recipeId),
+    });
+  }, [queryClient, recipeId]);
+
   const repoBranchByTask = useSelector((state: RootState) => state.RepoAndBranch.byTaskId);
   const storedRepoContext = recipeId ? repoBranchByTask?.[recipeId] : undefined;
 
@@ -282,7 +291,7 @@ const PlanPage = () => {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const planContentRef = useRef<HTMLDivElement>(null);
-  const { startNavigation } = useNavigationProgress();
+  const { startNavigation, endNavigation } = useNavigationProgress();
 
   useEffect(() => {
     const fetchRecipeDetails = async () => {
@@ -458,7 +467,7 @@ const PlanPage = () => {
         if (genStatus === "completed" || genStatus === "failed") {
           // Plan is already done, no need to stream - just update state and clear run_id from URL
           setPlanStatus(currentStatus);
-          queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] });
+          invalidatePlanStatusAndBuildFlowNav();
           router.replace(`/task/${recipeId}/plan`, { scroll: false });
           return;
         }
@@ -532,14 +541,14 @@ const PlanPage = () => {
           }
           if (eventType === "end") {
             setStreamProgress(null);
-            queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] });
+            invalidatePlanStatusAndBuildFlowNav();
             PlanService.getPlanStatusByRecipeId(recipeId).then(setPlanStatus).catch(() => {});
             router.replace(`/task/${recipeId}/plan`, { scroll: false });
           }
           if (eventType === "error") {
             setStreamProgress(null);
             setStreamItems([]);
-            queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] });
+            invalidatePlanStatusAndBuildFlowNav();
             PlanService.getPlanStatusByRecipeId(recipeId).then(setPlanStatus).catch(() => {});
             router.replace(`/task/${recipeId}/plan`, { scroll: false });
           }
@@ -552,7 +561,7 @@ const PlanPage = () => {
             const fallbackStatus = await PlanService.getPlanStatusByRecipeId(recipeId);
             const genStatus = fallbackStatus.generation_status;
             setPlanStatus(fallbackStatus);
-            queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] });
+            invalidatePlanStatusAndBuildFlowNav();
             if (genStatus === "completed" || genStatus === "failed") {
               // Plan finished, stream just wasn't available - no error to show
               setStreamProgress(null);
@@ -576,7 +585,7 @@ const PlanPage = () => {
       cancelled = true;
       streamAbortRef.current?.abort();
     };
-  }, [recipeId, runIdFromUrl, queryClient, router]);
+  }, [recipeId, runIdFromUrl, router, invalidatePlanStatusAndBuildFlowNav]);
 
   // Auto-scroll to end when stream items change
   useEffect(() => {
@@ -593,9 +602,9 @@ const PlanPage = () => {
 
     hasTriggeredPlanGenRef.current = true;
     PlanService.submitPlanGeneration({ recipe_id: recipeId })
-      .then(() => queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] }))
+      .then(() => invalidatePlanStatusAndBuildFlowNav())
       .catch(() => {});
-  }, [recipeId, isLoadingStatus, statusData, runIdFromUrl, queryClient]);
+  }, [recipeId, isLoadingStatus, statusData, runIdFromUrl, invalidatePlanStatusAndBuildFlowNav]);
 
   // Extract plan items from phases (new API)
   useEffect(() => {
@@ -919,7 +928,7 @@ const PlanPage = () => {
                         await PlanService.regeneratePlan(recipeId);
                         toast.success("Plan regeneration started");
                         setPlanStatus(null);
-                        queryClient.invalidateQueries({ queryKey: ["plan-status", recipeId] });
+                        invalidatePlanStatusAndBuildFlowNav();
                       } catch (err: any) {
                         console.error("Error regenerating plan:", err);
                         toast.error(err?.message ?? "Failed to regenerate plan");
@@ -1378,10 +1387,7 @@ const PlanPage = () => {
                   } catch (e) {
                     console.error("Failed to start implementation", e);
                     toast.error("Failed to start implementation");
-                    markCodegenStartedForRecipe(recipeId);
-                    router.push(
-                      `/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`
-                    );
+                    endNavigation();
                   }
                 }}
                 className="px-6 py-2.5 rounded-lg font-medium text-sm bg-[#022019] text-[#B4D13F] hover:opacity-90 shadow-sm"

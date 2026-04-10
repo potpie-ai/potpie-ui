@@ -127,6 +127,47 @@ export function hasCodegenStartedForRecipe(recipeId: string): boolean {
 }
 
 /**
+ * True when spec output has been produced at least once (recipe status reflects
+ * SPEC_READY or later build stages). Used for QnA primary button label.
+ */
+export function hasSpecBeenCompletedOnce(
+  recipeStatus: string | null | undefined,
+): boolean {
+  if (!recipeStatus) return false;
+  const u = recipeStatus.toUpperCase();
+  if (u === "SPEC_READY") return true;
+  if (
+    u.includes("PLAN") ||
+    u.includes("CODEGEN") ||
+    u.includes("TASK_SPLITTING") ||
+    u.includes("IMPLEMENTATION")
+  ) {
+    return true;
+  }
+  if (u.includes("SPEC") && (u.includes("READY") || u.includes("COMPLETE"))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * True when implementation/codegen has been started before (recipe status or session).
+ * Used for Plan "Start implementation" button label.
+ */
+export function hasImplementationBeenStartedBefore(
+  recipeStatus: string | null | undefined,
+  sessionCodegenStarted: boolean,
+): boolean {
+  if (sessionCodegenStarted) return true;
+  const s = (recipeStatus ?? "").toUpperCase();
+  return (
+    s.includes("CODEGEN") ||
+    s.includes("TASK_SPLITTING") ||
+    s.includes("IMPLEMENTATION")
+  );
+}
+
+/**
  * Persist last codegen URL query for a recipe so build-flow tabs can return to the
  * same slice / taskSplittingId instead of `/code` bare (which defaults itemNumber=1).
  */

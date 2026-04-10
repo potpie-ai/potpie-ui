@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
@@ -999,6 +1000,20 @@ const SpecPage = () => {
   const { plan: normalizedPlan, rawSpec: rawSpecification } = normalizeSpecFromProgress(specProgress ?? undefined);
   const hasSpecContent = normalizedPlan !== null || rawSpecification !== null;
 
+  const { data: planStatusForLabel } = useQuery({
+    queryKey: ["plan-status", recipeId],
+    queryFn: () => PlanService.getPlanStatusByRecipeId(recipeId!),
+    enabled:
+      !!recipeId &&
+      status === "COMPLETED" &&
+      !isCancelled &&
+      hasSpecContent,
+    staleTime: 30_000,
+  });
+  const planGenForLabel = planStatusForLabel?.generation_status?.toLowerCase();
+  const showReGeneratePlanButton =
+    planGenForLabel === "completed" || planGenForLabel === "failed";
+
   // Persist stream timeline when spec is completed so it survives refresh
   useEffect(() => {
     if (!recipeId || status !== "COMPLETED" || !hasSpecContent) return;
@@ -1396,7 +1411,7 @@ const SpecPage = () => {
                   disabled={isGeneratingPlan}
                   className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                 >
-                  GENERATE PLAN
+                  {showReGeneratePlanButton ? "RE-GENERATE PLAN" : "GENERATE PLAN"}
                 </button>
               </div>
             )}

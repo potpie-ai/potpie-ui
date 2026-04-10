@@ -39,6 +39,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
+import { hasSpecBeenCompletedOnce } from "@/lib/buildFlow";
 import {
   RecipeQuestionsResponse,
   RecipeQuestion,
@@ -157,6 +158,16 @@ export default function QnaPage() {
     questionGenerationStatus: null,
     questionGenerationError: null,
   });
+
+  const { data: recipeDetailsForGenerateLabel } = useQuery({
+    queryKey: ["recipe-details", recipeId, "qna-generate-label"],
+    queryFn: () => SpecService.getRecipeDetails(recipeId!),
+    enabled: !!recipeId,
+    staleTime: 10_000,
+  });
+  const reGenerateImplementationPlan = hasSpecBeenCompletedOnce(
+    recipeDetailsForGenerateLabel?.status,
+  );
 
   // Fetch recipe details when recipeId is available (same priority as spec: API then localStorage)
   useEffect(() => {
@@ -1909,6 +1920,7 @@ export default function QnaPage() {
                 onGeneratePlan={handleGeneratePlan}
                 isGenerating={state.isGenerating}
                 recipeId={recipeId}
+                reGenerateImplementationPlan={reGenerateImplementationPlan}
                 onAttachmentChange={handleAttachmentChange}
                 attachmentUploading={state.attachmentUploading}
               />

@@ -64,7 +64,12 @@ import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 import { useNavigationProgress } from "@/contexts/NavigationProgressContext";
 import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils";
 import { downloadPlanAsMarkdown } from "@/lib/utils/markdownExport";
-import { markCodegenStartedForRecipe } from "@/lib/buildFlow";
+import {
+  CODEGEN_STARTED_EVENT,
+  hasCodegenStartedForRecipe,
+  hasImplementationBeenStartedBefore,
+  markCodegenStartedForRecipe,
+} from "@/lib/buildFlow";
 import {
   StreamTimeline,
   type StreamTimelineItem,
@@ -386,6 +391,33 @@ const PlanPage = () => {
           return (data?.generation_status === "processing" || data?.generation_status === "pending") ? 2000 : false;
         },
   });
+
+  const { data: recipeDetailsForImplBtn } = useQuery({
+    queryKey: ["recipe-details", recipeId, "plan-start-impl-label"],
+    queryFn: () => SpecService.getRecipeDetails(recipeId),
+    enabled: !!recipeId,
+    staleTime: 10_000,
+  });
+
+  const [sessionCodegenFlag, setSessionCodegenFlag] = useState(false);
+
+  useEffect(() => {
+    setSessionCodegenFlag(hasCodegenStartedForRecipe(recipeId));
+  }, [recipeId]);
+
+  useEffect(() => {
+    const onMarked = (e: Event) => {
+      const d = (e as CustomEvent<{ recipeId?: string }>).detail;
+      if (d?.recipeId === recipeId) setSessionCodegenFlag(true);
+    };
+    window.addEventListener(CODEGEN_STARTED_EVENT, onMarked);
+    return () => window.removeEventListener(CODEGEN_STARTED_EVENT, onMarked);
+  }, [recipeId]);
+
+  const showReStartImplementation = hasImplementationBeenStartedBefore(
+    recipeDetailsForImplBtn?.status,
+    sessionCodegenFlag,
+  );
 
   useEffect(() => {
     if (statusData) {
@@ -1354,7 +1386,9 @@ const PlanPage = () => {
                 }}
                 className="px-6 py-2.5 rounded-lg font-medium text-sm bg-[#022019] text-[#B4D13F] hover:opacity-90 shadow-sm"
               >
-                START IMPLEMENTATION
+                {showReStartImplementation
+                  ? "RE-START IMPLEMENTATION"
+                  : "START IMPLEMENTATION"}
               </button>
             </div>
           )}

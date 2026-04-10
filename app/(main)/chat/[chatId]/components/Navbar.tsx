@@ -56,10 +56,11 @@ const Navbar = ({
   className?: string;
   showTitle?: boolean;
 }) => {
-  const { title, agentId, allAgents } = useSelector(
+  const { title, agentId, allAgents, temporaryContext } = useSelector(
     (state: RootState) => state.chat
   );
   const repoName = useSelector((state: RootState) => state.RepoAndBranch.repoName);
+  const resolvedRepoName = (repoName || temporaryContext?.repo || "").trim();
   const pathname = usePathname();
   const { user } = useAuthContext();
   const dispatch = useDispatch();
@@ -291,7 +292,7 @@ const Navbar = ({
                     <span className="text-black text-xl truncate block">
                       {displayTitle}
                     </span>
-                    {repoName?.trim() && (
+                    {resolvedRepoName && (
                       <span className="text-xs text-zinc-500 truncate block mt-0.5">
                         <span className="inline-flex items-center gap-1.5">
                           <Image
@@ -300,7 +301,7 @@ const Navbar = ({
                             width={12}
                             height={12}
                           />
-                          <span className="truncate">{repoName}</span>
+                          <span className="truncate">{resolvedRepoName}</span>
                         </span>
                       </span>
                     )}

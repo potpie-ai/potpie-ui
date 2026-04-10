@@ -84,7 +84,10 @@ import {
   type StreamTimelineItem,
 } from "@/components/stream/StreamTimeline";
 import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
-import { persistCodegenQueryString } from "@/lib/buildFlow";
+import {
+  markCodegenStartedForRecipe,
+  persistCodegenQueryString,
+} from "@/lib/buildFlow";
 
 /** sessionStorage key for codegen thinking */
 const THINKING_STORAGE_KEY_CODEGEN = "potpie_thinking_codegen";
@@ -857,6 +860,13 @@ export default function VerticalTaskExecution() {
   const [taskSplittingId, setTaskSplittingId] = useState<string | null>(
     taskSplittingIdFromUrl || null,
   );
+
+  useEffect(() => {
+    if (recipeId && taskSplittingId) {
+      markCodegenStartedForRecipe(recipeId);
+    }
+  }, [recipeId, taskSplittingId]);
+
   const [taskSplittingStatus, setTaskSplittingStatus] =
     useState<TaskSplittingStatusResponse | null>(null);
   const [allLayers, setAllLayers] = useState<TaskLayer[]>([]);

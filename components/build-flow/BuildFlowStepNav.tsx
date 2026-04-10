@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import SpecService from "@/services/SpecService";
@@ -7,11 +8,13 @@ import {
   BUILD_FLOW_STEPS,
   buildFlowStepFromPathname,
   canNavigateToBuildFlowStep,
+  CODEGEN_STARTED_EVENT,
   computeMaxReachableStepIndex,
+  getCodegenHrefForRecipe,
+  hasCodegenStartedForRecipe,
   type BuildFlowStep,
 } from "@/lib/buildFlow";
 import { cn } from "@/lib/utils";
-import { getCodegenHrefForRecipe } from "@/lib/buildFlow";
 
 type BuildFlowStepNavProps = {
   recipeId: string;
@@ -30,7 +33,24 @@ export function BuildFlowStepNav({ recipeId, className }: BuildFlowStepNavProps)
   });
 
   const recipeStatus = recipeDetails?.status ?? null;
-  const maxReachableIndex = computeMaxReachableStepIndex(recipeStatus, pathname);
+  const baseMaxReachable = computeMaxReachableStepIndex(recipeStatus, pathname);
+  const [codegenStarted, setCodegenStarted] = useState(false);
+
+  useEffect(() => {
+    const read = () => setCodegenStarted(hasCodegenStartedForRecipe(recipeId));
+    read();
+    const onMarked = (e: Event) => {
+      const detail = (e as CustomEvent<{ recipeId?: string }>).detail;
+      if (detail?.recipeId === recipeId) read();
+    };
+    window.addEventListener(CODEGEN_STARTED_EVENT, onMarked);
+    return () => window.removeEventListener(CODEGEN_STARTED_EVENT, onMarked);
+  }, [recipeId, pathname]);
+
+  const maxReachableIndex = Math.max(
+    baseMaxReachable,
+    codegenStarted ? 3 : 0,
+  );
   const activeStep = buildFlowStepFromPathname(pathname);
 
   const go = (step: BuildFlowStep, href: string) => {
@@ -69,7 +89,9 @@ export function BuildFlowStepNav({ recipeId, className }: BuildFlowStepNavProps)
               disabled={!enabled}
               title={
                 !enabled
-                  ? "Complete the current step to unlock this stage"
+                  ? step.id === "code"
+                    ? "Use “Start implementation” on the Plan page to begin codegen"
+                    : "Complete the current step to unlock this stage"
                   : undefined
               }
               onClick={() => go(step.id, href)}

@@ -64,6 +64,7 @@ import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 import { useNavigationProgress } from "@/contexts/NavigationProgressContext";
 import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils";
 import { downloadPlanAsMarkdown } from "@/lib/utils/markdownExport";
+import { markCodegenStartedForRecipe } from "@/lib/buildFlow";
 import {
   StreamTimeline,
   type StreamTimelineItem,
@@ -1336,6 +1337,7 @@ const PlanPage = () => {
                       recipe_id: recipeId,
                       plan_item_id: firstItem.id,
                     });
+                    markCodegenStartedForRecipe(recipeId);
                     const params = new URLSearchParams();
                     params.set("planId", planId);
                     params.set("itemNumber", String(firstItem.item_number));
@@ -1344,6 +1346,7 @@ const PlanPage = () => {
                   } catch (e) {
                     console.error("Failed to start implementation", e);
                     toast.error("Failed to start implementation");
+                    markCodegenStartedForRecipe(recipeId);
                     router.push(
                       `/task/${recipeId}/code?planId=${planId}&itemNumber=${firstItem.item_number}`
                     );

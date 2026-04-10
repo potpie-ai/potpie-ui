@@ -67,8 +67,9 @@ export function computeMaxReachableStepIndex(
     max = Math.max(max, 2);
   }
 
+  // Code tab: not unlocked by PLAN_READY alone — user must use "Start implementation"
+  // on the plan page (or recipe status must reflect codegen / task-splitting).
   if (
-    (s.includes("PLAN") && (s.includes("READY") || s.includes("COMPLETE"))) ||
     s.includes("CODEGEN") ||
     s.includes("TASK_SPLITTING") ||
     s.includes("IMPLEMENTATION")
@@ -97,6 +98,33 @@ export function canNavigateToBuildFlowStep(
 /** sessionStorage key for last codegen query (planId / taskSplittingId) per recipe. */
 const codegenQueryStorageKey = (recipeId: string) =>
   `potpie_codegen_query_${recipeId}`;
+
+/** Set when implementation/codegen has been started so the Code tab stays reachable after leaving /code. */
+const codegenStartedStorageKey = (recipeId: string) =>
+  `potpie_codegen_started_${recipeId}`;
+
+export const CODEGEN_STARTED_EVENT = "potpie-codegen-started";
+
+export function markCodegenStartedForRecipe(recipeId: string): void {
+  if (typeof window === "undefined" || !recipeId) return;
+  try {
+    sessionStorage.setItem(codegenStartedStorageKey(recipeId), "1");
+    window.dispatchEvent(
+      new CustomEvent(CODEGEN_STARTED_EVENT, { detail: { recipeId } }),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+export function hasCodegenStartedForRecipe(recipeId: string): boolean {
+  if (typeof window === "undefined" || !recipeId) return false;
+  try {
+    return sessionStorage.getItem(codegenStartedStorageKey(recipeId)) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Persist last codegen URL query for a recipe so build-flow tabs can return to the

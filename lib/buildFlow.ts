@@ -37,7 +37,8 @@ export function isRecipeInQuestionOnlyPhase(status: string | null | undefined): 
   if (u === "QUESTIONS_READY" || u === "PENDING_QUESTIONS") return true;
   if (u.includes("SPEC") || u.includes("PLAN")) return false;
   if (u.includes("QUESTION")) return true;
-  return false;
+  // Unrecognized status: stay conservative — keep Spec locked until we know Q&A is done.
+  return true;
 }
 
 /**

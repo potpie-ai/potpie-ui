@@ -18,7 +18,6 @@ import {
   Loader2,
   Code2,
   ShieldCheck,
-  GitBranch,
   Maximize2,
   CheckCircle2,
   Circle,
@@ -37,8 +36,6 @@ import {
   ExternalLink,
   Hourglass,
   List,
-  ArrowLeft,
-  Github,
   Sparkles,
   Info,
   RefreshCw,
@@ -86,6 +83,8 @@ import {
   StreamTimeline,
   type StreamTimelineItem,
 } from "@/components/stream/StreamTimeline";
+import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
+import { persistCodegenQueryString } from "@/lib/buildFlow";
 
 /** sessionStorage key for codegen thinking */
 const THINKING_STORAGE_KEY_CODEGEN = "potpie_thinking_codegen";
@@ -810,6 +809,14 @@ export default function VerticalTaskExecution() {
   const taskSplittingIdFromUrl = searchParams.get("taskSplittingId");
   const repoNameFromUrl = searchParams.get("repoName");
 
+  // Keep last codegen query (slice + task splitting id) for build-flow tab navigation
+  useEffect(() => {
+    if (!recipeId) return;
+    const qs = searchParams.toString();
+    if (!qs) return;
+    persistCodegenQueryString(recipeId, `?${qs}`);
+  }, [recipeId, searchParams]);
+
   const repoBranchByTask = useSelector(
     (state: RootState) => state.RepoAndBranch.byTaskId,
   );
@@ -1099,6 +1106,26 @@ export default function VerticalTaskExecution() {
   const displayRepoName =
     repoNameFromUrl || storedRepoContext?.repoName || repoName;
   const displayBranchName = storedRepoContext?.branchName || branchName;
+
+  /** Title for build-flow header: avoid blank h1 while prompt loads; prefer localStorage recipe cache */
+  const codePageHeaderTitle = useMemo(() => {
+    const trimmed = recipePrompt?.trim();
+    if (trimmed) {
+      return `${trimmed.slice(0, 50)}${trimmed.length > 50 ? "…" : ""}`;
+    }
+    if (typeof window !== "undefined" && recipeId) {
+      try {
+        const raw = localStorage.getItem(`recipe_${recipeId}`);
+        if (raw) {
+          const u = (JSON.parse(raw) as { user_prompt?: string }).user_prompt?.trim();
+          if (u) return `${u.slice(0, 50)}${u.length > 50 ? "…" : ""}`;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return "Code generation";
+  }, [recipePrompt, recipeId]);
 
   // Initialize the left "chat" with the prompt + a codegen helper message (once per recipe).
   // Run once per recipeId; use fallback prompt if recipePrompt not loaded yet so the pane is never empty.
@@ -2165,10 +2192,20 @@ export default function VerticalTaskExecution() {
   // Show loading if we don't have planId yet (plan items loading)
   if (!planId && isLoadingPlanItems) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
-          <p className="text-primary-color">Loading task data...</p>
+      <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
+        <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+          <BuildFlowChatHeader
+            recipeId={recipeId}
+            title={codePageHeaderTitle}
+            repoName={displayRepoName}
+            branchName={displayBranchName}
+          />
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-primary-color" />
+            <p className="text-primary-color">Loading task data...</p>
+          </div>
         </div>
       </div>
     );
@@ -2186,19 +2223,6 @@ export default function VerticalTaskExecution() {
   //     </div>
   //   );
   // }
-
-  const Badge = ({
-    children,
-    icon: Icon,
-  }: {
-    children: React.ReactNode;
-    icon?: React.ComponentType<{ className?: string }>;
-  }) => (
-    <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color bg-white">
-      {Icon && <Icon className="w-3.5 h-3.5" />}
-      <span className="truncate">{children}</span>
-    </div>
-  );
 
   const handleSendChatMessage = async () => {
     const text = chatInput.trim();
@@ -2277,21 +2301,18 @@ export default function VerticalTaskExecution() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left: Chat + plan */}
-        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7]">
-          {/* Header */}
-          <div className="flex justify-between items-center px-6 py-4 shrink-0">
-            <h1 className="text-lg font-bold text-primary-color truncate capitalize">
-              {recipePrompt?.slice(0, 50) ?? "Chat Name"}
-              {(recipePrompt?.length ?? 0) > 50 ? "…" : ""}
-            </h1>
-            <div className="flex items-center gap-2 shrink-0">
-              <Badge icon={Github}>{displayRepoName}</Badge>
-              <Badge icon={GitBranch}>{displayBranchName}</Badge>
-            </div>
-          </div>
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+        <BuildFlowChatHeader
+          recipeId={recipeId}
+          title={codePageHeaderTitle}
+          repoName={displayRepoName}
+          branchName={displayBranchName}
+        />
+      </div>
 
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Left: Chat + plan */}
+        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#E5E8E6] bg-[#FAF8F7]">
           {/* Messages */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
             {chatMessages.map((msg, i) => (
@@ -2658,8 +2679,8 @@ export default function VerticalTaskExecution() {
 
         {/* Right: Code generation */}
         <div className="overflow-hidden flex-none flex flex-col w-1/2 min-w-0">
-          <aside className="h-full w-full min-w-[320px] flex flex-col border-l border-[#D3E5E5]">
-            <div className="p-6 border-b border-[#D3E5E5] bg-white">
+          <aside className="h-full w-full min-w-[320px] flex flex-col border-l border-[#E5E8E6]">
+            <div className="p-6 border-b border-[#E5E8E6] bg-white">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0">
                   <h2
@@ -2687,7 +2708,7 @@ export default function VerticalTaskExecution() {
                         setSelectedChangedFilePath(null);
                         setChangedFilesSliderOpen(true);
                       }}
-                      className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#D3E5E5] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
+                      className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#E5E8E6] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
                       title="View all files and diffs"
                     >
                       View files
@@ -2701,7 +2722,7 @@ export default function VerticalTaskExecution() {
                       <button
                         type="button"
                         onClick={handleDownloadCode}
-                        className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#D3E5E5] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
+                        className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#E5E8E6] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
                         title="Download generated code as zip"
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -2878,7 +2899,7 @@ export default function VerticalTaskExecution() {
 
             {/* Sticky Create PR / View PR at end of code gen panel */}
             {taskSplittingId && (
-              <div className="sticky bottom-0 shrink-0 border-t border-[#D3E5E5] bg-white px-6 py-4 flex justify-end">
+              <div className="sticky bottom-0 shrink-0 border-t border-[#E5E8E6] bg-white px-6 py-4 flex justify-end">
                 {taskSplittingStatus?.pr_url ? (
                   <a
                     href={taskSplittingStatus.pr_url}

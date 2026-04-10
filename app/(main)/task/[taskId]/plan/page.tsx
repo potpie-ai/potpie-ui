@@ -23,8 +23,6 @@ import {
   AlignLeft,
   ListTodo,
   AlertCircle,
-  Github,
-  GitBranch,
   LucideIcon,
   FileText,
   Lightbulb,
@@ -34,7 +32,6 @@ import {
   SendHorizonal,
   RotateCw,
   Wrench,
-  ArrowLeft,
   Download,
 } from "lucide-react";
 import {
@@ -71,6 +68,7 @@ import {
   StreamTimeline,
   type StreamTimelineItem,
 } from "@/components/stream/StreamTimeline";
+import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 
 /**
  * VERTICAL SLICE PLANNER (Auto-Generation Mode)
@@ -206,21 +204,6 @@ const getModuleIcon = (name: string) => {
     default: return Code2;
   }
 };
-
-const HeaderBadge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: LucideIcon }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium" style={{ border: "1px solid #CCD3CF", color: "#022019" }}>
-    {Icon && <Icon className="w-3.5 h-3.5" />}
-    {children}
-  </div>
-);
-
-/** Chat pill badge (matches spec page) */
-const ChatBadge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: LucideIcon }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-[#022019]">
-    {Icon && <Icon className="w-3.5 h-3.5" />}
-    {children}
-  </div>
-);
 
 const FormattedText = ({ text }: { text: string }) => {
   if (!text) return null;
@@ -685,33 +668,21 @@ const PlanPage = () => {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#FAF8F7] text-[#000000] font-sans antialiased">
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left: Chat (same pattern as spec page) */}
-        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7] chat-panel-contained">
-          <div className="px-6 pt-4 pb-2 shrink-0 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (!recipeId) return;
-                router.push(`/task/${recipeId}/spec`);
-              }}
-              className="inline-flex items-center gap-1 text-xs font-medium text-[#022019] px-0 py-0.5 rounded-md hover:underline w-fit"
-            >
-              <ArrowLeft className="w-3 h-3" />
-              Back to spec
-            </button>
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-lg font-bold text-[#022019] truncate capitalize">
-                {userPrompt?.slice(0, 50) || "Chat Name"}
-                {(userPrompt?.length ?? 0) > 50 ? "…" : ""}
-              </h1>
-              <div className="flex items-center gap-2 shrink-0 mt-1 sm:mt-0">
-                <ChatBadge icon={Github}>{displayRepoName}</ChatBadge>
-                <ChatBadge icon={GitBranch}>{displayBranchName}</ChatBadge>
-              </div>
-            </div>
-          </div>
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+        <BuildFlowChatHeader
+          recipeId={recipeId}
+          variant="plan"
+          title={`${userPrompt?.slice(0, 50) || "Chat Name"}${
+            (userPrompt?.length ?? 0) > 50 ? "…" : ""
+          }`}
+          repoName={displayRepoName}
+          branchName={displayBranchName}
+        />
+      </div>
 
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Left: Chat (same pattern as spec page) */}
+        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
             {chatMessages.map((msg, i) => (
               <React.Fragment key={i}>
@@ -874,8 +845,8 @@ const PlanPage = () => {
         </div>
 
         {/* Right: Phase Plan panel (top bar matches Spec page) */}
-        <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 border-l border-[#D3E5E5]">
-          <div className="p-6 border-b border-[#D3E5E5] bg-[#FFFDFC] shrink-0">
+        <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 border-l border-[#E5E8E6]">
+          <div className="p-6 border-b border-[#E5E8E6] bg-[#FFFDFC] shrink-0">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
               <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0 truncate min-w-0" style={{ color: "#022019" }} title={`Phase ${selectedPhaseIndex + 1}`}>
@@ -1010,7 +981,7 @@ const PlanPage = () => {
                   {phase.name}
                 </h3>
                 <Tabs defaultValue="summary" className="w-full">
-                  <TabsList className="w-full grid grid-cols-3 rounded-none border-b border-[#D3E5E5] bg-[#F7F6F5] p-0 h-11 gap-0">
+                  <TabsList className="w-full grid grid-cols-3 rounded-none border-b border-[#E5E8E6] bg-[#F7F6F5] p-0 h-11 gap-0">
                     <TabsTrigger
                       value="summary"
                       className="rounded-none h-11 px-0 text-sm font-medium text-[#022019] border-b-2 border-transparent shadow-none data-[state=active]:bg-[#EAF4C8] data-[state=active]:border-[#B4D13F]"
@@ -1354,7 +1325,7 @@ const PlanPage = () => {
           </div>
 
           {isCompleted && planItems.length > 0 && (
-            <div className="shrink-0 p-6 pt-4 border-t border-[#D3E5E5] bg-[#FFFDFC] flex justify-end">
+            <div className="shrink-0 p-6 pt-4 border-t border-[#E5E8E6] bg-[#FFFDFC] flex justify-end">
               <button
                 type="button"
                 onClick={async () => {

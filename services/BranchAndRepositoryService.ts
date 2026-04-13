@@ -335,17 +335,41 @@ export default class BranchAndRepositoryService {
               return status;
           }
         };
+
+        const shouldAdvanceToNextStep = (status: string) =>
+          status === ParsingStatusEnum.INFERRING ||
+          status === ParsingStatusEnum.READY;
+
+        if (shouldAdvanceToNextStep(parsingStatus)) {
+          if (setChatStep) {
+            setChatStep(2);
+          }
+          setParsingStatus(
+            parsingStatus === ParsingStatusEnum.READY
+              ? ParsingStatusEnum.READY
+              : getStatusMessage(parsingStatus)
+          );
+          if (parsingStatus === ParsingStatusEnum.READY) {
+            return;
+          }
+        }
     
         while (parsingStatus !== ParsingStatusEnum.READY && Date.now() - startTime < maxDuration) {
           parsingStatus = await BranchAndRepositoryService.getParsingStatus(projectId);
           setParsingStatus(getStatusMessage(parsingStatus));
     
-          if (parsingStatus === ParsingStatusEnum.READY) {
+          if (shouldAdvanceToNextStep(parsingStatus)) {
             if (setChatStep) {
               setChatStep(2); 
             }
-            setParsingStatus(ParsingStatusEnum.READY);
-            return;
+            setParsingStatus(
+              parsingStatus === ParsingStatusEnum.READY
+                ? ParsingStatusEnum.READY
+                : getStatusMessage(parsingStatus)
+            );
+            if (parsingStatus === ParsingStatusEnum.READY) {
+              return;
+            }
           }
     
           if (parsingStatus === ParsingStatusEnum.ERROR) {

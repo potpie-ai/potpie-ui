@@ -21,7 +21,8 @@ import { toast } from "@/components/ui/sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LucideEdit, LucideTrash } from "lucide-react";
 import ChatService from "@/services/ChatService";
-import RecipeService from "@/services/RecipeService"; 
+import RecipeService from "@/services/RecipeService";
+import { getRecipeRedirectUrl } from "@/lib/utils/recipeRedirect";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -85,47 +86,6 @@ const AllChats = () => {
 
   const handleChatClick = (chat: any) => {
     dispatch(setChat({ agentId: chat.agent_id, temporaryContext: { branch: chat.branch, repo: chat.repository, projectId: chat.project_ids[0] }, selectedNodes: [], title: chat.title, chatFlow: "EXISTING_CHAT" }));
-  };
-
-  // Get redirect URL for recipe based on status
-  const getRecipeRedirectUrl = (recipe: any): string => {
-    const recipeId = recipe.id || recipe.recipe_id;
-    const status = (recipe.status || '').toUpperCase();
-    
-    // Check if status contains "QUESTIONS" (e.g., PENDING_QUESTIONS, QUESTIONS_READY)
-    // This matches patterns like "QUESTIONS*" as requested
-    if (status.includes('QUESTIONS')) {
-      const params = new URLSearchParams();
-      if (recipe.project_id) {
-        params.set('projectId', recipe.project_id);
-      }
-      if (recipeId) {
-        params.set('recipeId', recipeId);
-      }
-      return `/repo?${params.toString()}`;
-    }
-    
-    // Check if status contains "SPEC" (e.g., SPEC_IN_PROGRESS, SPEC_READY, ANSWERS_SUBMITTED)
-    // This matches patterns like "SPEC*" as requested
-    if (status.includes('SPEC') || status === 'ANSWERS_SUBMITTED') {
-      return `/task/${recipeId}/spec`;
-    }
-    
-    // Check if status contains "PLAN" (e.g., PLAN_IN_PROGRESS, PLAN_READY)
-    // This matches patterns like "PLAN*" as requested
-    if (status.includes('PLAN')) {
-      return `/task/${recipeId}/plan`;
-    }
-    
-    // Default: redirect to repo page for questions (for initial states)
-    const params = new URLSearchParams();
-    if (recipe.project_id) {
-      params.set('projectId', recipe.project_id);
-    }
-    if (recipeId) {
-      params.set('recipeId', recipeId);
-    }
-    return `/repo?${params.toString()}`;
   };
 
   // Combine chats and recipes into a single list

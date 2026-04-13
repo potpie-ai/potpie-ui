@@ -349,7 +349,9 @@ export default class BranchAndRepositoryService {
               ? ParsingStatusEnum.READY
               : getStatusMessage(parsingStatus)
           );
-          return;
+          if (parsingStatus === ParsingStatusEnum.READY) {
+            return;
+          }
         }
     
         while (parsingStatus !== ParsingStatusEnum.READY && Date.now() - startTime < maxDuration) {
@@ -365,7 +367,9 @@ export default class BranchAndRepositoryService {
                 ? ParsingStatusEnum.READY
                 : getStatusMessage(parsingStatus)
             );
-            return;
+            if (parsingStatus === ParsingStatusEnum.READY) {
+              return;
+            }
           }
     
           if (parsingStatus === ParsingStatusEnum.ERROR) {

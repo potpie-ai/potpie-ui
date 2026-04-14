@@ -39,6 +39,12 @@ jobs:
       - name: Set active GCP project
         run: gcloud config set project "$PROJECT_ID"
 
+      - name: Verify CI identity (must have Artifact Registry Writer on target project)
+        run: |
+          echo "Active GCP identity for this job:"
+          gcloud auth list --filter=status:ACTIVE --format="table(account,status)"
+          echo "Target project: ${PROJECT_ID}"
+
       # Install gke-gcloud-auth-plugin
       - name: Install gke-gcloud-auth-plugin
         run: |-

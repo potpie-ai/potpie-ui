@@ -35,6 +35,13 @@ jobs:
       - name: Set active GCP project
         run: gcloud config set project "$PROJECT_ID"
 
+      - name: Verify CI identity (must match a principal with Artifact Registry Writer on this project)
+        run: |
+          echo "Active GCP identity for this job:"
+          gcloud auth list --filter=status:ACTIVE --format="table(account,status)"
+          echo "Target project: ${PROJECT_ID}"
+          echo "Expected for staging-433102 pushes: github-actions@staging-433102.iam.gserviceaccount.com (or another SA granted roles/artifactregistry.writer)."
+
       # Install gke-gcloud-auth-plugin
       - name: Install gke-gcloud-auth-plugin
         run: |-

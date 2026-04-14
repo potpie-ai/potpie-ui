@@ -7,11 +7,13 @@ on:
       - main
 
 env:
+  # Set STAGE_GCLOUD_PROJECT_ID to staging-433102 in GitHub Actions secrets.
   PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}
-  IMAGE: potpie-app-stage # updated image name
-  GAR_ZONE: us-central1 # artifact registry zone
-  GAR_REPO: potpie-frontend # updated artifact registry repository
-  CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
+  # Matches Artifact Registry: asia-south1/.../potpie-frontend-aws/potpie-ui-aws
+  IMAGE: potpie-ui-aws
+  GAR_ZONE: asia-south1
+  GAR_REPO: potpie-frontend-aws
+  CLOUD_RUN_SERVICE: potpie-frontend-stage
 
 jobs:
   setup-build-publish-deploy:

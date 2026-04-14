@@ -5,10 +5,11 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}
-  IMAGE: potpie-ui-aws # updated image name
-  GAR_ZONE: us-central1 # artifact registry zone
-  GAR_REPO: potpie-frontend-aws # updated artifact registry repository
-  CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
+  IMAGE: potpie-ui-aws
+  # Matches Artifact Registry: asia-south1/.../potpie-frontend-aws/potpie-ui-aws
+  GAR_ZONE: asia-south1
+  GAR_REPO: potpie-frontend-aws
+  CLOUD_RUN_SERVICE: potpie-frontend-stage
 
 jobs:
   setup-build-publish-deploy:

@@ -39,6 +39,15 @@ jobs:
       - name: Set active GCP project
         run: gcloud config set project "$PROJECT_ID"
 
+      # IMAGE_TAG is: ${GAR_ZONE}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE}:<sha>
+      # For staging-433102: asia-south1-docker.pkg.dev/staging-433102/potpie-frontend-aws/potpie-ui-aws:<sha>
+      - name: Confirm target project and Artifact Registry URL
+        run: |
+          if [ -z "${PROJECT_ID}" ]; then echo "::error::STAGE_GCLOUD_PROJECT_ID is empty — set repo secret STAGE_GCLOUD_PROJECT_ID (e.g. staging-433102)"; exit 1; fi
+          echo "GAR_ZONE=$GAR_ZONE GAR_REPO=$GAR_REPO IMAGE=$IMAGE"
+          gcloud projects describe "$PROJECT_ID" --format='table(projectId,name,lifecycleState)' || { echo "::error::PROJECT_ID is not readable or invalid: check STAGE_GCLOUD_PROJECT_ID"; exit 1; }
+          echo "Docker push will use host: ${GAR_ZONE}-docker.pkg.dev (path segment after host must match project above)"
+
       - name: Verify CI identity (must have Artifact Registry Writer on target project)
         run: |
           echo "Active GCP identity for this job:"

@@ -44,7 +44,7 @@
     "@types/uuid": "^9.0.8",
     "ai": "^5.0.107",
     "ajv": "6.14.0",
-    "axios": "1.13.5",
+    "axios": "^1.15.0",
     "chart.js": "^4.4.7",
     "class-variance-authority": "^0.7.1",
     "claude": "^0.1.1",
@@ -62,9 +62,9 @@
     "markdown-to-jsx": "^7.7.4",
     "marked": "^14.1.4",
     "mermaid": "^11.11.0",
-    "minimatch": "^10.2.1",
+    "minimatch": "^10.1.1",
     "motion": "^12.5.0",
-    "next": "^15.5.14",
+    "next": "^15.5.15",
     "next-themes": "^0.3.0",
     "posthog-js": "^1.231.0",
     "prism-react-renderer": "^2.4.1",
@@ -103,7 +103,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "autoprefixer": "^10.4.21",
     "eslint": "^8.57.1",
-    "eslint-config-next": "15.5.14",
+    "eslint-config-next": "15.5.15",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.3",
     "husky": "^9.1.7",
@@ -116,20 +116,16 @@
   },
   "pnpm": {
     "overrides": {
-      "axios": "1.13.5",
       "form-data": "^4.0.4",
       "glob": "10.5.0",
       "mdast-util-to-hast": "13.2.1",
       "undici": "^6.21.2",
       "@isaacs/brace-expansion": "^5.0.1",
-      "brace-expansion": "^2.0.3",
+      "brace-expansion": "^2.0.2",
       "js-yaml": "^4.1.1",
       "prismjs": "^1.30.0",
-      "lodash-es": "^4.17.23",
-      "minimatch": "^10.2.3",
-      "flatted": "^3.4.2",
-      "picomatch": "^4.0.4",
-      "yaml": "^2.8.3"
+      "dompurify": "^3.3.3",
+      "lodash-es": "^4.18.1"
     }
   }
 }

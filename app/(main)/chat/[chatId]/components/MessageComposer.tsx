@@ -442,10 +442,10 @@ const MessageComposer = ({
       setIsSwitchingModel(true);
       await ChatService.updateAgent(conversation_id, selectedAgentId);
       dispatch(setChat({ agentId: selectedAgentId }));
-      toast.success("Model switched successfully");
+      toast.success("Agent switched successfully");
     } catch (error) {
-      console.error("Error switching agent:", error);
-      toast.error("Failed to switch model");
+      console.error("Failed to switch agent:", error);
+      toast.error("Failed to switch agent");
     } finally {
       setIsSwitchingModel(false);
     }

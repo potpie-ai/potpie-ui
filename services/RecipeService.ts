@@ -1,5 +1,7 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { auth } from "@/configs/Firebase-config";
+import { getDemoRecipe } from "@/lib/mock/demoBuildFlow";
 
 export interface Recipe {
   id: string;
@@ -34,9 +36,19 @@ export interface AllRecipesResponse {
 }
 
 export default class RecipeService {
+  private static readonly DEMO_VISIBLE_EMAILS = new Set([
+    "tools@potpie.ai",
+    "nandan@potpie.ai",
+  ]);
+
   private static getBaseUrl() {
     // Use workflows URL directly for recipe operations
     return process.env.NEXT_PUBLIC_WORKFLOWS_URL;
+  }
+
+  private static shouldIncludeDemoRecipe() {
+    const email = auth.currentUser?.email?.trim().toLowerCase();
+    return !!email && this.DEMO_VISIBLE_EMAILS.has(email);
   }
 
   static async getAllRecipes(
@@ -55,13 +67,16 @@ export default class RecipeService {
       // Normalize the response - API returns { recipes: [...] }
       const recipes = response.data.recipes || [];
       // Map id to recipe_id for backward compatibility
-      return recipes.map((recipe: any) => ({
+      const normalizedRecipes = recipes.map((recipe: any) => ({
         ...recipe,
         recipe_id: recipe.id || recipe.recipe_id,
       }));
+      return this.shouldIncludeDemoRecipe()
+        ? [getDemoRecipe(), ...normalizedRecipes]
+        : normalizedRecipes;
     } catch (error) {
       console.error("Error fetching recipes:", error);
-      throw new Error("Failed to fetch recipes");
+      return this.shouldIncludeDemoRecipe() ? [getDemoRecipe()] : [];
     }
   }
 

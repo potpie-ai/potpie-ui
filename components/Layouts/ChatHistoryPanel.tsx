@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import ChatService from "@/services/ChatService";
 import RecipeService from "@/services/RecipeService";
 import { getRecipeRedirectUrl } from "@/lib/utils/recipeRedirect";
+import { DEMO_RECIPE_ID, DEMO_RECIPE_TITLE } from "@/lib/mock/demoBuildFlow";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { AppDispatch } from "@/lib/state/store";
 import { Visibility } from "@/lib/Constants";
@@ -177,7 +178,7 @@ export function ChatHistoryPanel() {
           ...recipe,
           id,
           type: "recipe",
-          title: recipe.user_prompt,
+          title: id === DEMO_RECIPE_ID ? DEMO_RECIPE_TITLE : recipe.user_prompt,
           repository: recipe.repo_name,
           branch: recipe.branch_name,
           project_id: recipe.project_id,

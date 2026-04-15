@@ -24,6 +24,12 @@ import { ParsingStatusEnum } from "@/lib/Constants";
 import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
 import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
 import { useGithubAppPopup } from "../idea/hooks/useGithubAppPopup";
+import {
+  DEMO_QUESTION_RUN_ID,
+  getDemoCreateRecipeResponse,
+  isRedisDlqDemoRequest,
+  resetDemoBuildFlowState,
+} from "@/lib/mock/demoBuildFlow";
 
 interface Repo {
   id: string;
@@ -325,6 +331,16 @@ export default function NewChatPage() {
       repoName?: string;
       branchName?: string;
     }): Promise<CreateRecipeCodegenResponse & { runId?: string }> => {
+      if (
+        isRedisDlqDemoRequest(data.repoName, data.branchName, data.userPrompt)
+      ) {
+        resetDemoBuildFlowState();
+        return {
+          ...getDemoCreateRecipeResponse(),
+          runId: DEMO_QUESTION_RUN_ID,
+        };
+      }
+
       const recipeResponse = await SpecService.createRecipeCodegen({
         user_prompt: data.userPrompt,
         project_id: data.projectId,

@@ -1395,12 +1395,29 @@ const SpecPage = () => {
                         // If status lookup fails, assume first-time generation.
                       }
 
+                      let planRunId = "";
                       if (planAction === "regenerate") {
                         await PlanService.regeneratePlan(recipeId);
                       } else if (planAction === "submit") {
-                        await PlanService.submitPlanGeneration({ recipe_id: recipeId });
+                        try {
+                          const result = await PlanService.startPlanGenerationStream(
+                            recipeId,
+                            {
+                              consumeStream: false,
+                            },
+                          );
+                          planRunId = result.runId?.trim() || "";
+                        } catch {
+                          await PlanService.submitPlanGeneration({
+                            recipe_id: recipeId,
+                          });
+                        }
                       }
-                      router.push(`/task/${recipeId}/plan`);
+                      router.push(
+                        planRunId
+                          ? `/task/${recipeId}/plan?run_id=${encodeURIComponent(planRunId)}`
+                          : `/task/${recipeId}/plan`,
+                      );
                     } catch (err: any) {
                       console.error("Error starting plan generation:", err);
                       toast.error(err?.message ?? "Failed to start plan generation");

@@ -1,3 +1,5 @@
+import { DEMO_RECIPE_ID } from "@/lib/mock/demoBuildFlow";
+
 /**
  * Deep-link for a build flow (recipe) by status. Kept in sync with all-chats routing.
  */
@@ -9,6 +11,10 @@ export function getRecipeRedirectUrl(recipe: {
 }): string {
   const recipeId = recipe.id || recipe.recipe_id;
   const status = (recipe.status || "").toUpperCase();
+
+  if (recipeId === DEMO_RECIPE_ID) {
+    return `/task/${recipeId}/qna`;
+  }
 
   if (status.includes("QUESTIONS")) {
     const params = new URLSearchParams();

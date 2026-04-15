@@ -8,6 +8,15 @@ import {
   TaskSplittingStatusResponse,
   TaskSplittingItemsResponse,
 } from "@/lib/types/spec";
+import {
+  connectDemoCodegenStream,
+  createDemoPullRequest,
+  getDemoTaskSplittingItems,
+  getDemoTaskSplittingStatus,
+  isDemoTaskSplittingId,
+  isDemoRecipeId,
+  submitDemoTaskSplitting,
+} from "@/lib/mock/demoBuildFlow";
 
 export default class TaskSplittingService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
@@ -21,6 +30,9 @@ export default class TaskSplittingService {
   static async submitTaskSplitting(
     request: SubmitTaskSplittingRequest
   ): Promise<SubmitTaskSplittingResponse> {
+    if (isDemoRecipeId(request.recipe_id)) {
+      return submitDemoTaskSplitting();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.post<SubmitTaskSplittingResponse>(
@@ -57,6 +69,9 @@ export default class TaskSplittingService {
   static async getTaskSplittingStatus(
     taskSplittingId: string
   ): Promise<TaskSplittingStatusResponse> {
+    if (isDemoTaskSplittingId(taskSplittingId)) {
+      return getDemoTaskSplittingStatus();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.get<TaskSplittingStatusResponse>(
@@ -83,6 +98,9 @@ export default class TaskSplittingService {
     start: number = 0,
     limit: number = 10
   ): Promise<TaskSplittingItemsResponse> {
+    if (isDemoTaskSplittingId(taskSplittingId)) {
+      return getDemoTaskSplittingItems();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.get<TaskSplittingItemsResponse>(
@@ -106,6 +124,9 @@ export default class TaskSplittingService {
   static async createPullRequest(
     taskSplittingId: string
   ): Promise<CreatePullRequestResponse> {
+    if (isDemoTaskSplittingId(taskSplittingId)) {
+      return createDemoPullRequest();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.post<CreatePullRequestResponse>(
@@ -134,6 +155,10 @@ export default class TaskSplittingService {
       signal?: AbortSignal;
     }
   ): void {
+    if (isDemoTaskSplittingId(taskSplittingId)) {
+      connectDemoCodegenStream(options);
+      return;
+    }
     const url = `${this.API_BASE}/${taskSplittingId}/stream${options.cursor ? `?cursor=${encodeURIComponent(options.cursor)}` : ""}`;
     getHeaders()
       .then((headers) => {

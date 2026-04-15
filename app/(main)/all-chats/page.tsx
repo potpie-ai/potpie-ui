@@ -23,6 +23,7 @@ import { LucideEdit, LucideTrash } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import RecipeService from "@/services/RecipeService";
 import { getRecipeRedirectUrl } from "@/lib/utils/recipeRedirect";
+import { DEMO_RECIPE_ID, DEMO_RECIPE_TITLE } from "@/lib/mock/demoBuildFlow";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -118,7 +119,10 @@ const AllChats = () => {
           ...recipe,
           id: recipe.id || recipe.recipe_id,
           type: 'recipe',
-          title: recipe.user_prompt,
+          title:
+            (recipe.id || recipe.recipe_id) === DEMO_RECIPE_ID
+              ? DEMO_RECIPE_TITLE
+              : recipe.user_prompt,
           created_at: recipe.created_at,
           status: recipe.status,
           repository: recipe.repo_name,

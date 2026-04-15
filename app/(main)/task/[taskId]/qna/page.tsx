@@ -1138,6 +1138,7 @@ export default function QnaPage() {
           answersMap.set(q.id, {
             questionId: q.id,
             textAnswer: suggestedText,
+            isOther: false,
             isUserModified: false,
           });
         }

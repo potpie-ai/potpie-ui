@@ -1374,6 +1374,9 @@ const PlanPage = () => {
               <button
                 type="button"
                 onClick={async () => {
+                  if (recipeId === DEMO_RECIPE_ID) {
+                    return;
+                  }
                   const firstItem = planItems[0];
                   startNavigation();
                   try {

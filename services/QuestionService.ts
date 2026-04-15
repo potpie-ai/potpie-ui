@@ -305,6 +305,9 @@ export default class QuestionService {
   ): Promise<{ runId: string }> {
     if (isDemoRecipeId(recipeId)) {
       const initial = getDemoQuestionsResponse();
+      if (options.consumeStream !== false && options.onEvent) {
+        connectDemoQuestionsStream(options);
+      }
       return { runId: initial.run_id || "demo-question-run" };
     }
     const headers = await getHeaders();

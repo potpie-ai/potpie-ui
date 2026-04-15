@@ -27,6 +27,7 @@ import { useGithubAppPopup } from "../idea/hooks/useGithubAppPopup";
 import {
   DEMO_QUESTION_RUN_ID,
   getDemoCreateRecipeResponse,
+  isDemoBuildFlowActive,
   isRedisDlqDemoRequest,
   resetDemoBuildFlowState,
 } from "@/lib/mock/demoBuildFlow";
@@ -334,7 +335,9 @@ export default function NewChatPage() {
       if (
         isRedisDlqDemoRequest(data.repoName, data.branchName, data.userPrompt)
       ) {
-        resetDemoBuildFlowState();
+        if (!isDemoBuildFlowActive()) {
+          resetDemoBuildFlowState();
+        }
         return {
           ...getDemoCreateRecipeResponse(),
           runId: DEMO_QUESTION_RUN_ID,

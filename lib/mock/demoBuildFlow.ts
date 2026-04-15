@@ -31,6 +31,7 @@ export const DEMO_RECIPE_TITLE = "Dead Letter Q Support";
 export const DEMO_PR_URL = "https://github.com/potpietools/redis/pull/8";
 
 type DemoState = {
+  questionsStarted: boolean;
   questionsGenerated: boolean;
   answersSubmitted: boolean;
   specStarted: boolean;
@@ -51,6 +52,7 @@ type DemoStreamEvent = {
 };
 
 const DEFAULT_STATE: DemoState = {
+  questionsStarted: false,
   questionsGenerated: false,
   answersSubmitted: false,
   specStarted: false,
@@ -90,6 +92,20 @@ export function resetDemoBuildFlowState() {
     demoPrTimer = null;
   }
   writeState({ ...DEFAULT_STATE });
+}
+
+export function isDemoBuildFlowActive() {
+  const state = getDerivedState();
+  return (
+    demoPrTimer !== null ||
+    state.questionsStarted ||
+    state.questionsGenerated ||
+    state.answersSubmitted ||
+    state.specStarted ||
+    state.planStarted ||
+    state.codegenStarted ||
+    state.prStarted
+  );
 }
 
 export function isDemoRecipeId(recipeId?: string | null) {
@@ -156,6 +172,11 @@ export function getDemoRecipe(): Recipe {
 }
 
 export function getDemoCreateRecipeResponse(): CreateRecipeCodegenResponse {
+  updateState((current) => ({
+    ...current,
+    questionsStarted: true,
+    questionsGenerated: false,
+  }));
   return {
     recipe: {
       id: DEMO_RECIPE_ID,
@@ -1471,7 +1492,7 @@ function getLayersForCurrentState(): TaskLayer[] {
   }
 
   const activeLayerIndex = Math.min(
-    Math.max(state.codegenStage, 0),
+    Math.max(state.codegenStage + 1, 0),
     COMPLETED_LAYERS.length - 1,
   );
 
@@ -1816,19 +1837,42 @@ export function streamDemoConversationReply(
     citations: string[],
     thinking?: string | null,
   ) => void,
+  signal?: AbortSignal,
 ): Promise<{ message: string; citations: string[]; sessionId: string }> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const chunks = [
       DEMO_CHAT_REPLY.slice(0, 88),
       DEMO_CHAT_REPLY.slice(88, 178),
       DEMO_CHAT_REPLY.slice(178),
     ];
     let current = "";
+    const timers: number[] = [];
+    let onAbort: () => void;
+
+    const cleanup = () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      signal?.removeEventListener("abort", onAbort);
+    };
+
+    onAbort = () => {
+      cleanup();
+      reject(new Error("Demo conversation stream aborted"));
+    };
+
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+
     chunks.forEach((chunk, index) => {
-      window.setTimeout(() => {
+      const timer = window.setTimeout(() => {
+        if (signal?.aborted) return;
         current += chunk;
         onMessageUpdate(current, [], []);
         if (index === chunks.length - 1) {
+          cleanup();
           resolve({
             message: current,
             citations: [],
@@ -1836,6 +1880,7 @@ export function streamDemoConversationReply(
           });
         }
       }, 280 * (index + 1));
+      timers.push(timer);
     });
   });
 }
@@ -1957,6 +2002,11 @@ export function connectDemoQuestionsStream(options: {
   onEvent?: (eventType: string, data: Record<string, unknown>) => void;
   onError?: (error: string) => void;
 }) {
+  updateState((current) => ({
+    ...current,
+    questionsStarted: true,
+    questionsGenerated: false,
+  }));
   runStreamSequence(
     [
       { delay: 80, eventType: "queued", data: { message: "Queued clarifying question generation" } },
@@ -2003,6 +2053,7 @@ export function connectDemoQuestionsStream(options: {
     () => {
       updateState((current) => ({
         ...current,
+        questionsStarted: true,
         questionsGenerated: true,
       }));
     },

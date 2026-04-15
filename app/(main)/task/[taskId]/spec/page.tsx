@@ -1407,10 +1407,25 @@ const SpecPage = () => {
                             },
                           );
                           planRunId = result.runId?.trim() || "";
-                        } catch {
-                          await PlanService.submitPlanGeneration({
-                            recipe_id: recipeId,
-                          });
+                        } catch (streamError) {
+                          let currentPlanStatus;
+                          try {
+                            currentPlanStatus = await PlanService.getPlanStatusByRecipeId(recipeId);
+                          } catch {
+                            throw streamError;
+                          }
+
+                          const currentStatus = currentPlanStatus?.generation_status?.toLowerCase();
+                          const currentRunId = currentPlanStatus?.run_id?.trim() || "";
+                          if (currentStatus === "not_started") {
+                            await PlanService.submitPlanGeneration({
+                              recipe_id: recipeId,
+                            });
+                          } else if (currentRunId) {
+                            planRunId = currentRunId;
+                          } else {
+                            throw streamError;
+                          }
                         }
                       }
                       router.push(

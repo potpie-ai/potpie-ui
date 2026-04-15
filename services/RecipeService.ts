@@ -1,6 +1,5 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
-import { auth } from "@/configs/Firebase-config";
 import { getDemoRecipe } from "@/lib/mock/demoBuildFlow";
 
 export interface Recipe {
@@ -46,14 +45,15 @@ export default class RecipeService {
     return process.env.NEXT_PUBLIC_WORKFLOWS_URL;
   }
 
-  private static shouldIncludeDemoRecipe() {
-    const email = auth.currentUser?.email?.trim().toLowerCase();
-    return !!email && this.DEMO_VISIBLE_EMAILS.has(email);
+  private static shouldIncludeDemoRecipe(email?: string | null) {
+    const normalizedEmail = email?.trim().toLowerCase();
+    return !!normalizedEmail && this.DEMO_VISIBLE_EMAILS.has(normalizedEmail);
   }
 
   static async getAllRecipes(
     start: number = 0,
-    limit: number = 100
+    limit: number = 100,
+    userEmail?: string | null
   ): Promise<Recipe[]> {
     try {
       const headers = await getHeaders();
@@ -71,12 +71,12 @@ export default class RecipeService {
         ...recipe,
         recipe_id: recipe.id || recipe.recipe_id,
       }));
-      return this.shouldIncludeDemoRecipe()
+      return this.shouldIncludeDemoRecipe(userEmail)
         ? [getDemoRecipe(), ...normalizedRecipes]
         : normalizedRecipes;
     } catch (error) {
       console.error("Error fetching recipes:", error);
-      return this.shouldIncludeDemoRecipe() ? [getDemoRecipe()] : [];
+      return this.shouldIncludeDemoRecipe(userEmail) ? [getDemoRecipe()] : [];
     }
   }
 

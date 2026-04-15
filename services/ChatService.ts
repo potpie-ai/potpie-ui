@@ -561,7 +561,7 @@ export default class ChatService {
     abortSignal?: AbortSignal
   ): Promise<{ message: string; citations: string[]; sessionId: string }> {
     if (isDemoConversationId(conversationId)) {
-      return streamDemoConversationReply(onMessageUpdate);
+      return streamDemoConversationReply(onMessageUpdate, abortSignal);
     }
     let currentSessionId = sessionId;
 
@@ -877,7 +877,7 @@ export default class ChatService {
     limit: number
   ): Promise<LoadedMessage[]> {
     if (isDemoConversationId(conversationId)) {
-      return getDemoConversationMessages();
+      return getDemoConversationMessages().slice(start, start + limit);
     }
     const headers = await getHeaders();
     const response = await axios.get(

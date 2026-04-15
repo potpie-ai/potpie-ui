@@ -23,7 +23,8 @@ import { LucideEdit, LucideTrash } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import RecipeService from "@/services/RecipeService";
 import { getRecipeRedirectUrl } from "@/lib/utils/recipeRedirect";
-import { DEMO_RECIPE_ID, DEMO_RECIPE_TITLE } from "@/lib/mock/demoBuildFlow";
+import { getRecipeDisplayTitle } from "@/lib/utils/recipeDisplay";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,6 +32,7 @@ const AllChats = () => {
   const dispatch = useDispatch();
   const [title, setTitle] = useState("");
   const [inputValue, setInputValue] = useState(title);
+  const { user } = useAuthContext();
 
   const { data, isLoading, error, refetch } = useQuery<any[]>({
     queryKey: ["all-chats"],
@@ -38,8 +40,8 @@ const AllChats = () => {
   });
 
   const { data: recipes, isLoading: recipesLoading, error: recipesError, refetch: refetchRecipes } = useQuery<any[]>({
-    queryKey: ["all-recipes"],
-    queryFn: () => RecipeService.getAllRecipes(0, 100),
+    queryKey: ["all-recipes", user?.email ?? null],
+    queryFn: () => RecipeService.getAllRecipes(0, 100, user?.email ?? null),
   });
 
   const handleSave = async (chatId: string) => {
@@ -119,10 +121,7 @@ const AllChats = () => {
           ...recipe,
           id: recipe.id || recipe.recipe_id,
           type: 'recipe',
-          title:
-            (recipe.id || recipe.recipe_id) === DEMO_RECIPE_ID
-              ? DEMO_RECIPE_TITLE
-              : recipe.user_prompt,
+          title: getRecipeDisplayTitle(recipe),
           created_at: recipe.created_at,
           status: recipe.status,
           repository: recipe.repo_name,

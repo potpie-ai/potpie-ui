@@ -21,12 +21,12 @@ import type { CreateRecipeCodegenResponse } from "@/lib/types/spec";
 
 export const DEMO_RECIPE_ID = "8f6d6c5e-37f0-48b8-a8d8-6fbef4f7d201";
 export const DEMO_PROJECT_ID = "bd37c4a4-13bf-4d37-8507-986398f79400";
-export const DEMO_QUESTION_RUN_ID = "demo-question-run-redis-dlq";
-export const DEMO_SPEC_RUN_ID = "demo-spec-run-redis-dlq";
-export const DEMO_PLAN_RUN_ID = "demo-plan-run-redis-dlq";
+export const DEMO_QUESTION_RUN_ID = "1d4c7fb2-6bde-4c2d-9f4f-5b53f7bb8c11";
+export const DEMO_SPEC_RUN_ID = "6ef51371-8d1d-4caf-9344-2d8d5d1bc6a4";
+export const DEMO_PLAN_RUN_ID = "7b0d4d8a-6ac8-4a76-9d8b-fc6c72d8c3fe";
 export const DEMO_TASK_SPLITTING_ID = "ba6d3347-e744-4c2f-8924-4619f98e1f2f";
-export const DEMO_CONVERSATION_ID = "demo-conversation-redis-dlq";
-export const DEMO_PLAN_ITEM_ID = "phase-1-command-surface";
+export const DEMO_CONVERSATION_ID = "c2f5f4e1-9b7a-4d4d-8b0d-71359f5d4288";
+export const DEMO_PLAN_ITEM_ID = "f84fd0c0-9d26-4780-8c0c-8bce5d339a70";
 export const DEMO_RECIPE_TITLE = "Dead Letter Q Support";
 export const DEMO_PR_URL = "https://github.com/potpietools/redis/pull/8";
 
@@ -149,9 +149,9 @@ export function getDemoRecipe(): Recipe {
     created_at: "2026-04-14T10:05:00.000Z",
     repo_name: "redis",
     branch_name: "stream-dlq-demo",
-    current_question_task_id: "demo-question-task",
-    current_spec_task_id: "demo-spec-task",
-    current_plan_task_id: "demo-plan-task",
+    current_question_task_id: "2bb0d3e7-1b9a-4d52-80b4-e3d0d7c7c8ab",
+    current_spec_task_id: "6b6d1965-6d9a-4fae-8a5e-15a261146ea7",
+    current_plan_task_id: "9d9a3d6d-1f8b-4275-83f7-28c8be31df7d",
   };
 }
 
@@ -163,10 +163,10 @@ export function getDemoCreateRecipeResponse(): CreateRecipeCodegenResponse {
       user_prompt: DEMO_RECIPE_TITLE,
       additional_links: [],
       status: getDemoRecipeStatus(),
-      created_by: "demo-user",
-      current_question_task_id: "demo-question-task",
-      current_spec_task_id: "demo-spec-task",
-      current_plan_task_id: "demo-plan-task",
+      created_by: "7c1f0eb2-8a94-4c91-a1c8-d35a4cb8d713",
+      current_question_task_id: "2bb0d3e7-1b9a-4d52-80b4-e3d0d7c7c8ab",
+      current_spec_task_id: "6b6d1965-6d9a-4fae-8a5e-15a261146ea7",
+      current_plan_task_id: "9d9a3d6d-1f8b-4275-83f7-28c8be31df7d",
     },
   };
 }
@@ -827,23 +827,46 @@ const COMPLETED_LAYERS: TaskLayer[] = [
           {
             path: "src/commands/xdlq.json",
             lang: "json",
-            content: `{
-  "XDLQ": {
-    "summary": "Container command for Redis Streams dead-letter workflows",
-    "group": "stream",
-    "subcommands": ["MOVE", "LIST", "INFO", "REPLAY", "PURGE", "HELP"]
-  }
-}`,
+            content: `diff --git a/src/commands/xdlq.json b/src/commands/xdlq.json
+new file mode 100644
+index 00000000000..444cedc9dcb
+--- /dev/null
++++ b/src/commands/xdlq.json
+@@ -0,0 +1,9 @@
++{
++    "XDLQ": {
++        "summary": "A container for stream consumer-group dead-letter (XDLQ) commands.",
++        "complexity": "Depends on subcommand.",
++        "group": "stream",
++        "since": "8.9.0",
++        "arity": -2
++    }
++}`,
           },
           {
             path: "src/commands/xdlq-help.json",
             lang: "json",
-            content: `{
-  "XDLQ|HELP": {
-    "summary": "Show help for XDLQ subcommands and lifecycle semantics",
-    "reply_schema": { "type": "array", "items": { "type": "string" } }
-  }
-}`,
+            content: `diff --git a/src/commands/xdlq-help.json b/src/commands/xdlq-help.json
+new file mode 100644
+index 00000000000..48b5b0c17ac
+--- /dev/null
++++ b/src/commands/xdlq-help.json
+@@ -0,0 +1,25 @@
++{
++    "HELP": {
++        "summary": "Returns helpful text about XDLQ subcommands.",
++        "complexity": "O(1)",
++        "group": "stream",
++        "since": "8.9.0",
++        "arity": 2,
++        "container": "XDLQ",
++        "function": "xdlqCommand",
++        "command_flags": [
++            "LOADING",
++            "STALE"
++        ]
++    }
++}`,
           },
         ],
         logs: [
@@ -871,45 +894,123 @@ const COMPLETED_LAYERS: TaskLayer[] = [
           {
             path: "src/commands.def",
             lang: "c",
-            content: `struct COMMAND_STRUCT XDLQ_Subcommands[] = {
-    {MAKE_CMD("help", "...", "O(1)", "8.9.0", CMD_DOC_NONE, NULL, NULL, "stream", COMMAND_GROUP_STREAM, XDLQ_HELP_History, 0, XDLQ_HELP_Tips, 0, xdlqCommand, 2, CMD_LOADING|CMD_STALE, ACL_CATEGORY_STREAM, XDLQ_HELP_Keyspecs, 0, NULL, 0)},
-    {MAKE_CMD("move", "...", "O(log N) per message ID", "8.9.0", CMD_DOC_NONE, NULL, NULL, "stream", COMMAND_GROUP_STREAM, XDLQ_MOVE_History, 0, XDLQ_MOVE_Tips, 0, xdlqCommand, -9, CMD_WRITE|CMD_FAST, ACL_CATEGORY_STREAM, XDLQ_MOVE_Keyspecs, 1, NULL, 13),.args=XDLQ_MOVE_Args},
-    {0}
-};`,
+            content: `diff --git a/src/commands.def b/src/commands.def
+index 07e1dccc676..d9cfeff5d22 100644
+--- a/src/commands.def
++++ b/src/commands.def
+@@ -10273,6 +10273,31 @@ struct COMMAND_ARG XDELEX_Args[] = {
+ {MAKE_ARG("ids",ARG_TYPE_BLOCK,-1,"IDS",NULL,NULL,CMD_ARG_NONE,2,NULL),.subargs=XDELEX_ids_Subargs},
+ };
+ 
++/********** XDLQ HELP ********************/
++#define XDLQ_HELP_History NULL
++#define XDLQ_HELP_Tips NULL
++#define XDLQ_HELP_Keyspecs NULL
++
++/********** XDLQ INFO ********************/
++const char *XDLQ_INFO_Tips[] = {
++"nondeterministic_output",
++};
++
++/********** XDLQ LIST ********************/
++const char *XDLQ_LIST_Tips[] = {
++"nondeterministic_output",
++};
++
++/********** XDLQ MOVE ********************/
++struct COMMAND_ARG XDLQ_MOVE_Args[] = {
++{MAKE_ARG("key",ARG_TYPE_KEY,0,NULL,NULL,NULL,CMD_ARG_NONE,0,NULL)},
++{MAKE_ARG("group",ARG_TYPE_STRING,-1,NULL,NULL,NULL,CMD_ARG_NONE,0,NULL)},
++{MAKE_ARG("ids",ARG_TYPE_BLOCK,-1,"IDS",NULL,NULL,CMD_ARG_NONE,2,NULL),.subargs=XDLQ_MOVE_ids_Subargs},
++{MAKE_ARG("reason",ARG_TYPE_STRING,-1,"REASON",NULL,NULL,CMD_ARG_NONE,0,NULL)},
++};`,
           },
           {
             path: "src/commands/xdlq-move.json",
             lang: "json",
-            content: `{
-  "XDLQ|MOVE": {
-    "summary": "Move pending stream entries into consumer-group scoped DLQ state",
-    "arguments": [
-      { "name": "key", "type": "key" },
-      { "name": "group", "type": "string" },
-      { "name": "ids", "type": "block" },
-      { "name": "reason", "type": "string" }
-    ],
-    "reply_schema": {
-      "type": "array",
-      "items": { "type": "map" }
-    }
-  }
-}`,
+            content: `diff --git a/src/commands/xdlq-move.json b/src/commands/xdlq-move.json
+new file mode 100644
+index 00000000000..4bc4e9e8def
+--- /dev/null
++++ b/src/commands/xdlq-move.json
+@@ -0,0 +1,39 @@
++{
++    "MOVE": {
++        "summary": "Moves pending entries from the PEL into the group's dead-letter queue.",
++        "complexity": "O(log N) per message ID with N the size of the group PEL.",
++        "group": "stream",
++        "since": "8.9.0",
++        "arity": -9,
++        "container": "XDLQ",
++        "function": "xdlqCommand",
++        "command_flags": [
++            "WRITE",
++            "FAST"
++        ],
++        "arguments": [
++            {
++                "name": "key",
++                "type": "key",
++                "key_spec_index": 0
++            },
++            {
++                "name": "group",
++                "type": "string"
++            },
++            {
++                "name": "ids",
++                "token": "IDS",
++                "type": "block"
++            },
++            {
++                "name": "reason",
++                "token": "REASON",
++                "type": "string"
++            }
++        ]
++    }
++}`,
           },
           {
             path: "src/commands/xdlq-list.json",
             lang: "json",
-            content: `{
-  "XDLQ|LIST": {
-    "summary": "List dead-lettered entries and metadata",
-    "reply_schema": {
-      "type": "array",
-      "items": {
-        "type": "map"
-      }
-    }
-  }
-}`,
+            content: `diff --git a/src/commands/xdlq-list.json b/src/commands/xdlq-list.json
+new file mode 100644
+index 00000000000..a3cc25c2aa9
+--- /dev/null
++++ b/src/commands/xdlq-list.json
+@@ -0,0 +1,32 @@
++{
++    "LIST": {
++        "summary": "Lists dead-lettered entries with metadata for a consumer group.",
++        "complexity": "O(N) where N is the number of dead-lettered entries scanned.",
++        "group": "stream",
++        "since": "8.9.0",
++        "arity": -4,
++        "container": "XDLQ",
++        "function": "xdlqCommand",
++        "command_tips": [
++            "NONDETERMINISTIC_OUTPUT"
++        ],
++        "arguments": [
++            {
++                "name": "key",
++                "type": "key",
++                "key_spec_index": 0
++            },
++            {
++                "name": "group",
++                "type": "string"
++            },
++            {
++                "token": "COUNT",
++                "name": "count",
++                "type": "integer",
++                "optional": true
++            }
++        ]
++    }
++}`,
           },
         ],
         logs: [
@@ -929,29 +1030,27 @@ const COMPLETED_LAYERS: TaskLayer[] = [
           {
             path: "src/t_stream.c",
             lang: "c",
-            content: `void xdlqCommand(client *c) {
-    if (!strcasecmp(c->argv[1]->ptr, "MOVE")) {
-        streamDlqMoveCommand(c);
-        return;
-    }
-    if (!strcasecmp(c->argv[1]->ptr, "LIST")) {
-        streamDlqListCommand(c);
-        return;
-    }
-    if (!strcasecmp(c->argv[1]->ptr, "INFO")) {
-        streamDlqInfoCommand(c);
-        return;
-    }
-    if (!strcasecmp(c->argv[1]->ptr, "REPLAY")) {
-        streamDlqReplayCommand(c);
-        return;
-    }
-    if (!strcasecmp(c->argv[1]->ptr, "PURGE")) {
-        streamDlqPurgeCommand(c);
-        return;
-    }
-    addReplyErrorObject(c, shared.syntaxerr);
-}`,
+            content: `diff --git a/src/t_stream.c b/src/t_stream.c
+index 2fe8825720a..5fff2bfdd28 100644
+--- a/src/t_stream.c
++++ b/src/t_stream.c
+@@ -3990,6 +4124,20 @@ void xnackCommand(client *c) {
+     if (ids != static_ids) zfree(ids);
+ }
+ 
++void xdlqCommand(client *c) {
++    char *sub = c->argv[1]->ptr;
++    if (!strcasecmp(sub, "HELP") && c->argc == 2) {
++        addReplyHelp(c, help);
++        return;
++    }
++    if (!strcasecmp(sub, "MOVE")) { /* ... */ return; }
++    if (!strcasecmp(sub, "LIST")) { /* ... */ return; }
++    if (!strcasecmp(sub, "INFO")) { /* ... */ return; }
++    if (!strcasecmp(sub, "REPLAY")) { /* ... */ return; }
++    if (!strcasecmp(sub, "PURGE")) { /* ... */ return; }
++    addReplySubcommandSyntaxError(c);
++}`,
           },
         ],
         logs: [
@@ -980,29 +1079,69 @@ const COMPLETED_LAYERS: TaskLayer[] = [
           {
             path: "src/stream.h",
             lang: "c",
-            content: `typedef struct streamDLQRec {
-    sds reason;
-    sds last_consumer;
-    uint64_t delivery_count_at_move;
-    mstime_t moved_at;
-    uint64_t replay_count;
-    mstime_t last_replayed_at;
-    sds last_replay_consumer;
-} streamDLQRec;`,
+            content: `diff --git a/src/stream.h b/src/stream.h
+index 8adbeffe4f7..430fdf86869 100644
+--- a/src/stream.h
++++ b/src/stream.h
+@@ -89,6 +89,18 @@ typedef struct streamIterator {
+ /* Forward declarations */
+ typedef struct streamNACK streamNACK;
+ 
++/* Dead-letter metadata for a stream entry in a consumer group (not in PEL). */
++typedef struct streamDLQRec {
++    sds reason;
++    sds last_consumer;       /* Consumer that last owned the entry when moved. */
++    uint64_t delivery_count_at_move;
++    mstime_t moved_at;
++    mstime_t last_delivery_time; /* delivery_time on the NACK at move. */
++    uint64_t replay_count;
++    mstime_t last_replayed_at;
++    sds last_replay_consumer;
++} streamDLQRec;`,
           },
           {
             path: "src/server.h",
             lang: "c",
-            content: `void xdlqCommand(client *c);`,
+            content: `diff --git a/src/server.h b/src/server.h
+index 506191327e1..2b0676f7c2a 100644
+--- a/src/server.h
++++ b/src/server.h
+@@ -4450,6 +4450,7 @@ void xsetidCommand(client *c);
+ void xidmprecordCommand(client *c);
+ void xackCommand(client *c);
+ void xnackCommand(client *c);
++void xdlqCommand(client *c);
+ void xackdelCommand(client *c);`,
           },
           {
             path: "src/t_stream.c",
             lang: "c",
-            content: `static int streamGroupMoveToDlq(streamCG *group, streamNACK *nack,
-        robj *reason, robj *consumer, uint64_t delivery_count) {
-    /* persist metadata in a group-scoped ordered index */
-    return C_OK;
-}`,
+            content: `diff --git a/src/t_stream.c b/src/t_stream.c
+index 2fe8825720a..5fff2bfdd28 100644
+--- a/src/t_stream.c
++++ b/src/t_stream.c
+@@ -3154,9 +3175,42 @@ void streamUnlinkEntryFromCGroupRef(stream *s, streamNACK *na, unsigned char *ke
+     }
+ }
+ 
++streamDLQRec *streamDLQRecCreate(stream *s, sds reason, sds last_consumer,
++                                 uint64_t delivery_count_at_move, mstime_t moved_at,
++                                 mstime_t last_delivery_time, uint64_t replay_count,
++                                 mstime_t last_replayed_at, sds last_replay_consumer) {
++    size_t usable;
++    streamDLQRec *rec = zmalloc_usable(sizeof(*rec), &usable);
++    s->alloc_size += usable;
++    rec->reason = reason;
++    rec->last_consumer = last_consumer;
++    rec->delivery_count_at_move = delivery_count_at_move;
++    rec->moved_at = moved_at;
++    rec->last_delivery_time = last_delivery_time;
++    rec->replay_count = replay_count;
++    rec->last_replayed_at = last_replayed_at;
++    rec->last_replay_consumer = last_replay_consumer;
++    return rec;
++}
++`,
           },
         ],
         logs: [
@@ -1023,13 +1162,36 @@ const COMPLETED_LAYERS: TaskLayer[] = [
           {
             path: "tests/unit/type/stream-dlq.tcl",
             lang: "tcl",
-            content: `test {xdlq move and replay workflow} {
-    set id [r XADD jobs * job poison]
-    r XGROUP CREATE jobs workers 0 MKSTREAM
-    r XREADGROUP GROUP workers alice COUNT 1 STREAMS jobs >
-    r XDLQ MOVE jobs workers IDS 1 $id REASON "schema mismatch"
-    assert_equal 1 [dict get [r XDLQ INFO jobs workers] dlq-count]
-}`,
+            content: `diff --git a/tests/unit/type/stream-dlq.tcl b/tests/unit/type/stream-dlq.tcl
+new file mode 100644
+index 00000000000..c8482406b0e
+--- /dev/null
++++ b/tests/unit/type/stream-dlq.tcl
+@@ -0,0 +1,33 @@
++# Stream consumer-group dead-letter (XDLQ) coverage.
++
++start_server {
++    tags {"stream"}
++} {
++    test {XDLQ HELP returns text} {
++        set h [r XDLQ HELP]
++        assert {[llength $h] > 3}
++        assert {[string match *MOVE* [lindex $h 1]]}
++    }
++
++    test {XDLQ MOVE removes PEL entry and LIST shows metadata} {
++        r DEL dlqt-move
++        r XADD dlqt-move 1-0 k v
++        r XGROUP CREATE dlqt-move dlqg 0
++        r XREADGROUP GROUP dlqg cons1 STREAMS dlqt-move >
++        assert_equal 1 [llength [r XPENDING dlqt-move dlqg - + 10]]
++
++        set mv [r XDLQ MOVE dlqt-move dlqg IDS 1 1-0 REASON poison]
++        assert_equal $mv {moved}
++
++        assert_equal 0 [llength [r XPENDING dlqt-move dlqg - + 10]]
++    }
++}`,
           },
         ],
         logs: [
@@ -1058,23 +1220,51 @@ const COMPLETED_LAYERS: TaskLayer[] = [
           {
             path: "src/commands.def",
             lang: "c",
-            content: `commandHistory XINFO_STREAM_History[] = {
-    {"8.9.0","Added the dlq-count, first-dlq-id, and last-dlq-id fields to consumer groups in FULL output."},
-};`,
+            content: `diff --git a/src/commands.def b/src/commands.def
+index 07e1dccc676..d9cfeff5d22 100644
+--- a/src/commands.def
++++ b/src/commands.def
+@@ -319,6 +319,7 @@ commandHistory XINFO_STREAM_History[] = {
+ {"7.2.0","Added the \`active-time\` field, and changed the meaning of \`seen-time\`."},
+ {"8.6.0","Added the \`idmp-duration\`, \`idmp-maxsize\`, \`pids-tracked\`, \`iids-tracked\`, \`iids-added\` and \`iids-duplicates\` fields for IDMP tracking."},
+ {"8.8.0","Added the \`nacked-count\` field to consumer groups in \`FULL\` output."},
++{"8.9.0","Added the \`dlq-count\`, \`first-dlq-id\`, and \`last-dlq-id\` fields to consumer groups in \`FULL\` output."},
+ };
+ #endif`,
           },
           {
             path: "src/commands/xinfo-stream.json",
             lang: "json",
-            content: `{
-  "XINFO|STREAM|FULL": {
-    "group_fields": [
-      "dlq-count",
-      "first-dlq-id",
-      "last-dlq-id",
-      "replay-count-total"
-    ]
-  }
-}`,
+            content: `diff --git a/src/commands/xinfo-stream.json b/src/commands/xinfo-stream.json
+index 65b948a6e9c..4c5934c8c6f 100644
+--- a/src/commands/xinfo-stream.json
++++ b/src/commands/xinfo-stream.json
+@@ -26,6 +26,10 @@
+             [
+                 "8.8.0",
+                 "Added the \`nacked-count\` field to consumer groups in \`FULL\` output."
++            ],
++            [
++                "8.9.0",
++                "Added the \`dlq-count\`, \`first-dlq-id\`, and \`last-dlq-id\` fields to consumer groups in \`FULL\` output."
+             ]
+         ],
+@@ -306,6 +310,18 @@
+                                         "description": "number of entries currently in the nacked zone",
+                                         "type": "integer"
+                                     },
++                                    "dlq-count": {
++                                        "description": "number of entries in the consumer group's dead-letter queue",
++                                        "type": "integer"
++                                    },
++                                    "first-dlq-id": {
++                                        "description": "smallest stream ID in the dead-letter queue, if any",
++                                        "oneOf": [{"type": "null"}, {"type": "string", "pattern": "[0-9]+-[0-9]+"}]
++                                    },
++                                    "last-dlq-id": {
++                                        "description": "largest stream ID in the dead-letter queue, if any",
++                                        "oneOf": [{"type": "null"}, {"type": "string", "pattern": "[0-9]+-[0-9]+"}]
++                                    },`,
           },
         ],
         logs: [
@@ -1094,13 +1284,26 @@ const COMPLETED_LAYERS: TaskLayer[] = [
           {
             path: "src/t_stream.c",
             lang: "c",
-            content: `if (streamCGLookupDlq(group, buf, NULL))
-    continue;
-
-if (nack != NULL && streamCGLookupDlq(group, buf, NULL)) {
-    /* Quarantined dead-letter entries are not claimable. */
-    continue;
-}`,
+            content: `diff --git a/src/t_stream.c b/src/t_stream.c
+index 2fe8825720a..5fff2bfdd28 100644
+--- a/src/t_stream.c
++++ b/src/t_stream.c
+@@ -3957,6 +4089,8 @@ void xnackCommand(client *c) {
+              * entry exists, otherwise skip silently (same as XCLAIM). */
+             if (!streamEntryExists(s, &ids[j]))
+                 continue;
++            if (streamCGLookupDlq(group, buf, NULL))
++                continue;
+             streamNACK *nack = streamCreateNACK(s, NULL, &ids[j]);
+@@ -4528,6 +5227,11 @@ void xclaimCommand(client *c) {
+             nack->cgroup_ref_node = streamLinkCGroupToEntry(s, group, buf);
+         }
+ 
++        if (nack != NULL && streamCGLookupDlq(group, buf, NULL)) {
++            /* Quarantined dead-letter entries are not claimable. */
++            continue;
++        }
++`,
           },
         ],
         logs: [
@@ -1128,13 +1331,31 @@ if (nack != NULL && streamCGLookupDlq(group, buf, NULL)) {
           {
             path: "src/aof.c",
             lang: "c",
-            content: `static int rioWriteStreamDlqClaimForce(...) {
-    /* DLQ IDs are not in the PEL; emit XCLAIM ... FORCE first. */
-}
-
-int rioWriteStreamDlqMove(...) {
-    /* Emit XDLQ MOVE with full DLQ metadata. */
-}`,
+            content: `diff --git a/src/aof.c b/src/aof.c
+index a094d11ca9e..34387c0e86d 100644
+--- a/src/aof.c
++++ b/src/aof.c
+@@ -2254,6 +2254,32 @@ int rioWriteStreamIdmpEntry(rio *r, robj *key, const char *pid, size_t pid_len,
+     return 1;
+ }
+ 
++/* DLQ IDs are not in the PEL; emit XCLAIM ... FORCE first so MOVE can run. */
++static int rioWriteStreamDlqClaimForce(rio *r, robj *key, const char *groupname, size_t groupname_len,
++        unsigned char *rawid, streamDLQRec *rec) {
++    streamID id;
++    streamDecodeID(rawid, &id);
++    const char *cons = "__redis_dlq_rw__";
++    if (rioWriteBulkCount(r,'*',12) == 0) return 0;
++    if (rioWriteBulkString(r,"XCLAIM",6) == 0) return 0;
++    if (rioWriteBulkObject(r,key) == 0) return 0;
++    if (rioWriteBulkString(r,groupname,groupname_len) == 0) return 0;
++    if (rioWriteBulkString(r,cons,16) == 0) return 0;
++    if (rioWriteBulkString(r,"FORCE",5) == 0) return 0;
++    return 1;
++}
++
++int rioWriteStreamDlqMove(rio *r, robj *key, const char *groupname, size_t groupname_len,
++ unsigned char *rawid, streamDLQRec *rec) {`,
           },
         ],
         logs: [
@@ -1154,15 +1375,30 @@ int rioWriteStreamDlqMove(...) {
           {
             path: "src/rdb.h",
             lang: "c",
-            content: `#define RDB_TYPE_STREAM_LISTPACKS_6 28 /* Stream with XDLQ dead-letter metadata */`,
+            content: `diff --git a/src/rdb.h b/src/rdb.h
+index 5d92f8430bb..2d71a38e9f8 100644
+--- a/src/rdb.h
++++ b/src/rdb.h
+@@ -80,10 +80,11 @@
+ #define RDB_TYPE_HASH_LISTPACK_EX 25          /* Hash LP with HFEs. Attach min TTL at start */
+ #define RDB_TYPE_STREAM_LISTPACKS_4 26        /* Stream with IDMP support */
+ #define RDB_TYPE_STREAM_LISTPACKS_5 27        /* Stream with XNACK support (NACKed entries) */
++#define RDB_TYPE_STREAM_LISTPACKS_6 28        /* Stream with XDLQ (consumer-group dead-letter metadata) */
+ /* NOTE: WHEN ADDING NEW RDB TYPE, UPDATE rdbIsObjectType(), and rdb_type_string[] */`,
           },
           {
             path: "src/redis-check-rdb.c",
             lang: "c",
-            content: `char *rdb_type_string[] = {
-    /* ... */
-    "stream-v6",
-};`,
+            content: `diff --git a/src/redis-check-rdb.c b/src/redis-check-rdb.c
+index 4fe22647413..fcae8c9b8bb 100644
+--- a/src/redis-check-rdb.c
++++ b/src/redis-check-rdb.c
+@@ -88,6 +88,7 @@ char *rdb_type_string[] = {
+     "hash-listpack-md",
+     "stream-v4",
+     "stream-v5",
++    "stream-v6",
+ };`,
           },
         ],
         logs: [
@@ -1190,12 +1426,27 @@ int rioWriteStreamDlqMove(...) {
           {
             path: "src/commands/xdlq-help.json",
             lang: "json",
-            content: `{
-  "XDLQ|HELP": {
-    "summary": "Returns helpful text about XDLQ subcommands.",
-    "complexity": "O(1)"
-  }
-}`,
+            content: `diff --git a/src/commands/xdlq-help.json b/src/commands/xdlq-help.json
+new file mode 100644
+index 00000000000..48b5b0c17ac
+--- /dev/null
++++ b/src/commands/xdlq-help.json
+@@ -0,0 +1,18 @@
++{
++    "HELP": {
++        "summary": "Returns helpful text about XDLQ subcommands.",
++        "complexity": "O(1)",
++        "group": "stream",
++        "since": "8.9.0",
++        "arity": 2,
++        "container": "XDLQ",
++        "function": "xdlqCommand",
++        "command_flags": [
++            "LOADING",
++            "STALE"
++        ]
++    }
++}`,
           },
         ],
         logs: [
@@ -1647,27 +1898,47 @@ export function connectDemoSpecStream(options: {
   runStreamSequence(
     [
       { delay: 80, eventType: "queued", data: { message: "Queued Redis DLQ spec generation" } },
-      { delay: 340, eventType: "start", data: { message: "Analyzing feature handoff" } },
-      { delay: 900, eventType: "progress", data: { step: "Research", message: "Reading the Redis DLQ implementation plan and extracting operator workflows, edge cases, and file impact." } },
-      { delay: 1280, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-1" } },
-      { delay: 1360, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-2" } },
-      { delay: 1440, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-3" } },
-      { delay: 2400, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-1", result: "Read `STREAM_DLQ_IMPLEMENTATION_PLAN.md`, `src/t_stream.c`, and `src/stream.h` to ground the spec in real command and consumer-group semantics." } },
-      { delay: 2520, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-2", result: "Read `src/commands.def`, `src/commands/xdlq*.json`, and `src/commands/xinfo-stream.json` to align command contracts, help text, and introspection language." } },
-      { delay: 2640, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-3", result: "Read `tests/unit/type/stream-dlq.tcl`, `src/aof.c`, and `src/rdb.c` to pull lifecycle validation and persistence constraints into the handoff." } },
-      { delay: 3120, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-1" } },
-      { delay: 4020, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-1", result: "Cross-linked consumer-group state, quarantine semantics, and replay behavior to confirm DLQ should remain group-scoped and explicit." } },
-      { delay: 4500, eventType: "chunk", data: { content: "Thinking through the Redis DLQ feature as a spec handoff, not just a feature summary.\n\nI’m first locking the operator story: fail -> quarantine -> inspect -> replay -> purge, while preserving native Streams semantics and keeping the design scoped to the consumer group." } },
-      { delay: 5880, eventType: "progress", data: { step: "Structuring", message: "Converting the workflow into detailed functional requirements, non-functional guardrails, data models, and interface contracts." } },
-      { delay: 6240, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-4" } },
-      { delay: 7180, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-4", result: "Re-read persistence and test touchpoints to expand file impact, acceptance criteria, and operator-facing observability expectations." } },
-      { delay: 7580, eventType: "chunk", data: { content: "\nNow I’m translating that into requirements for command parsing, DLQ metadata storage, replay semantics, claim-path behavior, XINFO visibility, and persistence correctness across AOF/RDB boundaries." } },
-      { delay: 9000, eventType: "progress", data: { step: "Reasoning", message: "Reviewing tradeoffs and simplifying the v1 scope so the spec still feels production-ready without overreaching." } },
-      { delay: 9340, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-2" } },
-      { delay: 10180, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-2", result: "Validated that threshold automation, side-stream routing, and unbounded metadata scans should remain out of scope for the first release." } },
-      { delay: 10620, eventType: "chunk", data: { content: "\nThe final pass is polishing success metrics, keeping reply shapes deterministic, and making the spec read like a handoff an engineer could pick up without additional clarifications." } },
-      { delay: 11620, eventType: "progress", data: { step: "Polish", message: "Expanding the file impact and operator-facing acceptance criteria so the spec reads like a production handoff." } },
-      { delay: 12480, eventType: "end", data: { message: "Spec generation complete" } },
+      { delay: 360, eventType: "start", data: { message: "Analyzing feature handoff" } },
+      { delay: 980, eventType: "progress", data: { step: "Research", message: "Reading the Redis DLQ implementation plan, stream internals, and generated command metadata before locking spec structure." } },
+      { delay: 1360, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-1" } },
+      { delay: 1440, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-2" } },
+      { delay: 1520, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-3" } },
+      { delay: 3000, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-1", result: "Read `STREAM_DLQ_IMPLEMENTATION_PLAN.md`, `src/t_stream.c`, `src/stream.h`, and `src/server.h` to ground the spec in real command dispatch, group state, and helper boundaries." } },
+      { delay: 3160, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-2", result: "Read `src/commands.def`, `src/commands/xdlq*.json`, and `src/commands/xinfo-stream.json` to align command contracts, generated metadata, help text, and introspection wording." } },
+      { delay: 3320, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-3", result: "Read `tests/unit/type/stream-dlq.tcl`, `src/aof.c`, `src/rdb.c`, and `src/redis-check-rdb.c` to capture lifecycle validation and persistence invariants for the spec." } },
+      { delay: 3940, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-1" } },
+      { delay: 5780, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-1", result: "Cross-linked consumer-group state, quarantine semantics, and replay behavior to confirm DLQ should remain group-scoped, explicit, and isolated from normal XPENDING/XCLAIM paths." } },
+      { delay: 6260, eventType: "chunk", data: { content: "Thinking through the Redis DLQ feature as a production handoff, not just a feature summary.\n\nI’m first locking the operator story: fail -> quarantine -> inspect -> replay -> purge, while preserving native Streams semantics and keeping the design scoped to the consumer group instead of inventing a second keyspace." } },
+      { delay: 8920, eventType: "progress", data: { step: "Deep research", message: "Running a second pass over file impact and command surfaces so the spec can name exact contracts instead of generic feature bullets." } },
+      { delay: 9300, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-4" } },
+      { delay: 9380, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-5" } },
+      { delay: 9460, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-6" } },
+      { delay: 11180, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-4", result: "Re-read `src/commands/xdlq-move.json`, `src/commands/xdlq-list.json`, and `src/commands/xdlq-info.json` to make argument shapes, optional tokens, and response schema expectations explicit in the functional requirements." } },
+      { delay: 11320, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-5", result: "Re-read `src/commands/xdlq-replay.json`, `src/commands/xdlq-purge.json`, and `src/commands/xdlq-help.json` to describe lifecycle semantics, terminal actions, and operator discoverability correctly." } },
+      { delay: 11480, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-6", result: "Re-read `src/aof.c`, `src/rdb.h`, `src/rdb.c`, and `src/redis-check-rdb.c` to expand persistence, recovery, and validation-tool requirements beyond a surface-level mention." } },
+      { delay: 12120, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-2" } },
+      { delay: 14040, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-2", result: "Resolved how claim semantics, quarantine visibility, and replay transitions should be expressed so the spec can distinguish normal pending behavior from dead-lettered entries without ambiguity." } },
+      { delay: 14620, eventType: "chunk", data: { content: "\nNow I’m translating that into requirements for command parsing, DLQ metadata storage, replay semantics, claim-path behavior, XINFO visibility, and persistence correctness across AOF/RDB boundaries.\n\nThe goal is to make the handoff read like something an engineer could implement without needing a follow-up design sync." } },
+      { delay: 17520, eventType: "progress", data: { step: "Structuring", message: "Converting the workflow into detailed functional requirements, non-functional guardrails, data models, interface contracts, and file impact callouts." } },
+      { delay: 17880, eventType: "tool_call_start", data: { tool: "bash", call_id: "spec-bash-1" } },
+      { delay: 20480, eventType: "tool_call_end", data: { tool: "bash", call_id: "spec-bash-1", result: "Executed `git diff unstable...stream-dlq-demo -- src/t_stream.c src/stream.h src/server.h src/commands.def src/commands/xdlq*.json src/commands/xinfo-stream.json tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/rdb.h src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --feature stream-dlq --include-tests --include-persistence --include-command-docs --format spec-outline` to verify the handoff covers the actual file footprint." } },
+      { delay: 21020, eventType: "chunk", data: { content: "\nI’m also making sure the spec doesn’t flatten everything into one requirement. Runtime semantics, observability, persistence, and validation each need their own acceptance criteria so the implementation can be reviewed phase by phase instead of as one opaque patch." } },
+      { delay: 23940, eventType: "progress", data: { step: "Tradeoff analysis", message: "Reviewing what should remain intentionally out of scope for the first release so the spec feels production-ready without overreaching." } },
+      { delay: 24320, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-3" } },
+      { delay: 26480, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-3", result: "Validated that threshold automation, side-stream routing, and background remediation should remain out of scope, while explicit replay and operator-driven purge belong in v1." } },
+      { delay: 26960, eventType: "tool_call_start", data: { tool: "read_files", call_id: "spec-read-batch-7" } },
+      { delay: 28420, eventType: "tool_call_end", data: { tool: "read_files", call_id: "spec-read-batch-7", result: "Revisited the Tcl tests and introspection docs to tighten success metrics around `dlq-count`, replay safety, and quarantined-entry visibility after reload." } },
+      { delay: 29020, eventType: "chunk", data: { content: "\nThis pass is mostly about precision: naming what must be deterministic, what can remain nondeterministic, and which replies need to stay cheap enough for operators to use on real streams without creating pathological scans." } },
+      { delay: 32180, eventType: "progress", data: { step: "Knowledge synthesis", message: "Running one more graph pass to tie command docs, stream internals, and persistence constraints into a single spec narrative." } },
+      { delay: 32540, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-4" } },
+      { delay: 34820, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-4", result: "Connected command metadata, group-level DLQ storage, reload behavior, and `XINFO STREAM FULL` summaries so the final spec can explain why each touched file exists in the implementation plan." } },
+      { delay: 35440, eventType: "chunk", data: { content: "\nAt this point the handoff is no longer just saying \"add DLQ support.\" It is spelling out command-level contracts, group-scoped storage rules, lifecycle semantics, persistence guarantees, observability fields, and the validation coverage needed to keep the feature safe in Redis." } },
+      { delay: 38680, eventType: "progress", data: { step: "Polish", message: "Expanding the file impact, acceptance criteria, and operator-facing notes so the spec reads like a production handoff." } },
+      { delay: 39040, eventType: "tool_call_start", data: { tool: "bash", call_id: "spec-bash-2" } },
+      { delay: 41720, eventType: "tool_call_end", data: { tool: "bash", call_id: "spec-bash-2", result: "Executed `python scripts/plan_dependency_check.py --feature stream-dlq --emit-requirements && git diff --stat unstable...stream-dlq-demo` to sanity-check that the spec sections match the final implementation surfaces and sequencing assumptions." } },
+      { delay: 42340, eventType: "chunk", data: { content: "\nThe final pass is polishing success metrics, keeping reply shapes deterministic where they need to be, preserving explicit replay semantics, and making the spec read like a handoff that can survive implementation review, QA review, and persistence review without hidden assumptions." } },
+      { delay: 45640, eventType: "progress", data: { step: "Packaging", message: "Assembling the final spec payload with detailed requirements, architecture notes, data models, interfaces, guardrails, and complete file impact." } },
+      { delay: 48800, eventType: "end", data: { message: "Spec generation complete" } },
     ],
     options,
     () => {
@@ -1689,28 +1960,44 @@ export function connectDemoQuestionsStream(options: {
   runStreamSequence(
     [
       { delay: 80, eventType: "queued", data: { message: "Queued clarifying question generation" } },
-      { delay: 320, eventType: "start", data: { message: "Understanding the Redis Streams feature request" } },
-      { delay: 900, eventType: "progress", data: { step: "Context", message: "Scanning the handoff, stream internals, and prior Redis command patterns before drafting the QnA set." } },
-      { delay: 1260, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-1" } },
-      { delay: 1340, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-2" } },
-      { delay: 1420, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-3" } },
-      { delay: 2380, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-1", result: "Read `STREAM_DLQ_IMPLEMENTATION_PLAN.md`, `src/t_stream.c`, and `tests/unit/type/stream-dlq.tcl` in parallel to extract lifecycle semantics, parser touchpoints, and operator-facing edge cases." } },
-      { delay: 2500, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-2", result: "Read `src/commands/xdlq-move.json`, `src/commands/xdlq-replay.json`, and `src/commands/xinfo-stream.json` to align question wording with the planned command docs and introspection surface." } },
-      { delay: 2620, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-3", result: "Read `src/aof.c`, `src/rdb.c`, and `src/redis-check-rdb.c` to understand persistence constraints that should influence default answers." } },
-      { delay: 3160, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-1" } },
-      { delay: 4060, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-1", result: "Cross-referenced stream consumer-group structures, pending-entry flows, and claim semantics to confirm DLQ should stay group-scoped and out of normal XPENDING/XCLAIM behavior." } },
-      { delay: 4520, eventType: "chunk", data: { content: "Thinking through the smallest useful set of clarifying questions for the Redis DLQ rollout.\n\nI want the QnA step to feel purposeful, so I’m filtering for only the decisions that materially change command scope, metadata visibility, and replay semantics." } },
-      { delay: 5980, eventType: "progress", data: { step: "Drafting", message: "Locking only the questions that materially affect command scope, metadata visibility, and replay semantics." } },
-      { delay: 6340, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-4" } },
-      { delay: 7260, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-4", result: "Revisited docs, persistence, and lifecycle tests to make sure the default answers match the eventual plan and implementation story." } },
-      { delay: 7640, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-2" } },
-      { delay: 8500, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-2", result: "Validated that `PURGE` belongs in the first demo cut and that replay should preserve original IDs while remaining explicit." } },
-      { delay: 8920, eventType: "tool_call_start", data: { tool: "bash", call_id: "qna-bash-1" } },
-      { delay: 10620, eventType: "tool_call_end", data: { tool: "bash", call_id: "qna-bash-1", result: "Executed `git diff unstable...stream-dlq-demo -- src/t_stream.c src/commands/*.json tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --include-dlq --include-persistence --format markdown` to verify the touched files and keep the recommended answers consistent with the intended patch footprint." } },
-      { delay: 11040, eventType: "chunk", data: { content: "\nThe result is a short QnA set that still feels real: one question for feature scope, one for how DLQ affects `XPENDING`, one for what metadata must be visible, and one open-ended constraint that anchors the implementation to native Streams semantics." } },
-      { delay: 12420, eventType: "progress", data: { step: "Finalizing", message: "Marking recommendation-backed answers as the initial state and packaging the stream payload for the QnA screen." } },
-      { delay: 13280, eventType: "chunk", data: { content: "\nPrepared four focused questions with default answers already selected so the review can move straight to spec generation." } },
-      { delay: 14240, eventType: "end", data: { message: "Questions ready" } },
+      { delay: 360, eventType: "start", data: { message: "Understanding the Redis Streams feature request" } },
+      { delay: 980, eventType: "progress", data: { step: "Context", message: "Scanning the handoff, stream internals, command metadata, and persistence surfaces before drafting the QnA set." } },
+      { delay: 1380, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-1" } },
+      { delay: 1460, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-2" } },
+      { delay: 1540, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-3" } },
+      { delay: 3080, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-1", result: "Read `STREAM_DLQ_IMPLEMENTATION_PLAN.md`, `src/t_stream.c`, `src/stream.h`, and `tests/unit/type/stream-dlq.tcl` in parallel to extract lifecycle semantics, parser touchpoints, and operator-facing edge cases." } },
+      { delay: 3240, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-2", result: "Read `src/commands/xdlq-move.json`, `src/commands/xdlq-replay.json`, `src/commands/xdlq-purge.json`, and `src/commands/xinfo-stream.json` to align question wording with the planned command docs and introspection surface." } },
+      { delay: 3400, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-3", result: "Read `src/aof.c`, `src/rdb.c`, `src/rdb.h`, and `src/redis-check-rdb.c` to understand persistence constraints that should influence default answers and question priority." } },
+      { delay: 4060, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-1" } },
+      { delay: 5960, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-1", result: "Cross-referenced stream consumer-group structures, pending-entry flows, replay semantics, and claim behavior to confirm DLQ should stay group-scoped and out of normal XPENDING/XCLAIM behavior." } },
+      { delay: 6500, eventType: "chunk", data: { content: "Thinking through the smallest useful set of clarifying questions for the Redis DLQ rollout.\n\nI want the QnA step to feel purposeful, so I’m filtering for only the decisions that materially change command scope, metadata visibility, replay semantics, and persistence guarantees rather than asking generic implementation questions." } },
+      { delay: 9520, eventType: "progress", data: { step: "Reasoning", message: "Separating true product-shaping decisions from details that can safely be fixed by the implementation plan." } },
+      { delay: 9900, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-4" } },
+      { delay: 9980, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-5" } },
+      { delay: 11520, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-4", result: "Re-read docs, persistence notes, and lifecycle tests to make sure the default answers line up with the eventual plan and implementation story." } },
+      { delay: 11680, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-5", result: "Read `src/commands.def`, `src/commands/xdlq-help.json`, and `src/commands/xdlq-list.json` to determine which choices should be locked in the QnA versus deferred into the spec." } },
+      { delay: 12320, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-2" } },
+      { delay: 14440, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-2", result: "Validated that `PURGE` belongs in the first demo cut, replay should preserve original IDs while remaining explicit, and quarantine visibility should be exposed through summary fields instead of hidden state." } },
+      { delay: 15020, eventType: "chunk", data: { content: "\nAt this stage I’m not trying to maximize the number of questions. I’m trying to reduce uncertainty. If a decision does not materially affect parser scope, operator UX, state shape, or persistence semantics, it should probably not slow the user down in the QnA screen." } },
+      { delay: 18100, eventType: "progress", data: { step: "Cross-checking", message: "Running long verification passes against touched files so the recommended answers look justified by real implementation surfaces." } },
+      { delay: 18480, eventType: "tool_call_start", data: { tool: "bash", call_id: "qna-bash-1" } },
+      { delay: 21420, eventType: "tool_call_end", data: { tool: "bash", call_id: "qna-bash-1", result: "Executed `git diff unstable...stream-dlq-demo -- src/t_stream.c src/stream.h src/server.h src/commands/*.json src/commands.def tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/rdb.h src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --include-dlq --include-persistence --include-docs --format markdown` to verify the touched files and keep the recommended answers consistent with the intended patch footprint." } },
+      { delay: 21980, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-3" } },
+      { delay: 24220, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-3", result: "Confirmed that the most important choices to pre-answer are feature scope, DLQ treatment in pending/claim workflows, required metadata visibility, and persistence/reload fidelity." } },
+      { delay: 24820, eventType: "chunk", data: { content: "\nThe result is converging toward a short but credible set: one question to lock feature scope, one to lock how DLQ interacts with `XPENDING` and claim paths, one to lock what operators must be able to inspect, and one constraint-oriented question that anchors the design to native Streams behavior." } },
+      { delay: 28180, eventType: "progress", data: { step: "More synthesis", message: "Doing one more graph pass so the defaults feel deliberate rather than auto-filled." } },
+      { delay: 28560, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-4" } },
+      { delay: 30920, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-4", result: "Linked command docs, stream internals, replay semantics, and persistence notes to justify why the demo can confidently preselect the recommended answers without presenting unnecessary branches." } },
+      { delay: 31540, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-6" } },
+      { delay: 33120, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-6", result: "Revisited `tests/unit/type/stream-dlq.tcl`, `src/commands/xinfo-stream.json`, and `src/aof.c` to sharpen wording around operator visibility, replay safety, and reload correctness." } },
+      { delay: 33720, eventType: "chunk", data: { content: "\nI’m now tightening the copy of each question so it reads like something a real engineering lead would ask: broad enough to express a design choice, but specific enough that the answer obviously constrains the spec and plan that follow." } },
+      { delay: 37040, eventType: "progress", data: { step: "Final drafting", message: "Converting the research into a compact pre-answered QnA set with recommendation-backed defaults." } },
+      { delay: 37420, eventType: "tool_call_start", data: { tool: "bash", call_id: "qna-bash-2" } },
+      { delay: 40240, eventType: "tool_call_end", data: { tool: "bash", call_id: "qna-bash-2", result: "Executed `python scripts/question_coverage_check.py --feature stream-dlq --with-defaults --emit-json && git diff --stat unstable...stream-dlq-demo` to verify that the chosen questions cover command surface, semantics, observability, and persistence without redundant prompts." } },
+      { delay: 40860, eventType: "chunk", data: { content: "\nPrepared the final recommendation-backed set so the QnA review can move straight to spec generation while still feeling like the system genuinely read the repository, compared alternatives, and narrowed down only the decisions that matter." } },
+      { delay: 44120, eventType: "progress", data: { step: "Packaging", message: "Marking recommendation-backed answers as the initial state and packaging the stream payload for the QnA screen." } },
+      { delay: 47020, eventType: "chunk", data: { content: "\nPrepared four focused questions with default answers already selected so the review can move straight to spec generation." } },
+      { delay: 50280, eventType: "end", data: { message: "Questions ready" } },
     ],
     options,
     () => {

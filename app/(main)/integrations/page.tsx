@@ -652,6 +652,9 @@ const Integrations = () => {
       );
     }
   );
+  const isGithubAlreadyConnected = connectedIntegrations.some(
+    (integration) => integration.type === "github"
+  );
 
   const handleAddIntegration = (integrationType: any) => {
     // Navigate to the integration setup page
@@ -867,6 +870,9 @@ const Integrations = () => {
                 const integrationType = availableIntegrationTypes.find(
                   (t) => t.id === integration.type
                 );
+                const canManage = integration.isManageable !== false;
+                const manageableIntegrationId =
+                  integration.integration_id ?? integration.id;
                 return (
                   <Card
                     key={integration.id}
@@ -881,18 +887,18 @@ const Integrations = () => {
                           <div>
                             <div className="flex items-center gap-2">
                               {editingIntegrations.has(
-                                integration.integration_id
+                                manageableIntegrationId
                               ) ? (
                                 <div className="flex items-center gap-1">
                                   <Input
                                     value={
                                       editingNames[
-                                        integration.integration_id
+                                        manageableIntegrationId
                                       ] || ""
                                     }
                                     onChange={(e) =>
                                       handleNameChange(
-                                        integration.integration_id,
+                                        manageableIntegrationId,
                                         e.target.value
                                       )
                                     }
@@ -901,11 +907,11 @@ const Integrations = () => {
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter") {
                                         handleSaveEdit(
-                                          integration.integration_id
+                                          manageableIntegrationId
                                         );
                                       } else if (e.key === "Escape") {
                                         handleCancelEdit(
-                                          integration.integration_id
+                                          manageableIntegrationId
                                         );
                                       }
                                     }}
@@ -915,7 +921,7 @@ const Integrations = () => {
                                     size="sm"
                                     className="h-6 w-6 p-0"
                                     onClick={() =>
-                                      handleSaveEdit(integration.integration_id)
+                                      handleSaveEdit(manageableIntegrationId)
                                     }
                                   >
                                     <Check className="h-3 w-3 text-green-600" />
@@ -926,7 +932,7 @@ const Integrations = () => {
                                     className="h-6 w-6 p-0"
                                     onClick={() =>
                                       handleCancelEdit(
-                                        integration.integration_id
+                                        manageableIntegrationId
                                       )
                                     }
                                   >
@@ -938,19 +944,21 @@ const Integrations = () => {
                                   <CardTitle className="text-base">
                                     {integration.instanceName}
                                   </CardTitle>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() =>
-                                      handleStartEdit(
-                                        integration.integration_id,
-                                        integration.instanceName
-                                      )
-                                    }
-                                  >
-                                    <Edit2 className="h-3 w-3" />
-                                  </Button>
+                                  {canManage && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() =>
+                                        handleStartEdit(
+                                          manageableIntegrationId,
+                                          integration.instanceName
+                                        )
+                                      }
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -968,6 +976,11 @@ const Integrations = () => {
                                 integration.config.workspaceId ||
                                 "Connected"}
                             </p>
+                            {!canManage && (
+                              <p className="text-xs text-gray-500">
+                                Managed by login provider
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -979,27 +992,29 @@ const Integrations = () => {
                               {getStatusText(integration.status)}
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            disabled={deletingIntegrations.has(
-                              integration.integration_id
-                            )}
-                            onClick={() =>
-                              handleDeleteIntegration(
-                                integration.integration_id
-                              )
-                            }
-                          >
-                            {deletingIntegrations.has(
-                              integration.integration_id
-                            ) ? (
-                              <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3 w-3" />
-                            )}
-                          </Button>
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              disabled={deletingIntegrations.has(
+                                manageableIntegrationId
+                              )}
+                              onClick={() =>
+                                handleDeleteIntegration(
+                                  manageableIntegrationId
+                                )
+                              }
+                            >
+                              {deletingIntegrations.has(
+                                manageableIntegrationId
+                              ) ? (
+                                <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardHeader>
@@ -1041,39 +1056,52 @@ const Integrations = () => {
             Available Integrations
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredIntegrationTypes.map((integration) => (
-              <Card
-                key={integration.id}
-                className="relative border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden"
-                onClick={() => handleAddIntegration(integration)}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-shrink-0">{integration.icon}</div>
-                    <div>
-                      <CardTitle className="text-base">
-                        {integration.name}
-                      </CardTitle>
-                      <p className="text-xs text-gray-500">
-                        {integration.category}
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <CardDescription className="text-sm text-gray-600 mb-3">
-                    {integration.description}
-                  </CardDescription>
-                </CardContent>
+            {filteredIntegrationTypes.map((integration) => {
+              const isGithubCard = integration.id === "github";
+              const githubLocked = isGithubCard && isGithubAlreadyConnected;
 
-                {/* Hover Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent via-transparent via-transparent via-black/0 via-black/0 via-black/0 via-black/0 to-black/0 opacity-100 group-hover:from-transparent group-hover:via-transparent group-hover:via-transparent group-hover:via-transparent group-hover:via-black/5 group-hover:via-black/15 group-hover:via-black/25 group-hover:via-black/35 group-hover:to-black/45 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex items-end justify-end p-3">
-                  <p className="text-white font-medium text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    + add new
-                  </p>
-                </div>
-              </Card>
-            ))}
+              return (
+                <Card
+                  key={integration.id}
+                  className={`relative border border-gray-200 shadow-sm transition-all duration-200 group overflow-hidden ${
+                    githubLocked
+                      ? "cursor-default"
+                      : "cursor-pointer hover:shadow-md"
+                  }`}
+                  onClick={() => {
+                    if (!githubLocked) {
+                      handleAddIntegration(integration);
+                    }
+                  }}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-shrink-0">{integration.icon}</div>
+                      <div>
+                        <CardTitle className="text-base">
+                          {integration.name}
+                        </CardTitle>
+                        <p className="text-xs text-gray-500">
+                          {integration.category}
+                        </p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <CardDescription className="text-sm text-gray-600 mb-3">
+                      {integration.description}
+                    </CardDescription>
+                  </CardContent>
+
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent via-transparent via-transparent via-black/0 via-black/0 via-black/0 via-black/0 to-black/0 opacity-100 group-hover:from-transparent group-hover:via-transparent group-hover:via-transparent group-hover:via-transparent group-hover:via-black/5 group-hover:via-black/15 group-hover:via-black/25 group-hover:via-black/35 group-hover:to-black/45 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex items-end justify-end p-3">
+                    <p className="text-white font-medium text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      {githubLocked ? "already connected" : "+ add new"}
+                    </p>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </div>

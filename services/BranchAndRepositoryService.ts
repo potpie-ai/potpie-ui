@@ -140,6 +140,25 @@ export default class BranchAndRepositoryService {
       }
   }
 
+  /**
+   * Create a minimal DB project (no GitHub parse) so integrations such as Linear can attach.
+   */
+  static async createWorkspaceProject(displayName?: string) {
+    const headers = await getHeaders();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    const response = await axios.post(
+      `${baseUrl}/api/v1/projects/workspace`,
+      displayName ? { display_name: displayName } : {},
+      { headers }
+    );
+    return response.data as {
+      id: string;
+      repo_name: string;
+      branch_name: string;
+      status: string;
+    };
+  }
+
     static async getProjectContextGraph(
       projectId: string,
       options: { pr_number?: number; limit?: number } = {}

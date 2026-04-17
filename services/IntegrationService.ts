@@ -40,7 +40,7 @@ export interface ConnectedIntegrationResponse {
 
 export interface ConnectedIntegration {
   id: string;
-  integration_id: string;
+  integration_id: string | null;
   name: string;
   type: string;
   instanceName: string;
@@ -53,6 +53,15 @@ export interface ConnectedIntegration {
   uniqueIdentifier?: string;
   createdAt: string;
   updatedAt: string;
+  isManageable?: boolean;
+}
+
+interface SourcesConnection {
+  provider: string;
+  kind: string;
+  connected: boolean;
+  integration_id: string | null;
+  name: string | null;
 }
 
 export default class IntegrationService {
@@ -61,36 +70,94 @@ export default class IntegrationService {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
     try {
-      const response = await axios.get<ConnectedIntegrationResponse>(
-        `${baseUrl}/api/v1/integrations/connected`,
-        {
-          headers: headers,
+      const [integrationsResult, sourcesResult] = await Promise.allSettled([
+        axios.get<ConnectedIntegrationResponse>(
+          `${baseUrl}/api/v1/integrations/connected`,
+          { headers }
+        ),
+        axios.get<{ connections: SourcesConnection[] }>(
+          `${baseUrl}/api/v1/sources/connections`,
+          { headers }
+        ),
+      ]);
+
+      const byId = new Map<string, ConnectedIntegration>();
+      let integrationsError: unknown;
+      let sourcesError: unknown;
+
+      if (integrationsResult.status === "fulfilled") {
+        const connectedIntegrations: ConnectedIntegration[] = Object.values(
+          integrationsResult.value.data.connected_integrations
+        ).map((integration) => ({
+          id: integration.integration_id,
+          integration_id: integration.integration_id,
+          name: integration.name,
+          type: integration.integration_type,
+          instanceName: integration.metadata.instance_name,
+          status: integration.active ? "active" : "error",
+          lastSync: this.formatLastSync(integration.updated_at),
+          config: {
+            org_slug: integration.scope_data.org_slug,
+            installation_id: integration.scope_data.installation_id,
+          },
+          orgSlug: integration.scope_data.org_slug,
+          installationId: integration.scope_data.installation_id,
+          uniqueIdentifier: integration.unique_identifier,
+          createdAt: integration.created_at,
+          updatedAt: integration.updated_at,
+          isManageable: Boolean(integration.integration_id),
+        }));
+        connectedIntegrations.forEach((integration) => {
+          byId.set(integration.id, integration);
+        });
+      } else {
+        integrationsError = integrationsResult.reason;
+      }
+
+      if (sourcesResult.status === "fulfilled") {
+        const sourceConnections = sourcesResult.value.data.connections ?? [];
+        for (const connection of sourceConnections) {
+          if (!connection.connected) continue;
+
+          const provider = (connection.provider || "").toLowerCase();
+          const integrationId =
+            connection.integration_id ??
+            `${provider}-auth-provider-${connection.kind || "default"}`;
+          const existing = byId.get(integrationId);
+
+          if (existing) {
+            continue;
+          }
+
+          const nowIso = new Date().toISOString();
+          byId.set(integrationId, {
+            id: integrationId,
+            integration_id: connection.integration_id,
+            name: connection.name || provider || "Integration",
+            type: provider,
+            instanceName:
+              connection.name ||
+              provider.charAt(0).toUpperCase() + provider.slice(1),
+            status: "active",
+            lastSync: "Connected",
+            config: {},
+            createdAt: nowIso,
+            updatedAt: nowIso,
+            isManageable: Boolean(connection.integration_id),
+          });
         }
-      );
+      } else {
+        sourcesError = sourcesResult.reason;
+      }
 
-      // Transform the API response to match the component's expected format
-      const connectedIntegrations: ConnectedIntegration[] = Object.values(
-        response.data.connected_integrations
-      ).map((integration) => ({
-        id: integration.integration_id, // Use integration_id as the id
-        integration_id: integration.integration_id,
-        name: integration.name,
-        type: integration.integration_type,
-        instanceName: integration.metadata.instance_name,
-        status: integration.active ? "active" : "error",
-        lastSync: this.formatLastSync(integration.updated_at),
-        config: {
-          org_slug: integration.scope_data.org_slug,
-          installation_id: integration.scope_data.installation_id,
-        },
-        orgSlug: integration.scope_data.org_slug,
-        installationId: integration.scope_data.installation_id,
-        uniqueIdentifier: integration.unique_identifier,
-        createdAt: integration.created_at,
-        updatedAt: integration.updated_at,
-      }));
+      const merged = Array.from(byId.values());
+      if (merged.length > 0) {
+        return merged;
+      }
 
-      return connectedIntegrations;
+      if (integrationsError) throw integrationsError;
+      if (sourcesError) throw sourcesError;
+      return [];
     } catch (error) {
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);

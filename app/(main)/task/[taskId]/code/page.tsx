@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, useMemo, startTransition } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  startTransition,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Play,
@@ -11,7 +18,6 @@ import {
   Loader2,
   Code2,
   ShieldCheck,
-  GitBranch,
   Maximize2,
   CheckCircle2,
   Circle,
@@ -20,7 +26,6 @@ import {
   ArrowRight,
   TerminalSquare,
   Sidebar,
-
   FileDiff,
   TestTube,
   ScrollText,
@@ -31,8 +36,6 @@ import {
   ExternalLink,
   Hourglass,
   List,
-  ArrowLeft,
-  Github,
   Sparkles,
   Info,
   RefreshCw,
@@ -80,6 +83,11 @@ import {
   StreamTimeline,
   type StreamTimelineItem,
 } from "@/components/stream/StreamTimeline";
+import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
+import {
+  markCodegenStartedForRecipe,
+  persistCodegenQueryString,
+} from "@/lib/buildFlow";
 
 /** sessionStorage key for codegen thinking */
 const THINKING_STORAGE_KEY_CODEGEN = "potpie_thinking_codegen";
@@ -100,13 +108,17 @@ function getParamDisplayForEvt(evt: AgentActivityEvt): string {
   const params = evt.params || {};
   const tool = evt.tool || "";
   if (params._truncated) {
-    return params.preview ? String(params.preview).slice(0, 50) + "…" : "(large payload)";
+    return params.preview
+      ? String(params.preview).slice(0, 50) + "…"
+      : "(large payload)";
   }
   switch (tool) {
     case "read": {
       const filePath = String(params.file_path ?? params.path ?? "");
       const segments = filePath.split("/").filter(Boolean);
-      return segments.length > 3 ? "…/" + segments.slice(-3).join("/") : filePath;
+      return segments.length > 3
+        ? "…/" + segments.slice(-3).join("/")
+        : filePath;
     }
     case "grep":
     case "search":
@@ -122,7 +134,9 @@ function getParamDisplayForEvt(evt: AgentActivityEvt): string {
     case "str_replace": {
       const editPath = String(params.file_path ?? params.path ?? "");
       const editSegments = editPath.split("/").filter(Boolean);
-      return editSegments.length > 3 ? "…/" + editSegments.slice(-3).join("/") : editPath;
+      return editSegments.length > 3
+        ? "…/" + editSegments.slice(-3).join("/")
+        : editPath;
     }
     case "bash":
     case "shell":
@@ -152,7 +166,10 @@ function looksLikeFileName(segment: string): boolean {
 /** Build a tree of TreeNode from file paths (e.g. ["src/foo/bar.ts", "src/baz.ts"]). */
 function buildFileTree(paths: string[]): TreeNode[] {
   const seen = new Set<string>();
-  const root: Record<string, { node: TreeNode; children: Record<string, unknown> }> = {};
+  const root: Record<
+    string,
+    { node: TreeNode; children: Record<string, unknown> }
+  > = {};
 
   for (const path of paths) {
     const trimmed = path.trim();
@@ -186,21 +203,36 @@ function buildFileTree(paths: string[]): TreeNode[] {
       if (isFile) {
         (current[part].node as TreeNode).children = undefined;
       }
-      current = current[part].children as Record<string, { node: TreeNode; children: Record<string, unknown> }>;
+      current = current[part].children as Record<
+        string,
+        { node: TreeNode; children: Record<string, unknown> }
+      >;
     }
   }
 
-  function toChildren(obj: Record<string, { node: TreeNode; children: Record<string, unknown> }>): TreeNode[] {
+  function toChildren(
+    obj: Record<string, { node: TreeNode; children: Record<string, unknown> }>,
+  ): TreeNode[] {
     return Object.values(obj)
       .map(({ node, children }) => ({
         ...node,
-        children: node.children === undefined ? undefined : toChildren(children as Record<string, { node: TreeNode; children: Record<string, unknown> }>),
+        children:
+          node.children === undefined
+            ? undefined
+            : toChildren(
+                children as Record<
+                  string,
+                  { node: TreeNode; children: Record<string, unknown> }
+                >,
+              ),
       }))
       .sort((a, b) => {
         const aIsDir = (a.children?.length ?? 0) > 0;
         const bIsDir = (b.children?.length ?? 0) > 0;
         if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
-        return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+        return a.label.localeCompare(b.label, undefined, {
+          sensitivity: "base",
+        });
       });
   }
 
@@ -226,7 +258,7 @@ function getAllNodeIds(nodes: TreeNode[]): string[] {
  */
 function mergeLayersForCompletion(
   prev: TaskLayer[],
-  next: TaskLayer[]
+  next: TaskLayer[],
 ): TaskLayer[] {
   if (prev.length !== next.length) return next;
   let usedPrev = true;
@@ -332,7 +364,11 @@ const CodeFileCard = ({
       {isExpanded && (
         <div className="min-h-[280px]">
           <MonacoDiffView
-            change={{ path: change.path, lang: change.lang, content: change.content }}
+            change={{
+              path: change.path,
+              lang: change.lang,
+              content: change.content,
+            }}
             height={280}
             className="w-full"
           />
@@ -467,7 +503,7 @@ const TaskCard = ({
   const hasChanges = task.changes && task.changes.length > 0;
   // Default to 'logs' if no changes (Verification task), otherwise 'diff'
   const [activeTab, setActiveTab] = React.useState(
-    hasChanges ? "diff" : "logs"
+    hasChanges ? "diff" : "logs",
   );
   // Map API status to UI status
   const uiStatus = mapApiStatusToUI(task.status);
@@ -508,7 +544,10 @@ const TaskCard = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <StatusBadge status={uiStatus} tests={task.tests ?? { total: 0, passed: 0 }} />
+            <StatusBadge
+              status={uiStatus}
+              tests={task.tests ?? { total: 0, passed: 0 }}
+            />
             <ChevronDown
               className={`w-4 h-4 text-primary-color transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
             />
@@ -594,7 +633,7 @@ const TaskCard = ({
                   {task.changes?.map(
                     (
                       change: { path: string; lang: string; content: string },
-                      idx: number
+                      idx: number,
                     ) => (
                       <div
                         key={change.path ?? idx}
@@ -616,10 +655,12 @@ const TaskCard = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigator.clipboard.writeText(change.content || "").then(
-                                  () => toast.success("Copied to clipboard"),
-                                  () => toast.error("Failed to copy")
-                                );
+                                navigator.clipboard
+                                  .writeText(change.content || "")
+                                  .then(
+                                    () => toast.success("Copied to clipboard"),
+                                    () => toast.error("Failed to copy"),
+                                  );
                               }}
                               className="p-0.5 rounded hover:bg-zinc-100"
                               title="Copy file content"
@@ -631,7 +672,11 @@ const TaskCard = ({
                         {change.content ? (
                           <div className="min-h-[280px] rounded-b-lg overflow-hidden">
                             <MonacoDiffView
-                              change={{ path: change.path, lang: change.lang, content: change.content }}
+                              change={{
+                                path: change.path,
+                                lang: change.lang,
+                                content: change.content,
+                              }}
                               height={280}
                               className="w-full"
                             />
@@ -645,7 +690,7 @@ const TaskCard = ({
                           </div>
                         )}
                       </div>
-                    )
+                    ),
                   )}
                 </div>
               ))}
@@ -680,7 +725,7 @@ const TaskCard = ({
                       task.testResults.map(
                         (
                           test: import("@/lib/types/spec").TaskTestResult,
-                          i: number
+                          i: number,
                         ) => (
                           <div
                             key={i}
@@ -714,7 +759,7 @@ const TaskCard = ({
                                 : "PENDING"}
                             </span>
                           </div>
-                        )
+                        ),
                       )
                     ) : (
                       <div className="p-3 text-[11px] text-primary-color italic">
@@ -767,11 +812,21 @@ export default function VerticalTaskExecution() {
   const taskSplittingIdFromUrl = searchParams.get("taskSplittingId");
   const repoNameFromUrl = searchParams.get("repoName");
 
-  const repoBranchByTask = useSelector((state: RootState) => state.RepoAndBranch.byTaskId);
+  // Keep last codegen query (slice + task splitting id) for build-flow tab navigation
+  useEffect(() => {
+    if (!recipeId) return;
+    const qs = searchParams.toString();
+    if (!qs) return;
+    persistCodegenQueryString(recipeId, `?${qs}`);
+  }, [recipeId, searchParams]);
+
+  const repoBranchByTask = useSelector(
+    (state: RootState) => state.RepoAndBranch.byTaskId,
+  );
   const storedRepoContext = recipeId ? repoBranchByTask?.[recipeId] : undefined;
 
   const [activeSliceId, setActiveSliceId] = useState(
-    itemNumberFromUrl ? parseInt(itemNumberFromUrl) : 1
+    itemNumberFromUrl ? parseInt(itemNumberFromUrl) : 1,
   );
   // Persist completed slices in localStorage to survive page refresh
   const [completedSlices, setCompletedSlices] = useState<number[]>(() => {
@@ -784,12 +839,15 @@ export default function VerticalTaskExecution() {
     }
   });
   const [isRunning, setIsRunning] = useState(false);
-  
+
   // Persist completedSlices changes to localStorage
   useEffect(() => {
     if (!recipeId || completedSlices.length === 0) return;
     try {
-      localStorage.setItem(`completed_slices_${recipeId}`, JSON.stringify(completedSlices));
+      localStorage.setItem(
+        `completed_slices_${recipeId}`,
+        JSON.stringify(completedSlices),
+      );
     } catch {
       // Ignore storage errors
     }
@@ -800,8 +858,15 @@ export default function VerticalTaskExecution() {
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [isLoadingPlanItems, setIsLoadingPlanItems] = useState(false);
   const [taskSplittingId, setTaskSplittingId] = useState<string | null>(
-    taskSplittingIdFromUrl || null
+    taskSplittingIdFromUrl || null,
   );
+
+  useEffect(() => {
+    if (recipeId && taskSplittingId) {
+      markCodegenStartedForRecipe(recipeId);
+    }
+  }, [recipeId, taskSplittingId]);
+
   const [taskSplittingStatus, setTaskSplittingStatus] =
     useState<TaskSplittingStatusResponse | null>(null);
   const [allLayers, setAllLayers] = useState<TaskLayer[]>([]);
@@ -818,20 +883,24 @@ export default function VerticalTaskExecution() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [isCreatingPR, setIsCreatingPR] = useState(false);
   const [changedFilesSliderOpen, setChangedFilesSliderOpen] = useState(false);
-  const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<string | null>(null);
+  const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<
+    string | null
+  >(null);
   const hasShownFailedToastRef = useRef(false);
   const thinkingListRef = useRef<HTMLDivElement>(null);
-  
+
   // Refs for polling optimization - avoid dependency array issues while accessing current values
   const allLayersRef = useRef<TaskLayer[]>([]);
-  const taskSplittingStatusRef = useRef<TaskSplittingStatusResponse | null>(null);
+  const taskSplittingStatusRef = useRef<TaskSplittingStatusResponse | null>(
+    null,
+  );
   const planItemsRef = useRef<PlanItem[]>([]);
-  
+
   // Keep refs in sync with state
   useEffect(() => {
     allLayersRef.current = allLayers;
   }, [allLayers]);
-  
+
   useEffect(() => {
     taskSplittingStatusRef.current = taskSplittingStatus;
   }, [taskSplittingStatus]);
@@ -849,7 +918,9 @@ export default function VerticalTaskExecution() {
 
   // Code gen chat: same backend as ask flow (codebase_qna_agent), one conversation per recipe
   const { user } = useAuthContext();
-  const [codegenConversationId, setCodegenConversationId] = useState<string | null>(null);
+  const [codegenConversationId, setCodegenConversationId] = useState<
+    string | null
+  >(null);
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const codegenChatInitRef = useRef<string | null>(null);
   const prevRecipeIdForChatRef = useRef<string | null>(null);
@@ -857,7 +928,10 @@ export default function VerticalTaskExecution() {
   // When recipe (task) changes, reset codegen chat state so we don't use the previous recipe's conversation
   useEffect(() => {
     if (!recipeId) return;
-    if (prevRecipeIdForChatRef.current !== null && prevRecipeIdForChatRef.current !== recipeId) {
+    if (
+      prevRecipeIdForChatRef.current !== null &&
+      prevRecipeIdForChatRef.current !== recipeId
+    ) {
       setCodegenConversationId(null);
       codegenChatInitRef.current = null;
     }
@@ -865,15 +939,18 @@ export default function VerticalTaskExecution() {
   }, [recipeId]);
 
   // --- UI-only: plan phases for the "Generated Plan" card (keep backend intact) ---
-  const [planPhases, setPlanPhases] = useState<Array<{ name: string; total: number }>>(
-    []
-  );
+  const [planPhases, setPlanPhases] = useState<
+    Array<{ name: string; total: number }>
+  >([]);
 
   // --- Selected phase and task for code display ---
   const [selectedPhaseIndex, setSelectedPhaseIndex] = useState<number>(0);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([0]));
-  const [thinkingAccordionValue, setThinkingAccordionValue] = useState<string>("");
+  const [expandedPhases, setExpandedPhases] = useState<Set<number>>(
+    new Set([0]),
+  );
+  const [thinkingAccordionValue, setThinkingAccordionValue] =
+    useState<string>("");
 
   // --- UI-only: chat messages (visual only; backend chat wiring can come later) ---
   type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -903,7 +980,8 @@ export default function VerticalTaskExecution() {
 
   // Map file path -> change content for the slider detail view (first occurrence per path)
   const pathToChange = useMemo(() => {
-    const map: Record<string, { path: string; lang: string; content: string }> = {};
+    const map: Record<string, { path: string; lang: string; content: string }> =
+      {};
     for (const layer of allLayers) {
       for (const task of layer.tasks ?? []) {
         for (const change of task.changes ?? []) {
@@ -916,7 +994,9 @@ export default function VerticalTaskExecution() {
           }
         }
         if (task.file?.trim() && !map[task.file.trim()]) {
-          const fromChange = task.changes?.find((c) => c.path?.trim() === task.file.trim());
+          const fromChange = task.changes?.find(
+            (c) => c.path?.trim() === task.file.trim(),
+          );
           map[task.file.trim()] = {
             path: task.file.trim(),
             lang: fromChange?.lang ?? "text",
@@ -976,7 +1056,7 @@ export default function VerticalTaskExecution() {
     if (!recipeId) return;
     // Skip if we already fetched for this recipeId
     if (recipeFetchDoneRef.current === recipeId) return;
-    
+
     let mounted = true;
     const fromStorage = (() => {
       if (typeof window === "undefined") return null;
@@ -998,12 +1078,26 @@ export default function VerticalTaskExecution() {
         const prompt = (details.user_prompt || "").trim();
         setRecipePrompt(prompt);
         setProjectId(details.project_id?.trim() || null);
-        const repo = details.repo_name?.trim() || fromStorage?.repo_name?.trim() || null;
-        const branch = details.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main";
+        const repo =
+          details.repo_name?.trim() || fromStorage?.repo_name?.trim() || null;
+        const branch =
+          details.branch_name?.trim() ||
+          fromStorage?.branch_name?.trim() ||
+          "main";
         setRepoName(repo || "Unknown Repository");
         setBranchName(branch);
-        if (repo && typeof window !== "undefined" && !new URLSearchParams(window.location.search).get("repoName")?.trim()) {
-          dispatch(setRepoAndBranchForTask({ taskId: recipeId, repoName: repo, branchName: branch }));
+        if (
+          repo &&
+          typeof window !== "undefined" &&
+          !new URLSearchParams(window.location.search).get("repoName")?.trim()
+        ) {
+          dispatch(
+            setRepoAndBranchForTask({
+              taskId: recipeId,
+              repoName: repo,
+              branchName: branch,
+            }),
+          );
         }
       } catch (e) {
         if (!mounted) return;
@@ -1022,6 +1116,26 @@ export default function VerticalTaskExecution() {
   const displayRepoName =
     repoNameFromUrl || storedRepoContext?.repoName || repoName;
   const displayBranchName = storedRepoContext?.branchName || branchName;
+
+  /** Title for build-flow header: avoid blank h1 while prompt loads; prefer localStorage recipe cache */
+  const codePageHeaderTitle = useMemo(() => {
+    const trimmed = recipePrompt?.trim();
+    if (trimmed) {
+      return `${trimmed.slice(0, 50)}${trimmed.length > 50 ? "…" : ""}`;
+    }
+    if (typeof window !== "undefined" && recipeId) {
+      try {
+        const raw = localStorage.getItem(`recipe_${recipeId}`);
+        if (raw) {
+          const u = (JSON.parse(raw) as { user_prompt?: string }).user_prompt?.trim();
+          if (u) return `${u.slice(0, 50)}${u.length > 50 ? "…" : ""}`;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return "Code generation";
+  }, [recipePrompt, recipeId]);
 
   // Initialize the left "chat" with the prompt + a codegen helper message (once per recipe).
   // Run once per recipeId; use fallback prompt if recipePrompt not loaded yet so the pane is never empty.
@@ -1069,7 +1183,9 @@ export default function VerticalTaskExecution() {
         let conversationId: string | null = existingId;
 
         if (!conversationId) {
-          const title = promptForTitle!.slice(0, 50) + (promptForTitle!.length > 50 ? "…" : "");
+          const title =
+            promptForTitle!.slice(0, 50) +
+            (promptForTitle!.length > 50 ? "…" : "");
           const agentId = "codebase_qna_agent";
           const res = await ChatService.createConversation(
             user.uid,
@@ -1077,8 +1193,10 @@ export default function VerticalTaskExecution() {
             projectId || null,
             agentId,
             true, // hidden
-            displayRepoName !== "Unknown Repository" ? displayRepoName : undefined,
-            displayBranchName !== "main" ? displayBranchName : undefined
+            displayRepoName !== "Unknown Repository"
+              ? displayRepoName
+              : undefined,
+            displayBranchName !== "main" ? displayBranchName : undefined,
           );
           conversationId = res?.conversation_id ?? null;
           if (conversationId && typeof window !== "undefined") {
@@ -1094,17 +1212,26 @@ export default function VerticalTaskExecution() {
         if (conversationId) {
           setCodegenConversationId(conversationId);
           try {
-            const loaded = await ChatService.loadMessages(conversationId, 0, 500);
+            const loaded = await ChatService.loadMessages(
+              conversationId,
+              0,
+              500,
+            );
             if (!mounted) return;
             if (loaded && loaded.length > 0) {
-              const mapped: ChatMessage[] = loaded.map((m: { sender: string; text: string }) => ({
-                role: m.sender === "user" ? "user" : "assistant",
-                content: m.text ?? "",
-              }));
+              const mapped: ChatMessage[] = loaded.map(
+                (m: { sender: string; text: string }) => ({
+                  role: m.sender === "user" ? "user" : "assistant",
+                  content: m.text ?? "",
+                }),
+              );
               setChatMessages(mapped);
             }
           } catch (loadErr) {
-            console.error("[Code Page] Load messages failed (stale conversation?):", loadErr);
+            console.error(
+              "[Code Page] Load messages failed (stale conversation?):",
+              loadErr,
+            );
             if (!mounted) return;
             // Stale or deleted conversation: clear so we can create a new one on next run
             try {
@@ -1114,7 +1241,9 @@ export default function VerticalTaskExecution() {
             }
             setCodegenConversationId(null);
             codegenChatInitRef.current = null;
-            toast.error("Chat session expired. It will be recreated when you send a message.");
+            toast.error(
+              "Chat session expired. It will be recreated when you send a message.",
+            );
           }
         }
       } catch (e) {
@@ -1136,7 +1265,14 @@ export default function VerticalTaskExecution() {
     return () => {
       mounted = false;
     };
-  }, [recipeId, user?.uid, projectId, displayRepoName, displayBranchName, recipePrompt]);
+  }, [
+    recipeId,
+    user?.uid,
+    projectId,
+    displayRepoName,
+    displayBranchName,
+    recipePrompt,
+  ]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -1173,7 +1309,7 @@ export default function VerticalTaskExecution() {
   useEffect(() => {
     if (!taskSplittingId) return;
     const prStatus = taskSplittingStatus?.pr_status;
-    
+
     // Don't start polling if PR is already done (COMPLETED/FAILED with URL or no isCreatingPR)
     if (taskSplittingStatus?.pr_url) {
       // PR already exists, no need to poll
@@ -1181,7 +1317,7 @@ export default function VerticalTaskExecution() {
       return;
     }
     if (prStatus !== "IN_PROGRESS" && !isCreatingPR) return;
-    
+
     // Reset toast flag when starting new PR creation
     if (isCreatingPR && prStatus !== "IN_PROGRESS") {
       prToastShownRef.current = false;
@@ -1193,7 +1329,7 @@ export default function VerticalTaskExecution() {
         const status =
           await TaskSplittingService.getTaskSplittingStatus(taskSplittingId);
         if (!mounted) return;
-        
+
         // Only update if status changed
         setTaskSplittingStatus((prev) => {
           if (!prev) return status;
@@ -1231,7 +1367,12 @@ export default function VerticalTaskExecution() {
       mounted = false;
       clearInterval(interval);
     };
-  }, [taskSplittingId, taskSplittingStatus?.pr_status, taskSplittingStatus?.pr_url, isCreatingPR]);
+  }, [
+    taskSplittingId,
+    taskSplittingStatus?.pr_status,
+    taskSplittingStatus?.pr_url,
+    isCreatingPR,
+  ]);
 
   // Fetch plan by recipeId (new API: plan items come from getPlanStatusByRecipeId)
   // Only skip fetch when we already have plan items for this recipe (avoid re-fetch on re-renders).
@@ -1247,12 +1388,14 @@ export default function VerticalTaskExecution() {
         if (status.plan) {
           // Keep phase-level meta for "Generated Plan" card
           try {
-            const phases = Array.isArray(status.plan.phases) ? status.plan.phases : [];
+            const phases = Array.isArray(status.plan.phases)
+              ? status.plan.phases
+              : [];
             setPlanPhases(
               phases.map((p: any, i: number) => ({
                 name: String(p?.name || `PHASE ${i + 1}`),
                 total: Array.isArray(p?.plan_items) ? p.plan_items.length : 0,
-              }))
+              })),
             );
           } catch {
             setPlanPhases([]);
@@ -1313,14 +1456,14 @@ export default function VerticalTaskExecution() {
       setIsRunning(true); // Ensure codegen polling runs for this job
       localStorage.setItem(
         `task_splitting_${planId}_${activeSliceId}`,
-        taskSplittingIdFromUrl
+        taskSplittingIdFromUrl,
       );
       return;
     }
 
     // Priority 2: Check localStorage
     const storedTaskSplittingId = localStorage.getItem(
-      `task_splitting_${planId}_${activeSliceId}`
+      `task_splitting_${planId}_${activeSliceId}`,
     );
     if (storedTaskSplittingId) {
       setTaskSplittingId(storedTaskSplittingId);
@@ -1335,16 +1478,16 @@ export default function VerticalTaskExecution() {
         // Use ref to get current plan items to avoid stale closure
         const currentPlanItems = planItemsRef.current;
         const planItem = currentPlanItems.find(
-          (item) => item.item_number === activeSliceId
+          (item) => item.item_number === activeSliceId,
         );
         if (!planItem) {
           console.error(
             "[Code Page] Plan item not found for item_number:",
-            activeSliceId
+            activeSliceId,
           );
           console.error(
             "[Code Page] Available plan items:",
-            currentPlanItems.map((item) => item.item_number)
+            currentPlanItems.map((item) => item.item_number),
           );
           // Don't show error toast - just wait for plan items to load or user to select valid item
           return;
@@ -1352,7 +1495,7 @@ export default function VerticalTaskExecution() {
 
         console.log(
           "[Code Page] Submitting task splitting for plan_item_id:",
-          planItem.id
+          planItem.id,
         );
         const response = await TaskSplittingService.submitTaskSplitting({
           recipe_id: recipeId,
@@ -1363,7 +1506,7 @@ export default function VerticalTaskExecution() {
         setIsRunning(true); // Start codegen polling for live updates
         localStorage.setItem(
           `task_splitting_${planId}_${activeSliceId}`,
-          response.task_splitting_id
+          response.task_splitting_id,
         );
 
         // Update URL with taskSplittingId - use window.location to get fresh URL
@@ -1395,17 +1538,17 @@ export default function VerticalTaskExecution() {
   // Track if this is the initial mount to avoid resetting state on page refresh
   const isInitialMountRef = useRef(true);
   const prevActiveSliceIdRef = useRef<number | null>(null);
-  
+
   useEffect(() => {
     // On initial mount, don't reset - let the task splitting effect handle loading existing data
     if (isInitialMountRef.current) {
       isInitialMountRef.current = false;
       prevActiveSliceIdRef.current = activeSliceId;
-      
+
       // On initial mount, check if we have a stored task splitting ID and use it
       if (planId) {
         const storedTaskSplittingId = localStorage.getItem(
-          `task_splitting_${planId}_${activeSliceId}`
+          `task_splitting_${planId}_${activeSliceId}`,
         );
         if (storedTaskSplittingId && !taskSplittingId) {
           setTaskSplittingId(storedTaskSplittingId);
@@ -1417,13 +1560,13 @@ export default function VerticalTaskExecution() {
       }
       return;
     }
-    
+
     // Only run reset logic if activeSliceId actually changed (not just on re-renders)
     if (prevActiveSliceIdRef.current === activeSliceId) {
       return;
     }
     prevActiveSliceIdRef.current = activeSliceId;
-    
+
     // Only reset if we haven't completed this slice
     if (!completedSlices.includes(activeSliceId)) {
       setCurrentDag([]);
@@ -1440,7 +1583,7 @@ export default function VerticalTaskExecution() {
       // Try to get stored task_splitting_id for this slice
       if (planId) {
         const storedTaskSplittingId = localStorage.getItem(
-          `task_splitting_${planId}_${activeSliceId}`
+          `task_splitting_${planId}_${activeSliceId}`,
         );
         if (
           storedTaskSplittingId &&
@@ -1465,14 +1608,14 @@ export default function VerticalTaskExecution() {
 
     // Prevent concurrent fetches
     let isFetchingLayers = false;
-    
+
     // Fetch layers with pagination
     const fetchLayersWithPagination = async (): Promise<TaskLayer[]> => {
       // Skip if already fetching (prevents pile-up during slow connections)
       if (isFetchingLayers) {
         return allLayersRef.current;
       }
-      
+
       isFetchingLayers = true;
       try {
         let allLayersData: TaskLayer[] = [];
@@ -1483,7 +1626,7 @@ export default function VerticalTaskExecution() {
           const response = await TaskSplittingService.getTaskSplittingItems(
             taskSplittingId,
             start,
-            10
+            10,
           );
           allLayersData = [...allLayersData, ...response.layers];
 
@@ -1512,7 +1655,8 @@ export default function VerticalTaskExecution() {
                 if (!prevTask) return true;
                 if (task.status !== prevTask.status) return true;
                 return (
-                  (task.changes?.length ?? 0) !== (prevTask.changes?.length ?? 0)
+                  (task.changes?.length ?? 0) !==
+                  (prevTask.changes?.length ?? 0)
                 );
               });
             });
@@ -1529,7 +1673,7 @@ export default function VerticalTaskExecution() {
               return prev;
             });
             setGraphLoadIndex((prev) =>
-              prev < allLayersData.length ? allLayersData.length : prev
+              prev < allLayersData.length ? allLayersData.length : prev,
             );
           }
         });
@@ -1552,24 +1696,25 @@ export default function VerticalTaskExecution() {
         // Only update state if status actually changed - avoid unnecessary re-renders
         setTaskSplittingStatus((prev) => {
           if (!prev) return status;
-          
+
           // Compare key fields to avoid unnecessary re-renders
-          const statusChanged = 
+          const statusChanged =
             prev.status !== status.status ||
             prev.codegen_status !== status.codegen_status ||
             prev.current_step !== status.current_step ||
             prev.pr_status !== status.pr_status ||
             prev.pr_url !== status.pr_url ||
             prev.error_message !== status.error_message;
-          
+
           // Only compare activity length, not full content (content shown separately)
-          const activityChanged = 
-            (prev.agent_activity?.length ?? 0) !== (status.agent_activity?.length ?? 0);
-          
+          const activityChanged =
+            (prev.agent_activity?.length ?? 0) !==
+            (status.agent_activity?.length ?? 0);
+
           if (!statusChanged && !activityChanged) {
             return prev; // No change, return same reference to prevent re-render
           }
-          
+
           return status;
         });
 
@@ -1582,9 +1727,10 @@ export default function VerticalTaskExecution() {
         let fetchedLayers: TaskLayer[] = [];
         const cachedLayers = allLayersRef.current;
         const prevStatus = taskSplittingStatusRef.current;
-        
+
         const codegenJustCompleted =
-          status.codegen_status === "COMPLETED" && prevStatus?.codegen_status !== "COMPLETED";
+          status.codegen_status === "COMPLETED" &&
+          prevStatus?.codegen_status !== "COMPLETED";
 
         const shouldFetchLayers =
           (status.status === "COMPLETED" || status.status === "IN_PROGRESS") &&
@@ -1600,18 +1746,23 @@ export default function VerticalTaskExecution() {
         }
 
         // Handle codegen completion/failure logic (previously in separate effect)
-        if (status.codegen_status === "IN_PROGRESS" || status.codegen_status === "COMPLETED") {
+        if (
+          status.codegen_status === "IN_PROGRESS" ||
+          status.codegen_status === "COMPLETED"
+        ) {
           // Check if all tasks are completed for auto-advance logic
-          const allCompleted = fetchedLayers.length > 0 && fetchedLayers.every((layer) => {
-            const layerStatus = mapApiStatusToUI(layer.status);
-            return (
-              layerStatus === "completed" ||
-              layer.tasks.every((task) => {
-                const taskStatus = mapApiStatusToUI(task.status);
-                return taskStatus === "completed";
-              })
-            );
-          });
+          const allCompleted =
+            fetchedLayers.length > 0 &&
+            fetchedLayers.every((layer) => {
+              const layerStatus = mapApiStatusToUI(layer.status);
+              return (
+                layerStatus === "completed" ||
+                layer.tasks.every((task) => {
+                  const taskStatus = mapApiStatusToUI(task.status);
+                  return taskStatus === "completed";
+                })
+              );
+            });
 
           if (allCompleted && !completedSlices.includes(activeSliceId)) {
             setCompletedSlices((prev) => [...prev, activeSliceId]);
@@ -1622,7 +1773,7 @@ export default function VerticalTaskExecution() {
 
             // Auto-advance to next slice if available
             const nextSlice = planItemsRef.current.find(
-              (item) => item.item_number > activeSliceId
+              (item) => item.item_number > activeSliceId,
             );
             if (nextSlice) {
               setTimeout(() => {
@@ -1635,14 +1786,21 @@ export default function VerticalTaskExecution() {
         }
 
         // Stop polling and update state when codegen completes or fails
-        if (status.codegen_status === "COMPLETED" || status.codegen_status === "FAILED") {
+        if (
+          status.codegen_status === "COMPLETED" ||
+          status.codegen_status === "FAILED"
+        ) {
           setIsRunning(false);
         }
 
         // Stop polling if task splitting is done (but codegen may still be running)
         if (status.status === "COMPLETED" || status.status === "FAILED") {
           // Only stop polling if codegen is also done
-          if (status.codegen_status === "COMPLETED" || status.codegen_status === "FAILED" || !status.codegen_status) {
+          if (
+            status.codegen_status === "COMPLETED" ||
+            status.codegen_status === "FAILED" ||
+            !status.codegen_status
+          ) {
             if (pollInterval) clearInterval(pollInterval);
           }
           if (status.status === "COMPLETED") {
@@ -1651,32 +1809,42 @@ export default function VerticalTaskExecution() {
         }
 
         // Show toast when job fails (only once)
-        if (status.codegen_status === "FAILED" && !hasShownFailedToastRef.current) {
+        if (
+          status.codegen_status === "FAILED" &&
+          !hasShownFailedToastRef.current
+        ) {
           hasShownFailedToastRef.current = true;
-          toast.error("Code generation failed. Please try again.", { title: "Error" });
+          toast.error("Code generation failed. Please try again.", {
+            title: "Error",
+          });
         }
-        
+
         // Show warning toast when completed with errors (only once)
         if (
-          status.codegen_status === "COMPLETED" && 
-          status.error_message && 
+          status.codegen_status === "COMPLETED" &&
+          status.error_message &&
           !hasShownFailedToastRef.current
         ) {
           hasShownFailedToastRef.current = true;
           toast.warning(
-            status.error_message || "Code generation completed with some errors. Review the results.",
-            { title: "Completed with Errors" }
+            status.error_message ||
+              "Code generation completed with some errors. Review the results.",
+            { title: "Completed with Errors" },
           );
         }
 
         // Reset toast flag when job recovers or is reset
-        if (status.codegen_status !== "FAILED" && !status.error_message && hasShownFailedToastRef.current) {
+        if (
+          status.codegen_status !== "FAILED" &&
+          !status.error_message &&
+          hasShownFailedToastRef.current
+        ) {
           hasShownFailedToastRef.current = false;
         }
       } catch (error) {
         console.error(
           "[Code Page] Error polling task splitting status:",
-          error
+          error,
         );
       }
     };
@@ -1685,16 +1853,16 @@ export default function VerticalTaskExecution() {
     const initPolling = async () => {
       // First, do initial fetch
       await fetchStatusAndLayers();
-      
+
       if (!mounted) return;
-      
+
       // After initial fetch, check if we even need to poll
       // Use the latest status from ref (updated by fetchStatusAndLayers)
       const currentStatus = taskSplittingStatusRef.current;
-      const isAlreadyComplete = 
-        currentStatus?.codegen_status === "COMPLETED" || 
+      const isAlreadyComplete =
+        currentStatus?.codegen_status === "COMPLETED" ||
         currentStatus?.codegen_status === "FAILED";
-      
+
       // Only start polling if codegen is still in progress
       if (!isAlreadyComplete) {
         pollInterval = setInterval(fetchStatusAndLayers, 3000);
@@ -1704,7 +1872,7 @@ export default function VerticalTaskExecution() {
         setIsRunning(false);
       }
     };
-    
+
     initPolling();
 
     return () => {
@@ -1725,7 +1893,9 @@ export default function VerticalTaskExecution() {
       const paramDisplay = getParamDisplayForEvt(evt as AgentActivityEvt);
       const phaseTask =
         evt.phase != null ? `P${evt.phase + 1}.T${(evt.task ?? 0) + 1}` : "";
-      const oneLine = [tool, paramDisplay, phaseTask].filter(Boolean).join(" · ");
+      const oneLine = [tool, paramDisplay, phaseTask]
+        .filter(Boolean)
+        .join(" · ");
       const result =
         evt.params && typeof evt.params === "object"
           ? JSON.stringify(evt.params, null, 2)
@@ -1741,7 +1911,9 @@ export default function VerticalTaskExecution() {
   }, [taskSplittingStatus?.agent_activity]);
 
   // Live codegen stream (when backend supports SSE) – same event shape as spec/plan
-  const [codegenLiveStreamItems, setCodegenLiveStreamItems] = useState<StreamTimelineItem[]>([]);
+  const [codegenLiveStreamItems, setCodegenLiveStreamItems] = useState<
+    StreamTimelineItem[]
+  >([]);
   const codegenStreamAbortRef = useRef<AbortController | null>(null);
   const codegenStreamItemIdRef = useRef(0);
   const codegenStreamEndRef = useRef<HTMLDivElement>(null);
@@ -1767,16 +1939,33 @@ export default function VerticalTaskExecution() {
           setCodegenLiveStreamItems((prev) => {
             const last = prev[prev.length - 1];
             if (last?.type === "chunk") {
-              return [...prev.slice(0, -1), { ...last, content: last.content + content }];
+              return [
+                ...prev.slice(0, -1),
+                { ...last, content: last.content + content },
+              ];
             }
-            return [...prev, { type: "chunk", id: `codegen-chunk-${++codegenStreamItemIdRef.current}`, content }];
+            return [
+              ...prev,
+              {
+                type: "chunk",
+                id: `codegen-chunk-${++codegenStreamItemIdRef.current}`,
+                content,
+              },
+            ];
           });
         }
         if (eventType === "tool_call_start" && payload?.tool) {
-          const call_id = (payload.call_id as string) ?? `codegen-tool-${++codegenStreamItemIdRef.current}`;
+          const call_id =
+            (payload.call_id as string) ??
+            `codegen-tool-${++codegenStreamItemIdRef.current}`;
           setCodegenLiveStreamItems((prev) => [
             ...prev,
-            { type: "tool", id: call_id, label: String(payload.tool), phase: "running" },
+            {
+              type: "tool",
+              id: call_id,
+              label: String(payload.tool),
+              phase: "running",
+            },
           ]);
         }
         if (eventType === "tool_call_end" && payload?.tool) {
@@ -1793,7 +1982,10 @@ export default function VerticalTaskExecution() {
             const idx = call_id
               ? prev.findIndex((it) => it.type === "tool" && it.id === call_id)
               : prev.findLastIndex(
-                  (it) => it.type === "tool" && it.phase === "running" && it.label === label
+                  (it) =>
+                    it.type === "tool" &&
+                    it.phase === "running" &&
+                    it.label === label,
                 );
             if (idx === -1) return prev;
             const next = [...prev];
@@ -1822,11 +2014,16 @@ export default function VerticalTaskExecution() {
   ]);
 
   const displayCodegenItems =
-    codegenLiveStreamItems.length > 0 ? codegenLiveStreamItems : codegenStreamItems;
+    codegenLiveStreamItems.length > 0
+      ? codegenLiveStreamItems
+      : codegenStreamItems;
   const codegenStreamItemsLength = displayCodegenItems.length;
   useEffect(() => {
     if (codegenStreamItemsLength > 0) {
-      codegenStreamEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      codegenStreamEndRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
     }
   }, [codegenStreamItemsLength]);
 
@@ -1838,27 +2035,38 @@ export default function VerticalTaskExecution() {
   // Persist codegen thinking when done so it survives refresh
   useEffect(() => {
     if (!taskSplittingId || !codegenIsComplete) return;
-    const items = codegenLiveStreamItems.length > 0 ? codegenLiveStreamItems : codegenStreamItems;
+    const items =
+      codegenLiveStreamItems.length > 0
+        ? codegenLiveStreamItems
+        : codegenStreamItems;
     if (items.length > 0) {
       try {
         sessionStorage.setItem(
           `${THINKING_STORAGE_KEY_CODEGEN}_${taskSplittingId}`,
-          JSON.stringify({ streamItems: items })
+          JSON.stringify({ streamItems: items }),
         );
       } catch {
         // ignore
       }
     }
-  }, [taskSplittingId, codegenIsComplete, codegenLiveStreamItems, codegenStreamItems]);
+  }, [
+    taskSplittingId,
+    codegenIsComplete,
+    codegenLiveStreamItems,
+    codegenStreamItems,
+  ]);
 
   // Restore codegen thinking on load when already complete but no stream state (e.g. after refresh)
   useEffect(() => {
     if (!taskSplittingId || !codegenIsComplete) return;
-    if (codegenLiveStreamItems.length > 0 || codegenStreamItems.length > 0) return;
+    if (codegenLiveStreamItems.length > 0 || codegenStreamItems.length > 0)
+      return;
     if (hasRestoredCodegenThinkingRef.current === taskSplittingId) return;
     hasRestoredCodegenThinkingRef.current = taskSplittingId;
     try {
-      const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY_CODEGEN}_${taskSplittingId}`);
+      const raw = sessionStorage.getItem(
+        `${THINKING_STORAGE_KEY_CODEGEN}_${taskSplittingId}`,
+      );
       if (!raw) return;
       const data = JSON.parse(raw) as { streamItems?: StreamTimelineItem[] };
       const items = Array.isArray(data.streamItems) ? data.streamItems : [];
@@ -1868,7 +2076,12 @@ export default function VerticalTaskExecution() {
     } catch {
       // ignore
     }
-  }, [taskSplittingId, codegenIsComplete, codegenLiveStreamItems.length, codegenStreamItems.length]);
+  }, [
+    taskSplittingId,
+    codegenIsComplete,
+    codegenLiveStreamItems.length,
+    codegenStreamItems.length,
+  ]);
 
   // 3. Step-by-Step Graph Discovery (Loading Phase) - progressive reveal
   // Depend on primitive values (length, status string) so polling updates to allLayers/taskSplittingStatus
@@ -1929,7 +2142,7 @@ export default function VerticalTaskExecution() {
 
   const isSliceComplete = completedSlices.includes(activeSliceId);
   const activeSliceMeta = planItems.find(
-    (item) => item.item_number === activeSliceId
+    (item) => item.item_number === activeSliceId,
   );
 
   // Manual navigation
@@ -1959,17 +2172,17 @@ export default function VerticalTaskExecution() {
             lang: c.lang,
             content: c.content,
             status: t.status,
-          }))
-        )
+          })),
+        ),
       ),
-    [allLayers]
+    [allLayers],
   );
 
   // Filter change feed by selected phase - memoized
   // MUST be before any early returns (React hooks rule)
   const changeFeed = useMemo(
     () => changeFeedAll.filter((c) => c.layerIdx === selectedPhaseIndex),
-    [changeFeedAll, selectedPhaseIndex]
+    [changeFeedAll, selectedPhaseIndex],
   );
 
   // Invalid route: missing task/recipe id
@@ -1978,7 +2191,9 @@ export default function VerticalTaskExecution() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <p className="text-primary-color font-medium">Invalid task.</p>
-          <p className="text-sm text-primary-color mt-2">Go back and open a task from the plan.</p>
+          <p className="text-sm text-primary-color mt-2">
+            Go back and open a task from the plan.
+          </p>
         </div>
       </div>
     );
@@ -1987,10 +2202,20 @@ export default function VerticalTaskExecution() {
   // Show loading if we don't have planId yet (plan items loading)
   if (!planId && isLoadingPlanItems) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary-color" />
-          <p className="text-primary-color">Loading task data...</p>
+      <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
+        <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+          <BuildFlowChatHeader
+            recipeId={recipeId}
+            title={codePageHeaderTitle}
+            repoName={displayRepoName}
+            branchName={displayBranchName}
+          />
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-primary-color" />
+            <p className="text-primary-color">Loading task data...</p>
+          </div>
         </div>
       </div>
     );
@@ -2008,19 +2233,6 @@ export default function VerticalTaskExecution() {
   //     </div>
   //   );
   // }
-
-  const Badge = ({
-    children,
-    icon: Icon,
-  }: {
-    children: React.ReactNode;
-    icon?: React.ComponentType<{ className?: string }>;
-  }) => (
-    <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color bg-white">
-      {Icon && <Icon className="w-3.5 h-3.5" />}
-      <span className="truncate">{children}</span>
-      </div>
-    );
 
   const handleSendChatMessage = async () => {
     const text = chatInput.trim();
@@ -2059,7 +2271,7 @@ export default function VerticalTaskExecution() {
             }
             return next;
           });
-        }
+        },
       );
     } catch (e: unknown) {
       console.error("[Code Page] Chat stream error:", e);
@@ -2068,8 +2280,15 @@ export default function VerticalTaskExecution() {
       setChatMessages((prev) => {
         const next = [...prev];
         const lastIdx = next.length - 1;
-        if (lastIdx >= 0 && next[lastIdx]?.role === "assistant" && next[lastIdx]?.content === "") {
-          next[lastIdx] = { role: "assistant", content: "Sorry, something went wrong. Please try again." };
+        if (
+          lastIdx >= 0 &&
+          next[lastIdx]?.role === "assistant" &&
+          next[lastIdx]?.content === ""
+        ) {
+          next[lastIdx] = {
+            role: "assistant",
+            content: "Sorry, something went wrong. Please try again.",
+          };
         }
         return next;
       });
@@ -2090,28 +2309,27 @@ export default function VerticalTaskExecution() {
     }
   };
 
-    return (
+  return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left: Chat + plan */}
-        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#D3E5E5] bg-[#FAF8F7]">
-          {/* Header */}
-          <div className="flex justify-between items-center px-6 py-4 shrink-0">
-            <h1 className="text-lg font-bold text-primary-color truncate capitalize">
-              {recipePrompt?.slice(0, 50) ?? "Chat Name"}
-              {(recipePrompt?.length ?? 0) > 50 ? "…" : ""}
-            </h1>
-            <div className="flex items-center gap-2 shrink-0">
-              <Badge icon={Github}>{displayRepoName}</Badge>
-              <Badge icon={GitBranch}>{displayBranchName}</Badge>
-        </div>
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+        <BuildFlowChatHeader
+          recipeId={recipeId}
+          title={codePageHeaderTitle}
+          repoName={displayRepoName}
+          branchName={displayBranchName}
+        />
       </div>
 
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Left: Chat + plan */}
+        <div className="flex-[1] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#E5E8E6] bg-[#FAF8F7]">
           {/* Messages */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
             {chatMessages.map((msg, i) => (
               <React.Fragment key={i}>
-                <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
                   {msg.role === "assistant" && (
                     <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
                       <Image
@@ -2121,7 +2339,7 @@ export default function VerticalTaskExecution() {
                         alt="Potpie Logo"
                         className="w-6 h-6"
                       />
-          </div>
+                    </div>
                   )}
                   <div
                     className={`max-w-[85%] text-sm ${
@@ -2153,7 +2371,7 @@ export default function VerticalTaskExecution() {
                       msg.content
                     )}
                   </div>
-                    </div>
+                </div>
 
                 {/* Spec Generation Completed card - separate */}
                 {i === 1 && (
@@ -2164,191 +2382,265 @@ export default function VerticalTaskExecution() {
                         <div className="flex items-start gap-3">
                           <Check className="w-5 h-5 text-[#022D2C] shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-sm font-bold text-[#00291C]">Spec Generation Completed</p>
-                            <p className="text-[10px] text-zinc-500 mt-0.5">STATUS: COMPLETED</p>
-                    </div>
-                  </div>
-            </div>
+                            <p className="text-sm font-bold text-[#00291C]">
+                              Spec Generation Completed
+                            </p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">
+                              STATUS: COMPLETED
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
                       {/* Generated Plan - separate card with expandable phases and tasks */}
                       <div className="rounded-lg border border-gray-200 bg-[#FAF8F7] px-4 py-4">
                         <div className="flex items-center gap-2 mb-3">
                           <FileText className="w-3.5 h-3.5 text-[#00291C]" />
-                          <p className="text-xs font-bold text-[#00291C]">Generated Plan</p>
-            </div>
+                          <p className="text-xs font-bold text-[#00291C]">
+                            Generated Plan
+                          </p>
+                        </div>
                         <div className="space-y-1">
-                          {(planPhases.length > 0 ? planPhases : []).map((p, idx) => {
-                            // Get tasks from planItems (pre-populated from plan API)
-                            const phasePlanItems = planItems.filter((item) => {
-                              // Find which phase this item belongs to based on order
-                              const itemPhaseIndex = planPhases.findIndex((ph, i) => {
-                                const prevTotal = planPhases
-                                  .slice(0, i)
-                                  .reduce((sum, ph) => sum + (ph.total || 0), 0);
-                                const itemIdx = item.item_number - 1;
-                                return itemIdx >= prevTotal && itemIdx < prevTotal + (ph.total || 0);
-                              });
-                              return itemPhaseIndex === idx;
-                            });
-                            
-                            // Get runtime status from allLayers (codegen)
-                            const layer = allLayers[idx];
-                            const runtimeTasks = layer?.tasks || [];
-                            
-                            // Merge plan items with runtime status
-                            const tasks = phasePlanItems.map((planItem, i) => {
-                              const runtimeTask = runtimeTasks[i];
-                              return {
-                                id: planItem.id,
-                                title: planItem.title,
-                                status: runtimeTask?.status || "PENDING",
-                              };
-                            });
-                            
-                            const total = p.total || 0;
-                            const done = tasks.filter((t) => t.status === "COMPLETED").length;
-                            const isActiveCodegen =
-                              taskSplittingStatus?.current_step === idx &&
-                              (taskSplittingStatus?.status === "IN_PROGRESS" ||
-                                taskSplittingStatus?.codegen_status === "IN_PROGRESS");
-                            const isCompleted = done >= total && total > 0;
-                            const isExpanded = expandedPhases.has(idx);
-                            
-                    return (
-                              <div key={`${p.name}-${idx}`} className="">
-                                {/* Phase header */}
-                                <button
-                                  onClick={() => {
-                                    setSelectedPhaseIndex(idx);
-                                    setSelectedTaskId(null); // Clear selected task when clicking phase
-                                    setExpandedPhases((prev) => {
-                                      const newSet = new Set(prev);
-                                      if (newSet.has(idx)) {
-                                        newSet.delete(idx);
-                                      } else {
-                                        newSet.add(idx);
-                                      }
-                                      return newSet;
-                                    });
-                                  }}
-                                  className={`w-full flex items-center justify-between gap-3 py-1.5 transition-colors text-left rounded px-2 ${
-                                    selectedPhaseIndex === idx && !selectedTaskId ? "bg-zinc-100" : "hover:bg-zinc-50"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <ChevronDown
-                                      className={`w-3 h-3 text-zinc-400 transition-transform ${
-                                        isExpanded ? "" : "-rotate-90"
-                                      }`}
-                                    />
-                                    <p className="text-xs truncate" style={{ color: "#022D2C" }}>
-                                      <span className="text-zinc-400">PHASE {idx + 1}:</span>{" "}
-                                      <span className={isCompleted ? "text-zinc-400" : ""}>{p.name}</span>
-                  </p>
-                </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    {isActiveCodegen && (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#022D2C]" />
-                                    )}
-                                    <span className={`text-xs font-medium ${isCompleted ? "text-zinc-400" : "text-zinc-600"}`}>
-                                      {`${done}/${Math.max(total, 0)}`}
-                    </span>
-                  </div>
-                                </button>
-                                
-                                {/* Task list from plan items */}
-                                {isExpanded && tasks.length > 0 && (
-                                  <div className="ml-4 pl-3 border-l border-zinc-200 mt-1 space-y-1">
-                                    {tasks.map((task, taskIdx) => {
-                                      const isTaskCompleted = task.status === "COMPLETED";
-                                      const isTaskRunning = task.status === "IN_PROGRESS";
-                                      const isTaskFailed = task.status === "FAILED";
-                                      const isTaskSelected = selectedTaskId === task.id;
-                                      
+                          {(planPhases.length > 0 ? planPhases : []).map(
+                            (p, idx) => {
+                              // Get tasks from planItems (pre-populated from plan API)
+                              const phasePlanItems = planItems.filter(
+                                (item) => {
+                                  // Find which phase this item belongs to based on order
+                                  const itemPhaseIndex = planPhases.findIndex(
+                                    (ph, i) => {
+                                      const prevTotal = planPhases
+                                        .slice(0, i)
+                                        .reduce(
+                                          (sum, ph) => sum + (ph.total || 0),
+                                          0,
+                                        );
+                                      const itemIdx = item.item_number - 1;
                                       return (
-                                        <button
-                                          key={task.id || taskIdx}
-                                          onClick={() => {
-                                            setSelectedTaskId(task.id);
-                                            setSelectedPhaseIndex(idx);
-                                          }}
-                                          className={`w-full flex items-center gap-2 py-1.5 px-2 rounded text-left transition-colors ${
-                                            isTaskSelected ? "bg-zinc-100" : "hover:bg-zinc-50"
-                                          }`}
-                                          title={isTaskFailed ? (task as any).error || "Task failed" : undefined}
-                                        >
-                                          {isTaskCompleted ? (
-                                            <Check className="w-3 h-3 text-green-500 shrink-0" />
-                                          ) : isTaskFailed ? (
-                                            <Info className="w-3 h-3 text-amber-500 shrink-0" />
-                                          ) : isTaskRunning ? (
-                                            <Loader2 className="w-3 h-3 animate-spin text-[#022D2C] shrink-0" />
-                                          ) : (
-                                            <Circle className="w-3 h-3 text-zinc-300 shrink-0" />
-                                          )}
-                                          <span className={`text-[11px] truncate ${
-                                            isTaskCompleted ? "text-zinc-400" : isTaskFailed ? "text-amber-600" : "text-[#022D2C]"
-                                          }`}>
-                                            {task.title || `Task ${taskIdx + 1}`}
-                                            {isTaskFailed && " (review patch)"}
-                                          </span>
-                                        </button>
+                                        itemIdx >= prevTotal &&
+                                        itemIdx < prevTotal + (ph.total || 0)
                                       );
-                                    })}
-                                  </div>
-                                )}
-                    </div>
-                            );
-                          })}
+                                    },
+                                  );
+                                  return itemPhaseIndex === idx;
+                                },
+                              );
+
+                              // Get runtime status from allLayers (codegen)
+                              const layer = allLayers[idx];
+                              const runtimeTasks = layer?.tasks || [];
+
+                              // Merge plan items with runtime status
+                              const tasks = phasePlanItems.map(
+                                (planItem, i) => {
+                                  const runtimeTask = runtimeTasks[i];
+                                  return {
+                                    id: planItem.id,
+                                    title: planItem.title,
+                                    status: runtimeTask?.status || "PENDING",
+                                  };
+                                },
+                              );
+
+                              const total = p.total || 0;
+                              const done = tasks.filter(
+                                (t) => t.status === "COMPLETED",
+                              ).length;
+                              const isActiveCodegen =
+                                taskSplittingStatus?.current_step === idx &&
+                                (taskSplittingStatus?.status ===
+                                  "IN_PROGRESS" ||
+                                  taskSplittingStatus?.codegen_status ===
+                                    "IN_PROGRESS");
+                              const isCompleted = done >= total && total > 0;
+                              const isExpanded = expandedPhases.has(idx);
+
+                              return (
+                                <div key={`${p.name}-${idx}`} className="">
+                                  {/* Phase header */}
+                                  <button
+                                    onClick={() => {
+                                      setSelectedPhaseIndex(idx);
+                                      setSelectedTaskId(null); // Clear selected task when clicking phase
+                                      setExpandedPhases((prev) => {
+                                        const newSet = new Set(prev);
+                                        if (newSet.has(idx)) {
+                                          newSet.delete(idx);
+                                        } else {
+                                          newSet.add(idx);
+                                        }
+                                        return newSet;
+                                      });
+                                    }}
+                                    className={`w-full flex items-center justify-between gap-3 py-1.5 transition-colors text-left rounded px-2 ${
+                                      selectedPhaseIndex === idx &&
+                                      !selectedTaskId
+                                        ? "bg-zinc-100"
+                                        : "hover:bg-zinc-50"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <ChevronDown
+                                        className={`w-3 h-3 text-zinc-400 transition-transform ${
+                                          isExpanded ? "" : "-rotate-90"
+                                        }`}
+                                      />
+                                      <p
+                                        className="text-xs truncate"
+                                        style={{ color: "#022D2C" }}
+                                      >
+                                        <span className="text-zinc-400">
+                                          PHASE {idx + 1}:
+                                        </span>{" "}
+                                        <span
+                                          className={
+                                            isCompleted ? "text-zinc-400" : ""
+                                          }
+                                        >
+                                          {p.name}
+                                        </span>
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {isActiveCodegen && (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#022D2C]" />
+                                      )}
+                                      <span
+                                        className={`text-xs font-medium ${isCompleted ? "text-zinc-400" : "text-zinc-600"}`}
+                                      >
+                                        {`${done}/${Math.max(total, 0)}`}
+                                      </span>
+                                    </div>
+                                  </button>
+
+                                  {/* Task list from plan items */}
+                                  {isExpanded && tasks.length > 0 && (
+                                    <div className="ml-4 pl-3 border-l border-zinc-200 mt-1 space-y-1">
+                                      {tasks.map((task, taskIdx) => {
+                                        const isTaskCompleted =
+                                          task.status === "COMPLETED";
+                                        const isTaskRunning =
+                                          task.status === "IN_PROGRESS";
+                                        const isTaskFailed =
+                                          task.status === "FAILED";
+                                        const isTaskSelected =
+                                          selectedTaskId === task.id;
+
+                                        return (
+                                          <button
+                                            key={task.id || taskIdx}
+                                            onClick={() => {
+                                              setSelectedTaskId(task.id);
+                                              setSelectedPhaseIndex(idx);
+                                            }}
+                                            className={`w-full flex items-center gap-2 py-1.5 px-2 rounded text-left transition-colors ${
+                                              isTaskSelected
+                                                ? "bg-zinc-100"
+                                                : "hover:bg-zinc-50"
+                                            }`}
+                                            title={
+                                              isTaskFailed
+                                                ? (task as any).error ||
+                                                  "Task failed"
+                                                : undefined
+                                            }
+                                          >
+                                            {isTaskCompleted ? (
+                                              <Check className="w-3 h-3 text-green-500 shrink-0" />
+                                            ) : isTaskFailed ? (
+                                              <Info className="w-3 h-3 text-amber-500 shrink-0" />
+                                            ) : isTaskRunning ? (
+                                              <Loader2 className="w-3 h-3 animate-spin text-[#022D2C] shrink-0" />
+                                            ) : (
+                                              <Circle className="w-3 h-3 text-zinc-300 shrink-0" />
+                                            )}
+                                            <span
+                                              className={`text-[11px] truncate ${
+                                                isTaskCompleted
+                                                  ? "text-zinc-400"
+                                                  : isTaskFailed
+                                                    ? "text-amber-600"
+                                                    : "text-[#022D2C]"
+                                              }`}
+                                            >
+                                              {task.title ||
+                                                `Task ${taskIdx + 1}`}
+                                              {isTaskFailed &&
+                                                " (review patch)"}
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            },
+                          )}
                           {planPhases.length === 0 && (
                             <p className="text-xs text-zinc-500">
                               Loading phases…
                             </p>
                           )}
-                    </div>
-                  </div>
+                        </div>
+                      </div>
 
                       {/* Codegen stream timeline (same pattern as spec/plan): tool calls + loading dots */}
                       {taskSplittingId &&
                         (taskSplittingStatus?.codegen_status === "COMPLETED" ||
-                          taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
+                          taskSplittingStatus?.codegen_status ===
+                            "IN_PROGRESS" ||
                           taskSplittingStatus?.status === "IN_PROGRESS" ||
-                          (taskSplittingStatus?.agent_activity?.length ?? 0) > 0) && (
+                          (taskSplittingStatus?.agent_activity?.length ?? 0) >
+                            0) && (
                           <div className="space-y-3 min-w-0">
-                            {taskSplittingStatus?.codegen_status === "COMPLETED" && (
+                            {taskSplittingStatus?.codegen_status ===
+                              "COMPLETED" && (
                               <div className="rounded-lg border border-[#CCD3CF] bg-[#FAF8F7] px-4 py-4 min-w-0">
                                 <div className="flex items-center gap-3">
                                   <Check className="w-5 h-5 text-[#022D2C] shrink-0" />
                                   <div>
-                                    <p className="text-sm font-bold text-[#00291C]">Code generation completed</p>
-                                    <p className="text-[10px] text-zinc-500 mt-0.5">STATUS: COMPLETED</p>
+                                    <p className="text-sm font-bold text-[#00291C]">
+                                      Code generation completed
+                                    </p>
+                                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                                      STATUS: COMPLETED
+                                    </p>
                                   </div>
                                 </div>
                               </div>
                             )}
                             {(displayCodegenItems.length > 0 ||
-                              taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
-                              taskSplittingStatus?.status === "IN_PROGRESS") && (
+                              taskSplittingStatus?.codegen_status ===
+                                "IN_PROGRESS" ||
+                              taskSplittingStatus?.status ===
+                                "IN_PROGRESS") && (
                               <div className="min-w-0">
                                 <StreamTimeline
                                   items={displayCodegenItems}
                                   endRef={codegenStreamEndRef}
                                   loading={
-                                    (taskSplittingStatus?.codegen_status === "IN_PROGRESS" ||
-                                      taskSplittingStatus?.status === "IN_PROGRESS") &&
-                                    taskSplittingStatus?.codegen_status !== "FAILED"
+                                    (taskSplittingStatus?.codegen_status ===
+                                      "IN_PROGRESS" ||
+                                      taskSplittingStatus?.status ===
+                                        "IN_PROGRESS") &&
+                                    taskSplittingStatus?.codegen_status !==
+                                      "FAILED"
                                   }
                                 />
                               </div>
                             )}
-                            {taskSplittingStatus?.codegen_status === "FAILED" && displayCodegenItems.length === 0 && (
-                              <p className="text-xs text-zinc-500 italic">Codegen failed</p>
-                            )}
+                            {taskSplittingStatus?.codegen_status === "FAILED" &&
+                              displayCodegenItems.length === 0 && (
+                                <p className="text-xs text-zinc-500 italic">
+                                  Codegen failed
+                                </p>
+                              )}
                           </div>
                         )}
                     </div>
-              </div>
-            )}
+                  </div>
+                )}
               </React.Fragment>
             ))}
             <div ref={chatEndRef} />
@@ -2378,7 +2670,11 @@ export default function VerticalTaskExecution() {
               <button
                 type="button"
                 onClick={handleSendChatMessage}
-                disabled={isChatStreaming || !codegenConversationId || taskSplittingStatus?.codegen_status === "IN_PROGRESS"}
+                disabled={
+                  isChatStreaming ||
+                  !codegenConversationId ||
+                  taskSplittingStatus?.codegen_status === "IN_PROGRESS"
+                }
                 className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isChatStreaming ? (
@@ -2388,61 +2684,64 @@ export default function VerticalTaskExecution() {
                 )}
               </button>
             </div>
-            </div>
           </div>
+        </div>
 
         {/* Right: Code generation */}
         <div className="overflow-hidden flex-none flex flex-col w-1/2 min-w-0">
-          <aside className="h-full w-full min-w-[320px] flex flex-col border-l border-[#D3E5E5]">
-            <div className="p-6 border-b border-[#D3E5E5] bg-white">
+          <aside className="h-full w-full min-w-[320px] flex flex-col border-l border-[#E5E8E6]">
+            <div className="p-6 border-b border-[#E5E8E6] bg-white">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0">
-                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0" style={{ color: "#022019" }}>
+                  <h2
+                    className="text-[18px] font-bold leading-tight tracking-tight shrink-0"
+                    style={{ color: "#022019" }}
+                  >
                     Code generation
                   </h2>
-            <button
+                  <button
                     type="button"
                     className="p-1 rounded-full hover:bg-[#CCD3CF]/30 transition-colors shrink-0"
                     aria-label="Code generation info"
-                    title="See patches as phases complete; click MAKE PR when done."
+                    title="See patches as phases complete; click Create PR when done."
                   >
                     <Info className="w-4 h-4" style={{ color: "#022019" }} />
-            </button>
-              </div>
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-4">
-                {/* View files (slider with tree + diff) */}
-                {taskSplittingId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedChangedFilePath(null);
-                      setChangedFilesSliderOpen(true);
-                    }}
-                    className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#D3E5E5] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
-                    title="View all files and diffs"
-                  >
-                    View files
-                  </button>
-                )}
-
-                {/* Download generated code (zip) — when codegen completed and no PR yet */}
-                {taskSplittingId &&
-                  taskSplittingStatus?.codegen_status === "COMPLETED" &&
-                  !taskSplittingStatus?.pr_url && (
+                  {/* View files (slider with tree + diff) */}
+                  {taskSplittingId && (
                     <button
                       type="button"
-                      onClick={handleDownloadCode}
-                      className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#D3E5E5] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
-                      title="Download generated code as zip"
+                      onClick={() => {
+                        setSelectedChangedFilePath(null);
+                        setChangedFilesSliderOpen(true);
+                      }}
+                      className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#E5E8E6] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
+                      title="View all files and diffs"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      Download code
+                      View files
                     </button>
                   )}
-            </div>
-          </div>
+
+                  {/* Download generated code (zip) — when codegen completed and no PR yet */}
+                  {taskSplittingId &&
+                    taskSplittingStatus?.codegen_status === "COMPLETED" &&
+                    !taskSplittingStatus?.pr_url && (
+                      <button
+                        type="button"
+                        onClick={handleDownloadCode}
+                        className="shrink-0 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 border border-[#E5E8E6] bg-white text-[#022019] hover:bg-[#F5F5F5] transition-colors"
+                        title="Download generated code as zip"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download code
+                      </button>
+                    )}
                 </div>
+              </div>
+            </div>
 
             <div className="flex-1 overflow-y-auto p-6 bg-[#FAFAFA]">
               <div className="space-y-4 max-w-3xl mx-auto">
@@ -2450,13 +2749,15 @@ export default function VerticalTaskExecution() {
                 {(() => {
                   const currentLayer = allLayers[selectedPhaseIndex];
                   const tasks = currentLayer?.tasks || [];
-                  
+
                   // If a specific task is selected, show its details
                   if (selectedTaskId) {
-                    const selectedTask = tasks.find((t) => t.id === selectedTaskId);
+                    const selectedTask = tasks.find(
+                      (t) => t.id === selectedTaskId,
+                    );
                     if (selectedTask) {
                       const taskChanges = selectedTask.changes || [];
-                  return (
+                      return (
                         <>
                           {/* Task header */}
                           <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -2470,11 +2771,13 @@ export default function VerticalTaskExecution() {
                               )}
                               <h3 className="text-sm font-semibold text-[#022019]">
                                 {selectedTask.title}
-                            </h3>
+                              </h3>
                             </div>
                             <p className="text-xs text-zinc-500">
                               {selectedTask.file && (
-                                <span className="font-mono text-zinc-400">{selectedTask.file}</span>
+                                <span className="font-mono text-zinc-400">
+                                  {selectedTask.file}
+                                </span>
                               )}
                             </p>
                           </div>
@@ -2497,32 +2800,46 @@ export default function VerticalTaskExecution() {
                           ) : selectedTask.status === "FAILED" ? (
                             <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center">
                               <AlertCircle className="w-6 h-6 text-red-600 mx-auto mb-2" />
-                              <p className="text-sm text-red-700">Task failed</p>
+                              <p className="text-sm text-red-700">
+                                Task failed
+                              </p>
                               {(selectedTask as any).error && (
-                                <p className="text-xs text-red-600 mt-1">{(selectedTask as any).error}</p>
+                                <p className="text-xs text-red-600 mt-1">
+                                  {(selectedTask as any).error}
+                                </p>
                               )}
                             </div>
                           ) : selectedTask.status === "COMPLETED" ? (
                             <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
                               <Check className="w-6 h-6 text-green-500 mx-auto mb-2" />
-                              <p className="text-sm text-zinc-600">Task completed with no file changes</p>
+                              <p className="text-sm text-zinc-600">
+                                Task completed with no file changes
+                              </p>
                             </div>
                           ) : selectedTask.status === "IN_PROGRESS" ? (
                             <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-                              <img src="/images/loader.gif" alt="Loading" className="w-12 h-12 mx-auto mb-2" />
-                              <p className="text-sm text-zinc-600">Generating code...</p>
+                              <img
+                                src="/images/loader.gif"
+                                alt="Loading"
+                                className="w-12 h-12 mx-auto mb-2"
+                              />
+                              <p className="text-sm text-zinc-600">
+                                Generating code...
+                              </p>
                             </div>
                           ) : (
                             <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
                               <Circle className="w-6 h-6 text-zinc-300 mx-auto mb-2" />
-                              <p className="text-sm text-zinc-600">Waiting to start...</p>
+                              <p className="text-sm text-zinc-600">
+                                Waiting to start...
+                              </p>
                             </div>
                           )}
                         </>
                       );
                     }
                   }
-                  
+
                   // Otherwise show all files from the phase
                   return (
                     <>
@@ -2530,31 +2847,42 @@ export default function VerticalTaskExecution() {
                       <div className="rounded-lg border border-gray-200 bg-white p-4 mb-4">
                         <div className="flex items-center justify-between">
                           <h3 className="text-sm font-semibold text-[#022019]">
-                            Phase {selectedPhaseIndex + 1}: {currentLayer?.title || planPhases[selectedPhaseIndex]?.name}
+                            Phase {selectedPhaseIndex + 1}:{" "}
+                            {currentLayer?.title ||
+                              planPhases[selectedPhaseIndex]?.name}
                           </h3>
                           <span className="text-xs text-zinc-500">
-                            {tasks.filter((t) => t.status === "COMPLETED").length}/{tasks.length} tasks
+                            {
+                              tasks.filter((t) => t.status === "COMPLETED")
+                                .length
+                            }
+                            /{tasks.length} tasks
                           </span>
                         </div>
                       </div>
-                      
+
                       {/* All file changes from phase */}
                       {changeFeed.length > 0 ? (
-                        changeFeed.map((c, i) => <CodeFileCard key={`${c.path}-${i}`} change={c} />)
+                        changeFeed.map((c, i) => (
+                          <CodeFileCard key={`${c.path}-${i}`} change={c} />
+                        ))
                       ) : isRunning ? (
                         // Skeleton loading
                         <>
                           {[0, 1, 2].map((k) => (
-                            <div key={k} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                            <div
+                              key={k}
+                              className="rounded-lg border border-gray-200 bg-white overflow-hidden"
+                            >
                               <div className="px-4 py-2.5 border-b border-gray-200">
                                 <div className="h-3 w-52 bg-zinc-200 rounded animate-pulse" />
-                        </div>
+                              </div>
                               <div className="bg-zinc-50 px-4 py-3 space-y-2">
                                 <div className="h-3 w-full bg-zinc-200 rounded animate-pulse" />
                                 <div className="h-3 w-5/6 bg-zinc-200 rounded animate-pulse" />
                                 <div className="h-3 w-3/4 bg-zinc-200 rounded animate-pulse" />
-                        </div>
-                      </div>
+                              </div>
+                            </div>
                           ))}
                         </>
                       ) : (
@@ -2562,24 +2890,26 @@ export default function VerticalTaskExecution() {
                         <div className="flex flex-col items-center justify-center py-16 text-center">
                           <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-4">
                             <FileText className="w-6 h-6 text-zinc-400" />
-                    </div>
+                          </div>
                           <p className="text-sm font-medium text-zinc-600">
-                            No code generated yet for Phase {selectedPhaseIndex + 1}
+                            No code generated yet for Phase{" "}
+                            {selectedPhaseIndex + 1}
                           </p>
                           <p className="text-xs text-zinc-400 mt-1">
-                            Code will appear here once this phase starts generating
+                            Code will appear here once this phase starts
+                            generating
                           </p>
-                  </div>
-                )}
+                        </div>
+                      )}
                     </>
                   );
                 })()}
               </div>
-          </div>
+            </div>
 
-            {/* Sticky MAKE PR / VIEW PR at end of code gen panel */}
+            {/* Sticky Create PR / View PR at end of code gen panel */}
             {taskSplittingId && (
-              <div className="sticky bottom-0 shrink-0 border-t border-[#D3E5E5] bg-white px-6 py-4 flex justify-end">
+              <div className="sticky bottom-0 shrink-0 border-t border-[#E5E8E6] bg-white px-6 py-4 flex justify-end">
                 {taskSplittingStatus?.pr_url ? (
                   <a
                     href={taskSplittingStatus.pr_url}
@@ -2604,8 +2934,12 @@ export default function VerticalTaskExecution() {
                       toast.dismiss();
                       try {
                         setIsCreatingPR(true);
-                        await TaskSplittingService.createPullRequest(taskSplittingId);
-                        toast.success("PR creation started", { title: "Success" });
+                        await TaskSplittingService.createPullRequest(
+                          taskSplittingId,
+                        );
+                        toast.success("PR creation started", {
+                          title: "Success",
+                        });
                       } catch (e: any) {
                         setIsCreatingPR(false);
                         const msg = e?.message ?? "Failed to start PR creation";
@@ -2617,7 +2951,7 @@ export default function VerticalTaskExecution() {
                         if (isAppNotInstalled) {
                           toast.error(
                             "Cannot create PR since Potpie app is not installed on this repository. You can download the generated code below.",
-                            { title: "PR not available", duration: 8000 }
+                            { title: "PR not available", duration: 8000 },
                           );
                         } else {
                           toast.error(msg, { title: "Error" });
@@ -2631,30 +2965,35 @@ export default function VerticalTaskExecution() {
                         : taskSplittingStatus?.codegen_status !== "COMPLETED"
                           ? "Finish code generation before creating a PR"
                           : taskSplittingStatus?.pr_status === "FAILED"
-                            ? taskSplittingStatus?.pr_error_message || "PR creation failed"
+                            ? taskSplittingStatus?.pr_error_message ||
+                              "PR creation failed"
                             : taskSplittingStatus?.pr_status === "IN_PROGRESS"
                               ? "PR creation is in progress"
                               : "Create a PR from completed changes"
                     }
                   >
-                    {isCreatingPR || taskSplittingStatus?.pr_status === "IN_PROGRESS" ? (
+                    {isCreatingPR ||
+                    taskSplittingStatus?.pr_status === "IN_PROGRESS" ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        MAKING PR…
+                        CREATING PR…
                       </>
                     ) : (
-                      "MAKE PR"
+                      "CREATE PR"
                     )}
                   </button>
                 )}
               </div>
             )}
           </aside>
-                </div>
-              </div>
+        </div>
+      </div>
 
       {/* View files slider: tree + file diff */}
-      <Sheet open={changedFilesSliderOpen} onOpenChange={setChangedFilesSliderOpen}>
+      <Sheet
+        open={changedFilesSliderOpen}
+        onOpenChange={setChangedFilesSliderOpen}
+      >
         <SheetContent
           side="right"
           className="w-full max-w-[90vw] sm:max-w-6xl flex flex-col gap-0 p-0 overflow-hidden bg-white"
@@ -2676,8 +3015,12 @@ export default function VerticalTaskExecution() {
                     folderIconUrl="/images/figma/folder.svg"
                     fileIconUrl="/images/figma/file.svg"
                     selectable
-                    selectedIds={selectedChangedFilePath ? [selectedChangedFilePath] : []}
-                    onSelectionChange={(ids) => setSelectedChangedFilePath(ids[0] ?? null)}
+                    selectedIds={
+                      selectedChangedFilePath ? [selectedChangedFilePath] : []
+                    }
+                    onSelectionChange={(ids) =>
+                      setSelectedChangedFilePath(ids[0] ?? null)
+                    }
                     onNodeClick={(node) => {
                       const hasChildren = (node.children?.length ?? 0) > 0;
                       if (!hasChildren) setSelectedChangedFilePath(node.id);
@@ -2690,16 +3033,22 @@ export default function VerticalTaskExecution() {
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-zinc-500">
                   <FileText className="w-10 h-10 mb-3 opacity-50" />
                   <p className="text-sm font-medium">No files yet</p>
-                  <p className="text-xs mt-1">Files will appear here as code generation runs</p>
+                  <p className="text-xs mt-1">
+                    Files will appear here as code generation runs
+                  </p>
                 </div>
               )}
             </div>
             {/* Right: file diff — constrain width so content scrolls inside panel */}
             <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-white">
-              {selectedChangedFilePath && pathToChange[selectedChangedFilePath] ? (
+              {selectedChangedFilePath &&
+              pathToChange[selectedChangedFilePath] ? (
                 <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
                   <div className="px-4 py-2 border-b border-[#E5E7EB] bg-white shrink-0">
-                    <p className="text-xs font-medium text-[#022019] truncate" title={selectedChangedFilePath}>
+                    <p
+                      className="text-xs font-medium text-[#022019] truncate"
+                      title={selectedChangedFilePath}
+                    >
                       {selectedChangedFilePath}
                     </p>
                   </div>
@@ -2715,7 +3064,9 @@ export default function VerticalTaskExecution() {
                 <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 p-6">
                   <FileDiff className="w-10 h-10 mb-3 opacity-50" />
                   <p className="text-sm font-medium">Select a file</p>
-                  <p className="text-xs mt-1">Click a file in the tree to view its changes</p>
+                  <p className="text-xs mt-1">
+                    Click a file in the tree to view its changes
+                  </p>
                 </div>
               )}
             </div>

@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  Github,
-  GitBranch,
   Check,
   Loader2,
   ChevronDown,
@@ -23,7 +22,6 @@ import {
   RotateCcw,
   RotateCw,
   Wrench,
-  ArrowLeft,
   Download,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
@@ -62,6 +60,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import Image from "next/image";
+import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 
 interface FileItem {
   path: string;
@@ -373,13 +372,6 @@ function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
     </div>
   );
 }
-
-const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#E5E8E6] rounded text-xs font-medium text-primary-color">
-    {Icon && <Icon className="w-3.5 h-3.5" />}
-    {children}
-  </div>
-);
 
 const PlanTabs = ({ plan }: { plan: Plan }) => {
   // Combine all items from all categories
@@ -1008,6 +1000,20 @@ const SpecPage = () => {
   const { plan: normalizedPlan, rawSpec: rawSpecification } = normalizeSpecFromProgress(specProgress ?? undefined);
   const hasSpecContent = normalizedPlan !== null || rawSpecification !== null;
 
+  const { data: planStatusForLabel } = useQuery({
+    queryKey: ["plan-status", recipeId],
+    queryFn: () => PlanService.getPlanStatusByRecipeId(recipeId!),
+    enabled:
+      !!recipeId &&
+      status === "COMPLETED" &&
+      !isCancelled &&
+      hasSpecContent,
+    staleTime: 30_000,
+  });
+  const planGenForLabel = planStatusForLabel?.generation_status?.toLowerCase();
+  const showReGeneratePlanButton =
+    planGenForLabel === "completed" || planGenForLabel === "failed";
+
   // Persist stream timeline when spec is completed so it survives refresh
   useEffect(() => {
     if (!recipeId || status !== "COMPLETED" || !hasSpecContent) return;
@@ -1112,38 +1118,28 @@ const SpecPage = () => {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      {/* Full-width build flow bar — tabs extend to the right edge */}
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+        <BuildFlowChatHeader
+          recipeId={recipeId}
+          title={`${recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}${
+            (recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""
+          }`}
+          repoName={
+            repoNameFromUrl ||
+            storedRepoContext?.repoName ||
+            projectData?.repo ||
+            "Unknown Repository"
+          }
+          branchName={
+            storedRepoContext?.branchName || projectData?.branch || "main"
+          }
+        />
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
         <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-r-[1px] border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
-          {/* Chat header */}
-          <div className="px-6 pt-4 pb-2 shrink-0 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (!recipeId) return;
-                router.push(`/task/${recipeId}/qna`);
-              }}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary-color px-0 py-0.5 rounded-md hover:underline w-fit"
-            >
-              <ArrowLeft className="w-3 h-3" />
-              Back to questions
-            </button>
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-lg font-bold text-primary-color truncate capitalize">
-                {recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}
-                {(recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""}
-              </h1>
-              <div className="flex items-center gap-2 shrink-0 mt-1 sm:mt-0">
-                <Badge icon={Github}>
-                  {repoNameFromUrl || storedRepoContext?.repoName || projectData?.repo || "Unknown Repository"}
-                </Badge>
-                <Badge icon={GitBranch}>
-                  {storedRepoContext?.branchName || projectData?.branch || "main"}
-                </Badge>
-              </div>
-            </div>
-          </div>
-
           {/* Messages — only this section scrolls */}
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
             {chatMessages.map((msg, i) => (
@@ -1415,7 +1411,7 @@ const SpecPage = () => {
                   disabled={isGeneratingPlan}
                   className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                 >
-                  GENERATE PLAN
+                  {showReGeneratePlanButton ? "RE-GENERATE PLAN" : "GENERATE PLAN"}
                 </button>
               </div>
             )}

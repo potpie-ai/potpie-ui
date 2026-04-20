@@ -13,6 +13,8 @@ interface AdditionalContextSectionProps {
   onGeneratePlan: () => void;
   isGenerating: boolean;
   recipeId: string | null;
+  /** When spec (next step) has already been generated once — show "Re-generate" label. */
+  reGenerateImplementationPlan?: boolean;
   unansweredCount?: number;
   /** Called when attached files change. removedIndex set when user removes file at that index. */
   onAttachmentChange?: (files: File[], removedIndex?: number) => void;
@@ -37,6 +39,7 @@ export default function AdditionalContextSection({
   onGeneratePlan,
   isGenerating,
   recipeId,
+  reGenerateImplementationPlan = false,
   unansweredCount: _unansweredCount,
   onAttachmentChange,
   attachmentUploading = false,
@@ -183,6 +186,8 @@ export default function AdditionalContextSection({
                   <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
                   GENERATING...
                 </>
+              ) : reGenerateImplementationPlan ? (
+                "RE-GENERATE IMPLEMENTATION PLAN"
               ) : (
                 "GENERATE IMPLEMENTATION PLAN"
               )}

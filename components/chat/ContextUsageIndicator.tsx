@@ -1,4 +1,4 @@
-import React, { FC, useEffect, useState } from 'react';
+import React, { FC, useEffect, useState, useCallback } from 'react';
 import { ContextUsageResponse } from '@/lib/types/attachment';
 import ChatService from '@/services/ChatService';
 import { cn } from '@/lib/utils';
@@ -38,22 +38,46 @@ export const ContextUsageIndicator: FC<ContextUsageIndicatorProps> = ({
   const [usage, setUsage] = useState<ContextUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchUsage = useCallback(async () => {
+    if (!conversationId || document.hidden) {
+      return;
+    }
+    try {
+      const data = await ChatService.getContextUsage(conversationId);
+      setUsage(data);
+    } catch (error) {
+      console.error('Error fetching context usage:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationId]);
+
   useEffect(() => {
-    const fetchUsage = async () => {
-      try {
-        const data = await ChatService.getContextUsage(conversationId);
-        setUsage(data);
-      } catch (error) {
-        console.error('Error fetching context usage:', error);
-      } finally {
-        setLoading(false);
+    let cancelled = false;
+
+    const initialTimer = setTimeout(() => {
+      if (!cancelled) {
+        void fetchUsage();
+      }
+    }, 1000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void fetchUsage();
       }
     };
 
-    fetchUsage();
-    const interval = setInterval(fetchUsage, refreshInterval);
-    return () => clearInterval(interval);
-  }, [conversationId, refreshInterval, refreshTrigger]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const interval = setInterval(() => {
+      void fetchUsage();
+    }, refreshInterval);
+    return () => {
+      cancelled = true;
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchUsage, refreshInterval, refreshTrigger]);
 
   if (loading) {
     return (

@@ -106,7 +106,7 @@ export function AppSidebar() {
     dispatch(clearChat());
     dispatch(setBranchName(""));
     dispatch(setRepoName(""));
-    window.location.href = "/newchat";
+    router.push("/newchat");
   };
 
   const maxCredits =

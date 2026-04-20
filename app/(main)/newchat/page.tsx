@@ -106,6 +106,12 @@ export default function NewChatPage() {
 
   const isDemoMode = searchParams.get("demo") === "true";
 
+  useEffect(() => {
+    // Warm up the chat route's client JS bundle; the RSC payload is still
+    // prefetched below with the real conversation id before navigating.
+    router.prefetch("/chat");
+  }, [router]);
+
 
   const {
     data: allRepositories,
@@ -956,7 +962,10 @@ export default function NewChatPage() {
       if (state.input.trim()) {
         dispatch(setPendingMessage(getCleanInput(state.input)));
       }
-      router.push(`/chat/${conversationResponse.conversation_id}`);
+      const chatHref = `/chat/${conversationResponse.conversation_id}`;
+      // Prefetch RSC for the real conversation id so navigation is instant.
+      router.prefetch(chatHref);
+      router.push(chatHref);
       return true;
     } catch (error: any) {
       console.error("Failed to create conversation:", error);

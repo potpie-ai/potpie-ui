@@ -12,7 +12,7 @@ import { AppDispatch } from "@/lib/state/store";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import { AlertCircle, X, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authClient } from "@/lib/sso/unified-auth";
 import type { UserAccount } from "@/types/auth";
@@ -122,23 +122,32 @@ export default function RootLayout({
     retry: false,
   });
 
-  if (user == null) {
-    // Preserve all query parameters when redirecting to sign-in
-    const queryString = searchParams.toString();
-    const redirectPath = queryString ? `${pathname}?${queryString}` : pathname;
+  useEffect(() => {
+    if (user == null) {
+      // Preserve all query parameters when redirecting to sign-in
+      const queryString = searchParams.toString();
+      const redirectPath = queryString ? `${pathname}?${queryString}` : pathname;
 
-    if (repo && branch) {
-      dispatch(setRepoName(repo));
-      dispatch(setBranchName(branch));
+      if (repo && branch) {
+        dispatch(setRepoName(repo));
+        dispatch(setBranchName(branch));
+      }
+
+      router.push(`/sign-in?redirect=${encodeURIComponent(redirectPath)}`);
     }
+  }, [user, searchParams, pathname, repo, branch, dispatch, router]);
 
-    router.push(`/sign-in?redirect=${encodeURIComponent(redirectPath)}`);
+  useEffect(() => {
+    if (!user) return;
+    posthog.identify(user.uid ?? user.id, {
+      email: user.email,
+      name: (user?.name ?? user?.displayName) || "",
+    });
+  }, [user]);
+
+  if (user == null) {
     return null;
   }
-  posthog.identify(user.uid ?? user.id, {
-    email: user.email,
-    name: (user?.name ?? user?.displayName) || "",
-  });
 
   // Use verification status from backend (work email), not Firebase (which might be GitHub email)
   const workEmail = accountInfo?.email || user?.email;

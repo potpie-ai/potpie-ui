@@ -39,10 +39,12 @@ import {
 } from "lucide-react";
 import {
   FC,
+  memo,
   useRef,
   useState,
   KeyboardEvent,
   useEffect,
+  useMemo,
   // useCallback,
 } from "react";
 import ChatService from "@/services/ChatService";
@@ -83,6 +85,98 @@ interface NodeOption {
   relevance: number;
 }
 
+const MemoizedContextUsageIndicator = memo(ContextUsageIndicator);
+
+interface NodeSelectionProps {
+  isSearchingNode: boolean;
+  nodeOptions: NodeOption[];
+  selectedNodeIndex: number;
+  selectedNodeRef: React.MutableRefObject<HTMLLIElement | null>;
+  onSelect: (node: NodeOption) => void;
+}
+
+const NodeSelection: FC<NodeSelectionProps> = memo(
+  ({ isSearchingNode, nodeOptions, selectedNodeIndex, selectedNodeRef, onSelect }) => {
+    return (
+      <div className="max-h-40 overflow-scroll rounded-lg border border-gray-200 bg-[#FFFDFC] shadow-lg">
+        <ul>
+          {isSearchingNode ? (
+            <Skeleton className="w-full h-20 m-4" />
+          ) : (
+            nodeOptions
+              ?.sort((a, b) => b.relevance - a.relevance)
+              .map((node, index) => (
+                <li
+                  key={node.node_id}
+                  ref={(el) => {
+                    if (index === selectedNodeIndex && el) {
+                      selectedNodeRef.current = el;
+                    }
+                  }}
+                  className={`flex m-1 flex-row cursor-pointer rounded-sm text-s p1 px-2 transition ease-out ${
+                    index === selectedNodeIndex
+                      ? "bg-gray-200"
+                      : "hover:bg-gray-200"
+                  }`}
+                  onClick={() => onSelect(node)}
+                >
+                  <div className="font-semibold min-w-40">{node.name}</div>
+                  <div className="ml-10 text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
+                    {truncateFilePath(node.file_path)}
+                  </div>
+                </li>
+              ))
+          )}
+        </ul>
+      </div>
+    );
+  }
+);
+NodeSelection.displayName = "NodeSelection";
+
+interface ComposerActionProps {
+  disabled: boolean;
+  onEnhance: () => void;
+  onSend: () => void;
+}
+
+const ComposerAction: FC<ComposerActionProps> = memo(
+  ({ disabled, onEnhance, onSend }) => {
+    return (
+      <div className="flex flex-row w-full items-center justify-end space-x-4">
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            title="Enhance Prompt"
+            className="size-8 p-2 transition ease-in bg-white hover:bg-orange-200 rounded-md flex items-center justify-center"
+            onClick={onEnhance}
+            disabled={disabled}
+          >
+            <span className="text-lg">✨</span>
+          </button>
+        </div>
+        <ThreadPrimitive.If running={false}>
+          <button
+            type="button"
+            disabled={disabled}
+            title="Send"
+            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100"
+            onClick={onSend}
+          >
+            <SendHorizontalIcon />
+          </button>
+        </ThreadPrimitive.If>
+        <ThreadPrimitive.If running>
+          <ComposerPrimitive.Cancel className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer">
+            <CircleStopIcon />
+          </ComposerPrimitive.Cancel>
+        </ThreadPrimitive.If>
+      </div>
+    );
+  }
+);
+ComposerAction.displayName = "ComposerAction";
+
 // const free_models = ["openai/gpt-4.1", "openai/gpt-4o", "openai/gpt-4.1-mini"];
 
 const MessageComposer = ({
@@ -117,7 +211,10 @@ const MessageComposer = ({
   // Subscribe to thread running state
   useEffect(() => {
     const unsubscribe = threadRuntime.subscribe(() => {
-      setIsThreadRunning(threadRuntime.getState().isRunning);
+      const nextRunning = threadRuntime.getState().isRunning;
+      setIsThreadRunning((prev) =>
+        prev === nextRunning ? prev : nextRunning
+      );
     });
     // Set initial state
     setIsThreadRunning(threadRuntime.getState().isRunning);
@@ -154,7 +251,7 @@ const MessageComposer = ({
       ) {
         lastSyncedComposerText.current = composerText;
         messageRef.current = composerText;
-        setMessage(composerText);
+        setMessage((prev) => (prev === composerText ? prev : composerText));
       }
     });
     return unsubscribe;
@@ -333,42 +430,6 @@ const MessageComposer = ({
     }
   }, [selectedNodeIndex]);
 
-  const NodeSelection = () => {
-    return (
-      <div className="max-h-40 overflow-scroll rounded-lg border border-gray-200 bg-[#FFFDFC] shadow-lg">
-        <ul>
-          {isSearchingNode ? (
-            <Skeleton className="w-full h-20 m-4" />
-          ) : (
-            nodeOptions
-              ?.sort((a, b) => b.relevance - a.relevance)
-              .map((node, index) => (
-                <li
-                  key={node.node_id}
-                  ref={(el) => {
-                    if (index === selectedNodeIndex && el) {
-                      selectedNodeRef.current = el;
-                    }
-                  }}
-                  className={`flex m-1 flex-row cursor-pointer rounded-sm text-s p1 px-2 transition ease-out ${
-                    index === selectedNodeIndex
-                      ? "bg-gray-200"
-                      : "hover:bg-gray-200"
-                  }`}
-                  onClick={() => handleNodeSelect(node)}
-                >
-                  <div className="font-semibold min-w-40">{node.name}</div>
-                  <div className="ml-10 text-sm text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
-                    {truncateFilePath(node.file_path)}
-                  </div>
-                </li>
-              ))
-          )}
-        </ul>
-      </div>
-    );
-  };
-
   const handleSend = () => {
     // Ensure config is set with current documents before sending
     const documentIds = documents.map((doc) => doc.id);
@@ -533,45 +594,15 @@ const MessageComposer = ({
   //   loadCurrentModel();
   // }, [loadCurrentModel]);
 
-  const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
-    return (
-      <div className="flex flex-row w-full items-center justify-end space-x-4">
-        {/* <ModelSelection
-          currentModel={currentModel}
-          currPlan={currPlan}
-          loadCurrentModel={loadCurrentModel}
-          disabled={disabled}
-        /> */}
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            title="Enhance Prompt"
-            className="size-8 p-2 transition ease-in bg-white hover:bg-orange-200 rounded-md flex items-center justify-center"
-            onClick={handleEnhancePrompt}
-            disabled={isDisabled}
-          >
-            <span className="text-lg">✨</span>
-          </button>
-        </div>
-        <ThreadPrimitive.If running={false}>
-          <button
-            type="button"
-            disabled={isDisabled}
-            title="Send"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100"
-            onClick={handleSend}
-          >
-            <SendHorizontalIcon />
-          </button>
-        </ThreadPrimitive.If>
-        <ThreadPrimitive.If running>
-          <ComposerPrimitive.Cancel className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100 border-none cursor-pointer">
-            <CircleStopIcon />
-          </ComposerPrimitive.Cancel>
-        </ThreadPrimitive.If>
-      </div>
-    );
-  };
+  const memoizedContextUsage = useMemo(
+    () => (
+      <MemoizedContextUsageIndicator
+        conversationId={conversation_id}
+        refreshTrigger={contextRefreshTrigger}
+      />
+    ),
+    [conversation_id, contextRefreshTrigger]
+  );
 
   const handleEnhancePrompt = async () => {
     try {
@@ -667,7 +698,15 @@ const MessageComposer = ({
       )}
 
       <div className="flex flex-col w-full p-2">
-        {(nodeOptions?.length > 0 || isSearchingNode) && <NodeSelection />}
+        {(nodeOptions?.length > 0 || isSearchingNode) && (
+          <NodeSelection
+            isSearchingNode={isSearchingNode}
+            nodeOptions={nodeOptions}
+            selectedNodeIndex={selectedNodeIndex}
+            selectedNodeRef={selectedNodeRef}
+            onSelect={handleNodeSelect}
+          />
+        )}
 
         {selectedNodes.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -815,11 +854,12 @@ const MessageComposer = ({
           </div>
 
           <div className="flex items-center justify-between w-full">
-            <ContextUsageIndicator
-              conversationId={conversation_id}
-              refreshTrigger={contextRefreshTrigger}
+            {memoizedContextUsage}
+            <ComposerAction
+              disabled={isDisabled}
+              onEnhance={handleEnhancePrompt}
+              onSend={handleSend}
             />
-            <ComposerAction disabled={isDisabled} />
           </div>
         </div>
       </div>

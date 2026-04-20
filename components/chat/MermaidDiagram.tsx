@@ -1,9 +1,16 @@
 "use client";
 
-import React, { FC, useState, useEffect, useRef, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { LucideCopy, LucideCopyCheck, Maximize2 } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import React, { FC, useState, useEffect, useRef } from "react";
+import {
+  LucideCopy,
+  LucideCopyCheck,
+  Maximize2,
+  Minus,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import getHeaders from "@/app/utils/headers.util";
 
 interface MermaidDiagramProps {
   chart: string;
@@ -257,289 +264,856 @@ const preprocessMermaidChart = (chart: string): string => {
   }
 };
 
+const MERMAID_THEME_VARIABLES = {
+  primaryColor: "#f3f4f6",
+  primaryTextColor: "#111827",
+  primaryBorderColor: "#9ca3af",
+  lineColor: "#6b7280",
+  secondaryColor: "#ffffff",
+  tertiaryColor: "#f9fafb",
+  background: "#ffffff",
+  mainBkg: "#f3f4f6",
+  secondBkg: "#e5e7eb",
+  tertiaryBkg: "#f9fafb",
+  altLineColor: "#9ca3af",
+  sectionBkgColor: "#f3f4f6",
+  altSectionBkgColor: "#ffffff",
+  gridColor: "#f3f4f6",
+  loopTextColor: "#111827",
+  noteBkgColor: "#fef3c7",
+  noteTextColor: "#92400e",
+  activationBkgColor: "#dbeafe",
+  activationBorderColor: "#3b82f6",
+  sequenceNumberColor: "#1e40af",
+  actorBkg: "#f3f4f6",
+  actorBorder: "#9ca3af",
+  actorTextColor: "#111827",
+  actorLineColor: "#6b7280",
+  signalColor: "#6b7280",
+  signalTextColor: "#111827",
+  labelBackgroundBkgColor: "#ffffff",
+  labelTextColor: "#111827",
+  labelBoxBorderColor: "#d1d5db",
+  edgeLabelBackground: "#ffffff",
+  clusterBkg: "#f9fafb",
+  clusterBorder: "#d1d5db",
+  defaultLinkColor: "#6b7280",
+  titleColor: "#111827",
+  fontFamily: "monospace",
+  fontSize: "12px",
+};
+
+const DOMPURIFY_ADD_TAGS = [
+  "foreignObject",
+  "switch",
+  "marker",
+  "pattern",
+  "mask",
+  "clipPath",
+  "metadata",
+  "title",
+  "desc",
+  "defs",
+  "symbol",
+  "use",
+];
+
+const DOMPURIFY_ADD_ATTR = [
+  "style",
+  "transform",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "text-anchor",
+  "fill",
+  "stroke",
+  "stroke-width",
+  "stroke-dasharray",
+  "d",
+  "cx",
+  "cy",
+  "r",
+  "rx",
+  "ry",
+  "x",
+  "y",
+  "x1",
+  "y1",
+  "x2",
+  "y2",
+  "width",
+  "height",
+  "viewBox",
+  "preserveAspectRatio",
+  "opacity",
+  "fill-opacity",
+  "stroke-opacity",
+  "marker-start",
+  "marker-mid",
+  "marker-end",
+  "clip-path",
+  "mask",
+  "filter",
+  "dominant-baseline",
+  "alignment-baseline",
+  "baseline-shift",
+  "text-decoration",
+  "letter-spacing",
+  "word-spacing",
+  "direction",
+  "unicode-bidi",
+];
+
+const getMermaidConfig = (useMaxWidth: boolean) => ({
+  startOnLoad: false,
+  securityLevel: "loose" as const,
+  theme: "base" as const,
+  themeVariables: MERMAID_THEME_VARIABLES,
+  flowchart: {
+    useMaxWidth,
+    htmlLabels: false,
+    padding: 0,
+    look: "neo" as const,
+  },
+  logLevel: "fatal" as const,
+  suppressErrorRendering: true,
+});
+
+const addRenderDirectives = (chart: string): string => {
+  if (!chart.match(/^(flowchart|graph)\s+/)) {
+    return chart;
+  }
+
+  if (!chart.includes("%%{init:")) {
+    return chart.replace(
+      /^(flowchart|graph)\s+/,
+      "%%{init: {'layout': 'dagre', 'look': 'neo'}}%%\n$1 ",
+    );
+  }
+
+  return chart.replace(
+    /%%{init:\s*({.*?})}%%/,
+    "%%{init: {$1, 'layout': 'dagre', 'look': 'neo'}}%%",
+  );
+};
+
+const normalizeFlowchartChart = (chart: string): string => {
+  const lines = chart.split("\n");
+
+  return lines
+    .map((line) => {
+      const trimmed = line.trim();
+
+      // Markdown-like separators commonly appear in LLM output and break Mermaid parsing.
+      if (/^[-_=]{4,}$/.test(trimmed)) {
+        return `%% ${trimmed}`;
+      }
+
+      // Keep comments untouched.
+      if (trimmed.startsWith("%%")) {
+        return line;
+      }
+
+      // Mermaid often fails with literal "\n" inside bracket labels in flowcharts.
+      return line.replace(/\[([^\]]*)\]/g, (_match, label: string) => {
+        const normalized = label
+          .replace(/\\n/g, "<br/>")
+          .replace(/\r?\n/g, " ")
+          .trim();
+        return `[${normalized}]`;
+      });
+    })
+    .join("\n");
+};
+
+const normalizeClassDiagramChart = (chart: string): string => {
+  if (!chart.match(/^classDiagram(?:\s|$)/)) {
+    return chart;
+  }
+
+  let next = chart.trim();
+
+  // Ensure canonical classDiagram header layout.
+  next = next.replace(/^classDiagram\s+/, "classDiagram\n");
+
+  // Split chained class definitions that are often emitted in one line.
+  next = next.replace(/\}\s*class\s+/g, "}\nclass ");
+
+  // Reflow class bodies: "+a: int +b: str" -> one member per line.
+  next = next.replace(
+    /class\s+([A-Za-z_]\w*)\s*\{([^}]*)\}/g,
+    (_m, className: string, body: string) => {
+      const trimmedBody = String(body || "").trim();
+      if (!trimmedBody) {
+        return `class ${className} {\n}`;
+      }
+
+      const members = trimmedBody
+        .replace(/\s+/g, " ")
+        .split(/\s+(?=[+#~\-])/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+
+      if (!members.length) {
+        return `class ${className} {\n}`;
+      }
+
+      return `class ${className} {\n  ${members.join("\n  ")}\n}`;
+    },
+  );
+
+  return next;
+};
+
+const normalizeFlowchartForFallback = (chart: string): string => {
+  if (!chart.match(/^(flowchart|graph)\s+/)) {
+    return chart;
+  }
+
+  const normalized = normalizeFlowchartChart(chart);
+  return normalized
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("%%")) return line;
+
+      let next = line;
+
+      // Convert HTML breaks to plain spaces for parser stability.
+      next = next.replace(/<br\s*\/?>/gi, " ");
+
+      // Sanitize node labels in brackets to avoid parser blowups from odd symbols.
+      next = next.replace(/\[([^\]]*)\]/g, (_match, label: string) => {
+        const safe = label
+          .replace(/[*`{}[\]<>]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        return `[${safe}]`;
+      });
+
+      // Sanitize edge labels but keep meaning.
+      next = next.replace(/\|([^|]*)\|/g, (_match, label: string) => {
+        const safe = label
+          .replace(/[*`{}[\]<>]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        return `|${safe}|`;
+      });
+
+      return next;
+    })
+    .join("\n");
+};
+
+const removeFlowchartEdgeLabels = (chart: string): string => {
+  if (!chart.match(/^(flowchart|graph)\s+/)) {
+    return chart;
+  }
+  // Last-resort parser fallback: drop edge labels if they are the root cause.
+  return chart
+    .replace(/-->\s*\|[^|]*\|\s*/g, "--> ")
+    .replace(/--\s*\|[^|]*\|\s*-->/g, "--> ");
+};
+
+const autoFixMermaidChart = (chart: string, useStrictArchitectureFix = false): string => {
+  let nextChart = chart.trim();
+  if (nextChart.match(/^architecture(-beta)?\s/)) {
+    nextChart = useStrictArchitectureFix
+      ? sanitizeArchitectureLabelsStrict(nextChart)
+      : sanitizeArchitectureLabels(nextChart);
+  }
+  if (nextChart.match(/^(flowchart|graph)\s+/)) {
+    nextChart = normalizeFlowchartChart(nextChart);
+  }
+  if (nextChart.match(/^classDiagram(?:\s|$)/)) {
+    nextChart = normalizeClassDiagramChart(nextChart);
+  }
+  return preprocessMermaidChart(nextChart);
+};
+
+const sanitizeRenderedSvg = async (svg: string): Promise<string> => {
+  const cleanedSvg = svg
+    .replace(/<a[^>]*>/g, "<span>")
+    .replace(/<\/a>/g, "</span>")
+    .replace(/onclick="[^"]*"/g, "")
+    .replace(/onmouseover="[^"]*"/g, "")
+    .replace(/onmouseout="[^"]*"/g, "")
+    .replace(/href="[^"]*"/g, "")
+    .replace(/stroke-width="[^"]*"/g, 'stroke-width="1"');
+
+  const { default: DOMPurify } = await import("dompurify");
+  const safeSvg = DOMPurify.sanitize(cleanedSvg, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+    ADD_TAGS: DOMPURIFY_ADD_TAGS,
+    ADD_ATTR: DOMPURIFY_ADD_ATTR,
+    FORBID_TAGS: ["script", "object", "embed", "link", "meta", "base"],
+    FORBID_ATTR: [
+      "onload",
+      "onerror",
+      "onmouseover",
+      "onclick",
+      "href",
+      "xlink:href",
+    ],
+  });
+
+  if (!safeSvg.includes("<svg")) {
+    throw new Error("Rendered result is not a valid SVG");
+  }
+
+  return safeSvg;
+};
+
+type MermaidRenderSuccess = {
+  svg: string;
+  renderedChart: string;
+  wasCorrected: boolean;
+};
+
+const renderValidatedMermaid = async (chart: string): Promise<MermaidRenderSuccess> => {
+  const trimmedChart = chart.trim();
+
+  if (!trimmedChart) {
+    throw new Error("Empty chart content");
+  }
+
+  if (!looksLikeMermaid(trimmedChart)) {
+    throw new Error(
+      "Content is not a Mermaid diagram (use graph, flowchart, sequenceDiagram, etc.).",
+    );
+  }
+
+  const mermaid = (await import("mermaid")).default;
+  mermaid.initialize(getMermaidConfig(true));
+
+  const softFixedChart = autoFixMermaidChart(trimmedChart, false);
+  const strictArchitectureChart = trimmedChart.match(/^architecture(-beta)?\s/)
+    ? autoFixMermaidChart(trimmedChart, true)
+    : null;
+  const fallbackFlowchartChart = trimmedChart.match(/^(flowchart|graph)\s+/)
+    ? normalizeFlowchartForFallback(trimmedChart)
+    : null;
+  const fallbackFlowchartNoEdgeLabel =
+    fallbackFlowchartChart && fallbackFlowchartChart.match(/^(flowchart|graph)\s+/)
+      ? removeFlowchartEdgeLabels(fallbackFlowchartChart)
+      : null;
+
+  const candidates = [
+    { chart: trimmedChart, wasCorrected: false },
+    ...(softFixedChart !== trimmedChart
+      ? [{ chart: softFixedChart, wasCorrected: true }]
+      : []),
+    ...(strictArchitectureChart &&
+    strictArchitectureChart !== trimmedChart &&
+    strictArchitectureChart !== softFixedChart
+      ? [{ chart: strictArchitectureChart, wasCorrected: true }]
+      : []),
+    ...(fallbackFlowchartChart &&
+    fallbackFlowchartChart !== trimmedChart &&
+    fallbackFlowchartChart !== softFixedChart &&
+    fallbackFlowchartChart !== strictArchitectureChart
+      ? [{ chart: fallbackFlowchartChart, wasCorrected: true }]
+      : []),
+    ...(fallbackFlowchartNoEdgeLabel &&
+    fallbackFlowchartNoEdgeLabel !== trimmedChart &&
+    fallbackFlowchartNoEdgeLabel !== softFixedChart &&
+    fallbackFlowchartNoEdgeLabel !== strictArchitectureChart &&
+    fallbackFlowchartNoEdgeLabel !== fallbackFlowchartChart
+      ? [{ chart: fallbackFlowchartNoEdgeLabel, wasCorrected: true }]
+      : []),
+  ];
+
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    try {
+      const renderId = `diagram-${Date.now()}-${i}`;
+      const renderResult = await mermaid.render(
+        renderId,
+        addRenderDirectives(candidate.chart),
+      );
+
+      if (!renderResult?.svg) {
+        throw new Error("Mermaid render returned empty result");
+      }
+
+      return {
+        svg: await sanitizeRenderedSvg(renderResult.svg),
+        renderedChart: candidate.chart,
+        wasCorrected: candidate.wasCorrected,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError ?? new Error("Failed to render diagram.");
+};
+
+const clampZoom = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, Number(value.toFixed(2))));
+
+const requestMermaidRepair = async (
+  diagramCode: string,
+  errorMessage: string,
+  attempt: number,
+): Promise<string | null> => {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  if (!baseUrl) return null;
+
+  const headers = await getHeaders({
+    "Content-Type": "application/json",
+  });
+
+  const response = await fetch(`${baseUrl}/api/v1/repair-mermaid/`, {
+    method: "POST",
+    headers: headers as unknown as HeadersInit,
+    body: JSON.stringify({
+      diagram_code: diagramCode,
+      error_message: errorMessage,
+      attempt,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Mermaid repair request failed with status ${response.status}`);
+  }
+
+  const data = (await response.json()) as { corrected_code?: string };
+  const corrected = data.corrected_code?.trim();
+  return corrected || null;
+};
+
+interface DiagramViewerProps {
+  svg: string;
+  height?: string;
+  onCopy?: () => void;
+  copied?: boolean;
+  onOpenFullscreen?: () => void;
+  showFullscreenButton?: boolean;
+  minZoom?: number;
+  maxZoom?: number;
+}
+
+const DiagramIconButton: FC<{
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}> = ({ label, onClick, children }) => (
+  <button
+    type="button"
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick();
+    }}
+    aria-label={label}
+    className="inline-flex size-7 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+  >
+    {children}
+  </button>
+);
+
+const DiagramViewer: FC<DiagramViewerProps> = ({
+  svg,
+  height = "min(620px, 70vh)",
+  onCopy,
+  copied,
+  onOpenFullscreen,
+  showFullscreenButton,
+  minZoom = 0.25,
+  maxZoom = 4,
+}) => {
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{
+    x: number;
+    y: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
+  const zoomRef = useRef(zoom);
+  const panRef = useRef(pan);
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
+
+  const clamp = (v: number) => clampZoom(v, minZoom, maxZoom);
+
+  // Normalize Mermaid's SVG so rendering is based on actual diagram content
+  // instead of Mermaid's inline sizing defaults.
+  useEffect(() => {
+    const el = viewportRef.current;
+    const svgEl = el?.querySelector("svg") as SVGSVGElement | null;
+    if (!el || !svgEl) return;
+    const vb = svgEl.viewBox?.baseVal;
+    const width = vb?.width || Number(svgEl.getAttribute("width")) || 0;
+    const height = vb?.height || Number(svgEl.getAttribute("height")) || 0;
+    if (width > 0 && height > 0) {
+      svgEl.setAttribute("width", String(width));
+      svgEl.setAttribute("height", String(height));
+      if (!vb || !vb.width || !vb.height) {
+        svgEl.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      }
+    }
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = width > 0 ? `${width}px` : "auto";
+    svgEl.style.height = height > 0 ? `${height}px` : "auto";
+  }, [svg]);
+
+  const measureNatural = React.useCallback(() => {
+    const el = viewportRef.current;
+    const svgEl = el?.querySelector("svg") as SVGSVGElement | null;
+    if (!el || !svgEl) return null;
+
+    let bboxX = 0;
+    let bboxY = 0;
+    let bboxW = 0;
+    let bboxH = 0;
+    try {
+      const bbox = svgEl.getBBox();
+      bboxX = bbox.x;
+      bboxY = bbox.y;
+      bboxW = bbox.width;
+      bboxH = bbox.height;
+    } catch {
+      // getBBox can throw if not rendered yet
+    }
+
+    const vb = svgEl.viewBox?.baseVal;
+    const rect = svgEl.getBoundingClientRect();
+
+    if (!bboxW || !bboxH) {
+      bboxW = vb?.width || rect.width || 1;
+      bboxH = vb?.height || rect.height || 1;
+      bboxX = vb?.x || 0;
+      bboxY = vb?.y || 0;
+    }
+
+    return { bboxX, bboxY, bboxW, bboxH, el };
+  }, []);
+
+  const centerAtZoom = React.useCallback(
+    (z: number) => {
+      const m = measureNatural();
+      if (!m) return;
+      const scaledW = m.bboxW * z;
+      const scaledH = m.bboxH * z;
+      const pad = 16;
+      setZoom(z);
+      setPan({
+        x: (m.el.clientWidth - scaledW) / 2 - m.bboxX * z,
+        y:
+          scaledH <= m.el.clientHeight
+            ? (m.el.clientHeight - scaledH) / 2 - m.bboxY * z
+            : pad - m.bboxY * z,
+      });
+    },
+    [measureNatural],
+  );
+
+  // "Fit to view": fit actual content bounds (bbox), not entire SVG canvas.
+  const fitToView = React.useCallback(() => {
+    const m = measureNatural();
+    if (!m) return;
+    const pad = 32;
+    const availW = Math.max(100, m.el.clientWidth - pad);
+    const availH = Math.max(100, m.el.clientHeight - pad);
+    const scale = clamp(Math.min(availW / m.bboxW, availH / m.bboxH));
+    centerAtZoom(scale);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measureNatural, centerAtZoom, minZoom, maxZoom]);
+
+  // On load: fill most of the viewport width using content bounds so diagrams
+  // never appear tiny in a giant empty canvas.
+  const resetInitialView = React.useCallback(() => {
+    const m = measureNatural();
+    if (!m) return;
+    const pad = 32;
+    const availW = Math.max(100, m.el.clientWidth - pad);
+    const targetWidth = availW * 0.92;
+    const initial = clamp(targetWidth / m.bboxW);
+    centerAtZoom(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measureNatural, centerAtZoom, minZoom, maxZoom]);
+
+  useEffect(() => {
+    if (!svg) return;
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => resetInitialView());
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [svg, resetInitialView]);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let firstCallback = true;
+    const ro = new ResizeObserver(() => {
+      // Skip the very first immediate callback (initial observe).
+      if (firstCallback) {
+        firstCallback = false;
+        return;
+      }
+      fitToView();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitToView]);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const factor = e.deltaY < 0 ? 1.1 : 0.9;
+      const prevZoom = zoomRef.current;
+      const nextZoom = clamp(prevZoom * factor);
+      if (nextZoom === prevZoom) return;
+      const scale = nextZoom / prevZoom;
+      const prev = panRef.current;
+      setZoom(nextZoom);
+      setPan({
+        x: cx - (cx - prev.x) * scale,
+        y: cy - (cy - prev.y) * scale,
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel as EventListener);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!isPanning) return;
+    const onMove = (e: MouseEvent) => {
+      const s = panStartRef.current;
+      if (!s) return;
+      setPan({
+        x: s.panX + (e.clientX - s.x),
+        y: s.panY + (e.clientY - s.y),
+      });
+    };
+    const onUp = () => setIsPanning(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [isPanning]);
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    panStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panX: pan.x,
+      panY: pan.y,
+    };
+    setIsPanning(true);
+  };
+
+  const zoomFromCenter = (factor: number) => {
+    const el = viewportRef.current;
+    const cx = el ? el.clientWidth / 2 : 0;
+    const cy = el ? el.clientHeight / 2 : 0;
+    const prevZoom = zoomRef.current;
+    const nextZoom = clamp(prevZoom * factor);
+    if (nextZoom === prevZoom) return;
+    const scale = nextZoom / prevZoom;
+    const prev = panRef.current;
+    setZoom(nextZoom);
+    setPan({
+      x: cx - (cx - prev.x) * scale,
+      y: cy - (cy - prev.y) * scale,
+    });
+  };
+
+  const resetToActualSize = () => centerAtZoom(1);
+
+  return (
+    <div
+      className="diagram-viewer relative w-full overflow-hidden rounded-xl border border-gray-200 bg-[linear-gradient(#fafafa,#f4f4f5)]"
+      style={{ height }}
+    >
+      <div
+        ref={viewportRef}
+        className="absolute inset-0 select-none"
+        onMouseDown={handleMouseDown}
+        style={{ cursor: isPanning ? "grabbing" : "grab" }}
+      >
+        <div
+          className="mermaid-diagram-stage"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: "0 0",
+            willChange: "transform",
+          }}
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      </div>
+
+      <div className="pointer-events-auto absolute bottom-3 right-3 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white/95 px-1 py-1 shadow-md backdrop-blur">
+        <DiagramIconButton
+          label="Zoom out"
+          onClick={() => zoomFromCenter(0.9)}
+        >
+          <Minus className="size-3.5" />
+        </DiagramIconButton>
+        <button
+          type="button"
+          onClick={resetToActualSize}
+          className="min-w-[52px] rounded-full px-2 h-7 text-[11px] font-medium text-gray-700 hover:bg-gray-100 transition"
+          aria-label="Reset to actual size"
+          title="Reset to 100%"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <DiagramIconButton label="Zoom in" onClick={() => zoomFromCenter(1.1)}>
+          <Plus className="size-3.5" />
+        </DiagramIconButton>
+        <div className="mx-1 h-4 w-px bg-gray-200" />
+        <button
+          type="button"
+          onClick={fitToView}
+          className="inline-flex items-center gap-1 rounded-full px-2 h-7 text-[11px] font-medium text-gray-700 hover:bg-gray-100 transition"
+          aria-label="Fit to view"
+          title="Fit to view"
+        >
+          <RotateCcw className="size-3" />
+          Fit
+        </button>
+        {onCopy ? (
+          <DiagramIconButton label="Copy source" onClick={onCopy}>
+            {copied ? (
+              <LucideCopyCheck className="size-3.5" />
+            ) : (
+              <LucideCopy className="size-3.5" />
+            )}
+          </DiagramIconButton>
+        ) : null}
+        {showFullscreenButton && onOpenFullscreen ? (
+          <DiagramIconButton
+            label="Open fullscreen"
+            onClick={onOpenFullscreen}
+          >
+            <Maximize2 className="size-3.5" />
+          </DiagramIconButton>
+        ) : null}
+      </div>
+
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10 hidden sm:block">
+        <span className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-medium text-gray-500 border border-gray-200 backdrop-blur">
+          Drag to pan · ⌘/Ctrl + scroll to zoom
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
-  const [svg, setSvg] = useState<string>("");
+  const [svg, setSvg] = useState("");
+  const [resolvedChart, setResolvedChart] = useState(chart.trim());
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalSvg, setModalSvg] = useState<string>("");
+  const [wasCorrected, setWasCorrected] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const diagramId = useMemo(
-    () => `mermaid-${Date.now()}-${Math.random().toString(36)}`,
-    [],
-  );
 
   useEffect(() => {
     let isMounted = true;
 
     const renderDiagram = async () => {
       try {
-        // Reset previous state
         setSvg("");
         setError(null);
+        setResolvedChart(chart.trim());
+        setWasCorrected(false);
 
-        if (!chart || !chart.trim()) {
-          if (isMounted) {
-            setError("Empty chart content");
-          }
-          return;
-        }
+        const result = await renderValidatedMermaid(chart);
+        if (!isMounted) return;
 
-        const trimmedChart = chart.trim();
-        // Early guard: don't attempt render for non-Mermaid content (e.g. diff, code)
-        if (!looksLikeMermaid(trimmedChart)) {
-          if (isMounted) {
-            setError("Content is not a Mermaid diagram (use graph, flowchart, sequenceDiagram, etc.).");
-          }
-          return;
-        }
+        setSvg(result.svg);
+        setResolvedChart(result.renderedChart);
+        setWasCorrected(result.wasCorrected);
+      } catch (err) {
+        if (!isMounted) return;
+        let lastErrorMessage =
+          err instanceof Error ? err.message : "Failed to render diagram.";
 
-        // Dynamically import mermaid for code splitting
-        const mermaid = (await import("mermaid")).default;
-
-        // Use a simple, unique ID without special characters
-        const simpleId = `diagram${Date.now()}${Math.floor(Math.random() * 1000)}`;
-
-        // Initialize with minimal, safe configuration and better error handling
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: "loose",
-          theme: "base",
-          themeVariables: {
-            primaryColor: "#f3f4f6",
-            primaryTextColor: "#111827",
-            primaryBorderColor: "#9ca3af",
-            lineColor: "#6b7280",
-            secondaryColor: "#ffffff",
-            tertiaryColor: "#f9fafb",
-            background: "#ffffff",
-            mainBkg: "#f3f4f6",
-            secondBkg: "#e5e7eb",
-            tertiaryBkg: "#f9fafb",
-            altLineColor: "#9ca3af",
-            sectionBkgColor: "#f3f4f6",
-            altSectionBkgColor: "#ffffff",
-            gridColor: "#f3f4f6",
-            loopTextColor: "#111827",
-            noteBkgColor: "#fef3c7",
-            noteTextColor: "#92400e",
-            activationBkgColor: "#dbeafe",
-            activationBorderColor: "#3b82f6",
-            sequenceNumberColor: "#1e40af",
-            actorBkg: "#f3f4f6",
-            actorBorder: "#9ca3af",
-            actorTextColor: "#111827",
-            actorLineColor: "#6b7280",
-            signalColor: "#6b7280",
-            signalTextColor: "#111827",
-            labelBackgroundBkgColor: "#ffffff",
-            labelTextColor: "#111827",
-            labelBoxBorderColor: "#d1d5db",
-            edgeLabelBackground: "#ffffff",
-            clusterBkg: "#f9fafb",
-            clusterBorder: "#d1d5db",
-            defaultLinkColor: "#6b7280",
-            titleColor: "#111827",
-            fontFamily: "monospace",
-            fontSize: "12px",
-          },
-          flowchart: {
-            useMaxWidth: true,
-            htmlLabels: false,
-            padding: 0,
-            look: "neo",
-          } as any,
-          logLevel: "fatal", // Minimize console output
-          suppressErrorRendering: true, // Suppress mermaid's built-in error display since we handle errors
-        });
-
-        // Clean the chart content and apply intelligent fixes
-        let cleanChart = chart.trim();
-
-        // Architecture diagrams: sanitize labels (parser breaks on ., -, :, / inside [...])
-        if (cleanChart.match(/^architecture(-beta)?\s/)) {
-          cleanChart = sanitizeArchitectureLabels(cleanChart);
-        }
-
-        // Inject neo look and dagre layout for flowcharts and graphs
-        if (cleanChart.match(/^(flowchart|graph)\s+/)) {
-          // Check if already has layout directive
-          if (!cleanChart.includes("%%{init:")) {
-            // Insert initialization directive at the beginning
-            cleanChart = cleanChart.replace(
-              /^(flowchart|graph)\s+/,
-              "%%{init: {'layout': 'dagre', 'look': 'neo'}}%%\n$1 ",
-            );
-          } else {
-            // Modify existing init to include layout and look
-            cleanChart = cleanChart.replace(
-              /%%{init:\s*({.*?})}%%/,
-              "%%{init: {$1, 'layout': 'dagre', 'look': 'neo'}}%%",
-            );
-          }
-        }
-
-        // Apply intelligent preprocessing to fix common syntax issues
-        cleanChart = preprocessMermaidChart(cleanChart);
-
-        const isArchitecture = cleanChart.match(/^architecture(-beta)?\s/);
-        let lastError: Error | null = null;
-
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const chartToRender = attempt === 1 && isArchitecture
-            ? sanitizeArchitectureLabelsStrict(chart.trim())
-            : cleanChart;
-          if (attempt === 1 && chartToRender === cleanChart) break;
-
-          const renderId = attempt === 1 ? `${simpleId}-retry` : simpleId;
+        let latestChart = chart.trim();
+        for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            const renderResult = await mermaid.render(renderId, chartToRender);
-
-            if (!renderResult || !renderResult.svg) {
-              throw new Error("Mermaid render returned empty result");
+            const repairedChart = await requestMermaidRepair(
+              latestChart,
+              lastErrorMessage,
+              attempt,
+            );
+            if (!repairedChart || repairedChart === latestChart) {
+              break;
             }
 
-            if (isMounted) {
-              // Clean up any problematic elements in the SVG but preserve colors
-              const cleanedSvg = renderResult.svg
-            .replace(/<a[^>]*>/g, "<span>")
-            .replace(/<\/a>/g, "</span>")
-            .replace(/onclick="[^"]*"/g, "")
-            .replace(/onmouseover="[^"]*"/g, "")
-            .replace(/onmouseout="[^"]*"/g, "")
-            .replace(/href="[^"]*"/g, "")
-            .replace(/stroke-width="[^"]*"/g, 'stroke-width="1"');
+            latestChart = repairedChart;
+            const repairedResult = await renderValidatedMermaid(repairedChart);
+            if (!isMounted) return;
 
-          // Sanitize SVG with DOMPurify configured for Mermaid diagrams
-          const { default: DOMPurify } = await import("dompurify");
-          const safeSvg = DOMPurify.sanitize(cleanedSvg, {
-            USE_PROFILES: { svg: true, svgFilters: true },
-            ADD_TAGS: [
-              "foreignObject",
-              "switch",
-              "marker",
-              "pattern",
-              "mask",
-              "clipPath",
-              "metadata",
-              "title",
-              "desc",
-              "defs",
-              "symbol",
-              "use",
-            ],
-            ADD_ATTR: [
-              "style",
-              "transform",
-              "font-family",
-              "font-size",
-              "font-weight",
-              "text-anchor",
-              "fill",
-              "stroke",
-              "stroke-width",
-              "stroke-dasharray",
-              "d",
-              "cx",
-              "cy",
-              "r",
-              "rx",
-              "ry",
-              "x",
-              "y",
-              "x1",
-              "y1",
-              "x2",
-              "y2",
-              "width",
-              "height",
-              "viewBox",
-              "preserveAspectRatio",
-              "opacity",
-              "fill-opacity",
-              "stroke-opacity",
-              "marker-start",
-              "marker-mid",
-              "marker-end",
-              "clip-path",
-              "mask",
-              "filter",
-              "dominant-baseline",
-              "alignment-baseline",
-              "baseline-shift",
-              "text-decoration",
-              "letter-spacing",
-              "word-spacing",
-              "direction",
-              "unicode-bidi",
-            ],
-            FORBID_TAGS: ["script", "object", "embed", "link", "meta", "base"],
-            FORBID_ATTR: [
-              "onload",
-              "onerror",
-              "onmouseover",
-              "onclick",
-              "href",
-              "xlink:href",
-            ],
-          });
-
-          // Verify we have a valid SVG
-          if (!safeSvg.includes("<svg")) {
-            throw new Error("Rendered result is not a valid SVG");
-          }
-
-          setSvg(safeSvg);
-          setError(null);
-            }
+            setSvg(repairedResult.svg);
+            setResolvedChart(repairedResult.renderedChart);
+            setWasCorrected(true);
+            setError(null);
             return;
-          } catch (err) {
-            lastError = err instanceof Error ? err : new Error(String(err));
-            if (attempt === 0 && isArchitecture) continue;
-            break;
+          } catch (repairError) {
+            lastErrorMessage =
+              repairError instanceof Error
+                ? repairError.message
+                : "Failed to repair diagram.";
           }
         }
 
-        if (lastError && isMounted) {
-          const err = lastError;
-          if (process.env.NODE_ENV === "development") {
-            console.warn("Mermaid render error:", err.message);
-            console.warn("Chart preview (first 120 chars):", chart.trim().slice(0, 120));
-          }
+        setResolvedChart(chart.trim());
+        setWasCorrected(false);
 
-          let errorMessage: string;
-          if (
-            err.message.includes("Parsing failed") ||
-            err.message.includes("Parse error") ||
-            err.message.includes("Syntax error") ||
-            err.message.includes("unexpected character")
-          ) {
-            errorMessage = "This diagram couldn't be rendered. Copy the source below or try removing special characters (e.g. periods, hyphens) from labels.";
-          } else if (
-            err.message.includes("Cannot read properties of null") ||
-            err.message.includes("Cannot read properties of undefined")
-          ) {
-            errorMessage = "Mermaid parsing error — likely undefined node or edge reference. Copy the source below.";
-          } else if (err.message.includes("Invalid mermaid diagram type")) {
-            errorMessage = "Diagram must start with: graph, flowchart, sequenceDiagram, architecture-beta, etc.";
-          } else if (err.message.includes("Rendered result is not a valid SVG")) {
-            errorMessage = "Mermaid failed to generate valid SVG. Copy the source below.";
-          } else if (err.message.includes("Mermaid render returned empty result")) {
-            errorMessage = "Mermaid returned empty result. Copy the source below and check syntax.";
-          } else {
-            errorMessage = "This diagram couldn't be rendered. Copy the source below.";
-          }
-
-          setError(errorMessage);
-        }
-      } catch (outerErr) {
-        if (isMounted) {
-          setError("Failed to render diagram.");
+        if (
+          lastErrorMessage.includes("Parsing failed") ||
+          lastErrorMessage.includes("Parse error") ||
+          lastErrorMessage.includes("Syntax error") ||
+          lastErrorMessage.includes("unexpected character")
+        ) {
+          setError(
+            "This diagram could not be repaired automatically. Copy the Mermaid source below.",
+          );
+        } else if (
+          lastErrorMessage.includes("Cannot read properties of null") ||
+          lastErrorMessage.includes("Cannot read properties of undefined")
+        ) {
+          setError(
+            "Mermaid parsing error — likely an undefined node or edge reference. Copy the Mermaid source below.",
+          );
+        } else if (lastErrorMessage.includes("Invalid mermaid diagram type")) {
+          setError(
+            "Diagram must start with: graph, flowchart, sequenceDiagram, architecture-beta, etc.",
+          );
+        } else {
+          setError(lastErrorMessage || "Failed to render diagram.");
         }
       }
     };
 
-    // Render immediately when component mounts
     const timeoutId = setTimeout(renderDiagram, 100);
 
     return () => {
@@ -548,7 +1122,6 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
     };
   }, [chart]);
 
-  // Keyboard shortcuts effect
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isModalOpen) {
@@ -558,7 +1131,6 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
 
     if (isModalOpen) {
       document.addEventListener("keydown", handleKeydown);
-      // Prevent body scroll when modal is open
       document.body.style.overflow = "hidden";
     }
 
@@ -568,16 +1140,15 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
     };
   }, [isModalOpen]);
 
-  const handleCopy = async () => {
+  const copyText = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(chart);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy to clipboard:", err);
-      // Fallback for older browsers or when clipboard API is not available
       const textArea = document.createElement("textarea");
-      textArea.value = chart;
+      textArea.value = text;
       textArea.style.position = "fixed";
       textArea.style.opacity = "0";
       document.body.appendChild(textArea);
@@ -586,207 +1157,23 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
         document.execCommand("copy");
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-      } catch (fallbackErr) {
-        console.error("Fallback copy failed:", fallbackErr);
       } finally {
         document.body.removeChild(textArea);
       }
     }
   };
 
-  const handleModalOpen = async () => {
-    setIsModalOpen(true);
+  const handleCopySource = () => {
+    void copyText(wasCorrected ? resolvedChart : chart);
+  };
 
-    // Re-render diagram for modal with larger dimensions
-    try {
-      const mermaid = (await import("mermaid")).default;
-      const simpleId = `modal-diagram${Date.now()}${Math.floor(Math.random() * 1000)}`;
-
-      // Configure for larger modal rendering with explicit sizing
-      await mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "loose",
-        theme: "base",
-        themeVariables: {
-          primaryColor: "#f3f4f6",
-          primaryTextColor: "#111827",
-          primaryBorderColor: "#9ca3af",
-          lineColor: "#6b7280",
-          secondaryColor: "#ffffff",
-          tertiaryColor: "#f9fafb",
-          background: "#ffffff",
-          mainBkg: "#f3f4f6",
-          secondBkg: "#e5e7eb",
-          tertiaryBkg: "#f9fafb",
-          altLineColor: "#9ca3af",
-          sectionBkgColor: "#f3f4f6",
-          altSectionBkgColor: "#ffffff",
-          gridColor: "#f3f4f6",
-          loopTextColor: "#111827",
-          noteBkgColor: "#fef3c7",
-          noteTextColor: "#92400e",
-          activationBkgColor: "#dbeafe",
-          activationBorderColor: "#3b82f6",
-          sequenceNumberColor: "#1e40af",
-          actorBkg: "#f3f4f6",
-          actorBorder: "#9ca3af",
-          actorTextColor: "#111827",
-          actorLineColor: "#6b7280",
-          signalColor: "#6b7280",
-          signalTextColor: "#111827",
-          labelBackgroundBkgColor: "#ffffff",
-          labelTextColor: "#111827",
-          labelBoxBorderColor: "#d1d5db",
-          edgeLabelBackground: "#ffffff",
-          clusterBkg: "#f9fafb",
-          clusterBorder: "#d1d5db",
-          defaultLinkColor: "#6b7280",
-          titleColor: "#111827",
-          fontFamily: "monospace",
-          fontSize: "12px",
-        },
-        flowchart: {
-          htmlLabels: false,
-          useMaxWidth: false,
-          padding: 0,
-          look: "neo",
-        } as any,
-        logLevel: "fatal",
-        suppressErrorRendering: true,
-      });
-
-      // Use the same cleaned chart logic with preprocessing
-      let cleanChart = preprocessMermaidChart(chart.trim());
-      if (cleanChart.match(/^architecture(-beta)?\s/)) {
-        cleanChart = sanitizeArchitectureLabels(cleanChart);
-      }
-
-      // Validate before rendering in modal
-      if (!looksLikeMermaid(cleanChart)) {
-        throw new Error("Content is not a Mermaid diagram.");
-      }
-
-      // Inject neo look and dagre layout for flowcharts and graphs
-      if (cleanChart.match(/^(flowchart|graph)\s+/)) {
-        // Check if already has layout directive
-        if (!cleanChart.includes("%%{init:")) {
-          // Insert initialization directive at the beginning
-          cleanChart = cleanChart.replace(
-            /^(flowchart|graph)\s+/,
-            "%%{init: {'layout': 'dagre', 'look': 'neo'}}%%\n$1 ",
-          );
-        } else {
-          // Modify existing init to include layout and look
-          cleanChart = cleanChart.replace(
-            /%%{init:\s*({.*?})}%%/,
-            "%%{init: {$1, 'layout': 'dagre', 'look': 'neo'}}%%",
-          );
-        }
-      }
-
-      const { svg: renderedSvg } = await mermaid.render(simpleId, cleanChart);
-
-      let cleanedSvg = renderedSvg
-        .replace(/<a[^>]*>/g, "<span>")
-        .replace(/<\/a>/g, "</span>")
-        .replace(/onclick="[^"]*"/g, "")
-        .replace(/onmouseover="[^"]*"/g, "")
-        .replace(/onmouseout="[^"]*"/g, "")
-        .replace(/href="[^"]*"/g, "")
-        .replace(/stroke-width="[^"]*"/g, 'stroke-width="1"');
-
-      // Sanitize SVG with DOMPurify configured for Mermaid diagrams
-      const { default: DOMPurify } = await import("dompurify");
-      const safeModalSvg = DOMPurify.sanitize(cleanedSvg, {
-        USE_PROFILES: { svg: true, svgFilters: true },
-        ADD_TAGS: [
-          "foreignObject",
-          "switch",
-          "marker",
-          "pattern",
-          "mask",
-          "clipPath",
-          "metadata",
-          "title",
-          "desc",
-          "defs",
-          "symbol",
-          "use",
-        ],
-        ADD_ATTR: [
-          "style",
-          "transform",
-          "font-family",
-          "font-size",
-          "font-weight",
-          "text-anchor",
-          "fill",
-          "stroke",
-          "stroke-width",
-          "stroke-dasharray",
-          "d",
-          "cx",
-          "cy",
-          "r",
-          "rx",
-          "ry",
-          "x",
-          "y",
-          "x1",
-          "y1",
-          "x2",
-          "y2",
-          "width",
-          "height",
-          "viewBox",
-          "preserveAspectRatio",
-          "opacity",
-          "fill-opacity",
-          "stroke-opacity",
-          "marker-start",
-          "marker-mid",
-          "marker-end",
-          "clip-path",
-          "mask",
-          "filter",
-          "dominant-baseline",
-          "alignment-baseline",
-          "baseline-shift",
-          "text-decoration",
-          "letter-spacing",
-          "word-spacing",
-          "direction",
-          "unicode-bidi",
-        ],
-        FORBID_TAGS: ["script", "object", "embed", "link", "meta", "base"],
-        FORBID_ATTR: [
-          "onload",
-          "onerror",
-          "onmouseover",
-          "onclick",
-          "href",
-          "xlink:href",
-        ],
-      });
-
-      // Modify SVG for better scaling in modal
-      const scaledSvg = safeModalSvg.replace(
-        /<svg([^>]*)>/,
-        '<svg$1 style="width: 100%; height: auto; max-width: none; transform: scale(1.5); transform-origin: center;">',
-      );
-
-      setModalSvg(scaledSvg);
-    } catch (err) {
-      console.error("Error rendering modal diagram:", err);
-      // Fall back to regular SVG
-      setModalSvg(svg);
-    }
+  const handleCopyOriginal = () => {
+    void copyText(chart);
   };
 
   if (error) {
     return (
       <div className="relative bg-zinc-50 border border-zinc-200 rounded-lg mt-4 overflow-hidden">
-        {/* Header */}
         <div className="flex justify-between items-center px-4 py-2 bg-zinc-100 border-b border-zinc-200">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -795,18 +1182,19 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
             <span className="text-sm font-medium text-zinc-700">Diagram Source</span>
             <span className="text-xs text-zinc-400">(preview unavailable)</span>
           </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCopy();
-            }}
-            className="text-xs font-medium px-2 py-1 h-6 rounded bg-white hover:bg-zinc-50 border border-zinc-300 cursor-pointer flex items-center gap-1 transition-colors text-zinc-600"
-          >
-            {copied ? <LucideCopyCheck className="w-3 h-3" /> : <LucideCopy className="w-3 h-3" />}
-            {copied ? "Copied" : "Copy"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyOriginal();
+              }}
+              className="text-xs font-medium px-2 py-1 h-6 rounded bg-white hover:bg-zinc-50 border border-zinc-300 cursor-pointer flex items-center gap-1 transition-colors text-zinc-600"
+            >
+              {copied ? <LucideCopyCheck className="w-3 h-3" /> : <LucideCopy className="w-3 h-3" />}
+              {copied ? "Copied" : "Copy source"}
+            </button>
+          </div>
         </div>
-        {/* Source code */}
         <pre className="text-xs text-zinc-700 bg-zinc-50 p-4 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
           {chart}
         </pre>
@@ -815,97 +1203,65 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="relative bg-white rounded-none shadow-none mt-4"
-    >
-      <div className="relative">
-        <div
-          className="p-4 bg-white rounded-none overflow-x-auto mermaid-diagram"
-          dangerouslySetInnerHTML={{ __html: svg }}
-        />
-        <div className="absolute top-2 right-2 flex gap-1 z-10">
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogTrigger asChild>
-              <button
-                onClick={(e) => e.stopPropagation()}
-                aria-label="Expand diagram to full screen"
-                className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <Maximize2 className="size-3" />
-              </button>
-            </DialogTrigger>
-            <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] p-0 overflow-hidden">
-              <div className="flex flex-col h-full min-h-[80vh] sm:min-h-[70vh]">
-                <div className="absolute top-2 right-2 flex gap-1 z-10">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopy();
-                    }}
-                    className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800"
-                  >
-                    {copied ? (
-                      <LucideCopyCheck className="size-3" />
-                    ) : (
-                      <LucideCopy className="size-3" />
-                    )}
-                  </button>
-                </div>
-                <div
-                  className="flex-1 p-6 bg-white overflow-auto min-h-0 flex justify-center items-center"
-                  style={{
-                    WebkitOverflowScrolling: "touch",
-                  }}
-                >
-                  <div
-                    className="flex justify-center items-center"
-                    style={{
-                      minWidth: "100%",
-                      minHeight: "100%",
-                      padding: "40px",
-                    }}
-                    dangerouslySetInnerHTML={{ __html: modalSvg || svg }}
-                  />
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+    <div ref={containerRef} className="relative mt-4">
+      {wasCorrected ? (
+        <div className="mb-2 flex items-center justify-end px-1">
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCopy();
-            }}
-            className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800"
+            type="button"
+            onClick={handleCopySource}
+            className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-900"
           >
-            {copied ? (
-              <LucideCopyCheck className="size-3" />
-            ) : (
-              <LucideCopy className="size-3" />
-            )}
+            Copy fixed code
           </button>
         </div>
-      </div>
-      <style jsx>{`
-        .mermaid-diagram svg {
+      ) : null}
+
+      <DiagramViewer
+        svg={svg}
+        onCopy={handleCopySource}
+        copied={copied}
+        showFullscreenButton
+        onOpenFullscreen={() => setIsModalOpen(true)}
+      />
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] p-0 overflow-hidden">
+          <div className="flex h-full w-full flex-col bg-white">
+            <DiagramViewer
+              svg={svg}
+              height="100%"
+              onCopy={handleCopySource}
+              copied={copied}
+              maxZoom={6}
+              minZoom={0.1}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <style jsx global>{`
+        .diagram-viewer .mermaid-diagram-stage {
+          display: inline-block;
+        }
+        .diagram-viewer .mermaid-diagram-stage svg {
+          display: block;
+          max-width: none !important;
+          height: auto !important;
           filter: none !important;
         }
-        .mermaid-diagram svg * {
-          stroke-width: 1px !important;
-          stroke-dasharray: none !important;
+        .diagram-viewer .mermaid-diagram-stage svg * {
           opacity: 1 !important;
         }
-        .mermaid-diagram svg text {
-          font-family: monospace !important;
-          font-size: 12px !important;
+        .diagram-viewer .mermaid-diagram-stage svg text {
+          font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+            Roboto, "Helvetica Neue", Arial, sans-serif !important;
+          font-size: 13px !important;
         }
-        .mermaid-diagram svg .edgePath path,
-        .mermaid-diagram svg .edgePath .path {
-          stroke-width: 1px !important;
+        .diagram-viewer .mermaid-diagram-stage svg .edgePath path,
+        .diagram-viewer .mermaid-diagram-stage svg .edgePath .path,
+        .diagram-viewer .mermaid-diagram-stage svg .linePath {
+          stroke-width: 1.25px !important;
           fill: none !important;
-        }
-        .mermaid-diagram svg .linePath {
-          stroke-width: 1px !important;
         }
       `}</style>
     </div>

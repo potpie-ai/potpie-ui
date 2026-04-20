@@ -1177,14 +1177,14 @@ export default class ChatService {
     }
   }
 
-  static async getAllChats() {
+  static async getAllChats(limit: number = 200) {
     const headers = await getHeaders();
     const response = await axios.get(
       `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations`,
       {
         params: {
           start: 0,
-          limit: 1000,
+          limit,
         },
         headers: headers,
       }

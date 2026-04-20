@@ -41,12 +41,14 @@ interface ThreadProps {
   projectId?: string;
   conversationId?: string;
   writeDisabled?: boolean;
+  showWelcome?: boolean;
 }
 
 export const Thread: FC<ThreadProps> = ({
   projectId = "",
   conversationId = "",
   writeDisabled = false,
+  showWelcome = true,
 }) => {
   return (
     <LazyMotion features={domAnimation}>
@@ -58,9 +60,11 @@ export const Thread: FC<ThreadProps> = ({
           }}
         >
           <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
-            <ThreadPrimitive.If empty>
-              <ThreadWelcome />
-            </ThreadPrimitive.If>
+            {showWelcome ? (
+              <ThreadPrimitive.If empty>
+                <ThreadWelcome />
+              </ThreadPrimitive.If>
+            ) : null}
 
             <ThreadPrimitive.Messages
               components={{

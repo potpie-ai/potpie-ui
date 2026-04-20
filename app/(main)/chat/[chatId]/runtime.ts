@@ -21,10 +21,6 @@ import ChatService, {
 } from "@/services/ChatService";
 import { SessionInfo } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "@/lib/state/store";
-import { clearPendingMessage } from "@/lib/state/Reducers/chat";
-import { toast } from "sonner";
 
 // Type for tool call result structure from backend
 interface ToolCallResult {
@@ -399,8 +395,6 @@ const createChatAdapter = (
 ): ChatModelAdapter => {
   return {
     async *run({ messages, abortSignal, context }: ChatModelRunOptions) {
-      console.log("[Adapter] run() called with messages:", messages.length);
-
       // Check if this is a resume run FIRST
       const resumeSession = resumeSessionRef.current;
 
@@ -964,7 +958,7 @@ const createHistoryAdapter = (chatId: string): ThreadHistoryAdapter => {
       }
 
       try {
-        const messages = await ChatService.loadMessages(chatId, 0, 1000);
+        const messages = await ChatService.loadMessages(chatId, 0, 30);
         const convertedMessages = messages.map(convertToThreadMessage);
 
         return {
@@ -1062,7 +1056,6 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
 export function useChatRuntime(
   chatId: string | null | undefined
 ): ChatRuntimeResult {
-  console.log("[Runtime] useChatRuntime called with chatId:", chatId);
   // Keep only isBackgroundTaskActive
   const [isBackgroundTaskActive, setIsBackgroundTaskActive] = useState(false);
 
@@ -1127,11 +1120,6 @@ export function useChatRuntime(
     ) => {
       if (!chatId) return;
 
-      console.log(
-        "[Runtime] Preparing resume for session:",
-        sessionInfo.sessionId
-      );
-
       // Set the resume ref so the Adapter's run() method knows what to do
       resumeSessionRef.current = {
         sessionId: sessionInfo.sessionId,
@@ -1178,20 +1166,8 @@ export function useChatRuntime(
         // This tells assistant-ui: "Start a run responding TO this specific message."
         // This bypasses the internal state lookup that was causing the parentId error.
         if (lastMsg?.role === "user") {
-          console.log(
-            "[Runtime] Triggering startRun to resume stream for message:",
-            lastMsg.id
-          );
-
           // Passing the ID is the critical part to avoid the 'parentId' TypeError
           await thread.startRun(lastMsg.id);
-
-          console.log("[Runtime] Resume stream completed");
-        } else {
-          console.log(
-            "[Runtime] Last message is not from user, skipping resume. Role:",
-            lastMsg?.role
-          );
         }
 
         // Reset background task state after resume completes
@@ -1208,42 +1184,23 @@ export function useChatRuntime(
 
   // Check for active session on mount
   useEffect(() => {
-    console.log("[Runtime] useEffect triggered, chatId:", chatId);
     let isMounted = true;
 
     const checkAndResume = async () => {
       if (!chatId) {
-        console.log("[Runtime] No chatId, skipping session check");
         return;
       }
 
       try {
-        console.log("[Runtime] Checking for active session...");
         const activeSession = await ChatService.detectActiveSession(chatId);
-        console.log("[Runtime] Active session result:", activeSession);
 
         if (!isMounted) {
-          console.log("[Runtime] Component unmounted, skipping");
           return;
         }
 
-        if (!activeSession) {
-          console.log("[Runtime] No active session found");
+        if (!activeSession || activeSession.status !== "active") {
           return;
         }
-
-        if (activeSession.status !== "active") {
-          console.log(
-            "[Runtime] Session status is not active:",
-            activeSession.status
-          );
-          return;
-        }
-
-        console.log(
-          "[Runtime] Active session detected:",
-          activeSession.sessionId
-        );
 
         // Access the thread from runtime
         const thread = runtime.thread;
@@ -1280,10 +1237,9 @@ export function useChatRuntime(
       }
     };
 
-    const timer = setTimeout(checkAndResume, 300);
+    checkAndResume();
     return () => {
       isMounted = false;
-      clearTimeout(timer);
     };
   }, [chatId, runtime, resumeActiveSession]);
 
@@ -1294,72 +1250,4 @@ export function useChatRuntime(
     runtime,
     isBackgroundTaskActive,
   };
-}
-
-// Hook for handling pending messages from newchat page
-export function usePendingMessageHandler(
-  runtime: ReturnType<typeof useLocalRuntime>,
-  chatId: string | null | undefined
-) {
-  const dispatch = useDispatch<AppDispatch>();
-  const pendingMessage = useSelector(
-    (state: RootState) => state.chat.pendingMessage
-  );
-  const hasSentPendingMessage = useRef(false);
-
-  useEffect(() => {
-    if (!pendingMessage || !chatId || hasSentPendingMessage.current) {
-      return;
-    }
-
-    console.log(
-      "[PendingMessage] Detected pending message, sending via runtime:",
-      pendingMessage
-    );
-    hasSentPendingMessage.current = true;
-
-    // Wait for runtime to be ready
-    const sendPendingMessage = async () => {
-      try {
-        // Small delay to ensure runtime is fully initialized
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        const thread = runtime.thread;
-        if (!thread) {
-          console.error("[PendingMessage] Thread not available");
-          dispatch(clearPendingMessage());
-          return;
-        }
-
-        // Send message through thread's composer
-        // This ensures it goes through the adapter and proper streaming happens
-        const composer = thread.composer;
-        if (!composer) {
-          console.error("[PendingMessage] Composer not available");
-          dispatch(clearPendingMessage());
-          return;
-        }
-
-        composer.setText(pendingMessage);
-
-        // Trigger send
-        await composer.send();
-
-        console.log(
-          "[PendingMessage] Successfully sent pending message via runtime"
-        );
-
-        // Clear pending message
-        dispatch(clearPendingMessage());
-      } catch (error) {
-        console.error("[PendingMessage] Error sending pending message:", error);
-        toast.error("Failed to send message. You can retry in the chat.");
-
-        // Clear pending message even on error to prevent infinite retry
-        dispatch(clearPendingMessage());
-      }
-    };
-
-    sendPendingMessage();
-  }, [pendingMessage, chatId, runtime, dispatch]);
 }

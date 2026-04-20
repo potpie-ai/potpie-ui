@@ -145,7 +145,7 @@ export function ChatHistoryPanel() {
   // Fetch chats
   const { data: chats, isLoading } = useQuery<Chat[]>({
     queryKey: ["sidebar-chats"],
-    queryFn: () => ChatService.getAllChats(),
+    queryFn: () => ChatService.getAllChats(200),
     staleTime: 60000, // 1 minute
   });
 

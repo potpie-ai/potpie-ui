@@ -1,5 +1,4 @@
 "use client";
-import Loading from "@/app/loading";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { store, persistor } from "@/lib/state/store";
 import { Provider } from "react-redux";
@@ -49,11 +48,11 @@ const LayoutProviders = ({ children }: { children: React.ReactNode }) => {
               <NavigationProgressBar />
               <FormbricksProvider />
               <PlainChatProvider />
-              <PersistGate loading={<Loading />} persistor={persistor}>
-                <Provider store={store}>
+              <Provider store={store}>
+                <PersistGate loading={null} persistor={persistor}>
                   <TooltipProvider>{children}</TooltipProvider>
-                </Provider>
-              </PersistGate>
+                </PersistGate>
+              </Provider>
             </NavigationProgressProvider>
           </AuthContextProvider>
         </ThemeProvider>

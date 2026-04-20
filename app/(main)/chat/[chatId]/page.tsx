@@ -3,6 +3,7 @@ import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { setChat, clearPendingMessage } from "@/lib/state/Reducers/chat";
+import { setRepoName, setBranchName } from "@/lib/state/Reducers/RepoAndBranch";
 import {
   Dialog,
   DialogClose,
@@ -63,8 +64,11 @@ const ChatV2 = () => {
   // Returns runtime + session states for background task handling
   const { runtime, isBackgroundTaskActive } = useChatRuntime(params.chatId);
 
-  // Get pending message from Redux
+  // Get pending message and existing chat context from Redux
   const pendingMessage = useSelector((state: RootState) => state.chat.pendingMessage);
+  const existingTemporaryContext = useSelector(
+    (state: RootState) => state.chat.temporaryContext
+  );
   const hasSentPendingMessage = useRef(false);
 
   // Helper function to wait for runtime history to load
@@ -317,12 +321,47 @@ const ChatV2 = () => {
         setChatAccess(info.is_creator ? "write" : info.access_type);
       }
 
+      const infoWithRepo = info as {
+        repo_name?: string | null;
+        repository?: string | null;
+        repo?: string | null;
+        branch_name?: string | null;
+        branch?: string | null;
+      };
+      const resolvedRepoName = (
+        infoWithRepo.repo_name ??
+        infoWithRepo.repository ??
+        infoWithRepo.repo ??
+        ""
+      ).trim();
+      const resolvedBranchName = (
+        infoWithRepo.branch_name ??
+        infoWithRepo.branch ??
+        ""
+      ).trim();
+
+      const effectiveRepoName =
+        resolvedRepoName || existingTemporaryContext?.repo || "";
+      const effectiveBranchName =
+        resolvedBranchName || existingTemporaryContext?.branch || "";
+
       dispatch(
         setChat({
           agentId: info.agent_ids[0],
           title: info.title,
+          temporaryContext: {
+            repo: effectiveRepoName,
+            branch: effectiveBranchName,
+            projectId: info.project_ids[0],
+          },
         })
       );
+      if (effectiveRepoName) {
+        dispatch(setRepoName(effectiveRepoName));
+      }
+      if (effectiveBranchName) {
+        dispatch(setBranchName(effectiveBranchName));
+      }
 
       setProjectId(info.project_ids[0]);
       setInfoLoadedForChat(currentConversationId);

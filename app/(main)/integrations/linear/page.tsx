@@ -12,6 +12,7 @@ import { Plug, ArrowLeft, ChevronRight, Home } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { auth } from "@/configs/Firebase-config";
 
 export default function LinearIntegrationPage() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function LinearIntegrationPage() {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
       const redirectUri =
         process.env.NEXT_PUBLIC_LINEAR_REDIRECT_URI ||
-        "http://localhost:8001/integrations/linear/redirect";
+        "http://localhost:3000/integrations/linear/redirect";
 
       console.log("📡 Redirecting to backend OAuth initiation:");
       console.log(
@@ -40,11 +41,18 @@ export default function LinearIntegrationPage() {
       );
       console.log("- Redirect URI:", redirectUri);
 
-      // Create state parameter for CSRF protection
-      const state = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // OAuth `state` is verified by the backend and used as the Potpie user id when
+      // saving the integration. It must be the signed-in Firebase UID, not a random
+      // string — otherwise `/integrations/connected` (scoped to auth) stays empty.
+      const uid = auth.currentUser?.uid;
+      if (!uid) {
+        alert("Please sign in to connect Linear.");
+        setIsConnecting(false);
+        return;
+      }
 
       // Direct redirect to backend - backend will handle OAuth flow
-      const oauthUrl = `${baseUrl}/api/v1/integrations/linear/redirect?redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+      const oauthUrl = `${baseUrl}/api/v1/integrations/linear/redirect?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(uid)}`;
 
       console.log("🔗 Redirecting to backend OAuth endpoint...");
       window.location.href = oauthUrl;

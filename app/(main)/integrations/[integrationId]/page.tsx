@@ -247,6 +247,7 @@ export default function IntegrationModal({ params }: PageProps) {
   const selectedIntegrationType = availableIntegrationTypes.find(
     (integration) => integration.id === integrationId
   );
+  const isGithubIntegration = integrationId === "github";
 
   // If integration not found, redirect to integrations page
   useEffect(() => {
@@ -344,27 +345,51 @@ export default function IntegrationModal({ params }: PageProps) {
               {selectedIntegrationType.name} Integration
             </DialogTitle>
             <DialogDescription>
-              This integration is coming soon!
+              {isGithubIntegration
+                ? "GitHub is already connected."
+                : "This integration is coming soon!"}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="text-center py-8">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-white text-2xl font-bold">🚀</span>
+              <div
+                className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                  isGithubIntegration
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-gradient-to-r from-blue-500 to-purple-600"
+                }`}
+              >
+                <span className="text-2xl font-bold">
+                  {isGithubIntegration ? "✓" : "🚀"}
+                </span>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Coming Soon!
+                {isGithubIntegration ? "Already Connected" : "Coming Soon!"}
               </h3>
               <p className="text-gray-600 mb-4">
-                We&apos;re working hard to bring you the{" "}
-                {selectedIntegrationType.name} integration. Stay tuned for
-                updates!
+                {isGithubIntegration
+                  ? "Your GitHub account is already linked and ready to use. You can continue syncing sources and repositories."
+                  : `We're working hard to bring you the ${selectedIntegrationType.name} integration. Stay tuned for updates!`}
               </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  <strong>What to expect:</strong>{" "}
-                  {selectedIntegrationType.description}
+              <div
+                className={`rounded-lg p-4 ${
+                  isGithubIntegration
+                    ? "bg-emerald-50 border border-emerald-200"
+                    : "bg-blue-50 border border-blue-200"
+                }`}
+              >
+                <p
+                  className={`text-sm ${
+                    isGithubIntegration ? "text-emerald-800" : "text-blue-800"
+                  }`}
+                >
+                  <strong>
+                    {isGithubIntegration ? "Status:" : "What to expect:"}
+                  </strong>{" "}
+                  {isGithubIntegration
+                    ? "GitHub integration is active through your login provider."
+                    : selectedIntegrationType.description}
                 </p>
               </div>
             </div>
@@ -372,7 +397,7 @@ export default function IntegrationModal({ params }: PageProps) {
 
           <DialogFooter>
             <Button onClick={handleCloseModal} className="w-full">
-              Got it!
+              {isGithubIntegration ? "Continue" : "Got it!"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -16,19 +16,28 @@ import Image from "next/image";
 export default function LinearRedirectPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<"loading" | "success" | "error">(
-    "loading"
-  );
+  const [status, setStatus] = useState<
+    "loading" | "success" | "already_exists" | "error"
+  >("loading");
   const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
+      const isAlreadyIntegratedError = (errorMessage: string) => {
+        const normalizedError = errorMessage.toLowerCase();
+        return (
+          normalizedError.includes("already integrated") ||
+          normalizedError.includes("integration already exists")
+        );
+      };
+
       try {
         // Extract parameters from URL
         const code = searchParams.get("code");
         const error = searchParams.get("error");
         const state = searchParams.get("state");
         const success = searchParams.get("success");
+        const alreadyExists = searchParams.get("already_exists");
 
         console.log("🔍 Linear OAuth Callback Debug Info:");
         console.log("- URL:", window.location.href);
@@ -41,13 +50,28 @@ export default function LinearRedirectPage() {
         console.log("- Success:", success || "None");
         console.log("- Timestamp:", new Date().toISOString());
 
-        // Check for OAuth errors
+        // Check for OAuth errors (legacy: backend may pass error= for duplicate org)
         if (error) {
+          const decoded = decodeURIComponent(error.replace(/\+/g, " "));
+          if (isAlreadyIntegratedError(decoded)) {
+            setStatus("already_exists");
+            setMessage(
+              "This Linear organization is already connected. You're all set and can continue using the existing integration."
+            );
+            return;
+          }
           throw new Error(`OAuth error: ${error}`);
         }
 
         // If backend redirected here with success=true, integration is complete
         if (success === "true") {
+          if (alreadyExists === "true") {
+            setStatus("already_exists");
+            setMessage(
+              "This Linear organization is already connected. You're all set and can continue using the existing integration."
+            );
+            return;
+          }
           setStatus("success");
           setMessage("Successfully connected to Linear!");
 
@@ -75,9 +99,18 @@ export default function LinearRedirectPage() {
         throw new Error("No authorization code or success parameter received");
       } catch (error) {
         console.error("❌ Linear OAuth callback error:", error);
-        setMessage(
-          error instanceof Error ? error.message : "An unknown error occurred"
-        );
+        const errorMessage =
+          error instanceof Error ? error.message : "An unknown error occurred";
+
+        if (isAlreadyIntegratedError(errorMessage)) {
+          setStatus("already_exists");
+          setMessage(
+            "This Linear organization is already connected. You're all set and can continue using the existing integration."
+          );
+          return;
+        }
+
+        setMessage(errorMessage);
         setStatus("error");
       }
     };
@@ -110,6 +143,7 @@ export default function LinearRedirectPage() {
             <CardDescription>
               {status === "loading" && "Connecting to Linear..."}
               {status === "success" && "Successfully connected to Linear!"}
+              {status === "already_exists" && "Integration already exists"}
               {status === "error" && "Connection Failed"}
             </CardDescription>
           </CardHeader>
@@ -130,6 +164,26 @@ export default function LinearRedirectPage() {
                 <p className="text-sm text-gray-600">
                   Redirecting to integrations page...
                 </p>
+              </div>
+            )}
+
+            {status === "already_exists" && (
+              <div className="flex flex-col items-center space-y-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+                <p className="text-sm text-gray-600">{message}</p>
+                <div className="flex gap-2 w-full">
+                  <Button
+                    variant="outline"
+                    onClick={handleBackToIntegrations}
+                    className="flex-1"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back to Integrations
+                  </Button>
+                  <Button onClick={handleRetry} className="flex-1">
+                    Reconnect
+                  </Button>
+                </div>
               </div>
             )}
 

@@ -1369,7 +1369,14 @@ export function usePendingMessageHandler(
           return;
         }
 
-        composer.setText(pendingMessage);
+        composer.setText(pendingMessage.text);
+        if (pendingMessage.attachmentIds?.length) {
+          composer.setRunConfig({
+            custom: {
+              attachmentIds: pendingMessage.attachmentIds,
+            },
+          });
+        }
 
         // Trigger send
         await composer.send();

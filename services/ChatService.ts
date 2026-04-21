@@ -552,7 +552,8 @@ export default class ChatService {
       thinking?: string | null
     ) => void,
     sessionId?: string, // New optional parameter
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    attachmentIds?: string[] // Pre-uploaded attachment IDs (non-multimodal path)
   ): Promise<{ message: string; citations: string[]; sessionId: string }> {
     let currentSessionId = sessionId;
 
@@ -582,9 +583,34 @@ export default class ChatService {
 
       // Only process images if multimodal is enabled
       const enabledImages = isMultimodalEnabled() ? images : [];
+      console.log(
+        "[ChatService] Preparing image attachments",
+        {
+          multimodalEnabled: isMultimodalEnabled(),
+          providedImageCount: images.length,
+          enabledImageCount: enabledImages.length,
+        }
+      );
       enabledImages.forEach((image, index) => {
         formData.append("images", image);
+        console.log("[ChatService] Appended image attachment", {
+          index,
+          name: image.name,
+          type: image.type,
+          size: image.size,
+        });
       });
+
+      // Append pre-uploaded attachment IDs (from docs pre-uploaded via MediaService)
+      console.log("[ChatService] Preparing attachment IDs", {
+        attachmentIdCount: attachmentIds?.length ?? 0,
+      });
+      if (attachmentIds && attachmentIds.length > 0) {
+        attachmentIds.forEach((id) => {
+          formData.append("attachment_ids", id);
+          console.log("[ChatService] Appended attachment_id", { id });
+        });
+      }
 
       // Build URL with query parameters
       const url = new URL(
@@ -1095,7 +1121,8 @@ export default class ChatService {
     agentId: string,
     isHidden: boolean = false,
     repoName?: string | null,
-    branchName?: string | null
+    branchName?: string | null,
+    attachmentIds?: string[]
   ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
@@ -1116,6 +1143,9 @@ export default class ChatService {
       }
       if (branchName) {
         requestBody.branch_name = branchName;
+      }
+      if (attachmentIds && attachmentIds.length > 0) {
+        requestBody.attachment_ids = attachmentIds;
       }
 
       const response = await axios.post(
@@ -1271,5 +1301,15 @@ export default class ChatService {
       console.error("Error stopping message:", error);
       // Don't throw - we still want to clean up even if stop endpoint fails
     }
+  }
+
+  static async updateAgent(conversationId: string, agentId: string) {
+    const headers = await getHeaders();
+    const response = await axios.patch(
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/agent`,
+      { agent_id: agentId },
+      { headers }
+    );
+    return response.data;
   }
 }

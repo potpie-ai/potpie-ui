@@ -947,7 +947,11 @@ export default function NewChatPage() {
         user.uid,
         title,
         projectId,
-        agentId
+        agentId,
+        false,
+        undefined,
+        undefined,
+        state.attachmentIds.length > 0 ? state.attachmentIds : undefined
       );
       if (repoName && branchName) {
         dispatch(
@@ -961,7 +965,13 @@ export default function NewChatPage() {
       }
       dispatch(setChat({ agentId }));
       if (state.input.trim()) {
-        dispatch(setPendingMessage(getCleanInput(state.input)));
+        dispatch(
+          setPendingMessage({
+            text: getCleanInput(state.input),
+            attachmentIds:
+              state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+          })
+        );
       }
       router.push(`/chat/${conversationResponse.conversation_id}`);
       return true;

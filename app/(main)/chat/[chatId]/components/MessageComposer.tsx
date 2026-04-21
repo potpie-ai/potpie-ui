@@ -1,20 +1,6 @@
 import getHeaders from "@/app/utils/headers.util";
 import { Button } from "@/components/ui/button";
-import { isMultimodalEnabled } from "@/lib/utils";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { isMultimodalEnabled, getAgentDisplayLabel } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import ModelService from "@/services/ModelService";
 import {
@@ -24,19 +10,16 @@ import {
   useThreadRuntime,
 } from "@assistant-ui/react";
 import {
-  ComposerAddAttachment,
   ComposerAttachments,
 } from "@/components/assistant-ui/attachment";
-import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
-import { Dialog } from "@radix-ui/react-dialog";
 import axios from "axios";
+import { Agent } from "@/lib/state/Reducers/chat";
 import {
   SendHorizontalIcon,
   CircleStopIcon,
   X,
-  Loader2Icon,
   Crown,
-  Zap,
+  ChevronDown,
 } from "lucide-react";
 import {
   FC,
@@ -47,10 +30,21 @@ import {
   useCallback,
 } from "react";
 import ChatService from "@/services/ChatService";
-import Image from "next/image";
 import MinorService from "@/services/minorService";
+import AgentService from "@/services/AgentService";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/lib/state/store";
+import { setChat } from "@/lib/state/Reducers/chat";
+import { toast } from "@/components/ui/sonner";
+import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface MessageComposerProps {
   projectId: string;
@@ -67,7 +61,55 @@ interface NodeOption {
   relevance: number;
 }
 
-const free_models = ["openai/gpt-5-mini", "openrouter/moonshotai/kimi-k2.5"];
+interface AttachedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  file: File;
+}
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "";
+const IS_LOCALHOST =
+  BASE_URL.startsWith("http://localhost") ||
+  BASE_URL.startsWith("http://127.0.0.1");
+
+// Agent IDs that can be switched to
+const SWITCHABLE_AGENT_IDS = [
+  "codebase_qna_agent",
+  "debugging_agent",
+  "code_generation_agent",
+  ...(IS_LOCALHOST ? ["spec_generation_agent"] : []),
+];
+
+// SVG icons for agent modes
+const AgentModeIcons: Record<string, React.ReactNode> = {
+  codebase_qna_agent: (
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/message-question.svg" />
+    </svg>
+  ),
+  debugging_agent: (
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/bug-01.svg" />
+    </svg>
+  ),
+  custom_agent: (
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/star.svg" />
+    </svg>
+  ),
+  spec_generation_agent: (
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/document-validation.svg" />
+    </svg>
+  ),
+  code_generation_agent: (
+    <svg className="w-3 h-3" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+      <use href="/images/file-code.svg" />
+    </svg>
+  ),
+};
 
 const MessageComposer = ({
   projectId,
@@ -79,7 +121,11 @@ const MessageComposer = ({
   const [message, setMessage] = useState("");
   const [selectedNodeIndex, setSelectedNodeIndex] = useState(-1);
   const [isSearchingNode, setIsSearchingNode] = useState(false);
-  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isSwitchingModel, setIsSwitchingModel] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+
+  const dispatch = useDispatch();
+  const { agentId, allAgents } = useSelector((state: RootState) => state.chat);
 
   // Use thread runtime to check if streaming is in progress
   const threadRuntime = useThreadRuntime();
@@ -95,7 +141,7 @@ const MessageComposer = ({
     return unsubscribe;
   }, [threadRuntime]);
 
-  const isDisabled = disabled || isThreadRunning || isEnhancing;
+  const isDisabled = disabled || isThreadRunning;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,9 +181,10 @@ const MessageComposer = ({
     composer.setRunConfig({
       custom: {
         selectedNodes: selectedNodes,
+        attachmentIds: attachedFiles.map((f) => f.id),
       },
     });
-  }, [selectedNodes, composer]);
+  }, [selectedNodes, attachedFiles, composer]);
 
   useEffect(() => {
     const unsubscribe =
@@ -148,6 +195,7 @@ const MessageComposer = ({
         composer.setRunConfig({
           custom: {
             selectedNodes: [],
+            attachmentIds: [],
           },
         });
         // Clear React state
@@ -155,6 +203,7 @@ const MessageComposer = ({
         setNodeOptions([]);
         setSelectedNodeIndex(-1);
         setMessage("");
+        setAttachedFiles([]);
         // Clear refs
         messageRef.current = "";
         lastSyncedComposerText.current = "";
@@ -331,22 +380,8 @@ const MessageComposer = ({
     composer.send();
   };
 
-  const handleEnhancePrompt = async () => {
-    try {
-      setIsEnhancing(true);
-      setMessage("Enhancing...");
-      composer.setText("Enhancing...");
-      const enhancedMessage = await ChatService.enhancePrompt(
-        conversation_id,
-        message
-      );
-      setMessage(enhancedMessage);
-      composer.setText(enhancedMessage);
-    } catch (error) {
-      console.error("Error enhancing prompt:", error);
-    } finally {
-      setIsEnhancing(false);
-    }
+  const handleRemoveAttachedFile = (index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Model selection
@@ -364,6 +399,16 @@ const MessageComposer = ({
     enabled: !!user?.uid,
     retry: false,
   });
+
+  // Fetch agents directly instead of relying on Redux state
+  const { data: fetchedAgents } = useQuery({
+    queryKey: ["agents"],
+    queryFn: () => AgentService.getAgentTypes(),
+    retry: false,
+  });
+
+  // Use fetched agents, fallback to Redux state
+  const agents: Agent[] = (fetchedAgents || allAgents || []) as Agent[];
 
   useEffect(() => {
     if (userSubscription?.plan_type) {
@@ -390,35 +435,158 @@ const MessageComposer = ({
     loadCurrentModel();
   }, [loadCurrentModel]);
 
+  // Agent switch handlers
+  const handleSelectAgent = async (selectedAgentId: string) => {
+    if (isSwitchingModel) return;
+    try {
+      setIsSwitchingModel(true);
+      await ChatService.updateAgent(conversation_id, selectedAgentId);
+      dispatch(setChat({ agentId: selectedAgentId }));
+      toast.success("Agent switched successfully");
+    } catch (error) {
+      console.error("Failed to switch agent:", error);
+      toast.error("Failed to switch agent");
+    } finally {
+      setIsSwitchingModel(false);
+    }
+  };
+
+  // Build agent options for dropdown - separate modes and custom agents
+  const modeOptions = agents
+    ? agents
+        .filter((agent) => agent.id && SWITCHABLE_AGENT_IDS.includes(agent.id))
+        .map((agent) => ({
+          id: agent.id || "",
+          label: getAgentDisplayLabel(agent.id || "", agent.name || ""),
+        }))
+    : [];
+
+  const customAgentOptions = agents
+    ? agents
+        .filter((agent) => agent.status !== "SYSTEM")
+        .map((agent) => ({
+          id: agent.id || "",
+          label: getAgentDisplayLabel(agent.id || "", agent.name || ""),
+        }))
+    : [];
+
   const ComposerAction: FC<{ disabled: boolean }> = ({ disabled }) => {
     return (
-      <div className="flex flex-row w-full items-center justify-end space-x-4">
-        <ModelSelection
-          currentModel={currentModel}
-          currPlan={currPlan}
-          loadCurrentModel={loadCurrentModel}
-          disabled={disabled}
-        />
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            title="Enhance Prompt"
-            className="size-8 p-2 transition ease-in bg-white hover:bg-orange-200 rounded-md flex items-center justify-center"
-            onClick={handleEnhancePrompt}
-            disabled={isDisabled}
-          >
-            <span className="text-lg">✨</span>
-          </button>
+      <div className="flex flex-row w-full items-center justify-between space-x-4">
+        {/* Left: Agent Dropdown + Attach Trigger */}
+        <div className="flex flex-row items-center gap-2 pl-4">
+          {/* Agent Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-xs font-medium gap-2 border-0"
+                style={{ backgroundColor: "#B6E34329" }}
+                disabled={isSwitchingModel}
+              >
+                {(modeOptions.find((o) => o.id === agentId)
+                  ? AgentModeIcons[agentId]
+                  : customAgentOptions.find((o) => o.id === agentId)
+                    ? AgentModeIcons["custom_agent"]
+                    : null) || null}
+                {getAgentDisplayLabel(
+                  agentId,
+                  agents.find((a) => a.id === agentId)?.name || ""
+                )}
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-100 px-2">
+              {/* Modes Section */}
+              {modeOptions.length > 0 && (
+                <>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Mode
+                  </div>
+                  {modeOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.id}
+                      onClick={() => handleSelectAgent(option.id)}
+                      className={`cursor-pointer flex items-center gap-2 ${
+                        agentId === option.id ? "bg-zinc-100 font-medium" : ""
+                      }`}
+                    >
+                      {AgentModeIcons[option.id] || (
+                        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none">
+                          <rect width="24" height="24" rx="4" fill="#E5E7EB"/>
+                        </svg>
+                      )}
+                      <span className="truncate">{option.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+
+              {/* Custom Agents Section */}
+              {customAgentOptions.length > 0 && (
+                <>
+                  <div className="my-1 border-t border-transparent" />
+                  <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Custom Agent
+                  </div>
+                  {customAgentOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.id}
+                      onClick={() => handleSelectAgent(option.id)}
+                      className={`cursor-pointer flex items-center gap-2 ${
+                        agentId === option.id ? "bg-zinc-100 font-medium" : ""
+                      }`}
+                    >
+                      {AgentModeIcons["custom_agent"] || (
+                        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none">
+                          <rect width="24" height="24" rx="4" fill="#E5E7EB"/>
+                        </svg>
+                      )}
+                      <span className="truncate">{option.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {isMultimodalEnabled() && (
+            <ComposerPrimitive.AddAttachment asChild>
+              <button
+                type="button"
+                className="flex h-8 items-center justify-start gap-2 border-0 bg-transparent"
+                aria-label="Attach files"
+              >
+                <img
+                  src="/images/attachment-02.svg"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-3 w-3"
+                />
+                <span className="text-xs font-medium">Attach</span>
+              </button>
+            </ComposerPrimitive.AddAttachment>
+          )}
         </div>
+
+        {/* Right: Model Selection + Send */}
+        <div className="flex flex-row items-center justify-end space-x-4">
+          <ModelSelection
+            currentModel={currentModel}
+            currPlan={currPlan}
+            loadCurrentModel={loadCurrentModel}
+            disabled={disabled}
+          />
         <ThreadPrimitive.If running={false}>
           <button
             type="button"
             disabled={isDisabled}
             title="Send"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in rounded-md flex items-center justify-center bg-white hover:bg-gray-100"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none disabled:opacity-70 disabled:cursor-not-allowed"
             onClick={handleSend}
           >
-            <SendHorizontalIcon />
+            <SendHorizontalIcon className="h-4 w-4" />
           </button>
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
@@ -428,6 +596,7 @@ const MessageComposer = ({
             <CircleStopIcon />
           </ComposerPrimitive.Cancel>
         </ThreadPrimitive.If>
+        </div>
       </div>
     );
   };
@@ -460,6 +629,33 @@ const MessageComposer = ({
           </div>
         )}
 
+        {attachedFiles.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-2 pl-4">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+              Attachments
+            </span>
+            {attachedFiles.map((file, index) => (
+              <span
+                key={index}
+                className="flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 shadow-sm"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 4V3C4 1.89543 4.89543 1 6 1C7.10455 1 8 1.89543 8 3V9C8 10.1046 7.10455 11 6 11C4.89543 11 4 10.1046 4 9V6.75C4 6.05965 4.55964 5.5 5.25 5.5C5.94035 5.5 6.5 6.05965 6.5 6.75V8" stroke="currentColor" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span className="max-w-32 truncate">{file.name}</span>
+                <button
+                  type="button"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-blue-600 transition hover:bg-white hover:text-blue-800"
+                  onClick={() => handleRemoveAttachedFile(index)}
+                  aria-label={`Remove ${file.name}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         <div
           ref={containerRef}
           className="flex flex-col w-full items-start gap-4 outline-none"
@@ -468,11 +664,6 @@ const MessageComposer = ({
           {isMultimodalEnabled() && <ComposerAttachments />}
 
           <div className="flex flex-row w-full items-end gap-2">
-            {isMultimodalEnabled() && (
-              <div className="flex items-center pb-4">
-                <ComposerAddAttachment />
-              </div>
-            )}
             <div className="w-full">
               <ComposerPrimitive.Input
                 submitOnEnter={!isDisabled}
@@ -480,11 +671,11 @@ const MessageComposer = ({
                 value={message}
                 rows={1}
                 autoFocus
-                placeholder="Type @ followed by file or function name, or paste/upload images"
+                placeholder="Use @ to mention a file or function"
                 onChange={handleMessageChange}
                 onKeyDown={handleKeyPress}
                 disabled={isDisabled}
-                className="w-full placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+                className="w-full placeholder-Geist-Regular placeholder:text-gray-400 max-h-80 flex-grow resize-none border-none bg-transparent px-4 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -525,186 +716,139 @@ const ModelSelection: FC<{
   currPlan: string | undefined;
   loadCurrentModel: () => Promise<void>;
 }> = ({ currentModel, disabled, currPlan, loadCurrentModel }) => {
-  const _models: {
-    [key: string]: {
-      provider: string;
-      name: string;
-      id: string;
-      description: string;
-    }[];
-  } = {};
-  const [models, setModels] = useState(_models);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [models, setModels] = useState<
+    { provider: string; name: string; id: string; description: string }[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const isFreeUser = !currPlan || currPlan === "free";
+
+  const isModelAvailable = (provider: string) => {
+    if (!isFreeUser) return true;
+    const p = (provider || "").toLowerCase().replace(/[\s.-]/g, "");
+    return !(p === "openai" || p === "anthropic" || p === "gemini");
+  };
 
   const handleModelList = async () => {
     setLoading(true);
-    const res = await ModelService.listModels();
-
-    const response = res.models.map((model) => {
-      return {
-        provider: model.provider,
-        name: model.name,
-        id: model.id,
-        description: model.description,
-      };
-    });
-
-    let dict: {
-      [key: string]: {
-        provider: string;
-        name: string;
-        id: string;
-        description: string;
-      }[];
-    } = {};
-    for (let i = 0; i < response.length; i++) {
-      if (!dict[response[i].provider]) {
-        dict[response[i].provider] = [response[i]];
-      } else {
-        dict[response[i].provider].push(response[i]);
-      }
+    try {
+      const res = await ModelService.listModels();
+      const next =
+        res.models?.map((model) => ({
+          provider: model.provider,
+          name: model.name,
+          id: model.id,
+          description: model.description,
+        })) ?? [];
+      const free = next.filter((m) => isModelAvailable(m.provider));
+      const paid = next.filter((m) => !isModelAvailable(m.provider));
+      setModels(isFreeUser ? [...free, ...paid] : next);
+    } finally {
+      setLoading(false);
     }
-
-    setModels(dict);
-    setLoading(false);
-  };
-
-  const [selectedId, setSelectedId] = useState("");
-
-  const handleModelSelect = (id: string) => {
-    if (currPlan == "free" && !free_models.includes(id)) {
-      return;
-    }
-    return async () => {
-      setSelectedId(id);
-      await ModelService.setCurrentModel(id);
-      await loadCurrentModel();
-    };
   };
 
   return (
-    <Dialog>
-      {currentModel ? (
-        <DialogTrigger
-          className="p-2 transition ease-in bg-background hover:bg-gray-200 rounded-md flex items-center justify-center border-none cursor-pointer"
+    <DropdownMenu
+      open={modelDropdownOpen}
+      onOpenChange={(open) => {
+        setModelDropdownOpen(open);
+        if (open) void handleModelList();
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-2 h-8 px-3 text-xs font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full"
+          style={{
+            backgroundColor: "#F7F7F7",
+            
+            color: "#00291C",
+          }}
+          aria-label={isFreeUser ? "Upgrade to change plan" : "Change model"}
           disabled={disabled}
-          onClick={handleModelList}
         >
-          <div className="flex flex-row justify-center items-center">
-            <Image
-                height={20}
-                width={20}
-                src={`/chat/${currentModel.provider}.svg`}
-                alt={currentModel.provider.charAt(0)}
-              />
-
-            <h1 className="ml-2 opacity-70">{currentModel.name}</h1>
-          </div>
-        </DialogTrigger>
-      ) : (
-        <div className="flex flex-row items-center justify-center">
-          <Skeleton className="h-6 w-6 rounded-full" />
-          <Skeleton className="h-5 w-20 rounded-sm ml-1" />
-        </div>
-      )}
-      <DialogContent
-        showX={false}
-        className="bg-transparent p-0 w-1/2 max-w-full max-h-full"
+          <span className="shrink-0">{currentModel?.name ?? "ZLM 4.7"}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        align="end"
+        className="min-w-[280px] w-[280px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
       >
-        <DialogTitle hidden={true}>Select Model</DialogTitle>
-        <DialogDescription hidden={true}>
-          List of llm models to select from
-        </DialogDescription>
-        <Command className="rounded-lg border shadow-md w-full">
-          <CommandInput placeholder="Type a command or search..." />
+        <div className="py-1 max-h-[320px] overflow-y-auto">
           {loading ? (
-            <div className="m-4">
-              <div className="flex flex-row items-center mb-2">
-                <Skeleton className="w-10 h-10 rounded-full" />
-                <Skeleton className="w-2/3 h-6 ml-2" />
-              </div>
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <div className="flex flex-row items-center mb-2">
-                <Skeleton className="w-10 h-10 rounded-full" />
-                <Skeleton className="w-2/3 h-6 ml-2" />
-              </div>
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <div className="flex flex-row items-center mb-2">
-                <Skeleton className="w-10 h-10 rounded-full" />
-                <Skeleton className="w-2/3 h-6 ml-2" />
-              </div>
-              <Skeleton className="w-2/3 h-6 mb-2" />
-              <Skeleton className="w-2/3 h-6 mb-2" />
-            </div>
+            <div className="px-4 py-3 text-sm text-zinc-500">Loading models...</div>
+          ) : models.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-zinc-500">No models found</div>
           ) : (
-            <CommandList className="px-5">
-              <CommandEmpty>No models found</CommandEmpty>
-              {models &&
-                Object.keys(models).length > 0 &&
-                Object.values(models).map((models_) => {
-                  return (
-                    models_.length > 0 && (
-                      <CommandGroup
-                        key={models_[0].provider}
-                        heading={models_[0].provider}
-                      >
-                        {models_.map((model) => {
-                          return (
-                            <CommandItem
-                              key={model.id}
-                              className={`flex flex-row items-start ${
-                                selectedId === model.id ? "animate-pulse" : ""
-                              } ${
-                                !free_models.includes(model.id) &&
-                                currPlan == "free"
-                                  ? "opacity-50"
-                                  : ""
-                              }`}
-                              onSelect={handleModelSelect(model.id)}
-                              value={model.name + " " + model.provider}
-                            >
-                                <Avatar className="overflow-hidden rounded-full w-10 h-10">
-                                  <AvatarImage
-                                    src={`/chat/${model.provider}.svg`}
-                                    alt={model.provider}
-                                    className="w-10 h-10"
-                                  />
-                                  <AvatarFallback>
-                                    {model.provider.charAt(0)}
-                                  </AvatarFallback>
-                                </Avatar>
-                              <div className="flex flex-col">
-                                <div className="flex flex-row items-center">
-                                  <span className="ml-2">{model.name}</span>
-                                  {selectedId === model.id && (
-                                    <Loader2Icon className="ml-2 h-3 w-3 animate-spin" />
-                                  )}
-                                  {!free_models.includes(model.id) &&
-                                    currPlan == "free" && (
-                                      <div className="text-xs shadow-sm flex items-center rounded-sm ml-2 p-0.5 px-1 bg-yellow-300">
-                                        {" "}
-                                        <Crown className="h-3 w-3 mr-1" />
-                                        Upgrade Plan
-                                      </div>
-                                    )}
-                                </div>
-                                <div className="text-xs italic ml-2 mt-1">
-                                  {model.description}
-                                </div>
-                              </div>
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    )
-                  );
-                })}
-            </CommandList>
+            models.map((model) => {
+              const available = isModelAvailable(model.provider);
+              return (
+                <DropdownMenuItem
+                  key={model.id}
+                  title={!isMultimodalEnabled() ? "Model doesn't support multimodal input" : (model.description ?? undefined)}
+                  onClick={async (e) => {
+                    if (!available) {
+                      e.preventDefault();
+                      setModelDropdownOpen(false);
+                      router.push("/user-subscription");
+                      return;
+                    }
+                    try {
+                      await ModelService.setCurrentModel(model.id);
+                      await loadCurrentModel();
+                    } catch {
+                      // Keep current model on update failure.
+                    }
+                    setModelDropdownOpen(false);
+                  }}
+                  className={`flex flex-col items-start gap-0.5 py-2.5 ${
+                    available ? "cursor-pointer" : "cursor-default opacity-90"
+                  } ${currentModel?.id === model.id ? "bg-zinc-100 font-medium" : ""}`}
+                  style={{ color: available ? "#00291C" : "#9ca3af" }}
+                >
+                  <div className="flex w-full items-center gap-2 flex-wrap">
+                    <span className={available ? "" : "text-gray-400"}>
+                      {model.name}
+                    </span>
+                    {!available && (
+                      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-gray-700">
+                        <Crown className="h-3 w-3 shrink-0" />
+                        Upgrade Plan
+                      </span>
+                    )}
+                  </div>
+                  {model.description && (
+                    <span
+                      className="text-xs italic block mt-0.5"
+                      style={{ color: available ? "#A6A6AF" : "#9ca3af" }}
+                    >
+                      {model.description}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              );
+            })
           )}
-        </Command>
-      </DialogContent>
-    </Dialog>
+        </div>
+        {isFreeUser && (
+          <div className="p-3 border-t border-zinc-100">
+            <button
+              type="button"
+              onClick={() => {
+                setModelDropdownOpen(false);
+                router.push("/user-subscription");
+              }}
+              className="w-full py-2.5 px-4 text-sm font-semibold rounded-lg transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              Upgrade to change plan
+            </button>
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };

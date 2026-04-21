@@ -2,10 +2,16 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import dayjs from "dayjs";
 import { SessionInfo } from "@/lib/types/session";
 
-interface Agent {
+export interface Agent {
   id?: string;
   name?: string;
   description?: string;
+  status?: string;
+}
+
+export interface PendingMessagePayload {
+  text: string;
+  attachmentIds?: string[];
 }
 
 interface TemporaryContext {
@@ -16,7 +22,7 @@ interface TemporaryContext {
 
 interface chatState {
   selectedNodes: any[]
-  pendingMessage: string | null;
+  pendingMessage: PendingMessagePayload | null;
   chatFlow: string;
   title: string;
   agentId: string;
@@ -33,7 +39,7 @@ const initialState: chatState = {
   agentId: "",
   title: dayjs().format("MMMM DD, YYYY") + " Untitled Chat",
   allAgents: [],
-  pendingMessage: "",
+  pendingMessage: null,
   selectedNodes: [],
   chatFlow: "EXISTING_CHAT",
   temporaryContext: { branch: "", repo: "", projectId: "" },
@@ -52,7 +58,14 @@ const chatSlice = createSlice({
       Object.assign(state, action.payload);
     },
 
-    setPendingMessage: (state, action: PayloadAction<string>) => {
+    setPendingMessage: (
+      state,
+      action: PayloadAction<string | PendingMessagePayload>
+    ) => {
+      if (typeof action.payload === "string") {
+        state.pendingMessage = { text: action.payload };
+        return;
+      }
       state.pendingMessage = action.payload;
     },
 

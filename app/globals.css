@@ -98,6 +98,16 @@
     Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+.font-dm-mono {
+  font-family: var(--font-dm-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.placeholder-dm-mono::placeholder {
+  font-family: var(--font-dm-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 .hide-scrollbar::-webkit-scrollbar {
   display: none;

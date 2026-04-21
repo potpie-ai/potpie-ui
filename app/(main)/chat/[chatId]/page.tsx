@@ -152,7 +152,7 @@ const ChatV2 = () => {
     const sendPendingMessageWhenReady = async () => {
       // Check all prerequisites
       if (
-        !pendingMessage ||
+        !pendingMessage?.text ||
         hasSentPendingMessage.current ||
         !currentConversationId ||
         !isPreprocessingComplete ||
@@ -217,7 +217,14 @@ const ChatV2 = () => {
             throw new Error("Composer not available");
           }
 
-          composer.setText(pendingMessage);
+          composer.setText(pendingMessage.text);
+          if (pendingMessage.attachmentIds?.length) {
+            composer.setRunConfig({
+              custom: {
+                attachmentIds: pendingMessage.attachmentIds,
+              },
+            });
+          }
           composer.send();
           dispatch(clearPendingMessage());
         } else {

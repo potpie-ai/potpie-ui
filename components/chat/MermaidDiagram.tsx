@@ -515,6 +515,16 @@ const removeFlowchartEdgeLabels = (chart: string): string => {
     .replace(/--\s*\|[^|]*\|\s*-->/g, "--> ");
 };
 
+const stripFlowchartComments = (chart: string): string => {
+  if (!chart.match(/^(flowchart|graph)\s+/)) {
+    return chart;
+  }
+  return chart
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("%%"))
+    .join("\n");
+};
+
 const autoFixMermaidChart = (chart: string, useStrictArchitectureFix = false): string => {
   let nextChart = chart.trim();
   if (nextChart.match(/^architecture(-beta)?\s/)) {
@@ -597,6 +607,11 @@ const renderValidatedMermaid = async (chart: string): Promise<MermaidRenderSucce
     fallbackFlowchartChart && fallbackFlowchartChart.match(/^(flowchart|graph)\s+/)
       ? removeFlowchartEdgeLabels(fallbackFlowchartChart)
       : null;
+  const fallbackFlowchartNoComments =
+    fallbackFlowchartNoEdgeLabel &&
+    fallbackFlowchartNoEdgeLabel.match(/^(flowchart|graph)\s+/)
+      ? stripFlowchartComments(fallbackFlowchartNoEdgeLabel)
+      : null;
 
   const candidates = [
     { chart: trimmedChart, wasCorrected: false },
@@ -620,6 +635,14 @@ const renderValidatedMermaid = async (chart: string): Promise<MermaidRenderSucce
     fallbackFlowchartNoEdgeLabel !== strictArchitectureChart &&
     fallbackFlowchartNoEdgeLabel !== fallbackFlowchartChart
       ? [{ chart: fallbackFlowchartNoEdgeLabel, wasCorrected: true }]
+      : []),
+    ...(fallbackFlowchartNoComments &&
+    fallbackFlowchartNoComments !== trimmedChart &&
+    fallbackFlowchartNoComments !== softFixedChart &&
+    fallbackFlowchartNoComments !== strictArchitectureChart &&
+    fallbackFlowchartNoComments !== fallbackFlowchartChart &&
+    fallbackFlowchartNoComments !== fallbackFlowchartNoEdgeLabel
+      ? [{ chart: fallbackFlowchartNoComments, wasCorrected: true }]
       : []),
   ];
 
@@ -660,15 +683,25 @@ const requestMermaidRepair = async (
   attempt: number,
 ): Promise<string | null> => {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  if (!baseUrl) return null;
+  const endpoint = baseUrl
+    ? `${baseUrl}/api/v1/repair-mermaid/`
+    : "/api/v1/repair-mermaid/";
 
-  const headers = await getHeaders({
+  let headers: HeadersInit = {
     "Content-Type": "application/json",
-  });
+  };
+  try {
+    const authHeaders = await getHeaders({
+      "Content-Type": "application/json",
+    });
+    headers = authHeaders as unknown as HeadersInit;
+  } catch {
+    // Fall back to content-type only; caller handles response failures.
+  }
 
-  const response = await fetch(`${baseUrl}/api/v1/repair-mermaid/`, {
+  const response = await fetch(endpoint, {
     method: "POST",
-    headers: headers as unknown as HeadersInit,
+    headers,
     body: JSON.stringify({
       diagram_code: diagramCode,
       error_message: errorMessage,
@@ -683,6 +716,40 @@ const requestMermaidRepair = async (
   const data = (await response.json()) as { corrected_code?: string };
   const corrected = data.corrected_code?.trim();
   return corrected || null;
+};
+
+const requestServerRenderedMermaid = async (
+  chart: string,
+): Promise<MermaidRenderSuccess | null> => {
+  const response = await fetch("/api/render-mermaid", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ chart }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Server Mermaid render failed with status ${response.status}`,
+    );
+  }
+
+  const data = (await response.json()) as {
+    svg?: string;
+    rendered_chart?: string;
+    was_corrected?: boolean;
+  };
+
+  if (!data.svg || !data.rendered_chart) {
+    return null;
+  }
+
+  return {
+    svg: await sanitizeRenderedSvg(data.svg),
+    renderedChart: data.rendered_chart,
+    wasCorrected: Boolean(data.was_corrected),
+  };
 };
 
 interface DiagramViewerProps {
@@ -716,7 +783,7 @@ const DiagramIconButton: FC<{
 
 const DiagramViewer: FC<DiagramViewerProps> = ({
   svg,
-  height = "min(620px, 70vh)",
+  height = "min(460px, 55vh)",
   onCopy,
   copied,
   onOpenFullscreen,
@@ -752,16 +819,61 @@ const DiagramViewer: FC<DiagramViewerProps> = ({
     const el = viewportRef.current;
     const svgEl = el?.querySelector("svg") as SVGSVGElement | null;
     if (!el || !svgEl) return;
-    const vb = svgEl.viewBox?.baseVal;
-    const width = vb?.width || Number(svgEl.getAttribute("width")) || 0;
-    const height = vb?.height || Number(svgEl.getAttribute("height")) || 0;
-    if (width > 0 && height > 0) {
-      svgEl.setAttribute("width", String(width));
-      svgEl.setAttribute("height", String(height));
-      if (!vb || !vb.width || !vb.height) {
+
+    // Some server-rendered Mermaid SVGs produce zero-sized foreignObjects,
+    // which makes labels invisible even though the nodes rendered.
+    svgEl.querySelectorAll("foreignObject").forEach((node) => {
+      const foreignObject = node as SVGForeignObjectElement;
+      const width = Number(foreignObject.getAttribute("width") || 0);
+      const height = Number(foreignObject.getAttribute("height") || 0);
+      if (width > 0 && height > 0) return;
+
+      const text = (foreignObject.textContent || "").trim();
+      if (!text) return;
+
+      const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+      const maxLineLength = Math.max(...lines.map((line) => line.length), text.length);
+      const estimatedWidth = Math.max(80, maxLineLength * 8 + 24);
+      const estimatedHeight = Math.max(20, lines.length * 18 + 8);
+
+      foreignObject.setAttribute("width", String(estimatedWidth));
+      foreignObject.setAttribute("height", String(estimatedHeight));
+    });
+
+    const contentGroup = (svgEl.querySelector("g.root") ||
+      svgEl.querySelector("g")) as SVGGraphicsElement | null;
+
+    let width = 0;
+    let height = 0;
+    try {
+      const bbox = contentGroup?.getBBox() || svgEl.getBBox();
+      if (bbox.width > 0 && bbox.height > 0) {
+        const pad = 24;
+        const x = Math.floor(bbox.x - pad);
+        const y = Math.floor(bbox.y - pad);
+        width = Math.ceil(bbox.width + pad * 2);
+        height = Math.ceil(bbox.height + pad * 2);
+        svgEl.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
+      }
+    } catch {
+      // Fall back to intrinsic sizing below.
+    }
+
+    if (!width || !height) {
+      const vb = svgEl.viewBox?.baseVal;
+      width = vb?.width || Number(svgEl.getAttribute("width")) || 0;
+      height = vb?.height || Number(svgEl.getAttribute("height")) || 0;
+      if (width > 0 && height > 0 && (!vb || !vb.width || !vb.height)) {
         svgEl.setAttribute("viewBox", `0 0 ${width} ${height}`);
       }
     }
+
+    if (width > 0 && height > 0) {
+      svgEl.setAttribute("width", String(width));
+      svgEl.setAttribute("height", String(height));
+    }
+
+    svgEl.setAttribute("preserveAspectRatio", "xMinYMin meet");
     svgEl.style.maxWidth = "none";
     svgEl.style.width = width > 0 ? `${width}px` : "auto";
     svgEl.style.height = height > 0 ? `${height}px` : "auto";
@@ -948,7 +1060,7 @@ const DiagramViewer: FC<DiagramViewerProps> = ({
 
   return (
     <div
-      className="diagram-viewer relative w-full overflow-hidden rounded-xl border border-gray-200 bg-[linear-gradient(#fafafa,#f4f4f5)]"
+      className="diagram-viewer relative w-full overflow-hidden rounded-xl border border-gray-200 bg-[linear-gradient(#fcfcfd,#f5f6f8)]"
       style={{ height }}
     >
       <div
@@ -1083,6 +1195,24 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
                 ? repairError.message
                 : "Failed to repair diagram.";
           }
+        }
+
+        try {
+          const serverRendered = await requestServerRenderedMermaid(latestChart);
+          if (!isMounted || !serverRendered) return;
+
+          setSvg(serverRendered.svg);
+          setResolvedChart(serverRendered.renderedChart);
+          setWasCorrected(
+            serverRendered.wasCorrected || latestChart.trim() !== chart.trim(),
+          );
+          setError(null);
+          return;
+        } catch (serverRenderError) {
+          lastErrorMessage =
+            serverRenderError instanceof Error
+              ? serverRenderError.message
+              : "Failed to render Mermaid on the server.";
         }
 
         setResolvedChart(chart.trim());
@@ -1249,19 +1379,33 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
           height: auto !important;
           filter: none !important;
         }
+        .diagram-viewer {
+          background-image:
+            linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+            linear-gradient(#fcfcfd, #f5f6f8);
+          background-size: 24px 24px, 24px 24px, 100% 100%;
+        }
         .diagram-viewer .mermaid-diagram-stage svg * {
           opacity: 1 !important;
         }
         .diagram-viewer .mermaid-diagram-stage svg text {
           font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
             Roboto, "Helvetica Neue", Arial, sans-serif !important;
-          font-size: 13px !important;
+          font-size: 14px !important;
         }
         .diagram-viewer .mermaid-diagram-stage svg .edgePath path,
         .diagram-viewer .mermaid-diagram-stage svg .edgePath .path,
         .diagram-viewer .mermaid-diagram-stage svg .linePath {
-          stroke-width: 1.25px !important;
+          stroke-width: 1.5px !important;
           fill: none !important;
+        }
+        .diagram-viewer .mermaid-diagram-stage svg rect,
+        .diagram-viewer .mermaid-diagram-stage svg polygon,
+        .diagram-viewer .mermaid-diagram-stage svg circle,
+        .diagram-viewer .mermaid-diagram-stage svg ellipse,
+        .diagram-viewer .mermaid-diagram-stage svg path {
+          stroke: #94a3b8 !important;
         }
       `}</style>
     </div>

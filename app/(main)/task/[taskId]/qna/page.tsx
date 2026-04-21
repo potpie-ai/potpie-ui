@@ -403,6 +403,18 @@ export default function QnaPage() {
           const options = Array.isArray(q.options)
             ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
             : [];
+          if (options.length === 0) {
+            const suggestedText = q.reasoning?.trim();
+            if (suggestedText) {
+              initialAnswers.set(q.id, {
+                questionId: q.id,
+                textAnswer: suggestedText,
+                isOther: false,
+                isUserModified: false,
+              });
+            }
+            return;
+          }
           let recIdx: number | undefined;
           if (typeof q.answerRecommendationIdx === "number") {
             recIdx = q.answerRecommendationIdx;
@@ -1120,6 +1132,18 @@ export default function QnaPage() {
       const options = Array.isArray(q.options)
         ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
         : [];
+      if (options.length === 0) {
+        const suggestedText = q.reasoning?.trim();
+        if (suggestedText) {
+          answersMap.set(q.id, {
+            questionId: q.id,
+            textAnswer: suggestedText,
+            isOther: false,
+            isUserModified: false,
+          });
+        }
+        return;
+      }
       let idx: number | undefined;
       const qWithRec = q as MCQQuestion & { answerRecommendationIdx?: number };
       if (typeof qWithRec.answerRecommendationIdx === "number") {

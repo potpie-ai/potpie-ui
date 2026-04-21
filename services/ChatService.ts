@@ -3,6 +3,12 @@ import getHeaders from "@/app/utils/headers.util";
 import { Visibility } from "@/lib/Constants";
 import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
+import {
+  createDemoConversation,
+  getDemoConversationMessages,
+  isDemoConversationId,
+  streamDemoConversationReply,
+} from "@/lib/mock/demoBuildFlow";
 
 /** Tool call from message history / stream API */
 export interface ToolCall {
@@ -555,6 +561,9 @@ export default class ChatService {
     abortSignal?: AbortSignal,
     attachmentIds?: string[] // Pre-uploaded attachment IDs (non-multimodal path)
   ): Promise<{ message: string; citations: string[]; sessionId: string }> {
+    if (isDemoConversationId(conversationId)) {
+      return streamDemoConversationReply(onMessageUpdate, abortSignal);
+    }
     let currentSessionId = sessionId;
 
     // Check for existing active session if no sessionId provided
@@ -893,6 +902,9 @@ export default class ChatService {
     start: number,
     limit: number
   ): Promise<LoadedMessage[]> {
+    if (isDemoConversationId(conversationId)) {
+      return getDemoConversationMessages().slice(start, start + limit);
+    }
     const headers = await getHeaders();
     const response = await axios.get(
       `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/messages`,
@@ -1124,6 +1136,9 @@ export default class ChatService {
     branchName?: string | null,
     attachmentIds?: string[]
   ) {
+    if (repoName === "redis" && branchName === "stream-dlq-demo") {
+      return createDemoConversation();
+    }
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
     try {

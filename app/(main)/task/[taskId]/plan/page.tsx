@@ -76,6 +76,7 @@ import {
   type StreamTimelineItem,
 } from "@/components/stream/StreamTimeline";
 import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
+import { DEMO_RECIPE_ID } from "@/lib/mock/demoBuildFlow";
 
 /**
  * VERTICAL SLICE PLANNER (Auto-Generation Mode)
@@ -423,10 +424,12 @@ const PlanPage = () => {
     return () => window.removeEventListener(CODEGEN_STARTED_EVENT, onMarked);
   }, [recipeId]);
 
-  const showReStartImplementation = hasImplementationBeenStartedBefore(
-    recipeDetailsForImplBtn?.status,
-    sessionCodegenFlag,
-  );
+  const showReStartImplementation =
+    recipeId !== DEMO_RECIPE_ID &&
+    hasImplementationBeenStartedBefore(
+      recipeDetailsForImplBtn?.status,
+      sessionCodegenFlag,
+    );
 
   useEffect(() => {
     if (statusData) {
@@ -1371,6 +1374,9 @@ const PlanPage = () => {
               <button
                 type="button"
                 onClick={async () => {
+                  if (recipeId === DEMO_RECIPE_ID) {
+                    return;
+                  }
                   const firstItem = planItems[0];
                   startNavigation();
                   try {

@@ -906,11 +906,13 @@ export function ChatHistoryPanel() {
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[425px]" showX={false}>
-          <DialogHeader>
-            <DialogTitle className="text-center">Delete chat</DialogTitle>
+          <DialogHeader className="gap-1">
+            <DialogTitle className="text-left text-foreground">
+              Delete chat
+            </DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground text-center">
+          <div className="pt-1 pb-4">
+            <p className="text-sm text-black text-left">
               Are you sure you want to delete &quot;{selectedChat?.title || "this chat"}
               &quot;? This action cannot be undone.
             </p>

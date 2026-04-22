@@ -8,6 +8,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  signInWithCustomToken,
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "@/components/ui/sonner";
@@ -24,6 +25,7 @@ import posthog from "posthog-js";
 import { useSearchParams, useRouter } from "next/navigation";
 import { LinkProviderDialog } from "@/components/auth/LinkProviderDialog";
 import type { SSOLoginResponse } from "@/types/auth";
+import { authClient } from "@/lib/sso/unified-auth";
 import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
 
 export default function Signin() {
@@ -313,99 +315,84 @@ export default function Signin() {
   const onGoogle = async () => {
     signInWithPopup(auth, googleProvider)
       .then(async (result) => {
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (credential) {
-          try {
-            const userSignup = await AuthService.signupWithEmailPassword(
-              result.user,
-            );
+        try {
+          const user = result.user;
+          const firebaseIdToken = await user.getIdToken();
 
-            posthog.identify(result.user.uid, {
-              email: result.user.email,
-              name: result.user?.displayName || "",
+          if (!firebaseIdToken) {
+            throw new Error("Failed to get Firebase ID token");
+          }
+
+          const response = await authClient.ssoLogin(
+            user.email || "",
+            "google",
+            firebaseIdToken,
+            {
+              uid: user.uid,
+              sub: user.uid,
+              name: user.displayName || "",
+              given_name: user.displayName?.split(" ")[0] || "",
+              family_name: user.displayName?.split(" ").slice(1).join(" ") || "",
+              picture: user.photoURL || "",
+            },
+          );
+
+          if (response.firebase_token) {
+            await signInWithCustomToken(auth, response.firebase_token);
+          }
+
+          posthog.identify(user.uid, {
+            email: user.email,
+            name: user.displayName || "",
+          });
+
+          if (response.status === "needs_linking") {
+            setLinkingData(response);
+            setShowLinkingDialog(true);
+            return;
+          }
+
+          const urlSearchParams = new URLSearchParams(window.location.search);
+          const plan = (
+            urlSearchParams.get("plan") ||
+            urlSearchParams.get("PLAN") ||
+            ""
+          ).toLowerCase();
+          const prompt = urlSearchParams.get("prompt") || "";
+
+          if (response.status === "new_user" || response.needs_github_linking) {
+            toast.info("Almost there! Link your GitHub to unlock the magic");
+
+            const onboardingParams = new URLSearchParams({
+              ...(response.user_id && { uid: response.user_id }),
+              ...(response.email && { email: response.email }),
+              ...(response.display_name && { name: response.display_name }),
+              ...(plan && { plan }),
+              ...(prompt && { prompt }),
+              ...(finalAgent_id && { agent_id: finalAgent_id }),
             });
 
-            if (userSignup.needs_github_linking) {
-              toast.info("Almost there! Link your GitHub to unlock the magic");
-              const urlSearchParams = new URLSearchParams(
-                window.location.search,
-              );
-              const plan = (
-                urlSearchParams.get("plan") ||
-                urlSearchParams.get("PLAN") ||
-                ""
-              ).toLowerCase();
-              const prompt = urlSearchParams.get("prompt") || "";
-
-              const onboardingParams = new URLSearchParams();
-              if (result.user.uid)
-                onboardingParams.append("uid", result.user.uid);
-              if (result.user.email)
-                onboardingParams.append("email", result.user.email);
-              if (result.user.displayName)
-                onboardingParams.append("name", result.user.displayName);
-              if (plan) onboardingParams.append("plan", plan);
-              if (prompt) onboardingParams.append("prompt", prompt);
-              if (finalAgent_id)
-                onboardingParams.append("agent_id", finalAgent_id);
-
-              window.location.href = `/onboarding?${onboardingParams.toString()}`;
-              return;
-            }
-
-            if (!userSignup.exists) {
-              toast.success(
-                "Welcome aboard " +
-                  result.user.displayName +
-                  "! Let's get started",
-              );
-              const urlSearchParams = new URLSearchParams(
-                window.location.search,
-              );
-              const plan = (
-                urlSearchParams.get("plan") ||
-                urlSearchParams.get("PLAN") ||
-                ""
-              ).toLowerCase();
-              const prompt = urlSearchParams.get("prompt") || "";
-
-              const onboardingParams = new URLSearchParams();
-              if (result.user.uid)
-                onboardingParams.append("uid", result.user.uid);
-              if (result.user.email)
-                onboardingParams.append("email", result.user.email);
-              if (result.user.displayName)
-                onboardingParams.append("name", result.user.displayName);
-              if (plan) onboardingParams.append("plan", plan);
-              if (prompt) onboardingParams.append("prompt", prompt);
-              if (finalAgent_id)
-                onboardingParams.append("agent_id", finalAgent_id);
-
-              window.location.href = `/onboarding?${onboardingParams.toString()}`;
-              return;
-            }
-
-            if (source === "vscode") {
-              if (userSignup.token) {
-                const customToken =
-                  userSignup.customToken ??
-                  (await AuthService.getCustomToken());
-                handleExternalRedirect(userSignup.token, customToken);
-              }
-            } else if (finalAgent_id) {
-              handleExternalRedirect("");
-            } else {
-              window.location.href = "/newchat";
-            }
-
-            toast.success(
-              "Welcome back " +
-                result.user.displayName +
-                "! Let's build something amazing",
-            );
-          } catch (e: any) {
-            toast.error(e.message || "Sign-in unsuccessful");
+            window.location.href = `/onboarding?${onboardingParams.toString()}`;
+            return;
           }
+
+          if (source === "vscode") {
+            const customToken =
+              response.firebase_token ?? (await AuthService.getCustomToken());
+            handleExternalRedirect(firebaseIdToken, customToken);
+          } else if (finalAgent_id) {
+            handleExternalRedirect("");
+          } else {
+            window.location.href = "/newchat";
+          }
+
+          toast.success(
+            "Welcome back " +
+              (user.displayName || user.email) +
+              "! Let's build something amazing",
+          );
+        } catch (e: any) {
+          toast.error(e.message || "Sign-in unsuccessful");
         }
       })
       .catch((error) => {

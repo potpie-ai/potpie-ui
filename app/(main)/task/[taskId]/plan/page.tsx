@@ -739,18 +739,18 @@ const PlanPage = () => {
                 {msg.role === "user" && i === 0 && (
                   <>
                     {/* Assistant intro message (above thinking) */}
-                    <div className="flex justify-start">
-                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start">
+                    <div className="flex justify-start items-start">
+                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start">
                         <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                       </div>
-                      <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+                      <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
                         Your implementation plan is ready. Review the phases below and tell me what you&apos;d like to change—we&apos;ll nail it before moving to code.
                       </div>
                     </div>
                     {/* Agent output: interleaved thinking and tool calls */}
                     {(streamProgress || isGenerating || streamItems.length > 0) && (
                       <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
-                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                         <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
                           {(streamProgress || isGenerating) && streamItems.length === 0 && (
                             <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
@@ -774,7 +774,7 @@ const PlanPage = () => {
                 )}
                 {msg.role === "assistant" && i !== 1 && (
                   <div className="flex justify-start">
-                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
+                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C]">
                       <Image src="/images/logo.svg" width={24} height={24} alt="Potpie" className="w-6 h-6" />
                     </div>
                     <div className="max-w-[85%] text-sm rounded-t-xl rounded-br-xl px-4 py-3 text-gray-900">

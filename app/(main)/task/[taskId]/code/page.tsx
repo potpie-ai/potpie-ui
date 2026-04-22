@@ -2331,7 +2331,7 @@ export default function VerticalTaskExecution() {
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {msg.role === "assistant" && (
-                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
+                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C]">
                       <Image
                         src="/images/logo.svg"
                         width={24}

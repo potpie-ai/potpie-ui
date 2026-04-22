@@ -710,7 +710,7 @@ const PlanPage = () => {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#FAF8F7] text-[#000000] font-sans antialiased">
-      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
         <BuildFlowChatHeader
           recipeId={recipeId}
           variant="plan"

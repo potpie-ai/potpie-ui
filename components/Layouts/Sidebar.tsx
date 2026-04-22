@@ -292,7 +292,7 @@ export function AppSidebar() {
           <ChatHistoryPanel />
         </div>
       </SidebarContent>
-      {!subscriptionLoading && userSubscription && open && (
+      {open && (
         <div className="px-4 pt-3 pb-3">
           <div className="bg-white rounded-lg border border-zinc-200 p-3">
             <p className="text-sm font-medium text-emerald-950 mb-1">
@@ -315,7 +315,7 @@ export function AppSidebar() {
             </Progress.Root>
             <button
               onClick={() => router.push("/user-subscription")}
-              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFDFC] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
+              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFFFF] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
             >
               UPGRADE
             </button>

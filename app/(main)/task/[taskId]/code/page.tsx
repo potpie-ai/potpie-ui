@@ -30,6 +30,7 @@ import {
   TestTube,
   ScrollText,
   ChevronDown,
+  ChevronUp,
   FileText,
   Copy,
   Clock,
@@ -360,6 +361,11 @@ const CodeFileCard = ({
         <span className="text-xs font-medium text-[#022019] truncate">
           {change.path}
         </span>
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-[#022019] shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-[#022019] shrink-0" />
+        )}
       </button>
       {isExpanded && (
         <div className="min-h-[280px]">

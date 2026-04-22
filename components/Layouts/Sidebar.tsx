@@ -51,6 +51,12 @@ import {
 import { ProFeatureModal } from "./ProFeatureModal";
 import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 import { ChatHistoryPanel } from "./ChatHistoryPanel";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function AppSidebar() {
   const [proModalOpen, setProModalOpen] = useState(false);
@@ -164,32 +170,54 @@ export function AppSidebar() {
                   />
                 </Link>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "h-8 w-8 hover:bg-transparent transition-all duration-300",
-                  open ? "mr-2" : ""
-                )}
-                onClick={toggleSidebar}
-              >
-                {open ? (
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M2.34082 14.9792C2.50863 15.7188 2.78449 16.2805 3.23798 16.7341C4.39575 17.8918 6.25913 17.8918 9.98594 17.8918C13.7127 17.8918 15.5761 17.8918 16.7338 16.7341C17.8915 15.5763 17.8915 13.7128 17.8915 9.98611C17.8915 6.25934 17.8915 4.39596 16.7338 3.2382C15.5761 2.08044 13.7127 2.08044 9.98594 2.08044C6.25913 2.08044 4.39575 2.08044 3.23798 3.2382C2.78449 3.6917 2.50863 4.25346 2.34082 4.99306" className="stroke-emerald-950" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M4.57661 7.48958L2.08008 9.98611L4.57661 12.4826M2.91225 9.98611H8.73749" className="stroke-emerald-950" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M12.4824 2.07881V17.8901" className="stroke-emerald-950" strokeWidth="1.24826" />
-                    <path d="M17.8916 7.07187H12.4824M17.8916 12.8971H12.4824" className="stroke-emerald-950" strokeWidth="1.24826" />
-                  </svg>
-                ) : (
-                  <Image
-                    src="/images/insert-column-left.svg"
-                    alt="Open Sidebar"
-                    width={20}
-                    height={20}
-                  />
-                )}
-                <span className="sr-only">Toggle Sidebar</span>
-              </Button>
+              <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 hover:bg-transparent transition-all duration-300",
+                        !open && "group",
+                        open ? "mr-2" : ""
+                      )}
+                      onClick={toggleSidebar}
+                    >
+                      {open ? (
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M2.34082 14.9792C2.50863 15.7188 2.78449 16.2805 3.23798 16.7341C4.39575 17.8918 6.25913 17.8918 9.98594 17.8918C13.7127 17.8918 15.5761 17.8918 16.7338 16.7341C17.8915 15.5763 17.8915 13.7128 17.8915 9.98611C17.8915 6.25934 17.8915 4.39596 16.7338 3.2382C15.5761 2.08044 13.7127 2.08044 9.98594 2.08044C6.25913 2.08044 4.39575 2.08044 3.23798 3.2382C2.78449 3.6917 2.50863 4.25346 2.34082 4.99306" className="stroke-emerald-950" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M4.57661 7.48958L2.08008 9.98611L4.57661 12.4826M2.91225 9.98611H8.73749" className="stroke-emerald-950" strokeWidth="1.24826" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M12.4824 2.07881V17.8901" className="stroke-emerald-950" strokeWidth="1.24826" />
+                          <path d="M17.8916 7.07187H12.4824M17.8916 12.8971H12.4824" className="stroke-emerald-950" strokeWidth="1.24826" />
+                        </svg>
+                      ) : (
+                        <span className="relative h-6 w-6">
+                          <Image
+                            src="/images/Green Icon.svg"
+                            alt="Potpie"
+                            width={24}
+                            height={24}
+                            className="absolute inset-0 transition-opacity duration-200 group-hover:opacity-0"
+                          />
+                          <Image
+                            src="/images/insert-column-left.svg"
+                            alt="Open Sidebar"
+                            width={20}
+                            height={20}
+                            className="absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                          />
+                        </span>
+                      )}
+                      <span className="sr-only">Toggle Sidebar</span>
+                    </Button>
+                  </TooltipTrigger>
+                  {!open && (
+                    <TooltipContent side="right" className="text-xs">
+                      Open Sidebar
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -315,7 +343,7 @@ export function AppSidebar() {
             </Progress.Root>
             <button
               onClick={() => router.push("/user-subscription")}
-              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFDFC] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
+              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFFFF] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
             >
               UPGRADE
             </button>

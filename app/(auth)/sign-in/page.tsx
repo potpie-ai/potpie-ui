@@ -363,10 +363,15 @@ export default function Signin() {
           if (response.status === "new_user" || response.needs_github_linking) {
             toast.info("Almost there! Link your GitHub to unlock the magic");
 
+            const onboardingUid = response.user_id || user.uid;
+            const onboardingEmail = response.email || user.email || "";
+            const onboardingName =
+              response.display_name || user.displayName || "";
+
             const onboardingParams = new URLSearchParams({
-              ...(response.user_id && { uid: response.user_id }),
-              ...(response.email && { email: response.email }),
-              ...(response.display_name && { name: response.display_name }),
+              ...(onboardingUid && { uid: onboardingUid }),
+              ...(onboardingEmail && { email: onboardingEmail }),
+              ...(onboardingName && { name: onboardingName }),
               ...(plan && { plan }),
               ...(prompt && { prompt }),
               ...(finalAgent_id && { agent_id: finalAgent_id }),

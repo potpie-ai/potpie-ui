@@ -504,6 +504,13 @@ export function ChatHistoryPanel() {
     [pathname]
   );
 
+  const isActiveRecipe = useCallback(
+    (recipeId: string) => {
+      return pathname.startsWith(`/task/${recipeId}`);
+    },
+    [pathname]
+  );
+
   const toggleRepository = useCallback((repository: string) => {
     setExpandedRepositories((prev) => {
       const next = new Set(prev);
@@ -613,7 +620,9 @@ export function ChatHistoryPanel() {
                   const rowKey = item.type === "recipe" ? `recipe-${item.id}` : item.id;
                   const isRecipe = item.type === "recipe";
                   const isPinned = !isRecipe && pinnedChats.has(item.id);
-                  const isActive = !isRecipe && isActiveChat(item.id);
+                  const isActive = isRecipe
+                    ? isActiveRecipe(item.id)
+                    : isActiveChat(item.id);
                   const isHovered = hoveredChatId === rowKey;
                   const isDropdownOpen = openDropdownId === rowKey;
 
@@ -624,7 +633,7 @@ export function ChatHistoryPanel() {
                       onMouseEnter={() => setHoveredChatId(rowKey)}
                       onMouseLeave={() => setHoveredChatId(null)}
                       className={cn(
-                        "group ml-4 flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
+                        "group ml-4 mr-2 flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
                         isActive
                           ? "bg-[#F4F4F4] text-primary font-medium"
                           : "hover:bg-[#F4F4F4] text-zinc-700"

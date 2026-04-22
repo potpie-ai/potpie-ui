@@ -624,7 +624,7 @@ export function ChatHistoryPanel() {
                       onMouseEnter={() => setHoveredChatId(rowKey)}
                       onMouseLeave={() => setHoveredChatId(null)}
                       className={cn(
-                        "group mx-1 flex items-center justify-between pl-4 pr-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors overflow-hidden",
+                        "group ml-4 flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
                         isActive
                           ? "bg-[#F4F4F4] text-primary font-medium"
                           : "hover:bg-[#F4F4F4] text-zinc-700"
@@ -633,7 +633,7 @@ export function ChatHistoryPanel() {
                       <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                         {!isRecipe && (
                           <span
-                            className="shrink-0 inline-flex items-center justify-center min-w-[36px] rounded px-1 py-0 text-[0.6rem] font-light text-zinc-900"
+                            className="shrink-0 rounded px-1 py-[1px] text-[0.6rem] font-light text-zinc-900"
                             style={{ backgroundColor: "#DAF1A1" }}
                             title="Chat"
                           >
@@ -642,7 +642,7 @@ export function ChatHistoryPanel() {
                         )}
                         {isRecipe && (
                           <span
-                            className="shrink-0 inline-flex items-center justify-center min-w-[36px] rounded px-1 py-0 text-[0.6rem] font-light bg-blue-100 text-blue-900"
+                            className="shrink-0 rounded px-1 py-[1px] text-[0.6rem] font-light bg-blue-100 text-blue-900"
                             title="Build flow"
                           >
                             Build

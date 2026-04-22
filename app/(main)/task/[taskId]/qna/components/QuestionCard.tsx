@@ -198,7 +198,6 @@ export default function QuestionCard({
                   backgroundColor: "#F9FFE9",
                   border: "1px solid #B6E343",
                   color: "#4a6b00",
-                  fontFamily: "'Roboto Mono', monospace",
                 }}
               >
                 Input Needed

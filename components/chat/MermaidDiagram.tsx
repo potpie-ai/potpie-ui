@@ -2,7 +2,7 @@
 
 import React, { FC, useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { LucideCopy, LucideCopyCheck, Maximize2 } from "lucide-react";
+import { LucideCopy, LucideCopyCheck, Maximize2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 interface MermaidDiagramProps {
@@ -850,6 +850,16 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
                     ) : (
                       <LucideCopy className="size-3" />
                     )}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsModalOpen(false);
+                    }}
+                    aria-label="Close full screen diagram"
+                    className="text-xs font-medium px-2 py-1 h-6 rounded bg-white/90 hover:bg-white border border-gray-200 shadow-sm cursor-pointer flex items-center transition-colors text-gray-800"
+                  >
+                    <X className="size-3" />
                   </button>
                 </div>
                 <div

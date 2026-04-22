@@ -1790,7 +1790,7 @@ export default function QnaPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans antialiased">
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-gray-200 antialiased">
       <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
         <BuildFlowChatHeader
           recipeId={recipeId}

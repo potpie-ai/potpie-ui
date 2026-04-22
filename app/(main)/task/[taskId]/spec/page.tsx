@@ -1139,7 +1139,7 @@ const SpecPage = () => {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
-        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-r-[1px] border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
+        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
           {/* Messages — only this section scrolls */}
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
             {chatMessages.map((msg, i) => (
@@ -1243,7 +1243,7 @@ const SpecPage = () => {
             transition: "width 0.35s ease-out",
           }}
         >
-          <aside className="h-full w-full min-w-[280px] flex flex-col border-l border-l-[1px] border-[#E5E8E6]">
+          <aside className="h-full w-full min-w-[280px] flex flex-col">
             <div className="p-6 border-b border-[#E5E8E6]">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">

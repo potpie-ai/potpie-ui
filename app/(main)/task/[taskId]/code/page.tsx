@@ -2689,7 +2689,7 @@ export default function VerticalTaskExecution() {
 
         {/* Right: Code generation */}
         <div className="overflow-hidden flex-none flex flex-col w-1/2 min-w-0">
-          <aside className="h-full w-full min-w-[320px] flex flex-col border-l border-[#E5E8E6]">
+          <aside className="h-full w-full min-w-[320px] flex flex-col">
             <div className="p-6 border-b border-[#E5E8E6] bg-white">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0">

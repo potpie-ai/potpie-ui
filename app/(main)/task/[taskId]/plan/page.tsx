@@ -887,7 +887,7 @@ const PlanPage = () => {
         </div>
 
         {/* Right: Phase Plan panel (top bar matches Spec page) */}
-        <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 border-l border-[#E5E8E6]">
+        <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0">
           <div className="p-6 border-b border-[#E5E8E6] bg-[#FFFDFC] shrink-0">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">

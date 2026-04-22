@@ -9,7 +9,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}
   IMAGE: potpie-app-stage # updated image name
-  GAR_ZONE: us-central1 # artifact registry zone
+  GAR_ZONE: asia-south1 # artifact registry zone
   GAR_REPO: potpie-frontend # updated artifact registry repository
   CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
 
@@ -30,9 +30,12 @@ jobs:
 
       # Setup gcloud CLI
       - id: "auth"
-        uses: "google-github-actions/auth@v1"
+        uses: "google-github-actions/auth@v2"
         with:
           credentials_json: "${{ secrets.STAGE_GKE_SA_KEY }}"
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
 
       # Install gke-gcloud-auth-plugin
       - name: Install gke-gcloud-auth-plugin
@@ -42,26 +45,11 @@ jobs:
           curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
           sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
 
-      # Create Artifact Registry repository if it doesn't exist
-      - name: Create Artifact Registry repository if needed
-        run: |-
-          if ! gcloud artifacts repositories describe $GAR_REPO --location=$GAR_ZONE --project=$PROJECT_ID >/dev/null 2>&1; then
-            echo "Repository $GAR_REPO does not exist. Creating..."
-            gcloud artifacts repositories create $GAR_REPO \
-              --repository-format=docker \
-              --location=$GAR_ZONE \
-              --project=$PROJECT_ID \
-              --description="Docker repository for potpie frontend"
-            echo "Repository $GAR_REPO created successfully"
-          else
-            echo "Repository $GAR_REPO already exists"
-          fi
-
       # Configure Docker to use the gcloud command-line tool as a credential
       # helper for authentication
       - name: Docker configuration
         run: |-
-          gcloud auth configure-docker $GAR_ZONE-docker.pkg.dev
+          gcloud auth configure-docker "$GAR_ZONE-docker.pkg.dev" --quiet
 
       # Extract variables and set them as environment variables
       - name: Extract and set environment variables
@@ -92,6 +80,11 @@ jobs:
           echo "NEXT_PUBLIC_SLACK_SERVER=${{ secrets.STAGE_NEXT_PUBLIC_SLACK_SERVER }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_MULTIMODAL_ENABLED=${{ secrets.STAGE_NEXT_PUBLIC_MULTIMODAL_ENABLED }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID }}" >> $GITHUB_ENV
+
+      - name: Validate Artifact Registry repository exists
+        run: |-
+          gcloud config set project "$PROJECT_ID"
+          gcloud artifacts repositories describe "$GAR_REPO" --location="$GAR_ZONE" --project="$PROJECT_ID" --format='value(name)' >/dev/null
 
       # Build the Docker image
       - name: Build

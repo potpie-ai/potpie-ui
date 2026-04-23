@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type MermaidRenderResponse = {
   svg: string;
@@ -302,10 +303,27 @@ const buildRenderCandidates = (chart: string) => {
   ];
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _jsdomModule: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _mermaidModule: any = null;
+
+async function getJSDOM() {
+  if (!_jsdomModule) {
+    _jsdomModule = await import("jsdom");
+  }
+  return _jsdomModule;
+}
+
+async function getMermaid() {
+  if (!_mermaidModule) {
+    _mermaidModule = (await import("mermaid")).default;
+  }
+  return _mermaidModule;
+}
+
 const setupServerDom = async () => {
-  // Avoid bundling jsdom into the route during Next build analysis.
-  // A plain dynamic import with a string literal can still get statically traced.
-  const { JSDOM } = await new Function('return import("jsdom")')();
+  const { JSDOM } = await getJSDOM();
   const dom = new JSDOM(
     "<!doctype html><html><body><div id='mermaid-root'></div></body></html>",
     { pretendToBeVisual: true },
@@ -421,7 +439,7 @@ const renderMermaidServerSide = async (
   }
 
   const dom = await setupServerDom();
-  const mermaid = (await import("mermaid")).default;
+  const mermaid = await getMermaid();
   mermaid.initialize(getMermaidConfig());
 
   let lastError: Error | null = null;

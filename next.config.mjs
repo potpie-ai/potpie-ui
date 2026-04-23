@@ -11,6 +11,7 @@ const nextConfig = {
       },
     ],
   },
+  serverExternalPackages: ["jsdom", "html-encoding-sniffer", "@exodus/bytes"],
   typescript: {
     ignoreBuildErrors: false,
   },

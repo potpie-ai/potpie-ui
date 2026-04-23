@@ -388,6 +388,8 @@ const MessageComposer = ({
 
   const handleDragOverComposer = (e: DragEvent<HTMLDivElement>) => {
     if (!isMultimodalEnabled() || isDisabled) return;
+    const hasFiles = Array.from(e.dataTransfer.types || []).includes("Files");
+    if (!hasFiles) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "copy";
@@ -396,6 +398,8 @@ const MessageComposer = ({
 
   const handleDragLeaveComposer = (e: DragEvent<HTMLDivElement>) => {
     if (!isMultimodalEnabled() || isDisabled) return;
+    const nextTarget = e.relatedTarget as Node | null;
+    if (nextTarget && e.currentTarget.contains(nextTarget)) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingFiles(false);
@@ -409,17 +413,17 @@ const MessageComposer = ({
 
     const droppedFiles = Array.from(e.dataTransfer.files || []);
     if (droppedFiles.length === 0) return;
-    const composerAny = composer as any;
-    if (typeof composerAny?.addAttachment !== "function") {
+    if (typeof composer?.addAttachment !== "function") {
       toast.error("Drag-and-drop upload failed. Please use Attach.");
       return;
     }
+    const addAttachment = composer.addAttachment;
 
-    void Promise.all(
-      droppedFiles.map((file) => composerAny.addAttachment(file))
-    ).catch(() => {
-      toast.error("Drag-and-drop upload failed. Please use Attach.");
-    });
+    void Promise.all(droppedFiles.map((file) => addAttachment(file))).catch(
+      () => {
+        toast.error("Drag-and-drop upload failed. Please use Attach.");
+      }
+    );
   };
 
   // Model selection

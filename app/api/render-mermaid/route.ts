@@ -303,7 +303,9 @@ const buildRenderCandidates = (chart: string) => {
 };
 
 const setupServerDom = async () => {
-  const { JSDOM } = await import("jsdom");
+  // Avoid bundling jsdom into the route during Next build analysis.
+  // A plain dynamic import with a string literal can still get statically traced.
+  const { JSDOM } = await new Function('return import("jsdom")')();
   const dom = new JSDOM(
     "<!doctype html><html><body><div id='mermaid-root'></div></body></html>",
     { pretendToBeVisual: true },

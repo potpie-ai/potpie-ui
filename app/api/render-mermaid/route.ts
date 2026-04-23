@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JSDOM } from "jsdom";
 
 export const runtime = "nodejs";
 
@@ -303,7 +302,8 @@ const buildRenderCandidates = (chart: string) => {
   ];
 };
 
-const setupServerDom = () => {
+const setupServerDom = async () => {
+  const { JSDOM } = await import("jsdom");
   const dom = new JSDOM(
     "<!doctype html><html><body><div id='mermaid-root'></div></body></html>",
     { pretendToBeVisual: true },
@@ -418,7 +418,7 @@ const renderMermaidServerSide = async (
     );
   }
 
-  const dom = setupServerDom();
+  const dom = await setupServerDom();
   const mermaid = (await import("mermaid")).default;
   mermaid.initialize(getMermaidConfig());
 

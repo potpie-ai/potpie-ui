@@ -718,40 +718,6 @@ const requestMermaidRepair = async (
   return corrected || null;
 };
 
-const requestServerRenderedMermaid = async (
-  chart: string,
-): Promise<MermaidRenderSuccess | null> => {
-  const response = await fetch("/api/render-mermaid", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ chart }),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Server Mermaid render failed with status ${response.status}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    svg?: string;
-    rendered_chart?: string;
-    was_corrected?: boolean;
-  };
-
-  if (!data.svg || !data.rendered_chart) {
-    return null;
-  }
-
-  return {
-    svg: await sanitizeRenderedSvg(data.svg),
-    renderedChart: data.rendered_chart,
-    wasCorrected: Boolean(data.was_corrected),
-  };
-};
-
 interface DiagramViewerProps {
   svg: string;
   height?: string;
@@ -1195,24 +1161,6 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart }) => {
                 ? repairError.message
                 : "Failed to repair diagram.";
           }
-        }
-
-        try {
-          const serverRendered = await requestServerRenderedMermaid(latestChart);
-          if (!isMounted || !serverRendered) return;
-
-          setSvg(serverRendered.svg);
-          setResolvedChart(serverRendered.renderedChart);
-          setWasCorrected(
-            serverRendered.wasCorrected || latestChart.trim() !== chart.trim(),
-          );
-          setError(null);
-          return;
-        } catch (serverRenderError) {
-          lastErrorMessage =
-            serverRenderError instanceof Error
-              ? serverRenderError.message
-              : "Failed to render Mermaid on the server.";
         }
 
         setResolvedChart(chart.trim());

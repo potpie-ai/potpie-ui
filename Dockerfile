@@ -79,7 +79,6 @@ ENV NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID
 ENV NEXT_PUBLIC_LOGIN_PASSWORD=$NEXT_PUBLIC_LOGIN_PASSWORD
 
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS=--experimental-require-module
 
 RUN pnpm run build
 
@@ -88,7 +87,6 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS=--experimental-require-module
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

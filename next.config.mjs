@@ -11,7 +11,6 @@ const nextConfig = {
       },
     ],
   },
-  serverExternalPackages: ["jsdom"],
   typescript: {
     ignoreBuildErrors: false,
   },

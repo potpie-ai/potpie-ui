@@ -26,6 +26,7 @@ import {
   useRef,
   useState,
   KeyboardEvent,
+  DragEvent,
   useEffect,
   useCallback,
 } from "react";
@@ -123,6 +124,7 @@ const MessageComposer = ({
   const [isSearchingNode, setIsSearchingNode] = useState(false);
   const [isSwitchingModel, setIsSwitchingModel] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
 
   const dispatch = useDispatch();
   const { agentId, allAgents } = useSelector((state: RootState) => state.chat);
@@ -382,6 +384,42 @@ const MessageComposer = ({
 
   const handleRemoveAttachedFile = (index: number) => {
     setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDragOverComposer = (e: DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled() || isDisabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+    if (!isDraggingFiles) setIsDraggingFiles(true);
+  };
+
+  const handleDragLeaveComposer = (e: DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled() || isDisabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFiles(false);
+  };
+
+  const handleDropOnComposer = (e: DragEvent<HTMLDivElement>) => {
+    if (!isMultimodalEnabled() || isDisabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFiles(false);
+
+    const droppedFiles = Array.from(e.dataTransfer.files || []);
+    if (droppedFiles.length === 0) return;
+    const composerAny = composer as any;
+    if (typeof composerAny?.addAttachment !== "function") {
+      toast.error("Drag-and-drop upload failed. Please use Attach.");
+      return;
+    }
+
+    void Promise.all(
+      droppedFiles.map((file) => composerAny.addAttachment(file))
+    ).catch(() => {
+      toast.error("Drag-and-drop upload failed. Please use Attach.");
+    });
   };
 
   // Model selection
@@ -658,7 +696,12 @@ const MessageComposer = ({
 
         <div
           ref={containerRef}
-          className="flex flex-col w-full items-start gap-4 outline-none"
+          onDragOver={handleDragOverComposer}
+          onDragLeave={handleDragLeaveComposer}
+          onDrop={handleDropOnComposer}
+          className={`flex flex-col w-full items-start gap-4 outline-none transition-colors ${
+            isDraggingFiles ? "rounded-xl bg-[#F5F8EA]" : ""
+          }`}
           tabIndex={0}
         >
           {isMultimodalEnabled() && <ComposerAttachments />}

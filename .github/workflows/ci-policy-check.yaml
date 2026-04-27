@@ -24,11 +24,12 @@ jobs:
             ".github/workflows/upload-image.yaml"
             "Dockerfile"
             "Dockerfile.Portable"
+            ".env.template"
           )
 
           VIOLATION_REGEX='NEXT_PUBLIC_[A-Z0-9_]*(SECRET|PASSWORD|HMAC)[A-Z0-9_]*'
 
-          if rg -n "${VIOLATION_REGEX}" "${TARGETS[@]}"; then
+          if git grep -n -E "${VIOLATION_REGEX}" -- "${TARGETS[@]}"; then
             echo "::error::Forbidden NEXT_PUBLIC secret-like variable detected. Use server-side env names instead."
             exit 1
           fi

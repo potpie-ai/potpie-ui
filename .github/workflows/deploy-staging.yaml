@@ -2,6 +2,14 @@ name: Build and Deploy to Staging Artifact and Cloud Run
 
 on:
   workflow_dispatch:
+    inputs:
+      local_mode_only:
+        description: >
+          Customer / internal builds without Firebase: omit Firebase NEXT_PUBLIC_* at
+          docker build so the app uses mock auth and /api/login. Requires secret
+          STAGE_NEXT_PUBLIC_LOGIN_PASSWORD. Pushes to main ignore this (full staging build).
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -14,6 +22,8 @@ env:
   GAR_ZONE: asia-south1
   GAR_REPO: potpie-frontend-aws
   CLOUD_RUN_SERVICE: potpie-frontend-stage
+  # Branches listed here build without Firebase so the UI uses local/mock auth.
+  LOCAL_MODE_BRANCH: cc-deployment
 
 jobs:
   setup-build-publish-deploy:
@@ -71,12 +81,23 @@ jobs:
       # Extract variables and set them as environment variables
       - name: Extract and set environment variables
         run: |
-          echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_API_KEY }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_APP_ID }}" >> $GITHUB_ENV
+          # local mode is enabled either explicitly from workflow_dispatch or automatically on the customer branch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.local_mode_only }}" = "true" ] || [ "${{ github.ref_name }}" = "${LOCAL_MODE_BRANCH}" ]; then
+            echo "::notice::Local mode build — Firebase NEXT_PUBLIC_* cleared for branch ${{ github.ref_name }}; use email + STAGE_NEXT_PUBLIC_LOGIN_PASSWORD on /api/login"
+            echo "NEXT_PUBLIC_FIREBASE_API_KEY=" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_APP_ID=" >> $GITHUB_ENV
+          else
+            echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_API_KEY }}" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_APP_ID }}" >> $GITHUB_ENV
+          fi
           echo "NEXT_PUBLIC_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_BASE_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SKIP_PRO_CHECK=${{ secrets.STAGE_NEXT_PUBLIC_SKIP_PRO_CHECK }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GITHUB_APP_NAME=${{ secrets.STAGE_NEXT_PUBLIC_GITHUB_APP_NAME }}" >> $GITHUB_ENV
@@ -98,6 +119,7 @@ jobs:
           echo "NEXT_PUBLIC_SLACK_SERVER=${{ secrets.STAGE_NEXT_PUBLIC_SLACK_SERVER }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_MULTIMODAL_ENABLED=${{ secrets.STAGE_NEXT_PUBLIC_MULTIMODAL_ENABLED }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_LOGIN_PASSWORD=${{ secrets.STAGE_NEXT_PUBLIC_LOGIN_PASSWORD }}" >> $GITHUB_ENV
 
       # Build the Docker image
       - name: Build
@@ -134,6 +156,7 @@ jobs:
             --build-arg NEXT_PUBLIC_SLACK_SERVER="${{ env.NEXT_PUBLIC_SLACK_SERVER }}" \
             --build-arg NEXT_PUBLIC_MULTIMODAL_ENABLED="${{ env.NEXT_PUBLIC_MULTIMODAL_ENABLED }}" \
             --build-arg NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID="${{ env.NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID }}" \
+            --build-arg NEXT_PUBLIC_LOGIN_PASSWORD="${{ env.NEXT_PUBLIC_LOGIN_PASSWORD }}" \
             -f Dockerfile .
 
       # Push the Docker image to Google Artifact Registry

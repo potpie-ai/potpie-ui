@@ -1,0 +1,36 @@
+name: CI Policy Checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  env-policy-check:
+    name: Block forbidden public secret env vars
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate NEXT_PUBLIC secret policy
+        run: |
+          set -euo pipefail
+          TARGETS=(
+            ".github/workflows/deploy-staging.yaml"
+            ".github/workflows/deploy-prod.yaml"
+            ".github/workflows/pr-cloud-run.yaml"
+            ".github/workflows/upload-image.yaml"
+            "Dockerfile"
+            "Dockerfile.Portable"
+          )
+
+          VIOLATION_REGEX='NEXT_PUBLIC_[A-Z0-9_]*(SECRET|PASSWORD|HMAC)[A-Z0-9_]*'
+
+          if rg -n "${VIOLATION_REGEX}" "${TARGETS[@]}"; then
+            echo "::error::Forbidden NEXT_PUBLIC secret-like variable detected. Use server-side env names instead."
+            exit 1
+          fi
+
+          echo "Policy check passed: no forbidden NEXT_PUBLIC secret-like variables found."

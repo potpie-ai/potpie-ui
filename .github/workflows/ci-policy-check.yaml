@@ -17,19 +17,10 @@ jobs:
       - name: Validate NEXT_PUBLIC secret policy
         run: |
           set -euo pipefail
-          TARGETS=(
-            ".github/workflows/deploy-staging.yaml"
-            ".github/workflows/deploy-prod.yaml"
-            ".github/workflows/pr-cloud-run.yaml"
-            ".github/workflows/upload-image.yaml"
-            "Dockerfile"
-            "Dockerfile.Portable"
-            ".env.template"
-          )
-
           VIOLATION_REGEX='NEXT_PUBLIC_[A-Z0-9_]*(SECRET|PASSWORD|HMAC)[A-Z0-9_]*'
-
-          if git grep -n -E "${VIOLATION_REGEX}" -- "${TARGETS[@]}"; then
+          MATCHES="$(git grep -n -E "${VIOLATION_REGEX}" -- . ':(exclude).github/workflows/ci-policy-check.yaml' || true)"
+          if [ -n "${MATCHES}" ]; then
+            echo "${MATCHES}"
             echo "::error::Forbidden NEXT_PUBLIC secret-like variable detected. Use server-side env names instead."
             exit 1
           fi

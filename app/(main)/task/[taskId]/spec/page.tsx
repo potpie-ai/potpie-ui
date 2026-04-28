@@ -199,6 +199,41 @@ function normalizeSpecFromProgress(progress: any): { plan: Plan | null; rawSpec:
   return { plan: null, rawSpec: spec };
 }
 
+/**
+ * Persist QnA additional text + attachment refs from the same localStorage key the Q&A page uses,
+ * so "Regenerate spec" on this page does not drop extras that were never re-submitted via /answers.
+ */
+async function persistQaExtrasFromLocalStorageIfAny(recipeId: string): Promise<void> {
+  if (typeof window === "undefined" || !recipeId) return;
+  try {
+    const raw = localStorage.getItem(`qa_extras_${recipeId}`);
+    if (!raw) return;
+    const p = JSON.parse(raw) as {
+      additionalContext?: string;
+      qaAttachments?: Array<{ id: string; file_name?: string; mime_type?: string }>;
+    };
+    const additional_context =
+      typeof p.additionalContext === "string" && p.additionalContext.trim()
+        ? p.additionalContext.trim()
+        : undefined;
+    const attachments =
+      Array.isArray(p.qaAttachments) && p.qaAttachments.length > 0
+        ? p.qaAttachments.map((a) => ({
+            id: String(a.id),
+            file_name: a.file_name ?? "",
+            mime_type: a.mime_type ?? "",
+          }))
+        : undefined;
+    if (!additional_context && !attachments?.length) return;
+    await SpecService.updateQaSubmissionExtras(recipeId, {
+      additional_context,
+      attachments,
+    });
+  } catch (e) {
+    console.warn("[Spec Page] Failed to persist Q&A extras before spec run:", e);
+  }
+}
+
 /** Renders one functional requirement per API: id, title, description, acceptance_criteria, priority, dependencies (requirement IDs), guardrails, implementation_recommendations, external_dependencies. No file_impact/target files. */
 function FunctionalRequirementCard({ fr }: { fr: any }) {
   const id = fr?.id ?? "";
@@ -295,14 +330,24 @@ const SPEC_KNOWN_KEYS = [
   "success_metrics", "data_models", "context", "add", "modify", "fix", "interfaces", "external_dependencies_summary",
 ];
 
-/** Renders specification.context with API sub-fields: original_request, janus_analysis, qa_answers, research_findings */
+/** Renders specification.context with API sub-fields: original_request, janus_analysis, qa_answers, research_findings, additional_context */
 function SpecContextBlock({ context }: { context: Record<string, any> }) {
   const items: { label: string; value: string }[] = [];
   if (context.original_request) items.push({ label: "Original request", value: String(context.original_request) });
   if (context.janus_analysis) items.push({ label: "Janus analysis", value: String(context.janus_analysis) });
   if (context.qa_answers) items.push({ label: "Q&A answers", value: String(context.qa_answers) });
+  if (context.additional_context) items.push({ label: "Additional context (from Q&A)", value: String(context.additional_context) });
   if (context.research_findings) items.push({ label: "Research findings", value: String(context.research_findings) });
-  const rest = Object.entries(context).filter(([k]) => !["original_request", "janus_analysis", "qa_answers", "research_findings"].includes(k));
+  const rest = Object.entries(context).filter(
+    ([k]) =>
+      ![
+        "original_request",
+        "janus_analysis",
+        "qa_answers",
+        "research_findings",
+        "additional_context",
+      ].includes(k)
+  );
   rest.forEach(([k, v]) => {
     if (v != null && v !== "") items.push({ label: k.replace(/_/g, " "), value: typeof v === "string" ? v : JSON.stringify(v, null, 2) });
   });
@@ -1281,6 +1326,7 @@ const SpecPage = () => {
                       if (!recipeId || isRegeneratingSpec) return;
                       setIsRegeneratingSpec(true);
                       try {
+                        await persistQaExtrasFromLocalStorageIfAny(recipeId);
                         // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
                         // Clear transient stream state and errors but keep specProgress populated

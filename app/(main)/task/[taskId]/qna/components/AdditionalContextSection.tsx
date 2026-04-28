@@ -178,7 +178,7 @@ export default function AdditionalContextSection({
           <div className="flex items-center justify-end">
             <Button
               onClick={onGeneratePlan}
-              disabled={isGenerating || !recipeId}
+              disabled={isGenerating || attachmentUploading || !recipeId}
               className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
             >
               {isGenerating ? (

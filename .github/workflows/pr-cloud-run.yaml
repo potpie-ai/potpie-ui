@@ -7,7 +7,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}
   GAR_ZONE: us-central1 # artifact registry zone
-  GAR_REPO: momentum-frontend # artifact registry repository
+  GAR_REPO: potpie-frontend # artifact registry repository
 
 jobs:
   build-deploy-comment:

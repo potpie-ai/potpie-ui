@@ -55,6 +55,11 @@ export interface RepoPageState {
   questionGenerationStatus?: QuestionGenerationStatus | null;
   /** Error message when question generation failed */
   questionGenerationError?: string | null;
+  /**
+   * Multi-batch: IDs in the current answer round. `null` = entire list is one batch (legacy API).
+   * Empty array while continuation is evaluating (no new batch rows yet).
+   */
+  activeQuestionIds?: string[] | null;
 }
 
 /**

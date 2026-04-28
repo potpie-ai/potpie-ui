@@ -89,7 +89,7 @@ const PricingPage = () => {
       if (userId) {
         try {
           const data = await MinorService.fetchUserSubscription(userId);
-          if (data.plan_type && data.end_date) {
+          if (data?.plan_type && data?.end_date) {
             setSubscription({
               plan: getPlanDisplayName(data.plan_type),
               endDate: new Date(data.end_date).toLocaleDateString("en-US", {

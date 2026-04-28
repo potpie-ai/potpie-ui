@@ -15,6 +15,11 @@ interface AdditionalContextSectionProps {
   recipeId: string | null;
   /** When spec (next step) has already been generated once — show "Re-generate" label. */
   reGenerateImplementationPlan?: boolean;
+  /** Primary CTA label (e.g. Submit response during Q&A; generate plan when appropriate). */
+  submitLabel?: string;
+  /** When true, show evaluating copy on the button (e.g. after submitting answers). */
+  isEvaluating?: boolean;
+  evaluatingLabel?: string;
   unansweredCount?: number;
   /** Called when attached files change. removedIndex set when user removes file at that index. */
   onAttachmentChange?: (files: File[], removedIndex?: number) => void;
@@ -40,6 +45,9 @@ export default function AdditionalContextSection({
   isGenerating,
   recipeId,
   reGenerateImplementationPlan = false,
+  submitLabel,
+  isEvaluating = false,
+  evaluatingLabel = "Evaluating your response…",
   unansweredCount: _unansweredCount,
   onAttachmentChange,
   attachmentUploading = false,
@@ -181,13 +189,17 @@ export default function AdditionalContextSection({
               disabled={isGenerating || !recipeId}
               className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
             >
-              {isGenerating ? (
+              {isGenerating || isEvaluating ? (
                 <>
                   <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-                  GENERATING...
+                  {isEvaluating
+                    ? evaluatingLabel.toUpperCase()
+                    : "GENERATING..."}
                 </>
               ) : reGenerateImplementationPlan ? (
                 "RE-GENERATE IMPLEMENTATION PLAN"
+              ) : submitLabel?.trim() ? (
+                submitLabel.toUpperCase()
               ) : (
                 "GENERATE IMPLEMENTATION PLAN"
               )}

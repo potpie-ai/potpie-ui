@@ -315,25 +315,33 @@ export function parseApiError(error: any): string {
       validationErrors.forEach((err: any) => {
         if (err.loc && err.msg) {
           // Extract the field name from the location path
-          const fieldPath = err.loc.slice(2); // Skip 'body' and 'nodes'
-          const fieldName = fieldPath[fieldPath.length - 1];
-          const nodeId = fieldPath[1]; // Get the node ID
+          const fieldPath = err.loc.slice(2); // Skip 'body' and root field name
+          const fieldName = fieldPath.length > 0 ? fieldPath[fieldPath.length - 1] : null;
+          const nodeId = fieldPath.length > 1 ? fieldPath[1] : "general"; // Get the node ID if present
 
-          if (!fieldErrors[nodeId]) {
-            fieldErrors[nodeId] = [];
+          const groupKey = nodeId ?? "general";
+          if (!fieldErrors[groupKey]) {
+            fieldErrors[groupKey] = [];
           }
 
-          // Create a more readable error message
-          const readableField = fieldName
-            .replace(/([A-Z])/g, " $1")
-            .toLowerCase();
-          fieldErrors[nodeId].push(`${readableField} is required`);
+          if (fieldName && typeof fieldName === "string") {
+            // Create a more readable error message
+            const readableField = fieldName
+              .replace(/([A-Z])/g, " $1")
+              .toLowerCase();
+            fieldErrors[groupKey].push(`${readableField}: ${err.msg}`);
+          } else {
+            fieldErrors[groupKey].push(err.msg);
+          }
         }
       });
 
       // Format the error message
       const errorMessages = Object.entries(fieldErrors).map(
         ([nodeId, errors]) => {
+          if (nodeId === "general") {
+            return errors.join(", ");
+          }
           const shortNodeId = nodeId.length > 20 ? nodeId.slice(-8) : nodeId;
           return `Node ${shortNodeId}: ${errors.join(", ")}`;
         }

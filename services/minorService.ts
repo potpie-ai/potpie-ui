@@ -18,6 +18,14 @@ export default class MinorService {
   }
   static async fetchUserSubscription (userId: string) {
     const baseUrl = process.env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL;
+    const subscriptionChecksEnabled =
+      process.env.NEXT_PUBLIC_ENABLE_SUBSCRIPTION_CHECKS === "true";
+    if (
+      !baseUrl ||
+      (baseUrl.includes("localhost:5001") && !subscriptionChecksEnabled)
+    ) {
+      return null;
+    }
     const response = await axios.get(
       `${baseUrl}/subscriptions/info?user_id=${userId}`
     );

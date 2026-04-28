@@ -219,8 +219,8 @@ const Onboarding = () => {
         // This ensures we're saving data for the correct user
         const authenticatedUid = user.uid;
 
-        const token = await user.getIdToken();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+        const headers = await getHeaders();
         
         const response = await axios.post(
           `${baseUrl}/api/v1/user/onboarding`,
@@ -233,9 +233,7 @@ const Onboarding = () => {
             jobTitle: formData.jobTitle,
             companyName: formData.companyName,
           },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+          { headers }
         );
 
         if (response.data.success) {
@@ -266,13 +264,11 @@ const Onboarding = () => {
       try {
         const user = auth.currentUser;
         if (user) {
-          const token = await user.getIdToken();
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+          const headers = await getHeaders();
           const response = await axios.get(
             `${baseUrl}/api/v1/providers/me`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
+            { headers }
           );
           
           githubLinked = response.data.providers?.some(

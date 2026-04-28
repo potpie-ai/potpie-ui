@@ -18,6 +18,7 @@ import { authClient } from "@/lib/sso/unified-auth";
 import type { UserAccount } from "@/types/auth";
 import { auth } from "@/configs/Firebase-config";
 import { toast } from "sonner";
+import getHeaders from "@/app/utils/headers.util";
 
 export default function RootLayout({
   children,
@@ -51,18 +52,13 @@ export default function RootLayout({
 
     setIsSendingVerification(true);
     try {
-      // Get Firebase token for authentication
-      const token = await auth.currentUser.getIdToken();
-
       // Call backend API to send verification email to work email
+      const headers = await getHeaders({ "Content-Type": "application/json" });
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8000"}/api/v1/account/resend-verification`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+          headers: headers as HeadersInit,
         },
       );
 

@@ -84,6 +84,10 @@ jobs:
           # local mode is enabled either explicitly from workflow_dispatch or automatically on the customer branch
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.local_mode_only }}" = "true" ] || [ "${{ github.ref_name }}" = "${LOCAL_MODE_BRANCH}" ]; then
             echo "::notice::Local mode build — Firebase NEXT_PUBLIC_* cleared for branch ${{ github.ref_name }}; use email + STAGE_NEXT_PUBLIC_LOGIN_PASSWORD on /api/login"
+            if [ -z "${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_TOKEN }}" ]; then
+              echo "::error::STAGE_NEXT_PUBLIC_FIREBASE_TOKEN is required for local-mode staging builds because the backend still requires Firebase Bearer auth."
+              exit 1
+            fi
             echo "NEXT_PUBLIC_FIREBASE_API_KEY=" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=" >> $GITHUB_ENV
@@ -122,6 +126,51 @@ jobs:
           echo "NEXT_PUBLIC_MULTIMODAL_ENABLED=${{ secrets.STAGE_NEXT_PUBLIC_MULTIMODAL_ENABLED }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_LOGIN_PASSWORD=${{ secrets.STAGE_NEXT_PUBLIC_LOGIN_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Print NEXT_PUBLIC_* build env (safe)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEXT_PUBLIC_* build environment summary (values redacted):"
+          KEYS=(
+            NEXT_PUBLIC_FIREBASE_API_KEY
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID
+            NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+            NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+            NEXT_PUBLIC_FIREBASE_APP_ID
+            NEXT_PUBLIC_FIREBASE_TOKEN
+            NEXT_PUBLIC_BASE_URL
+            NEXT_PUBLIC_SKIP_PRO_CHECK
+            NEXT_PUBLIC_GITHUB_APP_NAME
+            NEXT_PUBLIC_CONVERSATION_BASE_URL
+            NEXT_PUBLIC_DEFAULT_CHAT_AGENT_ID
+            NEXT_PUBLIC_POSTHOG_KEY
+            NEXT_PUBLIC_POSTHOG_HOST
+            NEXT_PUBLIC_POTPIE_PLUS_URL
+            NEXT_PUBLIC_APP_URL
+            NEXT_PUBLIC_SUBSCRIPTION_BASE_URL
+            NEXT_PUBLIC_HMAC_SECRET_KEY
+            NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID
+            NEXT_PUBLIC_FORMBRICKS_API_HOST
+            NEXT_PUBLIC_WORKFLOWS_URL
+            NEXT_PUBLIC_SENTRY_CLIENT_ID
+            NEXT_PUBLIC_SENTRY_CLIENT_SECRET
+            NEXT_PUBLIC_SENTRY_REDIRECT_URI
+            NEXT_PUBLIC_LINEAR_REDIRECT_URI
+            NEXT_PUBLIC_SLACK_SERVER
+            NEXT_PUBLIC_MULTIMODAL_ENABLED
+            NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID
+            NEXT_PUBLIC_LOGIN_PASSWORD
+          )
+          for k in "${KEYS[@]}"; do
+            v="${!k-}"
+            if [ -z "${v}" ]; then
+              echo " - ${k}=<EMPTY>"
+            else
+              echo " - ${k}=<SET> (len=${#v})"
+            fi
+          done
 
       # Build the Docker image
       - name: Build

@@ -17,6 +17,19 @@ const getHeaders = async (existingHeaders: Headers = {}): Promise<Headers> => {
             };
         }
 
+        const headersWithoutMockAuth = { ...existingHeaders };
+        const existingAuthorization = headersWithoutMockAuth.Authorization;
+        const existingBearerToken = existingAuthorization?.startsWith("Bearer ")
+            ? existingAuthorization.slice("Bearer ".length).trim()
+            : null;
+        const isExistingMockToken =
+            existingBearerToken === "dummy-token" ||
+            existingBearerToken === "mock-token-for-local-development" ||
+            existingBearerToken === "mock-id-token";
+        if (isExistingMockToken) {
+            delete headersWithoutMockAuth.Authorization;
+        }
+
         // Direct check for Firebase environment variables
         const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
         const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
@@ -34,7 +47,7 @@ const getHeaders = async (existingHeaders: Headers = {}): Promise<Headers> => {
         
         const user = auth.currentUser;
         if (!user) {
-            return existingHeaders;
+            return headersWithoutMockAuth;
         }
         
         try {
@@ -48,7 +61,8 @@ const getHeaders = async (existingHeaders: Headers = {}): Promise<Headers> => {
                 
                 // Check if this is a mock user by examining the token directly
                 const isMockToken = idToken === 'mock-token-for-local-development' || 
-                                   idToken === 'mock-id-token';
+                                   idToken === 'mock-id-token' ||
+                                   idToken === 'dummy-token';
                 
                 // Also check the user ID as a backup detection mechanism
                 const isMockUser = user.uid === 'local-dev-user';
@@ -64,7 +78,7 @@ const getHeaders = async (existingHeaders: Headers = {}): Promise<Headers> => {
             
             // If we get here, either Firebase is not enabled, we're using mock Firebase,
             // or we have a mock token. In all these cases, skip adding the Authorization header.
-            return existingHeaders;
+            return headersWithoutMockAuth;
             
         } catch (tokenError) {
             console.error('getHeaders: Error getting Firebase token:', tokenError);

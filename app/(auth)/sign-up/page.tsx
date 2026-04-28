@@ -20,6 +20,7 @@ import AuthService from "@/services/AuthService";
 import axios from "axios";
 import posthog from "posthog-js";
 import { authClient } from '@/lib/sso/unified-auth';
+import getHeaders from "@/app/utils/headers.util";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -238,13 +239,11 @@ const Signup = () => {
       const user = auth.currentUser;
       if (!user) return false;
 
-      const token = await user.getIdToken();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      const headers = await getHeaders();
       const response = await axios.get(
         `${baseUrl}/api/v1/providers/me`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers }
       );
 
       const hasGithub = response.data.providers?.some(

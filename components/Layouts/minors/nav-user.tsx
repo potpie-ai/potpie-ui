@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { isFirebaseEnabled } from "@/lib/utils";
+import getHeaders from "@/app/utils/headers.util";
 
 export function NavUser({
   user,
@@ -88,18 +89,13 @@ export function NavUser({
 
     setIsSendingVerification(true);
     try {
-      // Get Firebase token for authentication
-      const token = await auth.currentUser.getIdToken();
-
       // Call backend API to send verification email to work email
+      const headers = await getHeaders({ 'Content-Type': 'application/json' });
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8000'}/api/v1/account/resend-verification`,
         {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+          headers: headers as HeadersInit,
         }
       );
 

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { SSOLoginResponse, UserAccount, AuthProvider } from '@/types/auth';
+import getHeaders from '@/app/utils/headers.util';
 
 const API_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8000';
 
@@ -8,6 +9,12 @@ export class UnifiedAuthClient {
 
   constructor(baseURL = API_URL) {
     this.baseURL = baseURL;
+  }
+
+  private async getAuthHeaders(firebaseToken?: string) {
+    return getHeaders(
+      firebaseToken ? { Authorization: `Bearer ${firebaseToken}` } : {}
+    );
   }
 
   /**
@@ -55,11 +62,10 @@ export class UnifiedAuthClient {
    * Get user's connected providers
    */
   async getMyProviders(firebaseToken: string): Promise<{ providers: AuthProvider[]; primary_provider?: AuthProvider }> {
+    const headers = await this.getAuthHeaders(firebaseToken);
     const response = await axios.get(
       `${this.baseURL}/api/v1/providers/me`,
-      {
-        headers: { Authorization: `Bearer ${firebaseToken}` },
-      }
+      { headers }
     );
     return response.data;
   }
@@ -71,12 +77,11 @@ export class UnifiedAuthClient {
     firebaseToken: string,
     providerType: string
   ): Promise<void> {
+    const headers = await this.getAuthHeaders(firebaseToken);
     await axios.post(
       `${this.baseURL}/api/v1/providers/set-primary`,
       { provider_type: providerType },
-      {
-        headers: { Authorization: `Bearer ${firebaseToken}` },
-      }
+      { headers }
     );
   }
 
@@ -87,11 +92,12 @@ export class UnifiedAuthClient {
     firebaseToken: string,
     providerType: string
   ): Promise<void> {
+    const headers = await this.getAuthHeaders(firebaseToken);
     await axios.delete(
       `${this.baseURL}/api/v1/providers/unlink`,
       {
         data: { provider_type: providerType },
-        headers: { Authorization: `Bearer ${firebaseToken}` },
+        headers,
       }
     );
   }
@@ -100,11 +106,10 @@ export class UnifiedAuthClient {
    * Get complete account information
    */
   async getAccount(firebaseToken: string): Promise<UserAccount> {
+    const headers = await this.getAuthHeaders(firebaseToken);
     const response = await axios.get<UserAccount>(
       `${this.baseURL}/api/v1/account/me`,
-      {
-        headers: { Authorization: `Bearer ${firebaseToken}` },
-      }
+      { headers }
     );
     return response.data;
   }

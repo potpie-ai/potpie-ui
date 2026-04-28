@@ -188,11 +188,23 @@ jobs:
         run: |-
           docker push "$IMAGE_TAG"
 
+      - name: Capture image digest
+        run: |-
+          IMAGE_DIGEST_REF=$(gcloud artifacts docker images describe "$IMAGE_TAG" --format='value(image_summary.fully_qualified_digest)' || true)
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            IMAGE_DIGEST_REF=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_TAG" || true)
+          fi
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            echo "Failed to resolve digest for $IMAGE_TAG" >&2
+            exit 1
+          fi
+          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
+
       # Deploy to Cloud Run
       - name: Deploy to Cloud Run
         run: |-
           gcloud run deploy "pr-${SANITIZED_BRANCH_NAME}" \
-            --image "$IMAGE_TAG" \
+            --image "$IMAGE_DIGEST_REF" \
             --project "$PROJECT_ID" \
             --region $GAR_ZONE \
             --platform managed \
@@ -222,6 +234,9 @@ jobs:
     if: github.event.action == 'closed'
     name: Cleanup Cloud Run Service
     runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
     env:
       STAGE_GCP_WIF_PROVIDER: ${{ secrets.STAGE_GCP_WIF_PROVIDER }}
       STAGE_GCP_WIF_SERVICE_ACCOUNT: ${{ secrets.STAGE_GCP_WIF_SERVICE_ACCOUNT }}

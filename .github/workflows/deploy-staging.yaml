@@ -14,7 +14,35 @@ env:
   CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
 
 jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm run build
+
   setup-build-publish-deploy:
+    needs: [quality-gates]
     name: Setup, Build, Publish, and Deploy
     runs-on: ubuntu-latest
     environment: staging
@@ -24,13 +52,21 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: false
 
       # Setup gcloud CLI
       - id: "auth"
-        uses: "google-github-actions/auth@v2"
+        if: ${{ secrets.STAGE_GCP_WIF_PROVIDER != '' && secrets.STAGE_GCP_WIF_SERVICE_ACCOUNT != '' }}
+        uses: "google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed" # v2
+        with:
+          workload_identity_provider: "${{ secrets.STAGE_GCP_WIF_PROVIDER }}"
+          service_account: "${{ secrets.STAGE_GCP_WIF_SERVICE_ACCOUNT }}"
+
+      - id: "auth-key-fallback"
+        if: ${{ secrets.STAGE_GCP_WIF_PROVIDER == '' || secrets.STAGE_GCP_WIF_SERVICE_ACCOUNT == '' }}
+        uses: "google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed" # v2
         with:
           credentials_json: "${{ secrets.STAGE_GKE_SA_KEY }}"
 

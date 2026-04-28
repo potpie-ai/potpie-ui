@@ -153,7 +153,7 @@ export default function QnaPage() {
     skippedQuestions: new Set(),
     unansweredQuestionIds: new Set(),
     isGenerating: false,
-    attachmentIds: [],
+    qaAttachments: [],
     attachmentUploading: false,
     questionGenerationStatus: null,
     questionGenerationError: null,
@@ -428,12 +428,43 @@ export default function QnaPage() {
           }
         });
 
+        let storedAdditionalContext = "";
+        let storedQaAttachments: {
+          id: string;
+          file_name: string;
+          mime_type: string;
+        }[] = [];
+        if (typeof window !== "undefined" && recipeId) {
+          try {
+            const raw = localStorage.getItem(`qa_extras_${recipeId}`);
+            if (raw) {
+              const p = JSON.parse(raw) as {
+                additionalContext?: string;
+                qaAttachments?: typeof storedQaAttachments;
+              };
+              if (typeof p.additionalContext === "string") {
+                storedAdditionalContext = p.additionalContext;
+              }
+              if (Array.isArray(p.qaAttachments)) {
+                storedQaAttachments = p.qaAttachments;
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+
         setState((prev) => ({
           ...prev,
           questions: mcqQuestions,
           sections: sectionsMap,
           answers: initialAnswers,
           pageState: "questions",
+          additionalContext: storedAdditionalContext || prev.additionalContext,
+          qaAttachments:
+            storedQaAttachments.length > 0
+              ? storedQaAttachments
+              : prev.qaAttachments,
         }));
 
         // Animate questions appearing
@@ -455,6 +486,27 @@ export default function QnaPage() {
         setState((prev) => ({ ...prev, pageState: "questions" }));
       }
   }, [recipeId]);
+
+  // Persist additional context + attachment refs (survives refresh; cleared after successful submit)
+  useEffect(() => {
+    if (!recipeId || typeof window === "undefined" || state.pageState !== "questions") {
+      return;
+    }
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          `qa_extras_${recipeId}`,
+          JSON.stringify({
+            additionalContext: state.additionalContext,
+            qaAttachments: state.qaAttachments,
+          })
+        );
+      } catch {
+        /* ignore */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [recipeId, state.pageState, state.additionalContext, state.qaAttachments]);
 
   // When run_id in URL, connect to questions stream (streaming part from last working commit – no poll inside this effect)
   useEffect(() => {
@@ -1258,7 +1310,8 @@ export default function QnaPage() {
       console.log("[QnA Page] Submitting QA answers with recipeId:", recipeId);
 
       // Collect all answers - format: { question_id: answer_text }
-      const answersPayload: Record<string, string> = {};
+      const answersPayload: Record<string, string | number | boolean | string[]> =
+        {};
 
       state.questions.forEach((question) => {
         const qId = question.id;
@@ -1304,11 +1357,6 @@ export default function QnaPage() {
         }
       });
 
-      // Add additional context if provided
-      if (state.additionalContext.trim()) {
-        answersPayload["additional_context"] = state.additionalContext.trim();
-      }
-
       // Check recipe status to determine if we need to submit answers or just regenerate
       let shouldRegenerate = false;
       let recipeStatus: string | null = null;
@@ -1324,11 +1372,97 @@ export default function QnaPage() {
       const canSubmitAnswers = !recipeStatus || recipeStatus === "QUESTIONS_READY" || recipeStatus === "ANSWERS_SUBMITTED";
       const alreadyInSpecPhase = recipeStatus === "SPEC_IN_PROGRESS" || recipeStatus === "SPEC_READY";
 
+      const extrasBody = {
+        additional_context: state.additionalContext.trim() || undefined,
+        attachments:
+          state.qaAttachments.length > 0 ? state.qaAttachments : undefined,
+      };
+      // #region agent log
+      fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "4826dc",
+        },
+        body: JSON.stringify({
+          sessionId: "4826dc",
+          runId: "pre-fix",
+          hypothesisId: "H1",
+          location: "qna/page.tsx:extrasBody",
+          message: "Computed QnA extras payload before submit",
+          data: {
+            recipeId,
+            pageState: state.pageState,
+            canSubmitAnswers,
+            alreadyInSpecPhase,
+            rawAdditionalContextLength: state.additionalContext.length,
+            trimmedAdditionalContextLength: state.additionalContext.trim().length,
+            hasAdditionalContextField: !!extrasBody.additional_context,
+            attachmentsCount: state.qaAttachments.length,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
       if (canSubmitAnswers) {
-        // Submit answers (idempotent on backend)
-        await SpecService.submitAnswers(recipeId, answersPayload);
+        // #region agent log
+        fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "4826dc",
+          },
+          body: JSON.stringify({
+            sessionId: "4826dc",
+            runId: "pre-fix",
+            hypothesisId: "H2",
+            location: "qna/page.tsx:submitAnswersBranch",
+            message: "Using submitAnswers branch",
+            data: {
+              recipeId,
+              answersCount: Object.keys(answersPayload).length,
+              hasAdditionalContextField: !!extrasBody.additional_context,
+              attachmentsCount: extrasBody.attachments?.length ?? 0,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        await SpecService.submitAnswers(recipeId, {
+          answers: answersPayload,
+          ...extrasBody,
+        });
       } else if (alreadyInSpecPhase) {
-        console.log("[QnA Page] Recipe already in spec phase, skipping submitAnswers");
+        console.log(
+          "[QnA Page] Recipe already in spec phase, skipping full submitAnswers"
+        );
+        if (extrasBody.additional_context || extrasBody.attachments) {
+          // #region agent log
+          fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "4826dc",
+            },
+            body: JSON.stringify({
+              sessionId: "4826dc",
+              runId: "pre-fix",
+              hypothesisId: "H3",
+              location: "qna/page.tsx:updateQaSubmissionExtrasBranch",
+              message: "Using qa-submission extras-only branch",
+              data: {
+                recipeId,
+                recipeStatus,
+                hasAdditionalContextField: !!extrasBody.additional_context,
+                attachmentsCount: extrasBody.attachments?.length ?? 0,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+          await SpecService.updateQaSubmissionExtras(recipeId, extrasBody);
+        }
         shouldRegenerate = true;
       }
 
@@ -1373,6 +1507,7 @@ export default function QnaPage() {
         try {
           const storageKey = `qa_answers_${recipeId}`;
           localStorage.removeItem(storageKey);
+          localStorage.removeItem(`qa_extras_${recipeId}`);
         } catch (error) {
           console.warn("Failed to clear localStorage after submission:", error);
         }
@@ -1491,24 +1626,29 @@ export default function QnaPage() {
     files: File[],
     removedIndex?: number
   ) => {
-    const idsAfterRemove =
+    const refsAfterRemove =
       removedIndex !== undefined
-        ? state.attachmentIds.filter((_, i) => i !== removedIndex)
-        : [...state.attachmentIds];
-    if (files.length <= idsAfterRemove.length) {
-      setState((prev) => ({ ...prev, attachmentIds: idsAfterRemove }));
+        ? state.qaAttachments.filter((_, i) => i !== removedIndex)
+        : [...state.qaAttachments];
+    if (files.length <= refsAfterRemove.length) {
+      setState((prev) => ({ ...prev, qaAttachments: refsAfterRemove }));
       return;
     }
     setState((prev) => ({ ...prev, attachmentUploading: true }));
     try {
-      const newIds: string[] = [];
-      for (let i = idsAfterRemove.length; i < files.length; i++) {
+      const newRefs: { id: string; file_name: string; mime_type: string }[] =
+        [];
+      for (let i = refsAfterRemove.length; i < files.length; i++) {
         const result = await MediaService.uploadFile(files[i]);
-        newIds.push(result.id);
+        newRefs.push({
+          id: result.id,
+          file_name: result.file_name,
+          mime_type: result.mime_type,
+        });
       }
       setState((prev) => ({
         ...prev,
-        attachmentIds: idsAfterRemove.concat(newIds),
+        qaAttachments: refsAfterRemove.concat(newRefs),
         attachmentUploading: false,
       }));
     } catch (err: unknown) {

@@ -15,6 +15,8 @@ import {
   RecipeQuestionsResponse,
   SubmitRecipeAnswersRequest,
   SubmitRecipeAnswersResponse,
+  QaAttachmentRef,
+  QaSubmissionExtrasResponse,
   TriggerSpecGenerationResponse,
   SpecStatusResponse,
   RecipeDetailsResponse,
@@ -185,21 +187,183 @@ export default class SpecService {
    */
   static async submitAnswers(
     recipeId: string,
-    answers: Record<string, string>,
+    body: SubmitRecipeAnswersRequest,
   ): Promise<SubmitRecipeAnswersResponse> {
     try {
       console.log("[SpecService] Submitting answers for recipe:", recipeId);
       const headers = await getHeaders();
-      const request: SubmitRecipeAnswersRequest = { answers };
+      const request: SubmitRecipeAnswersRequest = { ...body };
+      // #region agent log
+      fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "4826dc",
+        },
+        body: JSON.stringify({
+          sessionId: "4826dc",
+          runId: "pre-fix",
+          hypothesisId: "H4",
+          location: "services/SpecService.ts:submitAnswers:prePost",
+          message: "Sending submitAnswers request to backend",
+          data: {
+            recipeId,
+            endpoint: `${this.API_BASE}/${recipeId}/answers`,
+            answersCount: Object.keys(request.answers ?? {}).length,
+            hasAdditionalContextField: !!request.additional_context,
+            additionalContextLength: request.additional_context?.length ?? 0,
+            attachmentsCount: request.attachments?.length ?? 0,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       const response = await axios.post<SubmitRecipeAnswersResponse>(
         `${this.API_BASE}/${recipeId}/answers`,
         request,
         { headers },
       );
+      // #region agent log
+      fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "4826dc",
+        },
+        body: JSON.stringify({
+          sessionId: "4826dc",
+          runId: "pre-fix",
+          hypothesisId: "H5",
+          location: "services/SpecService.ts:submitAnswers:postPost",
+          message: "submitAnswers backend response received",
+          data: {
+            recipeId,
+            status: response.status,
+            responseKeys: Object.keys(response.data ?? {}),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       console.log("[SpecService] Submit answers response:", response.data);
       return response.data;
     } catch (error: any) {
+      // #region agent log
+      fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "4826dc",
+        },
+        body: JSON.stringify({
+          sessionId: "4826dc",
+          runId: "pre-fix",
+          hypothesisId: "H5",
+          location: "services/SpecService.ts:submitAnswers:catch",
+          message: "submitAnswers backend request failed",
+          data: {
+            recipeId,
+            status: error?.response?.status ?? null,
+            responseData: error?.response?.data ?? null,
+            message: error?.message ?? null,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       console.error("[SpecService] Error submitting answers:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Persist only additional QnA text and attachment refs (e.g. when spec phase already started).
+   * POST /api/v1/recipes/{recipe_id}/qa-submission
+   */
+  static async updateQaSubmissionExtras(
+    recipeId: string,
+    body: { additional_context?: string; attachments?: QaAttachmentRef[] },
+  ): Promise<QaSubmissionExtrasResponse> {
+    try {
+      const headers = await getHeaders();
+      // #region agent log
+      fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "4826dc",
+        },
+        body: JSON.stringify({
+          sessionId: "4826dc",
+          runId: "pre-fix",
+          hypothesisId: "H4",
+          location: "services/SpecService.ts:updateQaSubmissionExtras:prePost",
+          message: "Sending qa-submission extras request to backend",
+          data: {
+            recipeId,
+            endpoint: `${this.API_BASE}/${recipeId}/qa-submission`,
+            hasAdditionalContextField: !!body.additional_context,
+            additionalContextLength: body.additional_context?.length ?? 0,
+            attachmentsCount: body.attachments?.length ?? 0,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      const response = await axios.post<QaSubmissionExtrasResponse>(
+        `${this.API_BASE}/${recipeId}/qa-submission`,
+        body,
+        { headers },
+      );
+      // #region agent log
+      fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "4826dc",
+        },
+        body: JSON.stringify({
+          sessionId: "4826dc",
+          runId: "pre-fix",
+          hypothesisId: "H5",
+          location: "services/SpecService.ts:updateQaSubmissionExtras:postPost",
+          message: "qa-submission extras backend response received",
+          data: {
+            recipeId,
+            status: response.status,
+            responseKeys: Object.keys(response.data ?? {}),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return response.data;
+    } catch (error: any) {
+      // #region agent log
+      fetch("http://127.0.0.1:7242/ingest/be73e103-780e-4c00-8b5d-42a4ff6c2156", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "4826dc",
+        },
+        body: JSON.stringify({
+          sessionId: "4826dc",
+          runId: "pre-fix",
+          hypothesisId: "H5",
+          location: "services/SpecService.ts:updateQaSubmissionExtras:catch",
+          message: "qa-submission extras backend request failed",
+          data: {
+            recipeId,
+            status: error?.response?.status ?? null,
+            responseData: error?.response?.data ?? null,
+            message: error?.message ?? null,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      console.error("[SpecService] Error updating QnA submission extras:", error);
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }

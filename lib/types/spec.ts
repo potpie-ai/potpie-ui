@@ -190,9 +190,20 @@ export interface RecipeQuestionsResponse {
   run_id?: string | null;
 }
 
+/** QnA attachment ref (from Potpie media upload) for spec context */
+export interface QaAttachmentRef {
+  id: string;
+  file_name: string;
+  mime_type: string;
+}
+
 /** Request for POST /api/v1/recipes/{recipe_id}/answers */
 export interface SubmitRecipeAnswersRequest {
-  answers: Record<string, string>;
+  answers: Record<string, string | number | boolean | string[]>;
+  /** Free text from Additional Context (stored on recipe for spec gen) */
+  additional_context?: string;
+  /** Uploaded files; workflows fetches bytes for images/PDFs for research */
+  attachments?: QaAttachmentRef[];
 }
 
 /** Response from POST /api/v1/recipes/{recipe_id}/answers */
@@ -200,6 +211,12 @@ export interface SubmitRecipeAnswersResponse {
   message: string;
   recipe_id: string;
   new_status: string;
+}
+
+/** Response from POST /api/v1/recipes/{recipe_id}/qa-submission */
+export interface QaSubmissionExtrasResponse {
+  message: string;
+  recipe_id: string;
 }
 
 /** Response from POST /api/v1/recipes/{recipe_id}/spec/generate */

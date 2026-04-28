@@ -92,8 +92,8 @@ jobs:
             echo "NEXT_PUBLIC_FIREBASE_APP_ID=" >> $GITHUB_ENV
 
             # Override API base URLs for local-mode branch to match the known-good backend.
-            echo "NEXT_PUBLIC_BASE_URL=http://10.179.100.22" >> $GITHUB_ENV
-            echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=http://10.179.100.22" >> $GITHUB_ENV
+            API_BASE_URL="http://10.179.100.22"
+            CONVERSATION_BASE_URL="http://10.179.100.22"
           else
             echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_API_KEY }}" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> $GITHUB_ENV
@@ -101,17 +101,15 @@ jobs:
             echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.STAGE_NEXT_PUBLIC_FIREBASE_APP_ID }}" >> $GITHUB_ENV
+            API_BASE_URL="${{ secrets.STAGE_NEXT_PUBLIC_BASE_URL }}"
+            CONVERSATION_BASE_URL="${{ secrets.STAGE_NEXT_PUBLIC_CONVERSATION_BASE_URL }}"
           fi
-          # If local-mode already set NEXT_PUBLIC_BASE_URL above, do not override it here.
-          if [ -z "${NEXT_PUBLIC_BASE_URL:-}" ]; then
-            echo "NEXT_PUBLIC_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_BASE_URL }}" >> $GITHUB_ENV
-          fi
+          echo "NEXT_PUBLIC_BASE_URL=${API_BASE_URL}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SKIP_PRO_CHECK=${{ secrets.STAGE_NEXT_PUBLIC_SKIP_PRO_CHECK }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GITHUB_APP_NAME=${{ secrets.STAGE_NEXT_PUBLIC_GITHUB_APP_NAME }}" >> $GITHUB_ENV
-          # If local-mode already set NEXT_PUBLIC_CONVERSATION_BASE_URL above, do not override it here.
-          if [ -z "${NEXT_PUBLIC_CONVERSATION_BASE_URL:-}" ]; then
-            echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=${{ secrets.STAGE_NEXT_PUBLIC_CONVERSATION_BASE_URL }}" >> $GITHUB_ENV
-          fi
+          echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=${CONVERSATION_BASE_URL}" >> $GITHUB_ENV
+          echo "Resolved NEXT_PUBLIC_BASE_URL=${API_BASE_URL}"
+          echo "Resolved NEXT_PUBLIC_CONVERSATION_BASE_URL=${CONVERSATION_BASE_URL}"
           echo "NEXT_PUBLIC_DEFAULT_CHAT_AGENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_DEFAULT_CHAT_AGENT_ID }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_KEY }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_HOST }}" >> $GITHUB_ENV
@@ -181,6 +179,8 @@ jobs:
           SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
           IMAGE_TAG="$GAR_ZONE-docker.pkg.dev/$PROJECT_ID/$GAR_REPO/$IMAGE:$SHORT_SHA"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "Building with NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}"
+          echo "Building with NEXT_PUBLIC_CONVERSATION_BASE_URL=${NEXT_PUBLIC_CONVERSATION_BASE_URL}"
           docker build \
             --tag "$IMAGE_TAG" \
             --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="${{ env.NEXT_PUBLIC_FIREBASE_API_KEY }}" \
@@ -189,10 +189,10 @@ jobs:
             --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
             --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
             --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ env.NEXT_PUBLIC_FIREBASE_APP_ID }}" \
-            --build-arg NEXT_PUBLIC_BASE_URL="${{ env.NEXT_PUBLIC_BASE_URL }}" \
+            --build-arg NEXT_PUBLIC_BASE_URL="${NEXT_PUBLIC_BASE_URL}" \
             --build-arg NEXT_PUBLIC_SKIP_PRO_CHECK="${{ env.NEXT_PUBLIC_SKIP_PRO_CHECK }}" \
             --build-arg NEXT_PUBLIC_GITHUB_APP_NAME="${{ env.NEXT_PUBLIC_GITHUB_APP_NAME }}" \
-            --build-arg NEXT_PUBLIC_CONVERSATION_BASE_URL="${{ env.NEXT_PUBLIC_CONVERSATION_BASE_URL }}" \
+            --build-arg NEXT_PUBLIC_CONVERSATION_BASE_URL="${NEXT_PUBLIC_CONVERSATION_BASE_URL}" \
             --build-arg NEXT_PUBLIC_DEFAULT_CHAT_AGENT_ID="${{ env.NEXT_PUBLIC_DEFAULT_CHAT_AGENT_ID }}" \
             --build-arg NEXT_PUBLIC_POSTHOG_KEY="${{ env.NEXT_PUBLIC_POSTHOG_KEY }}" \
             --build-arg NEXT_PUBLIC_POSTHOG_HOST="${{ env.NEXT_PUBLIC_POSTHOG_HOST }}" \
@@ -221,9 +221,12 @@ jobs:
       # Deploy to Cloud Run
       - name: Deploy to Cloud Run
         run: |-
+          echo "Deploying with Cloud Run NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}"
+          echo "Deploying with Cloud Run NEXT_PUBLIC_CONVERSATION_BASE_URL=${NEXT_PUBLIC_CONVERSATION_BASE_URL}"
           gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
             --image ${{ env.IMAGE_TAG }} \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.GAR_ZONE }} \
             --platform managed \
+            --set-env-vars NEXT_PUBLIC_BASE_URL="${NEXT_PUBLIC_BASE_URL}",NEXT_PUBLIC_CONVERSATION_BASE_URL="${NEXT_PUBLIC_CONVERSATION_BASE_URL}" \
             --allow-unauthenticated

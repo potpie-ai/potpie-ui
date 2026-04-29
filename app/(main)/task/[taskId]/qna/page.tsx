@@ -1309,6 +1309,10 @@ export default function QnaPage() {
 
       console.log("[QnA Page] Submitting QA answers with recipeId:", recipeId);
 
+      if (state.attachmentUploading) {
+        throw new Error("Please wait for attachments to finish uploading.");
+      }
+
       // Collect all answers - format: { question_id: answer_text }
       const answersPayload: Record<string, string | number | boolean | string[]> =
         {};
@@ -1626,33 +1630,21 @@ export default function QnaPage() {
     files: File[],
     removedIndex?: number
   ) => {
-    const refsAfterRemove =
+    let refsAfterRemove =
       removedIndex !== undefined
         ? state.qaAttachments.filter((_, i) => i !== removedIndex)
         : [...state.qaAttachments];
-    if (files.length <= refsAfterRemove.length) {
-      setState((prev) => ({ ...prev, qaAttachments: refsAfterRemove }));
-      return;
-    }
-    setState((prev) => ({ ...prev, attachmentUploading: true }));
-    try {
-      const newRefs: { id: string; file_name: string; mime_type: string }[] =
-        [];
-      for (let i = refsAfterRemove.length; i < files.length; i++) {
-        const result = await MediaService.uploadFile(files[i]);
-        newRefs.push({
-          id: result.id,
-          file_name: result.file_name,
-          mime_type: result.mime_type,
-        });
-      }
+
+    // Fewer File objects than refs — trim refs (removals).
+    if (files.length < refsAfterRemove.length) {
       setState((prev) => ({
         ...prev,
-        qaAttachments: refsAfterRemove.concat(newRefs),
-        attachmentUploading: false,
+        qaAttachments: refsAfterRemove.slice(0, files.length),
       }));
-    } catch (err: unknown) {
-      setState((prev) => ({ ...prev, attachmentUploading: false }));
+      return;
+    }
+
+    const finishUploadError = (err: unknown) => {
       const message =
         err && typeof err === "object" && "response" in err
           ? (err as { response?: { data?: { detail?: string } } }).response?.data
@@ -1661,7 +1653,78 @@ export default function QnaPage() {
       toast.error(
         typeof message === "string" ? message : "Failed to upload attachment."
       );
+    };
+
+    // More files than refs — upload new tail only.
+    if (files.length > refsAfterRemove.length) {
+      setState((prev) => ({ ...prev, attachmentUploading: true }));
+      try {
+        const newRefs: { id: string; file_name: string; mime_type: string }[] =
+          [];
+        for (let i = refsAfterRemove.length; i < files.length; i++) {
+          const result = await MediaService.uploadFile(files[i]);
+          newRefs.push({
+            id: result.id,
+            file_name: result.file_name,
+            mime_type: result.mime_type,
+          });
+        }
+        setState((prev) => ({
+          ...prev,
+          qaAttachments: refsAfterRemove.concat(newRefs),
+          attachmentUploading: false,
+        }));
+      } catch (err: unknown) {
+        setState((prev) => ({ ...prev, attachmentUploading: false }));
+        finishUploadError(err);
+      }
+      return;
     }
+
+    // files.length === refsAfterRemove.length
+    if (files.length === 0) {
+      setState((prev) => ({ ...prev, qaAttachments: [] }));
+      return;
+    }
+
+    // Single-slot equality: restored qaAttachments from storage + child starts with empty File[]
+    // yields one ref and one new File — old logic treated this as "synced" and skipped upload.
+    if (
+      removedIndex === undefined &&
+      files.length === 1 &&
+      refsAfterRemove.length === 1
+    ) {
+      const file = files[0];
+      const ref = refsAfterRemove[0];
+      const looksLikeSameUpload =
+        Boolean(ref.file_name?.trim()) &&
+        Boolean(ref.mime_type?.trim()) &&
+        ref.file_name === file.name &&
+        ref.mime_type === file.type;
+      if (!looksLikeSameUpload) {
+        setState((prev) => ({ ...prev, attachmentUploading: true }));
+        try {
+          const result = await MediaService.uploadFile(file);
+          setState((prev) => ({
+            ...prev,
+            qaAttachments: [
+              {
+                id: result.id,
+                file_name: result.file_name,
+                mime_type: result.mime_type,
+              },
+            ],
+            attachmentUploading: false,
+          }));
+        } catch (err: unknown) {
+          setState((prev) => ({ ...prev, attachmentUploading: false }));
+          finishUploadError(err);
+        }
+        return;
+      }
+    }
+
+    setState((prev) => ({ ...prev, qaAttachments: refsAfterRemove }));
   };
 
   // Count answered questions (excluding skipped ones)

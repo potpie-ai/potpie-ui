@@ -1016,10 +1016,16 @@ const SpecPage = () => {
 
   const persistQaExtrasFromLocalStorageIfAny = useCallback(
     async (id: string) => {
-      if (typeof window === "undefined") return;
+      if (typeof window === "undefined") return true;
       try {
         const raw = localStorage.getItem(`qa_extras_${id}`);
-        if (!raw) return;
+        if (!raw) {
+          await SpecService.updateQaSubmissionExtras(id, {
+            additionalContext: null,
+            attachments: [],
+          });
+          return true;
+        }
         const parsed = JSON.parse(raw) as {
           additionalContext?: string;
           attachments?: Array<{ id: string; file_name: string; mime_type: string }>;
@@ -1029,13 +1035,23 @@ const SpecPage = () => {
           parsed.additionalContext.trim().length > 0;
         const hasAttachments =
           Array.isArray(parsed.attachments) && parsed.attachments.length > 0;
-        if (!hasAdditionalContext && !hasAttachments) return;
+        if (!hasAdditionalContext && !hasAttachments) {
+          await SpecService.updateQaSubmissionExtras(id, {
+            additionalContext: null,
+            attachments: [],
+          });
+          return true;
+        }
         await SpecService.updateQaSubmissionExtras(id, {
-          additionalContext: parsed.additionalContext,
-          attachments: parsed.attachments,
+          additionalContext: hasAdditionalContext ? parsed.additionalContext : null,
+          attachments: hasAttachments ? parsed.attachments : [],
         });
+        return true;
       } catch (err) {
         console.warn("[Spec Page] Could not persist QA extras before regenerate", err);
+        throw err instanceof Error
+          ? err
+          : new Error("Failed to sync QA extras before regenerate");
       }
     },
     []
@@ -1308,7 +1324,11 @@ const SpecPage = () => {
                       if (!recipeId || isRegeneratingSpec) return;
                       setIsRegeneratingSpec(true);
                       try {
-                        await persistQaExtrasFromLocalStorageIfAny(recipeId);
+                        const extrasPersisted =
+                          await persistQaExtrasFromLocalStorageIfAny(recipeId);
+                        if (!extrasPersisted) {
+                          throw new Error("Failed to sync QA extras before regenerate");
+                        }
                         // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
                         // Clear transient stream state and errors but keep specProgress populated

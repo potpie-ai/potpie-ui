@@ -196,10 +196,14 @@ export default class SpecService {
       const headers = await getHeaders();
       const request: SubmitRecipeAnswersRequest = {
         answers,
-        additional_context: extras?.additionalContext?.trim() || undefined,
+        additional_context: extras
+          ? extras.additionalContext?.trim() || null
+          : undefined,
         attachments:
-          extras?.attachments && extras.attachments.length > 0
-            ? extras.attachments
+          extras
+            ? extras.attachments && extras.attachments.length > 0
+              ? extras.attachments
+              : []
             : undefined,
       };
       const response = await axios.post<SubmitRecipeAnswersResponse>(
@@ -223,7 +227,7 @@ export default class SpecService {
   static async updateQaSubmissionExtras(
     recipeId: string,
     extras: {
-      additionalContext?: string;
+      additionalContext?: string | null;
       attachments?: Array<{ id: string; file_name: string; mime_type: string }>;
     },
   ): Promise<{ message: string; recipe_id: string }> {
@@ -232,10 +236,14 @@ export default class SpecService {
       const response = await axios.post<{ message: string; recipe_id: string }>(
         `${this.API_BASE}/${recipeId}/qa-submission`,
         {
-          additional_context: extras.additionalContext?.trim() || undefined,
+          additional_context: extras
+            ? extras.additionalContext?.trim() || null
+            : undefined,
           attachments:
-            extras.attachments && extras.attachments.length > 0
-              ? extras.attachments
+            extras
+              ? extras.attachments && extras.attachments.length > 0
+                ? extras.attachments
+                : []
               : undefined,
         },
         { headers },

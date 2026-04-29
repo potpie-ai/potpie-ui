@@ -169,31 +169,55 @@ export default function QnaPage() {
     recipeDetailsForGenerateLabel?.status,
   );
 
+  const [extrasRestoredForRecipeId, setExtrasRestoredForRecipeId] = useState<string | null>(null);
+
   // Restore saved QnA extras (additional context + attachments metadata) for this recipe.
   useEffect(() => {
-    if (!recipeId || typeof window === "undefined") return;
+    if (!recipeId || typeof window === "undefined") {
+      setExtrasRestoredForRecipeId(null);
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      additionalContext: "",
+      attachments: [],
+    }));
+
     try {
       const raw = localStorage.getItem(`qa_extras_${recipeId}`);
-      if (!raw) return;
+      if (!raw) {
+        setExtrasRestoredForRecipeId(recipeId);
+        return;
+      }
       const parsed = JSON.parse(raw) as {
         additionalContext?: string;
         attachments?: Array<{ id: string; file_name: string; mime_type: string }>;
       };
       setState((prev) => ({
         ...prev,
-        additionalContext: parsed.additionalContext ?? prev.additionalContext,
-        attachments: Array.isArray(parsed.attachments)
-          ? parsed.attachments
-          : prev.attachments,
+        additionalContext:
+          typeof parsed.additionalContext === "string"
+            ? parsed.additionalContext
+            : "",
+        attachments: Array.isArray(parsed.attachments) ? parsed.attachments : [],
       }));
     } catch {
       // ignore malformed localStorage payload
+    } finally {
+      setExtrasRestoredForRecipeId(recipeId);
     }
   }, [recipeId]);
 
   // Keep extras mirrored in localStorage so spec regenerate can sync them before triggering.
   useEffect(() => {
-    if (!recipeId || typeof window === "undefined") return;
+    if (
+      !recipeId ||
+      extrasRestoredForRecipeId !== recipeId ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
     try {
       localStorage.setItem(
         `qa_extras_${recipeId}`,
@@ -205,7 +229,12 @@ export default function QnaPage() {
     } catch {
       // ignore localStorage write errors
     }
-  }, [recipeId, state.additionalContext, state.attachments]);
+  }, [
+    recipeId,
+    extrasRestoredForRecipeId,
+    state.additionalContext,
+    state.attachments,
+  ]);
 
   // Fetch recipe details when recipeId is available (same priority as spec: API then localStorage)
   useEffect(() => {

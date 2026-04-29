@@ -193,6 +193,14 @@ export interface RecipeQuestionsResponse {
 /** Request for POST /api/v1/recipes/{recipe_id}/answers */
 export interface SubmitRecipeAnswersRequest {
   answers: Record<string, string>;
+  additional_context?: string;
+  attachments?: QaAttachmentRef[];
+}
+
+export interface QaAttachmentRef {
+  id: string;
+  file_name: string;
+  mime_type: string;
 }
 
 /** Response from POST /api/v1/recipes/{recipe_id}/answers */

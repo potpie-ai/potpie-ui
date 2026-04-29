@@ -153,7 +153,7 @@ export default function QnaPage() {
     skippedQuestions: new Set(),
     unansweredQuestionIds: new Set(),
     isGenerating: false,
-    attachmentIds: [],
+    attachments: [],
     attachmentUploading: false,
     questionGenerationStatus: null,
     questionGenerationError: null,
@@ -168,6 +168,44 @@ export default function QnaPage() {
   const reGenerateImplementationPlan = hasSpecBeenCompletedOnce(
     recipeDetailsForGenerateLabel?.status,
   );
+
+  // Restore saved QnA extras (additional context + attachments metadata) for this recipe.
+  useEffect(() => {
+    if (!recipeId || typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(`qa_extras_${recipeId}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        additionalContext?: string;
+        attachments?: Array<{ id: string; file_name: string; mime_type: string }>;
+      };
+      setState((prev) => ({
+        ...prev,
+        additionalContext: parsed.additionalContext ?? prev.additionalContext,
+        attachments: Array.isArray(parsed.attachments)
+          ? parsed.attachments
+          : prev.attachments,
+      }));
+    } catch {
+      // ignore malformed localStorage payload
+    }
+  }, [recipeId]);
+
+  // Keep extras mirrored in localStorage so spec regenerate can sync them before triggering.
+  useEffect(() => {
+    if (!recipeId || typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        `qa_extras_${recipeId}`,
+        JSON.stringify({
+          additionalContext: state.additionalContext,
+          attachments: state.attachments,
+        })
+      );
+    } catch {
+      // ignore localStorage write errors
+    }
+  }, [recipeId, state.additionalContext, state.attachments]);
 
   // Fetch recipe details when recipeId is available (same priority as spec: API then localStorage)
   useEffect(() => {
@@ -1304,11 +1342,6 @@ export default function QnaPage() {
         }
       });
 
-      // Add additional context if provided
-      if (state.additionalContext.trim()) {
-        answersPayload["additional_context"] = state.additionalContext.trim();
-      }
-
       // Check recipe status to determine if we need to submit answers or just regenerate
       let shouldRegenerate = false;
       let recipeStatus: string | null = null;
@@ -1326,9 +1359,16 @@ export default function QnaPage() {
 
       if (canSubmitAnswers) {
         // Submit answers (idempotent on backend)
-        await SpecService.submitAnswers(recipeId, answersPayload);
+        await SpecService.submitAnswers(recipeId, answersPayload, {
+          additionalContext: state.additionalContext,
+          attachments: state.attachments,
+        });
       } else if (alreadyInSpecPhase) {
         console.log("[QnA Page] Recipe already in spec phase, skipping submitAnswers");
+        await SpecService.updateQaSubmissionExtras(recipeId, {
+          additionalContext: state.additionalContext,
+          attachments: state.attachments,
+        });
         shouldRegenerate = true;
       }
 
@@ -1491,24 +1531,28 @@ export default function QnaPage() {
     files: File[],
     removedIndex?: number
   ) => {
-    const idsAfterRemove =
+    const refsAfterRemove =
       removedIndex !== undefined
-        ? state.attachmentIds.filter((_, i) => i !== removedIndex)
-        : [...state.attachmentIds];
-    if (files.length <= idsAfterRemove.length) {
-      setState((prev) => ({ ...prev, attachmentIds: idsAfterRemove }));
+        ? state.attachments.filter((_, i) => i !== removedIndex)
+        : [...state.attachments];
+    if (files.length <= refsAfterRemove.length) {
+      setState((prev) => ({ ...prev, attachments: refsAfterRemove }));
       return;
     }
     setState((prev) => ({ ...prev, attachmentUploading: true }));
     try {
-      const newIds: string[] = [];
-      for (let i = idsAfterRemove.length; i < files.length; i++) {
+      const newRefs: Array<{ id: string; file_name: string; mime_type: string }> = [];
+      for (let i = refsAfterRemove.length; i < files.length; i++) {
         const result = await MediaService.uploadFile(files[i]);
-        newIds.push(result.id);
+        newRefs.push({
+          id: result.id,
+          file_name: result.file_name,
+          mime_type: result.mime_type,
+        });
       }
       setState((prev) => ({
         ...prev,
-        attachmentIds: idsAfterRemove.concat(newIds),
+        attachments: refsAfterRemove.concat(newRefs),
         attachmentUploading: false,
       }));
     } catch (err: unknown) {

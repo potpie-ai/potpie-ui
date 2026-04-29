@@ -186,11 +186,22 @@ export default class SpecService {
   static async submitAnswers(
     recipeId: string,
     answers: Record<string, string>,
+    extras?: {
+      additionalContext?: string;
+      attachments?: Array<{ id: string; file_name: string; mime_type: string }>;
+    },
   ): Promise<SubmitRecipeAnswersResponse> {
     try {
       console.log("[SpecService] Submitting answers for recipe:", recipeId);
       const headers = await getHeaders();
-      const request: SubmitRecipeAnswersRequest = { answers };
+      const request: SubmitRecipeAnswersRequest = {
+        answers,
+        additional_context: extras?.additionalContext?.trim() || undefined,
+        attachments:
+          extras?.attachments && extras.attachments.length > 0
+            ? extras.attachments
+            : undefined,
+      };
       const response = await axios.post<SubmitRecipeAnswersResponse>(
         `${this.API_BASE}/${recipeId}/answers`,
         request,
@@ -200,6 +211,37 @@ export default class SpecService {
       return response.data;
     } catch (error: any) {
       console.error("[SpecService] Error submitting answers:", error);
+      const errorMessage = parseApiError(error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Persist only Q&A extras (additional context + attachment refs) without submitting answers.
+   * POST /api/v1/recipes/{recipe_id}/qa-submission
+   */
+  static async updateQaSubmissionExtras(
+    recipeId: string,
+    extras: {
+      additionalContext?: string;
+      attachments?: Array<{ id: string; file_name: string; mime_type: string }>;
+    },
+  ): Promise<{ message: string; recipe_id: string }> {
+    try {
+      const headers = await getHeaders();
+      const response = await axios.post<{ message: string; recipe_id: string }>(
+        `${this.API_BASE}/${recipeId}/qa-submission`,
+        {
+          additional_context: extras.additionalContext?.trim() || undefined,
+          attachments:
+            extras.attachments && extras.attachments.length > 0
+              ? extras.attachments
+              : undefined,
+        },
+        { headers },
+      );
+      return response.data;
+    } catch (error: any) {
       const errorMessage = parseApiError(error);
       throw new Error(errorMessage);
     }

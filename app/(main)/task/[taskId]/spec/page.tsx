@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -1014,6 +1014,33 @@ const SpecPage = () => {
   const showReGeneratePlanButton =
     planGenForLabel === "completed" || planGenForLabel === "failed";
 
+  const persistQaExtrasFromLocalStorageIfAny = useCallback(
+    async (id: string) => {
+      if (typeof window === "undefined") return;
+      try {
+        const raw = localStorage.getItem(`qa_extras_${id}`);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as {
+          additionalContext?: string;
+          attachments?: Array<{ id: string; file_name: string; mime_type: string }>;
+        };
+        const hasAdditionalContext =
+          typeof parsed.additionalContext === "string" &&
+          parsed.additionalContext.trim().length > 0;
+        const hasAttachments =
+          Array.isArray(parsed.attachments) && parsed.attachments.length > 0;
+        if (!hasAdditionalContext && !hasAttachments) return;
+        await SpecService.updateQaSubmissionExtras(id, {
+          additionalContext: parsed.additionalContext,
+          attachments: parsed.attachments,
+        });
+      } catch (err) {
+        console.warn("[Spec Page] Could not persist QA extras before regenerate", err);
+      }
+    },
+    []
+  );
+
   // Persist stream timeline when spec is completed so it survives refresh
   useEffect(() => {
     if (!recipeId || status !== "COMPLETED" || !hasSpecContent) return;
@@ -1281,6 +1308,7 @@ const SpecPage = () => {
                       if (!recipeId || isRegeneratingSpec) return;
                       setIsRegeneratingSpec(true);
                       try {
+                        await persistQaExtrasFromLocalStorageIfAny(recipeId);
                         // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
                         // Clear transient stream state and errors but keep specProgress populated

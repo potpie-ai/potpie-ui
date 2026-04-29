@@ -1399,7 +1399,11 @@ const SpecPage = () => {
                         const { runId } = await PlanService.startPlanGenerationStream(recipeId, {
                           consumeStream: false,
                         });
-                        router.push(`/task/${recipeId}/plan?run_id=${encodeURIComponent(runId)}`);
+                        if (runId && runId.trim()) {
+                          router.push(`/task/${recipeId}/plan?run_id=${encodeURIComponent(runId.trim())}`);
+                        } else {
+                          router.push(`/task/${recipeId}/plan`);
+                        }
                       } else {
                         router.push(`/task/${recipeId}/plan`);
                       }

@@ -39,7 +39,7 @@ function formatAnswerSnippet(
     return typeof o === "string" ? o : o.label;
   }
   const txt = ans.textAnswer?.trim();
-  if (txt && !txt.startsWith("Other:")) return txt;
+  if (txt) return txt;
   return ans.mcqAnswer?.trim() || "—";
 }
 

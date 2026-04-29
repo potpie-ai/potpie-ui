@@ -24,7 +24,12 @@ export default class MinorService {
       !baseUrl ||
       (baseUrl.includes("localhost:5001") && !subscriptionChecksEnabled)
     ) {
-      return null;
+      return {
+        end_date: null,
+        plan: null,
+        plan_type: null,
+        status: null,
+      };
     }
     const response = await axios.get(
       `${baseUrl}/subscriptions/info?user_id=${userId}`

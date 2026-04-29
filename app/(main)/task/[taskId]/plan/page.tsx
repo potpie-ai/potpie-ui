@@ -605,14 +605,21 @@ const PlanPage = () => {
     if (statusData?.generation_status !== "not_started") return;
 
     hasTriggeredPlanGenRef.current = true;
-    
+
     // Live re-check to avoid triggering on stale 'not_started' cache immediately after a stream ends
     PlanService.getPlanStatusByRecipeId(recipeId).then((freshStatus) => {
-      if (freshStatus.generation_status !== "not_started") return;
+      if (freshStatus.generation_status !== "not_started") {
+        hasTriggeredPlanGenRef.current = false;
+        return;
+      }
       return PlanService.submitPlanGeneration({ recipe_id: recipeId })
         .then(() => invalidatePlanStatusAndBuildFlowNav())
-        .catch(() => {});
-    }).catch(() => {});
+        .catch((err) => {
+          hasTriggeredPlanGenRef.current = false;
+        });
+    }).catch((err) => {
+      hasTriggeredPlanGenRef.current = false;
+    });
   }, [recipeId, isLoadingStatus, statusData, runIdFromUrl, invalidatePlanStatusAndBuildFlowNav]);
 
   // Extract plan items from phases (new API)

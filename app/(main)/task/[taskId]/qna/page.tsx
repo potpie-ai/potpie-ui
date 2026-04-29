@@ -118,8 +118,14 @@ async function runSpecGenerationAfterQna(
               ? (current as { spec_generation_step_status?: string })
                   .spec_generation_step_status
               : null;
-      if (genStatus && genStatus !== "not_started") {
+      // Only regenerate for terminal/failed states; continue stream for in-progress
+      const normalizedStatus = genStatus?.toLowerCase();
+      const isTerminal = normalizedStatus === "failed" || normalizedStatus === "completed" || normalizedStatus === "error" || normalizedStatus === "succeeded";
+      if (isTerminal) {
         shouldRegenerate = true;
+      } else if (normalizedStatus && normalizedStatus !== "not_started") {
+        // In-progress or pending - use startSpecGenerationStream to attach to existing run
+        shouldRegenerate = false;
       }
     } catch {
       /* first generation */
@@ -1424,55 +1430,73 @@ export default function QnaPage() {
       if (awaitingContinuation) {
         setState((prev) => ({ ...prev, isGenerating: false }));
         toast.info("Reviewing your answers…");
+        // Create AbortController for this poll
+        const pollAbortController = new AbortController();
         void (async () => {
-          for (let attempt = 0; attempt < 60; attempt++) {
-            await new Promise((r) => setTimeout(r, 2500));
-            try {
-              const details = await SpecService.getRecipeDetails(recipeId);
-              const st = (details as { status?: string })?.status;
-              const qd = await QuestionService.getRecipeQuestions(recipeId);
-              processQuestions(qd);
-              if (st === "QUESTIONS_READY") {
-                setIsEvaluatingResponse(false);
-                toast.success("New questions are ready.");
-                return;
-              }
-              if (st === "ANSWERS_SUBMITTED") {
-                try {
-                  const { runId } = await runSpecGenerationAfterQna(recipeId, {
-                    forceRegenerate: false,
-                  });
-                  toast.success("Spec generation started successfully");
+          try {
+            for (let attempt = 0; attempt < 60; attempt++) {
+              if (pollAbortController.signal.aborted) return;
+              await new Promise((r) => setTimeout(r, 2500));
+              if (pollAbortController.signal.aborted) return;
+              try {
+                const details = await SpecService.getRecipeDetails(recipeId);
+                if (pollAbortController.signal.aborted) return;
+                const st = (details as { status?: string })?.status;
+                const qd = await QuestionService.getRecipeQuestions(recipeId);
+                if (pollAbortController.signal.aborted) return;
+                processQuestions(qd);
+                if (st === "QUESTIONS_READY") {
+                  if (pollAbortController.signal.aborted) return;
                   setIsEvaluatingResponse(false);
-                  const trimId = runId?.trim();
-                  const specPath = trimId
-                    ? `/task/${recipeId}/spec?run_id=${encodeURIComponent(trimId)}`
-                    : `/task/${recipeId}/spec`;
-                  router.push(specPath);
-                } catch (e: unknown) {
-                  console.warn("[QnA Page] Auto-start spec after interview:", e);
-                  setIsEvaluatingResponse(false);
-                  setState((prev) => ({ ...prev, isGenerating: false }));
-                  toast.error(
-                    e instanceof Error
-                      ? e.message
-                      : "Failed to start spec generation",
-                  );
+                  toast.success("New questions are ready.");
+                  return;
                 }
-                return;
+                if (st === "ANSWERS_SUBMITTED") {
+                  try {
+                    const { runId } = await runSpecGenerationAfterQna(recipeId, {
+                      forceRegenerate: false,
+                    });
+                    if (pollAbortController.signal.aborted) return;
+                    toast.success("Spec generation started successfully");
+                    setIsEvaluatingResponse(false);
+                    const trimId = runId?.trim();
+                    const specPath = trimId
+                      ? `/task/${recipeId}/spec?run_id=${encodeURIComponent(trimId)}`
+                      : `/task/${recipeId}/spec`;
+                    router.push(specPath);
+                  } catch (e: unknown) {
+                    console.warn("[QnA Page] Auto-start spec after interview:", e);
+                    if (pollAbortController.signal.aborted) return;
+                    setIsEvaluatingResponse(false);
+                    setState((prev) => ({ ...prev, isGenerating: false }));
+                    toast.error(
+                      e instanceof Error
+                        ? e.message
+                        : "Failed to start spec generation",
+                    );
+                  }
+                  return;
+                }
+                if (qd.generation_status === "failed") {
+                  if (pollAbortController.signal.aborted) return;
+                  setIsEvaluatingResponse(false);
+                  toast.error(qd.error_message || "Question generation failed");
+                  return;
+                }
+              } catch (e) {
+                console.warn("[QnA Page] Poll after submit:", e);
               }
-              if (qd.generation_status === "failed") {
-                setIsEvaluatingResponse(false);
-                toast.error(qd.error_message || "Question generation failed");
-                return;
-              }
-            } catch (e) {
-              console.warn("[QnA Page] Poll after submit:", e);
             }
+            if (pollAbortController.signal.aborted) return;
+            setIsEvaluatingResponse(false);
+            toast.error("Timed out waiting for follow-up questions.");
+          } catch (e) {
+            if (pollAbortController.signal.aborted) return;
+            console.error("[QnA Page] Poll error:", e);
           }
-          setIsEvaluatingResponse(false);
-          toast.error("Timed out waiting for follow-up questions.");
         })();
+        // Store abort controller so it can be cancelled on unmount
+        (globalThis as any).__qnaPollAbort = pollAbortController;
         return { stayOnPage: true as const };
       }
 
@@ -1955,6 +1979,17 @@ export default function QnaPage() {
     state.answers,
     state.activeQuestionIds,
   ]);
+
+  // Cleanup: abort any detached polling on unmount
+  useEffect(() => {
+    return () => {
+      const pollAbort = (globalThis as any).__qnaPollAbort as AbortController | undefined;
+      if (pollAbort) {
+        pollAbort.abort();
+        (globalThis as any).__qnaPollAbort = undefined;
+      }
+    };
+  }, []);
 
   if (!recipeId) {
     return (

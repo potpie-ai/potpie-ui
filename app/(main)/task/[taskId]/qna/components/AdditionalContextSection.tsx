@@ -158,7 +158,7 @@ export default function AdditionalContextSection({
                           index
                         )
                       }
-                      disabled={isGenerating}
+                      disabled={isGenerating || isEvaluating}
                       className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-zinc-600 hover:bg-zinc-300 disabled:opacity-50"
                       aria-label="Remove attachment"
                     >
@@ -173,7 +173,7 @@ export default function AdditionalContextSection({
               <button
                 type="button"
                 className="flex items-center gap-1.5 text-sm font-medium text-zinc-400 hover:text-zinc-500 focus:outline-none disabled:opacity-50"
-                disabled={isGenerating}
+                disabled={isGenerating || isEvaluating}
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Attach file"
               >
@@ -186,7 +186,7 @@ export default function AdditionalContextSection({
           <div className="flex items-center justify-end">
             <Button
               onClick={onGeneratePlan}
-              disabled={isGenerating || !recipeId}
+              disabled={isGenerating || isEvaluating || !recipeId}
               className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
             >
               {isGenerating || isEvaluating ? (

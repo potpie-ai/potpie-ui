@@ -317,7 +317,7 @@ export function parseApiError(error: any): string {
           // Extract the field name from the location path
           const fieldPath = err.loc.slice(2); // Skip 'body' and root field name
           const fieldName = fieldPath.length > 0 ? fieldPath[fieldPath.length - 1] : null;
-          const nodeId = fieldPath.length > 1 ? fieldPath[1] : "general"; // Get the node ID if present
+          const nodeId = fieldPath.length > 0 ? fieldPath[0] : "general"; // Get the node ID from first element
 
           const groupKey = nodeId ?? "general";
           if (!fieldErrors[groupKey]) {

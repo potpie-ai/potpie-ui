@@ -131,3 +131,33 @@ jobs:
       - name: Publish
         run: |-
           docker push "$IMAGE_TAG"
+
+      - name: Capture image digest
+        run: |-
+          IMAGE_DIGEST_REF=$(gcloud artifacts docker images describe "$IMAGE_TAG" --format='value(image_summary.fully_qualified_digest)' || true)
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            IMAGE_DIGEST_REF=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_TAG" || true)
+          fi
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            echo "Failed to resolve digest for $IMAGE_TAG" >&2
+            exit 1
+          fi
+          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
+
+      - name: Persist image metadata
+        run: |-
+          cat > image-metadata.json <<EOF
+          {
+            "image_tag": "${IMAGE_TAG}",
+            "image_digest_ref": "${IMAGE_DIGEST_REF}",
+            "project_id": "${PROJECT_ID}",
+            "repository": "${GAR_REPO}",
+            "commit_sha": "${GITHUB_SHA}"
+          }
+          EOF
+
+      - name: Upload image metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-metadata
+          path: image-metadata.json

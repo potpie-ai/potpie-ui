@@ -2,6 +2,11 @@ name: Build and Deploy to Prod Artifact and Cloud Run
 
 on:
   workflow_dispatch:
+    inputs:
+      image_digest_ref:
+        description: "Existing immutable image digest ref (repo@sha256:...) to promote"
+        required: false
+        type: string
 
 env:
   PROJECT_ID: ${{ secrets.PROD_GCLOUD_PROJECT_ID }}
@@ -9,6 +14,7 @@ env:
   GAR_ZONE: us-central1 # artifact registry zone
   GAR_REPO: potpie-frontend # updated artifact registry repository
   CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
+  PROMOTE_IMAGE_DIGEST_REF: ${{ github.event.inputs.image_digest_ref }}
 
 jobs:
   setup-build-publish-deploy:
@@ -76,6 +82,7 @@ jobs:
           echo "NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID=${{ secrets.PROD_NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID }}" >> $GITHUB_ENV
       # Build the Docker image
       - name: Build
+        if: env.PROMOTE_IMAGE_DIGEST_REF == ''
         run: |-
           SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
           IMAGE_TAG="$GAR_ZONE-docker.pkg.dev/$PROJECT_ID/$GAR_REPO/$IMAGE:$SHORT_SHA"
@@ -112,14 +119,44 @@ jobs:
 
       # Push the Docker image to Google Artifact Registry
       - name: Publish
+        if: env.PROMOTE_IMAGE_DIGEST_REF == ''
         run: |-
           docker push "$IMAGE_TAG"
+
+      - name: Capture image digest
+        if: env.PROMOTE_IMAGE_DIGEST_REF == ''
+        id: capture-digest
+        run: |-
+          IMAGE_DIGEST_REF=$(gcloud artifacts docker images describe "$IMAGE_TAG" --format='value(image_summary.fully_qualified_digest)' || true)
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            IMAGE_DIGEST_REF=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_TAG" || true)
+          fi
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            echo "Failed to resolve digest for $IMAGE_TAG" >&2
+            exit 1
+          fi
+          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
+
+      - name: Select promoted digest
+        run: |-
+          if [ -n "$PROMOTE_IMAGE_DIGEST_REF" ]; then
+            IMAGE_DIGEST_REF="$PROMOTE_IMAGE_DIGEST_REF"
+          fi
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            echo "No IMAGE_DIGEST_REF available for deployment" >&2
+            exit 1
+          fi
+          if [[ "$IMAGE_DIGEST_REF" != *@sha256:* ]]; then
+            echo "IMAGE_DIGEST_REF must be immutable and include @sha256:. Got: $IMAGE_DIGEST_REF" >&2
+            exit 1
+          fi
+          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
 
       # Deploy to Cloud Run
       - name: Deploy to Cloud Run
         run: |-
           gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
-            --image ${{ env.IMAGE_TAG }} \
+            --image ${{ env.IMAGE_DIGEST_REF }} \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.GAR_ZONE }} \
             --platform managed \

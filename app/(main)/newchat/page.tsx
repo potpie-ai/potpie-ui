@@ -103,6 +103,10 @@ export default function NewChatPage() {
 
   const [repoSearch, setRepoSearch] = useState<string>("");
   const [branchSearch, setBranchSearch] = useState<string>("");
+  const [hasPrefilledRepoFromQuery, setHasPrefilledRepoFromQuery] =
+    useState(false);
+  const [hasResolvedBranchFromQuery, setHasResolvedBranchFromQuery] =
+    useState(false);
 
   const [isLocalhost, setIsLocalhost] = useState(false);
   useEffect(() => {
@@ -114,6 +118,8 @@ export default function NewChatPage() {
   }, []);
 
   const isDemoMode = searchParams.get("demo") === "true";
+  const quickStartRepoQuery = searchParams.get("repo")?.trim() || "";
+  const quickStartBranchQuery = searchParams.get("branch")?.trim() || "";
 
 
   const {
@@ -248,6 +254,121 @@ export default function NewChatPage() {
       return { ...prev, linkedRepos: repositories };
     });
   }, [repositories, repoSearch]);
+
+  useEffect(() => {
+    setHasPrefilledRepoFromQuery(false);
+    setHasResolvedBranchFromQuery(false);
+  }, [quickStartRepoQuery, quickStartBranchQuery]);
+
+  useEffect(() => {
+    if (!quickStartRepoQuery || hasPrefilledRepoFromQuery) {
+      return;
+    }
+    if (reposLoading) {
+      return;
+    }
+
+    const normalize = (name: string) =>
+      name.trim().toLowerCase().replace(/\.git$/i, "");
+    const normalizedQuery = normalize(quickStartRepoQuery);
+
+    const matchedRepo = repositories.find((repo: Repo) => {
+      const fullName = normalize(repo.full_name || "");
+      const repoName = normalize(repo.name || "");
+      return fullName === normalizedQuery || repoName === normalizedQuery;
+    });
+
+    if (!matchedRepo) {
+      toast.error("Repository not found in linked repositories");
+      setHasPrefilledRepoFromQuery(true);
+      setHasResolvedBranchFromQuery(true);
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      selectedRepo: matchedRepo.id?.toString() || prev.selectedRepo,
+      selectedBranch: null,
+    }));
+    setHasPrefilledRepoFromQuery(true);
+  }, [
+    quickStartRepoQuery,
+    hasPrefilledRepoFromQuery,
+    reposLoading,
+    repositories,
+  ]);
+
+  useEffect(() => {
+    if (!quickStartRepoQuery || !hasPrefilledRepoFromQuery || hasResolvedBranchFromQuery) {
+      return;
+    }
+    if (!state.selectedRepo || branchesLoading) {
+      return;
+    }
+
+    const selectedRepoData = repositories.find(
+      (repo: Repo) => repo.id?.toString() === state.selectedRepo
+    );
+    if (!selectedRepoData) {
+      setHasResolvedBranchFromQuery(true);
+      return;
+    }
+
+    const availableBranches = Array.isArray(branches) ? branches : [];
+    let resolvedBranch = "";
+
+    if (quickStartBranchQuery) {
+      if (
+        availableBranches.length === 0 ||
+        availableBranches.includes(quickStartBranchQuery)
+      ) {
+        resolvedBranch = quickStartBranchQuery;
+      } else {
+        toast.error(
+          `Branch '${quickStartBranchQuery}' not found. Using fallback branch.`
+        );
+      }
+    }
+
+    if (
+      !resolvedBranch &&
+      selectedRepoData.default_branch &&
+      (availableBranches.length === 0 ||
+        availableBranches.includes(selectedRepoData.default_branch))
+    ) {
+      resolvedBranch = selectedRepoData.default_branch;
+    }
+
+    if (!resolvedBranch) {
+      if (availableBranches.includes("main")) {
+        resolvedBranch = "main";
+      } else if (availableBranches.length > 0) {
+        resolvedBranch = availableBranches[0];
+      } else {
+        resolvedBranch = selectedRepoData.default_branch || "main";
+      }
+    }
+
+    setState((prev) =>
+      prev.selectedBranch === resolvedBranch
+        ? prev
+        : { ...prev, selectedBranch: resolvedBranch }
+    );
+    setHasResolvedBranchFromQuery(true);
+
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
+  }, [
+    quickStartRepoQuery,
+    quickStartBranchQuery,
+    hasPrefilledRepoFromQuery,
+    hasResolvedBranchFromQuery,
+    state.selectedRepo,
+    branchesLoading,
+    branches,
+    repositories,
+  ]);
 
   useEffect(() => {
     if (isDemoMode && repositories.length > 0) {

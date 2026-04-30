@@ -1117,9 +1117,9 @@ const SpecPage = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-gray-200 antialiased">
       {/* Full-width build flow bar — tabs extend to the right edge */}
-      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
         <BuildFlowChatHeader
           recipeId={recipeId}
           title={`${recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}${
@@ -1155,18 +1155,18 @@ const SpecPage = () => {
                 {/* After first user message: assistant intro, then thinking/stream (no bordered box) */}
                 {msg.role === "user" && i === 0 && (
                   <>
-                    <div className="flex justify-start">
-                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start">
+                    <div className="flex justify-start items-start">
+                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start">
                         <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                       </div>
-                      <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+                      <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
                         Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they&apos;re ready, we can refine them together.
                       </div>
                     </div>
                     {/* Agent output: interleaved thinking/response and tool calls in stream order */}
                     {(streamProgress || isGenerating || streamItems.length > 0) && (
                       <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
-                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                         <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
                           {(streamProgress || isGenerating) && streamItems.length === 0 && (
                             <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
@@ -1190,11 +1190,11 @@ const SpecPage = () => {
                 )}
                 {/* Assistant message (skip i===1 — shown above as thinking/stream) */}
                 {msg.role === "assistant" && i !== 1 && (
-                  <div className="flex justify-start">
-                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
+                  <div className="flex justify-start items-start">
+                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C]">
                       <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                     </div>
-                    <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+                    <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
                       {msg.content.length > 400
                         ? `${msg.content.slice(0, 400).trim()}… View the full specification in the panel on the right.`
                         : msg.content}

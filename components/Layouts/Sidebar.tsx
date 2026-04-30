@@ -320,7 +320,7 @@ export function AppSidebar() {
           <ChatHistoryPanel />
         </div>
       </SidebarContent>
-      {!subscriptionLoading && userSubscription && open && (
+      {open && (
         <div className="px-4 pt-3 pb-3">
           <div className="bg-white rounded-lg border border-zinc-200 p-3">
             <p className="text-sm font-medium text-emerald-950 mb-1">

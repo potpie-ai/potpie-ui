@@ -71,7 +71,7 @@ export default function QuestionCard({
       question.answerRecommendationIdx < 0);
 
   const cardClasses = [
-    "p-4 rounded-xl border transition-all duration-200 relative",
+    "p-4 rounded-lg border transition-all duration-200 relative",
     isSkipped && "bg-neutral-100/60 border-neutral-200 opacity-50",
     !isSkipped && "bg-neutral-100 border-neutral-200",
     isUnanswered && !isSkipped && "ring-2 ring-amber-400/60 border-amber-300",
@@ -198,7 +198,6 @@ export default function QuestionCard({
                   backgroundColor: "#F9FFE9",
                   border: "1px solid #B6E343",
                   color: "#4a6b00",
-                  fontFamily: "'Roboto Mono', monospace",
                 }}
               >
                 Input Needed
@@ -233,7 +232,7 @@ export default function QuestionCard({
                   return (
                     <div
                       key={index}
-                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                      className={`flex items-start gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
                         isSelected
                           ? "bg-white border-neutral-300 shadow-sm text-primary-color"
                           : "bg-white border-neutral-200 hover:border-neutral-300 text-foreground"
@@ -257,7 +256,7 @@ export default function QuestionCard({
 
                 {/* Other (specify your own) */}
                 <div
-                  className={`flex flex-col gap-2 p-3 rounded-xl border transition-all ${
+                  className={`flex flex-col gap-2 p-3 rounded-lg border transition-all ${
                     isOther
                       ? "bg-white border-neutral-300 shadow-sm text-primary-color"
                       : "bg-white border-neutral-200 hover:border-neutral-300 text-foreground"
@@ -319,7 +318,7 @@ export default function QuestionCard({
                   return (
                     <div
                       key={index}
-                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                      className={`flex items-start gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
                         !isOther && selectedIdx === index
                           ? "bg-white border-neutral-300 shadow-sm text-primary-color"
                           : "bg-white border-neutral-200 hover:border-neutral-300 text-foreground"
@@ -343,7 +342,7 @@ export default function QuestionCard({
 
                 {/* Other (specify your own) */}
                 <div
-                  className={`flex flex-col gap-2 p-3 rounded-xl border transition-all ${
+                  className={`flex flex-col gap-2 p-3 rounded-lg border transition-all ${
                     isOther
                       ? "bg-white border-neutral-300 shadow-sm text-primary-color"
                       : "bg-white border-neutral-200 hover:border-neutral-300 text-foreground"

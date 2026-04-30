@@ -1790,8 +1790,8 @@ export default function QnaPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans antialiased">
-      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-gray-200 antialiased">
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
         <BuildFlowChatHeader
           recipeId={recipeId}
           title={`${featureIdea?.slice(0, 50) || "Clarifying Questions"}${
@@ -1824,18 +1824,18 @@ export default function QnaPage() {
               </div>
             </div>
             {/* Assistant intro (above thinking) */}
-            <div className="flex justify-start">
-              <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start">
+            <div className="flex justify-start items-start">
+              <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start">
                 <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
               </div>
-              <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+              <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
                 Analyzing your repository and generating clarifying questions. They&apos;ll appear below once ready—you can then answer and we&apos;ll create a plan together.
               </div>
             </div>
             {/* Agent output: interleaved timeline (chunks + tool rows in stream order) */}
             {(displayProgress || isGenerating || displayItems.length > 0) && (
               <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
-                <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                 <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
                   {(displayProgress || isGenerating) && displayItems.length === 0 && (
                     <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">

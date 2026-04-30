@@ -24,6 +24,8 @@ interface AdditionalContextSectionProps {
   /** Called when attached files change. removedIndex set when user removes file at that index. */
   onAttachmentChange?: (files: File[], removedIndex?: number) => void;
   attachmentUploading?: boolean;
+  /** False while continuation is in flight and the active question batch is empty (parent hides this section). */
+  hasVisibleQuestionBatch?: boolean;
 }
 
 function getFileTypeLabel(file: File): string {
@@ -51,6 +53,7 @@ export default function AdditionalContextSection({
   unansweredCount: _unansweredCount,
   onAttachmentChange,
   attachmentUploading = false,
+  hasVisibleQuestionBatch = true,
 }: AdditionalContextSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -85,6 +88,12 @@ export default function AdditionalContextSection({
     setAttachedFilesAndNotify([...attachedFiles, ...newFiles]);
     e.target.value = "";
   };
+
+  const showSubmittingButton =
+    isEvaluating &&
+    hasVisibleQuestionBatch &&
+    !reGenerateImplementationPlan &&
+    Boolean(submitLabel?.trim());
 
   return (
     <div className="bg-background border-zinc-100 px-6 py-4">
@@ -183,27 +192,39 @@ export default function AdditionalContextSection({
             </div>
           </div>
 
-          <div className="flex items-center justify-end">
-            <Button
-              onClick={onGeneratePlan}
-              disabled={isGenerating || isEvaluating || !recipeId}
-              className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
-            >
-              {isGenerating || isEvaluating ? (
-                <>
-                  <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-                  {isEvaluating
-                    ? evaluatingLabel.toUpperCase()
-                    : "GENERATING..."}
-                </>
-              ) : reGenerateImplementationPlan ? (
-                "RE-GENERATE IMPLEMENTATION PLAN"
-              ) : submitLabel?.trim() ? (
-                submitLabel.toUpperCase()
-              ) : (
-                "GENERATE IMPLEMENTATION PLAN"
-              )}
-            </Button>
+          <div className="flex items-center justify-end min-h-[44px]">
+            {showSubmittingButton ? (
+              <Button
+                type="button"
+                disabled
+                className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
+                aria-live="polite"
+              >
+                <Loader2 className="w-3 h-3 shrink-0 animate-spin" aria-hidden />
+                SUBMITTING
+              </Button>
+            ) : (
+              <Button
+                onClick={onGeneratePlan}
+                disabled={isGenerating || isEvaluating || !recipeId}
+                className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
+              >
+                {isGenerating || isEvaluating ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                    {isEvaluating
+                      ? evaluatingLabel.toUpperCase()
+                      : "GENERATING..."}
+                  </>
+                ) : reGenerateImplementationPlan ? (
+                  "RE-GENERATE IMPLEMENTATION PLAN"
+                ) : submitLabel?.trim() ? (
+                  submitLabel.toUpperCase()
+                ) : (
+                  "GENERATE IMPLEMENTATION PLAN"
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>

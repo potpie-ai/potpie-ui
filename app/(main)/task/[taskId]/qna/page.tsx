@@ -14,7 +14,6 @@ import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import MediaService from "@/services/MediaService";
 import QuestionSection from "./components/QuestionSection";
 import AdditionalContextSection from "./components/AdditionalContextSection";
-import PreviousQuestionsCollapsible from "./components/PreviousQuestionsCollapsible";
 import { getStreamEventPayload } from "@/lib/utils";
 import {
   StreamTimeline,
@@ -29,17 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  ChevronDown,
-  FileText,
-  Info,
-  Loader2,
-} from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { FileText, Info } from "lucide-react";
 import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 import { hasSpecBeenCompletedOnce } from "@/lib/buildFlow";
 import {
@@ -80,6 +69,13 @@ function getSortedSections(sectionKeys: Iterable<string>): string[] {
 const RECIPE_ID_UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REPO_RECIPE_STORAGE_PREFIX = "repo_recipe_";
+
+/** QnA stream panel: half of default StreamTimeline height */
+const QNA_STREAM_MAX_HEIGHT = "min(35vh, 280px)";
+
+function interviewBatchStorageKey(recipeId: string): string {
+  return `qna_interview_batch_${recipeId}`;
+}
 
 function getParsingDisplayStatus(status: string): string {
   switch (status) {
@@ -199,8 +195,8 @@ export default function QnaPage() {
     useState(false);
   /** After submit in multi-batch flow until next questions or spec start */
   const [isEvaluatingResponse, setIsEvaluatingResponse] = useState(false);
-  /** When questions are ready, thought stream defaults collapsed; user can expand */
-  const [thoughtTimelineOpen, setThoughtTimelineOpen] = useState(false);
+  /** Multi-batch interview round (1-based); persisted for refresh */
+  const [interviewBatchNumber, setInterviewBatchNumber] = useState(1);
   const [state, setState] = useState<RepoPageState>({
     pageState: "generating",
     questions: [],
@@ -219,6 +215,14 @@ export default function QnaPage() {
     questionGenerationError: null,
     activeQuestionIds: null,
   });
+
+  useEffect(() => {
+    if (!recipeId || typeof window === "undefined") return;
+    const raw = sessionStorage.getItem(interviewBatchStorageKey(recipeId));
+    if (raw === null || raw === "") return;
+    const n = parseInt(raw, 10);
+    if (!Number.isNaN(n) && n >= 1) setInterviewBatchNumber(n);
+  }, [recipeId]);
 
   const { data: recipeDetailsForGenerateLabel } = useQuery({
     queryKey: ["recipe-details", recipeId, "qna-generate-label"],
@@ -1444,13 +1448,25 @@ export default function QnaPage() {
                 const st = (details as { status?: string })?.status;
                 const qd = await QuestionService.getRecipeQuestions(recipeId);
                 if (pollAbortController.signal.aborted) return;
-                processQuestions(qd);
                 if (st === "QUESTIONS_READY") {
+                  if (pollAbortController.signal.aborted) return;
+                  setInterviewBatchNumber((prev) => {
+                    const next = prev + 1;
+                    if (typeof window !== "undefined") {
+                      sessionStorage.setItem(
+                        interviewBatchStorageKey(recipeId),
+                        String(next),
+                      );
+                    }
+                    return next;
+                  });
+                  processQuestions(qd);
                   if (pollAbortController.signal.aborted) return;
                   setIsEvaluatingResponse(false);
                   toast.success("New questions are ready.");
                   return;
                 }
+                processQuestions(qd);
                 if (st === "ANSWERS_SUBMITTED") {
                   try {
                     const { runId } = await runSpecGenerationAfterQna(recipeId, {
@@ -1828,12 +1844,6 @@ export default function QnaPage() {
 
   const hasQuestionsReady = state.pageState === "questions" && state.questions.length > 0;
 
-  useEffect(() => {
-    if (hasQuestionsReady) {
-      setThoughtTimelineOpen(false);
-    }
-  }, [hasQuestionsReady]);
-
   // Persist thinking when questions are ready so it survives refresh
   useEffect(() => {
     if (!recipeId || !hasQuestionsReady) return;
@@ -1914,16 +1924,6 @@ export default function QnaPage() {
     return new Set(state.activeQuestionIds);
   }, [state.activeQuestionIds]);
 
-  const isMultiBatchMode = state.activeQuestionIds !== null;
-
-  const previousBatchQuestions = useMemo(() => {
-    if (!isMultiBatchMode || activeIdSetMemo === null) return [] as MCQQuestion[];
-    if (activeIdSetMemo.size === 0) {
-      return state.questions;
-    }
-    return state.questions.filter((q) => !activeIdSetMemo.has(q.id));
-  }, [isMultiBatchMode, activeIdSetMemo, state.questions]);
-
   const sortedSections = useMemo(
     () => getSortedSections(state.sections.keys()),
     [state.sections],
@@ -1937,6 +1937,23 @@ export default function QnaPage() {
     if (activeIdSetMemo.size === 0) return [];
     return base.filter((q) => activeIdSetMemo.has(q.id));
   }, [sortedSections, state.sections, state.visibleQuestions, activeIdSetMemo]);
+
+  const thinkingAfterSubmit =
+    isEvaluatingResponse &&
+    state.pageState === "questions" &&
+    questionsInOrder.length === 0;
+
+  const showAgentStreamRow =
+    Boolean(displayProgress) ||
+    isGenerating ||
+    displayItems.length > 0 ||
+    thinkingAfterSubmit;
+
+  const streamTimelineLoading =
+    thinkingAfterSubmit ||
+    (displayItems.length > 0 &&
+      (isStreamingActive || isGenerating) &&
+      state.pageState !== "questions");
 
   const focusedQuestion =
     (state.hoveredQuestion &&
@@ -2043,59 +2060,23 @@ export default function QnaPage() {
               </div>
             </div>
             {/* Agent output: interleaved timeline (chunks + tool rows in stream order) */}
-            {(displayProgress || isGenerating || displayItems.length > 0) && (
+            {showAgentStreamRow && (
               <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
                 <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                 <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
-                  {(displayProgress || isGenerating) && displayItems.length === 0 && (
+                  {(displayProgress || isGenerating) && displayItems.length === 0 && !thinkingAfterSubmit && (
                     <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
                       <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
                       {displayProgress ? `${displayProgress.step}: ${displayProgress.message}` : "Generating questions…"}
                     </p>
                   )}
-                  {hasQuestionsReady && displayItems.length > 0 ? (
-                    <Collapsible
-                      open={thoughtTimelineOpen}
-                      onOpenChange={setThoughtTimelineOpen}
-                      className="w-full rounded-lg border border-zinc-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                    >
-                      <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-zinc-800 hover:bg-zinc-50/90 rounded-lg">
-                        <ChevronDown
-                          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 ${
-                            thoughtTimelineOpen ? "rotate-180" : ""
-                          }`}
-                          aria-hidden
-                        />
-                        <span className="flex-1">Thought</span>
-                        <span className="text-zinc-400 font-normal">
-                          Analysis complete
-                        </span>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="max-h-[min(70vh,560px)] overflow-y-auto overflow-x-hidden px-3 pb-3 pt-1">
-                          <StreamTimeline
-                            items={displayItems}
-                            endRef={streamOutputEndRef}
-                            loading={
-                              displayItems.length > 0 &&
-                              (isStreamingActive || isGenerating) &&
-                              state.pageState !== "questions"
-                            }
-                          />
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  ) : (
-                    <StreamTimeline
-                      items={displayItems}
-                      endRef={streamOutputEndRef}
-                      loading={
-                        displayItems.length > 0 &&
-                        (isStreamingActive || isGenerating) &&
-                        state.pageState !== "questions"
-                      }
-                    />
-                  )}
+                  <StreamTimeline
+                    items={displayItems}
+                    endRef={streamOutputEndRef}
+                    maxHeight={QNA_STREAM_MAX_HEIGHT}
+                    compactToolResults
+                    loading={streamTimelineLoading}
+                  />
                   {state.questionGenerationError && (
                     <p className="text-xs text-red-600 mt-1">{state.questionGenerationError}</p>
                   )}
@@ -2105,16 +2086,6 @@ export default function QnaPage() {
 
             {/* Align with Thinking block content above (52px = avatar width + margin) */}
             <div className="space-y-6 ml-[52px] min-w-0" style={{ width: "calc(100% - 52px)" }}>
-            {isEvaluatingResponse && hasQuestionsReady && (
-              <div
-                className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-xs text-zinc-700 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                role="status"
-                aria-live="polite"
-              >
-                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-[#102C2C]" />
-                Evaluating your response…
-              </div>
-            )}
             {/* Show error card when there's an error - full card when no questions, banner when questions exist */}
             {state.pageState === "questions" && state.questionGenerationError && (
               state.questions.length === 0 ? (
@@ -2130,11 +2101,18 @@ export default function QnaPage() {
               )
             )}
             {state.pageState === "questions" &&
-              previousBatchQuestions.length > 0 && (
-                <PreviousQuestionsCollapsible
-                  questions={previousBatchQuestions}
-                  answers={state.answers}
-                />
+              hasQuestionsReady &&
+              questionsInOrder.length > 0 &&
+              interviewBatchNumber >= 2 &&
+              interviewBatchNumber <= 4 && (
+                <p className="text-sm text-gray-900 leading-relaxed">
+                  {interviewBatchNumber === 2 &&
+                    "Based on your last few answers, we've tailored a few more questions. Please complete the next set of questions to proceed."}
+                  {interviewBatchNumber === 3 &&
+                    "Almost there. These questions translate your last answers into concrete choices for the spec."}
+                  {interviewBatchNumber === 4 &&
+                    "This final set will lock the remaining decisions so we can generate your spec with confidence."}
+                </p>
               )}
             {state.pageState === "questions" &&
               (() => {
@@ -2173,7 +2151,9 @@ export default function QnaPage() {
                   );
                 });
               })()}
-            {state.pageState === "questions" && hasQuestionsReady && (
+            {state.pageState === "questions" &&
+              hasQuestionsReady &&
+              questionsInOrder.length > 0 && (
               <AdditionalContextSection
                 open={additionalContextDialogOpen}
                 onOpenChange={setAdditionalContextDialogOpen}
@@ -2195,6 +2175,7 @@ export default function QnaPage() {
                 unansweredCount={unansweredActiveCount}
                 onAttachmentChange={handleAttachmentChange}
                 attachmentUploading={state.attachmentUploading}
+                hasVisibleQuestionBatch={questionsInOrder.length > 0}
               />
             )}
             <div ref={questionsEndRef} />

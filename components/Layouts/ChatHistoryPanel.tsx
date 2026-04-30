@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   ChevronDown,
   ChevronUp,
+  Plus,
 } from "lucide-react";
 import Image from "next/image";
 import { toast } from "@/components/ui/sonner";
@@ -516,6 +517,24 @@ export function ChatHistoryPanel() {
     });
   }, []);
 
+  const handleRepoQuickStart = useCallback(
+    (repository: string, branch?: string, event?: React.MouseEvent) => {
+      event?.stopPropagation();
+      const repoName = repository?.trim();
+      if (!repoName || repoName === "No repository") {
+        toast.error("Repository is not available for quick start");
+        return;
+      }
+
+      const params = new URLSearchParams({ repo: repoName });
+      if (branch?.trim()) {
+        params.set("branch", branch.trim());
+      }
+      router.push(`/newchat?${params.toString()}`);
+    },
+    [router]
+  );
+
   return (
     <div className="flex flex-col h-full">
       {/* Header with Search Icon */}
@@ -570,7 +589,19 @@ export function ChatHistoryPanel() {
               </p>
             </div>
           ) : (
-            groupedItems.map((group) => (
+            groupedItems.map((group) => {
+              const distinctBranches = Array.from(
+                new Set(
+                  group.items
+                    .map((item: any) =>
+                      typeof item.branch === "string" ? item.branch.trim() : ""
+                    )
+                    .filter((branch: string) => branch.length > 0)
+                )
+              );
+              const quickStartBranch =
+                distinctBranches.length === 1 ? distinctBranches[0] : undefined;
+              return (
               <div key={group.repository}>
                 <div className="flex items-center justify-between gap-2 px-2 py-1 text-sm text-black">
                   <div className="flex items-center gap-2 min-w-0">
@@ -589,23 +620,40 @@ export function ChatHistoryPanel() {
                       {getRepositoryDisplayName(group.repository)}
                     </span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-4 w-4 shrink-0"
-                    onClick={() => toggleRepository(group.repository)}
-                    aria-label={
-                      expandedRepositories.has(group.repository)
-                        ? `Collapse ${group.repository}`
-                        : `Expand ${group.repository}`
-                    }
-                  >
-                    {expandedRepositories.has(group.repository) ? (
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      onClick={(event) =>
+                        handleRepoQuickStart(
+                          group.repository,
+                          quickStartBranch,
+                          event
+                        )
+                      }
+                      aria-label={`Quick start ${group.repository}`}
+                    >
+                      <Plus className="h-3.5 w-3.5 text-[#B6E343]" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      onClick={() => toggleRepository(group.repository)}
+                      aria-label={
+                        expandedRepositories.has(group.repository)
+                          ? `Collapse ${group.repository}`
+                          : `Expand ${group.repository}`
+                      }
+                    >
+                      {expandedRepositories.has(group.repository) ? (
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
                 {expandedRepositories.has(group.repository) &&
@@ -764,7 +812,8 @@ export function ChatHistoryPanel() {
                   );
                 })}
               </div>
-            ))
+            );
+            })
           )}
         </div>
       </ScrollArea>

@@ -30,6 +30,7 @@ import {
   TestTube,
   ScrollText,
   ChevronDown,
+  ChevronUp,
   FileText,
   Copy,
   Clock,
@@ -360,6 +361,11 @@ const CodeFileCard = ({
         <span className="text-xs font-medium text-[#022019] truncate">
           {change.path}
         </span>
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-[#022019] shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-[#022019] shrink-0" />
+        )}
       </button>
       {isExpanded && (
         <div className="min-h-[280px]">
@@ -2689,7 +2695,7 @@ export default function VerticalTaskExecution() {
 
         {/* Right: Code generation */}
         <div className="overflow-hidden flex-none flex flex-col w-1/2 min-w-0">
-          <aside className="h-full w-full min-w-[320px] flex flex-col border-l border-[#E5E8E6]">
+          <aside className="h-full w-full min-w-[320px] flex flex-col">
             <div className="p-6 border-b border-[#E5E8E6] bg-white">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0">

@@ -1,4 +1,5 @@
 import type { MCQQuestion } from "@/services/QuestionService";
+import type { QaAttachmentRef } from "@/lib/types/spec";
 
 // Re-export MCQQuestion
 export type { MCQQuestion };
@@ -48,8 +49,8 @@ export interface RepoPageState {
   /** IDs of questions that need answers (for validation highlighting) */
   unansweredQuestionIds?: Set<string>;
   isGenerating: boolean;
-  /** Attachment IDs from media upload (for additional context) */
-  attachmentIds: string[];
+  /** Uploaded attachment refs from media upload (for additional context) */
+  attachments: QaAttachmentRef[];
   attachmentUploading: boolean;
   /** Status from backend while questions are being generated (pending/processing/completed/failed) */
   questionGenerationStatus?: QuestionGenerationStatus | null;

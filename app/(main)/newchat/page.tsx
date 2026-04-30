@@ -280,6 +280,11 @@ export default function NewChatPage() {
 
     if (!matchedRepo) {
       toast.error("Repository not found in linked repositories");
+      setState((prev) => ({
+        ...prev,
+        selectedRepo: null,
+        selectedBranch: null,
+      }));
       setHasPrefilledRepoFromQuery(true);
       setHasResolvedBranchFromQuery(true);
       return;
@@ -310,19 +315,20 @@ export default function NewChatPage() {
       (repo: Repo) => repo.id?.toString() === state.selectedRepo
     );
     if (!selectedRepoData) {
-      setHasResolvedBranchFromQuery(true);
       return;
     }
 
     const availableBranches = Array.isArray(branches) ? branches : [];
     let resolvedBranch = "";
+    let resolvedFromVerifiedQueryBranch = false;
 
     if (quickStartBranchQuery) {
       if (
-        availableBranches.length === 0 ||
+        availableBranches.length > 0 &&
         availableBranches.includes(quickStartBranchQuery)
       ) {
         resolvedBranch = quickStartBranchQuery;
+        resolvedFromVerifiedQueryBranch = true;
       } else {
         toast.error(
           `Branch '${quickStartBranchQuery}' not found. Using fallback branch.`
@@ -333,7 +339,7 @@ export default function NewChatPage() {
     if (
       !resolvedBranch &&
       selectedRepoData.default_branch &&
-      (availableBranches.length === 0 ||
+      (availableBranches.length > 0 &&
         availableBranches.includes(selectedRepoData.default_branch))
     ) {
       resolvedBranch = selectedRepoData.default_branch;
@@ -354,7 +360,9 @@ export default function NewChatPage() {
         ? prev
         : { ...prev, selectedBranch: resolvedBranch }
     );
-    setHasResolvedBranchFromQuery(true);
+    if (resolvedFromVerifiedQueryBranch) {
+      setHasResolvedBranchFromQuery(true);
+    }
 
     setTimeout(() => {
       textareaRef.current?.focus();

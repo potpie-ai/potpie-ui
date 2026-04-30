@@ -590,9 +590,17 @@ export function ChatHistoryPanel() {
             </div>
           ) : (
             groupedItems.map((group) => {
-              const quickStartBranch = group.items.find(
-                (item: any) => item.branch && String(item.branch).trim().length > 0
-              )?.branch as string | undefined;
+              const distinctBranches = Array.from(
+                new Set(
+                  group.items
+                    .map((item: any) =>
+                      typeof item.branch === "string" ? item.branch.trim() : ""
+                    )
+                    .filter((branch: string) => branch.length > 0)
+                )
+              );
+              const quickStartBranch =
+                distinctBranches.length === 1 ? distinctBranches[0] : undefined;
               return (
               <div key={group.repository}>
                 <div className="flex items-center justify-between gap-2 px-2 py-1 text-sm text-black">

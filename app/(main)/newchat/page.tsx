@@ -320,7 +320,6 @@ export default function NewChatPage() {
 
     const availableBranches = Array.isArray(branches) ? branches : [];
     let resolvedBranch = "";
-    let resolvedFromVerifiedQueryBranch = false;
 
     if (quickStartBranchQuery) {
       if (
@@ -328,7 +327,6 @@ export default function NewChatPage() {
         availableBranches.includes(quickStartBranchQuery)
       ) {
         resolvedBranch = quickStartBranchQuery;
-        resolvedFromVerifiedQueryBranch = true;
       } else {
         toast.error(
           `Branch '${quickStartBranchQuery}' not found. Using fallback branch.`
@@ -360,7 +358,7 @@ export default function NewChatPage() {
         ? prev
         : { ...prev, selectedBranch: resolvedBranch }
     );
-    if (resolvedFromVerifiedQueryBranch) {
+    if (resolvedBranch) {
       setHasResolvedBranchFromQuery(true);
     }
 

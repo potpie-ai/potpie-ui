@@ -130,6 +130,14 @@ async function runSpecGenerationAfterQna(
   let runId: string | undefined;
   if (shouldRegenerate) {
     await SpecService.regenerateSpec(recipeId);
+    try {
+      const res = await SpecService.startSpecGenerationStream(recipeId, {
+        consumeStream: false,
+      });
+      runId = res.runId;
+    } catch (e) {
+      console.warn("[QnA] Failed to get runId after regenerateSpec, will fallback to polling", e);
+    }
   } else {
     const res = await SpecService.startSpecGenerationStream(recipeId, {
       consumeStream: false,
@@ -1436,6 +1444,9 @@ export default function QnaPage() {
         toast.info("Reviewing your answers…");
         // Create AbortController for this poll
         const pollAbortController = new AbortController();
+        let lastQuestionIds = "";
+        let lastActiveIds = "";
+        
         void (async () => {
           try {
             for (let attempt = 0; attempt < 60; attempt++) {
@@ -1448,6 +1459,11 @@ export default function QnaPage() {
                 const st = (details as { status?: string })?.status;
                 const qd = await QuestionService.getRecipeQuestions(recipeId);
                 if (pollAbortController.signal.aborted) return;
+                
+                const currentQuestionIds = qd.questions?.map((q: any) => q.id).join(',') || "";
+                const currentActiveIds = qd.active_question_ids?.join(',') || "";
+                const questionsChanged = currentQuestionIds !== lastQuestionIds || currentActiveIds !== lastActiveIds;
+
                 if (st === "QUESTIONS_READY") {
                   if (pollAbortController.signal.aborted) return;
                   setInterviewBatchNumber((prev) => {
@@ -1460,13 +1476,20 @@ export default function QnaPage() {
                     }
                     return next;
                   });
-                  processQuestions(qd);
+                  if (questionsChanged) {
+                    processQuestions(qd);
+                  }
                   if (pollAbortController.signal.aborted) return;
                   setIsEvaluatingResponse(false);
                   toast.success("New questions are ready.");
                   return;
                 }
-                processQuestions(qd);
+                
+                if (questionsChanged) {
+                  processQuestions(qd);
+                  lastQuestionIds = currentQuestionIds;
+                  lastActiveIds = currentActiveIds;
+                }
                 if (st === "ANSWERS_SUBMITTED") {
                   try {
                     const { runId } = await runSpecGenerationAfterQna(recipeId, {

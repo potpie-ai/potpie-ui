@@ -54,6 +54,7 @@ import { ChatHistoryPanel } from "./ChatHistoryPanel";
 import {
   Tooltip,
   TooltipContent,
+  TooltipPortal,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -212,9 +213,11 @@ export function AppSidebar() {
                     </Button>
                   </TooltipTrigger>
                   {!open && (
-                    <TooltipContent side="right" className="text-xs">
-                      Open Sidebar
-                    </TooltipContent>
+                    <TooltipPortal>
+                      <TooltipContent side="right" className="z-[80] text-xs">
+                        Open Sidebar
+                      </TooltipContent>
+                    </TooltipPortal>
                   )}
                 </Tooltip>
               </TooltipProvider>

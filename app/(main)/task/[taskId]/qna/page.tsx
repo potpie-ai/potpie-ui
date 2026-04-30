@@ -14,9 +14,7 @@ import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import MediaService from "@/services/MediaService";
 import QuestionSection from "./components/QuestionSection";
 import AdditionalContextSection from "./components/AdditionalContextSection";
-import QuestionProgress from "./components/QuestionProgress";
-import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils";
+import { getStreamEventPayload } from "@/lib/utils";
 import {
   StreamTimeline,
   type StreamTimelineItem,
@@ -30,14 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Check,
-  ChevronDown,
-  FileText,
-  Info,
-  Loader2,
-  Wrench,
-} from "lucide-react";
+import { FileText, Info } from "lucide-react";
 import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 import { hasSpecBeenCompletedOnce } from "@/lib/buildFlow";
 import {
@@ -45,7 +36,6 @@ import {
   RecipeQuestion,
   RecipeQuestionNew,
   QuestionOption,
-  TriggerSpecGenerationResponse,
 } from "@/lib/types/spec";
 import type {
   MCQQuestion,
@@ -80,6 +70,13 @@ const RECIPE_ID_UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REPO_RECIPE_STORAGE_PREFIX = "repo_recipe_";
 
+/** QnA stream panel: half of default StreamTimeline height */
+const QNA_STREAM_MAX_HEIGHT = "min(35vh, 280px)";
+
+function interviewBatchStorageKey(recipeId: string): string {
+  return `qna_interview_batch_${recipeId}`;
+}
+
 function getParsingDisplayStatus(status: string): string {
   switch (status) {
     case ParsingStatusEnum.SUBMITTED:
@@ -92,6 +89,69 @@ function getParsingDisplayStatus(status: string): string {
     default:
       return status;
   }
+}
+
+async function runSpecGenerationAfterQna(
+  recipeId: string,
+  options?: { forceRegenerate?: boolean },
+): Promise<{ runId?: string }> {
+  let shouldRegenerate = !!options?.forceRegenerate;
+  if (!shouldRegenerate) {
+    try {
+      const current = await SpecService.getSpecProgressByRecipeId(recipeId);
+      const genStatus =
+        current &&
+        typeof current === "object" &&
+        "generation_status" in current
+          ? (current as { generation_status?: string }).generation_status
+          : current &&
+              typeof current === "object" &&
+              "spec_gen_status" in current
+            ? (current as { spec_gen_status?: string }).spec_gen_status
+            : current &&
+                typeof current === "object" &&
+                "spec_generation_step_status" in current
+              ? (current as { spec_generation_step_status?: string })
+                  .spec_generation_step_status
+              : null;
+      // Only regenerate for terminal/failed states; continue stream for in-progress
+      const normalizedStatus = genStatus?.toLowerCase();
+      const isTerminal = normalizedStatus === "failed" || normalizedStatus === "completed" || normalizedStatus === "error" || normalizedStatus === "succeeded";
+      if (isTerminal) {
+        shouldRegenerate = true;
+      } else if (normalizedStatus && normalizedStatus !== "not_started") {
+        // In-progress or pending - use startSpecGenerationStream to attach to existing run
+        shouldRegenerate = false;
+      }
+    } catch {
+      /* first generation */
+    }
+  }
+  let runId: string | undefined;
+  if (shouldRegenerate) {
+    await SpecService.regenerateSpec(recipeId);
+    try {
+      const res = await SpecService.startSpecGenerationStream(recipeId, {
+        consumeStream: false,
+      });
+      runId = res.runId;
+    } catch (e) {
+      console.warn("[QnA] Failed to get runId after regenerateSpec, will fallback to polling", e);
+    }
+  } else {
+    const res = await SpecService.startSpecGenerationStream(recipeId, {
+      consumeStream: false,
+    });
+    runId = res.runId;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(`qa_answers_${recipeId}`);
+    } catch {
+      /* ignore */
+    }
+  }
+  return { runId };
 }
 
 export default function QnaPage() {
@@ -141,6 +201,10 @@ export default function QnaPage() {
 
   const [additionalContextDialogOpen, setAdditionalContextDialogOpen] =
     useState(false);
+  /** After submit in multi-batch flow until next questions or spec start */
+  const [isEvaluatingResponse, setIsEvaluatingResponse] = useState(false);
+  /** Multi-batch interview round (1-based); persisted for refresh */
+  const [interviewBatchNumber, setInterviewBatchNumber] = useState(1);
   const [state, setState] = useState<RepoPageState>({
     pageState: "generating",
     questions: [],
@@ -157,7 +221,16 @@ export default function QnaPage() {
     attachmentUploading: false,
     questionGenerationStatus: null,
     questionGenerationError: null,
+    activeQuestionIds: null,
   });
+
+  useEffect(() => {
+    if (!recipeId || typeof window === "undefined") return;
+    const raw = sessionStorage.getItem(interviewBatchStorageKey(recipeId));
+    if (raw === null || raw === "") return;
+    const n = parseInt(raw, 10);
+    if (!Number.isNaN(n) && n >= 1) setInterviewBatchNumber(n);
+  }, [recipeId]);
 
   const { data: recipeDetailsForGenerateLabel } = useQuery({
     queryKey: ["recipe-details", recipeId, "qna-generate-label"],
@@ -428,12 +501,21 @@ export default function QnaPage() {
           }
         });
 
+        const activeQuestionIds =
+          questionsData.active_question_ids === undefined
+            ? null
+            : questionsData.active_question_ids;
+
         setState((prev) => ({
           ...prev,
           questions: mcqQuestions,
           sections: sectionsMap,
           answers: initialAnswers,
           pageState: "questions",
+          activeQuestionIds,
+          questionGenerationStatus:
+            questionsData.generation_status as QuestionGenerationStatus,
+          questionGenerationError: questionsData.error_message ?? null,
         }));
 
         // Animate questions appearing
@@ -1195,10 +1277,26 @@ export default function QnaPage() {
   // Generate plan mutation
   const generatePlanMutation = useMutation({
     mutationFn: async () => {
-      // Validate: all questions must be answered (no NULL in payload)
+      const activeSet: Set<string> | null =
+        state.activeQuestionIds === null
+          ? null
+          : new Set(state.activeQuestionIds);
+      const evaluatingFollowUp =
+        activeSet !== null &&
+        activeSet.size === 0 &&
+        (state.questionGenerationStatus === "pending" ||
+          state.questionGenerationStatus === "processing");
+      if (evaluatingFollowUp) {
+        throw new Error(
+          "Still reviewing your answers. Please wait for the next questions.",
+        );
+      }
+
+      // Validate: all questions in the current batch must be answered (no NULL in payload)
       const unansweredIds: string[] = [];
       state.questions.forEach((q) => {
         if (state.skippedQuestions.has(q.id)) return;
+        if (activeSet !== null && !activeSet.has(q.id)) return;
         const answer = state.answers.get(q.id);
         const options = Array.isArray(q.options)
           ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
@@ -1263,6 +1361,7 @@ export default function QnaPage() {
       state.questions.forEach((question) => {
         const qId = question.id;
         if (state.skippedQuestions.has(qId)) return;
+        if (activeSet !== null && !activeSet.has(qId)) return;
 
         const answer = state.answers.get(qId);
         let answerStr: string | undefined;
@@ -1324,63 +1423,134 @@ export default function QnaPage() {
       const canSubmitAnswers = !recipeStatus || recipeStatus === "QUESTIONS_READY" || recipeStatus === "ANSWERS_SUBMITTED";
       const alreadyInSpecPhase = recipeStatus === "SPEC_IN_PROGRESS" || recipeStatus === "SPEC_READY";
 
+      let submitRes: Awaited<ReturnType<typeof SpecService.submitAnswers>> | null =
+        null;
+
       if (canSubmitAnswers) {
-        // Submit answers (idempotent on backend)
-        await SpecService.submitAnswers(recipeId, answersPayload);
+        setIsEvaluatingResponse(true);
+        submitRes = await SpecService.submitAnswers(recipeId, answersPayload);
       } else if (alreadyInSpecPhase) {
         console.log("[QnA Page] Recipe already in spec phase, skipping submitAnswers");
         shouldRegenerate = true;
       }
 
-      // Check spec generation status to determine if we should regenerate
-      if (!shouldRegenerate) {
-        try {
-          const current = await SpecService.getSpecProgressByRecipeId(recipeId);
-          const genStatus =
-            "generation_status" in current
-              ? (current as any).generation_status
-              : "spec_gen_status" in current
-                ? (current as any).spec_gen_status
-                : "spec_generation_step_status" in current
-                  ? (current as any).spec_generation_step_status
-                  : null;
-          // If any spec generation has already been started (pending/processing/completed/failed),
-          // treat this click as an explicit request to regenerate.
-          if (genStatus && genStatus !== "not_started") {
-            shouldRegenerate = true;
+      const awaitingContinuation =
+        submitRes != null &&
+        submitRes.interview_complete === false &&
+        submitRes.new_status === "PENDING_QUESTIONS";
+
+      if (awaitingContinuation) {
+        setState((prev) => ({ ...prev, isGenerating: false }));
+        toast.info("Reviewing your answers…");
+        // Create AbortController for this poll
+        const pollAbortController = new AbortController();
+        let lastQuestionIds = "";
+        let lastActiveIds = "";
+        
+        void (async () => {
+          try {
+            for (let attempt = 0; attempt < 60; attempt++) {
+              if (pollAbortController.signal.aborted) return;
+              await new Promise((r) => setTimeout(r, 2500));
+              if (pollAbortController.signal.aborted) return;
+              try {
+                const details = await SpecService.getRecipeDetails(recipeId);
+                if (pollAbortController.signal.aborted) return;
+                const st = (details as { status?: string })?.status;
+                const qd = await QuestionService.getRecipeQuestions(recipeId);
+                if (pollAbortController.signal.aborted) return;
+                
+                const currentQuestionIds = qd.questions?.map((q: any) => q.id).join(',') || "";
+                const currentActiveIds = qd.active_question_ids?.join(',') || "";
+                const questionsChanged = currentQuestionIds !== lastQuestionIds || currentActiveIds !== lastActiveIds;
+
+                if (st === "QUESTIONS_READY") {
+                  if (pollAbortController.signal.aborted) return;
+                  setInterviewBatchNumber((prev) => {
+                    const next = prev + 1;
+                    if (typeof window !== "undefined") {
+                      sessionStorage.setItem(
+                        interviewBatchStorageKey(recipeId),
+                        String(next),
+                      );
+                    }
+                    return next;
+                  });
+                  if (questionsChanged) {
+                    processQuestions(qd);
+                  }
+                  if (pollAbortController.signal.aborted) return;
+                  setIsEvaluatingResponse(false);
+                  toast.success("New questions are ready.");
+                  return;
+                }
+                
+                if (questionsChanged) {
+                  processQuestions(qd);
+                  lastQuestionIds = currentQuestionIds;
+                  lastActiveIds = currentActiveIds;
+                }
+                if (st === "ANSWERS_SUBMITTED") {
+                  try {
+                    const { runId } = await runSpecGenerationAfterQna(recipeId, {
+                      forceRegenerate: false,
+                    });
+                    if (pollAbortController.signal.aborted) return;
+                    toast.success("Spec generation started successfully");
+                    setIsEvaluatingResponse(false);
+                    const trimId = runId?.trim();
+                    const specPath = trimId
+                      ? `/task/${recipeId}/spec?run_id=${encodeURIComponent(trimId)}`
+                      : `/task/${recipeId}/spec`;
+                    router.push(specPath);
+                  } catch (e: unknown) {
+                    console.warn("[QnA Page] Auto-start spec after interview:", e);
+                    if (pollAbortController.signal.aborted) return;
+                    setIsEvaluatingResponse(false);
+                    setState((prev) => ({ ...prev, isGenerating: false }));
+                    toast.error(
+                      e instanceof Error
+                        ? e.message
+                        : "Failed to start spec generation",
+                    );
+                  }
+                  return;
+                }
+                if (qd.generation_status === "failed") {
+                  if (pollAbortController.signal.aborted) return;
+                  setIsEvaluatingResponse(false);
+                  toast.error(qd.error_message || "Question generation failed");
+                  return;
+                }
+              } catch (e) {
+                console.warn("[QnA Page] Poll after submit:", e);
+              }
+            }
+            if (pollAbortController.signal.aborted) return;
+            setIsEvaluatingResponse(false);
+            toast.error("Timed out waiting for follow-up questions.");
+          } catch (e) {
+            if (pollAbortController.signal.aborted) return;
+            console.error("[QnA Page] Poll error:", e);
           }
-        } catch {
-          // If status lookup fails, assume first-time generation.
-        }
+        })();
+        // Store abort controller so it can be cancelled on unmount
+        (globalThis as any).__qnaPollAbort = pollAbortController;
+        return { stayOnPage: true as const };
       }
 
-      let runId: string | undefined;
+      const { runId } = await runSpecGenerationAfterQna(recipeId, {
+        forceRegenerate: shouldRegenerate,
+      });
 
-      if (shouldRegenerate) {
-        // Start a fresh spec generation run; SpecPage will poll /spec and, if provided,
-        // attach to the new run's stream via its own run_id handshake.
-        await SpecService.regenerateSpec(recipeId);
-      } else {
-        // First-time generation: start via generate-stream to get run_id for live updates.
-        const res = await SpecService.startSpecGenerationStream(recipeId, {
-          consumeStream: false,
-        });
-        runId = res.runId;
-      }
-
-      // Clear localStorage only after both calls succeed so we don't lose answers on submission failure
-      if (typeof window !== "undefined" && recipeId) {
-        try {
-          const storageKey = `qa_answers_${recipeId}`;
-          localStorage.removeItem(storageKey);
-        } catch (error) {
-          console.warn("Failed to clear localStorage after submission:", error);
-        }
-      }
-
-      return { runId };
+      return { runId, stayOnPage: false as const };
     },
-    onSuccess: (data: { runId?: string } | void) => {
+    onSuccess: (data: { runId?: string; stayOnPage?: boolean } | void) => {
+      if (data?.stayOnPage) {
+        return;
+      }
+      setIsEvaluatingResponse(false);
+      setState((prev) => ({ ...prev, isGenerating: false }));
       toast.success("Spec generation started successfully");
       if (!recipeId) {
         console.error("recipeId is not set after successful submission");
@@ -1401,6 +1571,7 @@ export default function QnaPage() {
       console.error("Current recipeId:", recipeId);
       console.error("Current projectId:", projectId);
       toast.error(error.message || "Failed to start spec generation");
+      setIsEvaluatingResponse(false);
       setState((prev) => ({ ...prev, isGenerating: false }));
     },
   });
@@ -1771,15 +1942,94 @@ export default function QnaPage() {
     };
   }, [recipeId]);
 
-  // Figma: flat list for right sidebar
-  const sortedSections = getSortedSections(state.sections.keys());
-  const questionsInOrder = sortedSections.flatMap(
-    (s) => state.sections.get(s) || []
-  ).filter((q) => state.visibleQuestions.has(q.id));
+  const activeIdSetMemo = useMemo(() => {
+    if (state.activeQuestionIds === null) return null;
+    return new Set(state.activeQuestionIds);
+  }, [state.activeQuestionIds]);
+
+  const sortedSections = useMemo(
+    () => getSortedSections(state.sections.keys()),
+    [state.sections],
+  );
+
+  const questionsInOrder = useMemo(() => {
+    const base = sortedSections
+      .flatMap((s) => state.sections.get(s) || [])
+      .filter((q) => state.visibleQuestions.has(q.id));
+    if (activeIdSetMemo === null) return base;
+    if (activeIdSetMemo.size === 0) return [];
+    return base.filter((q) => activeIdSetMemo.has(q.id));
+  }, [sortedSections, state.sections, state.visibleQuestions, activeIdSetMemo]);
+
+  const thinkingAfterSubmit =
+    isEvaluatingResponse &&
+    state.pageState === "questions" &&
+    questionsInOrder.length === 0;
+
+  const showAgentStreamRow =
+    Boolean(displayProgress) ||
+    isGenerating ||
+    displayItems.length > 0 ||
+    thinkingAfterSubmit;
+
+  const streamTimelineLoading =
+    thinkingAfterSubmit ||
+    (displayItems.length > 0 &&
+      (isStreamingActive || isGenerating) &&
+      state.pageState !== "questions");
+
   const focusedQuestion =
     (state.hoveredQuestion &&
       questionsInOrder.find((q) => q.id === state.hoveredQuestion)) ||
     questionsInOrder[0];
+
+  const unansweredActiveCount = useMemo(() => {
+    const activeSet: Set<string> | null =
+      state.activeQuestionIds === null
+        ? null
+        : new Set(state.activeQuestionIds);
+    return state.questions.filter((q) => {
+      if (state.skippedQuestions.has(q.id)) return false;
+      if (activeSet !== null && activeSet.size > 0 && !activeSet.has(q.id)) {
+        return false;
+      }
+      const a = state.answers.get(q.id);
+      const opts = Array.isArray(q.options)
+        ? q.options.map((o) => (typeof o === "string" ? { label: o } : o))
+        : [];
+      const isMultipleChoice = q.multipleChoice ?? false;
+      const hasAnswer =
+        (a?.isOther && a.otherText?.trim()) ||
+        (isMultipleChoice &&
+          a?.selectedOptionIndices &&
+          a.selectedOptionIndices.length > 0 &&
+          a.selectedOptionIndices.some(
+            (idx) => idx >= 0 && idx < opts.length,
+          )) ||
+        (a?.selectedOptionIdx != null &&
+          a.selectedOptionIdx >= 0 &&
+          a.selectedOptionIdx < opts.length) ||
+        Boolean(a?.textAnswer?.trim()) ||
+        Boolean(a?.mcqAnswer && opts.length > 0);
+      return !hasAnswer;
+    }).length;
+  }, [
+    state.questions,
+    state.skippedQuestions,
+    state.answers,
+    state.activeQuestionIds,
+  ]);
+
+  // Cleanup: abort any detached polling on unmount
+  useEffect(() => {
+    return () => {
+      const pollAbort = (globalThis as any).__qnaPollAbort as AbortController | undefined;
+      if (pollAbort) {
+        pollAbort.abort();
+        (globalThis as any).__qnaPollAbort = undefined;
+      }
+    };
+  }, []);
 
   if (!recipeId) {
     return (
@@ -1833,11 +2083,11 @@ export default function QnaPage() {
               </div>
             </div>
             {/* Agent output: interleaved timeline (chunks + tool rows in stream order) */}
-            {(displayProgress || isGenerating || displayItems.length > 0) && (
+            {showAgentStreamRow && (
               <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
                 <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                 <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
-                  {(displayProgress || isGenerating) && displayItems.length === 0 && (
+                  {(displayProgress || isGenerating) && displayItems.length === 0 && !thinkingAfterSubmit && (
                     <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
                       <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
                       {displayProgress ? `${displayProgress.step}: ${displayProgress.message}` : "Generating questions…"}
@@ -1846,11 +2096,9 @@ export default function QnaPage() {
                   <StreamTimeline
                     items={displayItems}
                     endRef={streamOutputEndRef}
-                    loading={
-                      displayItems.length > 0 &&
-                      (isStreamingActive || isGenerating) &&
-                      state.pageState !== "questions"
-                    }
+                    maxHeight={QNA_STREAM_MAX_HEIGHT}
+                    compactToolResults
+                    loading={streamTimelineLoading}
                   />
                   {state.questionGenerationError && (
                     <p className="text-xs text-red-600 mt-1">{state.questionGenerationError}</p>
@@ -1876,6 +2124,20 @@ export default function QnaPage() {
               )
             )}
             {state.pageState === "questions" &&
+              hasQuestionsReady &&
+              questionsInOrder.length > 0 &&
+              interviewBatchNumber >= 2 &&
+              interviewBatchNumber <= 4 && (
+                <p className="text-sm text-gray-900 leading-relaxed">
+                  {interviewBatchNumber === 2 &&
+                    "Based on your last few answers, we've tailored a few more questions. Please complete the next set of questions to proceed."}
+                  {interviewBatchNumber === 3 &&
+                    "Almost there. These questions translate your last answers into concrete choices for the spec."}
+                  {interviewBatchNumber === 4 &&
+                    "This final set will lock the remaining decisions so we can generate your spec with confidence."}
+                </p>
+              )}
+            {state.pageState === "questions" &&
               (() => {
                 return sortedSections.map((section) => {
                   const sectionQuestions = state.sections.get(section) || [];
@@ -1884,9 +2146,12 @@ export default function QnaPage() {
                     <QuestionSection
                       key={section}
                       section={section}
-                      questions={sectionQuestions.filter((q) =>
-                        state.visibleQuestions.has(q.id)
-                      )}
+                      questions={sectionQuestions.filter((q) => {
+                        if (!state.visibleQuestions.has(q.id)) return false;
+                        if (activeIdSetMemo === null) return true;
+                        if (activeIdSetMemo.size === 0) return false;
+                        return activeIdSetMemo.has(q.id);
+                      })}
                       answers={state.answers}
                       hoveredQuestion={state.hoveredQuestion}
                       expandedOptions={state.expandedOptions}
@@ -1909,7 +2174,9 @@ export default function QnaPage() {
                   );
                 });
               })()}
-            {state.pageState === "questions" && (
+            {state.pageState === "questions" &&
+              hasQuestionsReady &&
+              questionsInOrder.length > 0 && (
               <AdditionalContextSection
                 open={additionalContextDialogOpen}
                 onOpenChange={setAdditionalContextDialogOpen}
@@ -1918,11 +2185,20 @@ export default function QnaPage() {
                   setState((prev) => ({ ...prev, additionalContext: context }))
                 }
                 onGeneratePlan={handleGeneratePlan}
-                isGenerating={state.isGenerating}
+                isGenerating={state.isGenerating || isEvaluatingResponse}
+                isEvaluating={isEvaluatingResponse}
+                evaluatingLabel="Evaluating your response…"
+                submitLabel={
+                  reGenerateImplementationPlan
+                    ? undefined
+                    : "Submit response"
+                }
                 recipeId={recipeId}
                 reGenerateImplementationPlan={reGenerateImplementationPlan}
+                unansweredCount={unansweredActiveCount}
                 onAttachmentChange={handleAttachmentChange}
                 attachmentUploading={state.attachmentUploading}
+                hasVisibleQuestionBatch={questionsInOrder.length > 0}
               />
             )}
             <div ref={questionsEndRef} />

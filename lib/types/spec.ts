@@ -188,6 +188,10 @@ export interface RecipeQuestionsResponse {
   error_message: string | null;
   /** When generation is in progress, backend includes run_id for SSE stream connection */
   run_id?: string | null;
+  /** Multi-batch: task id that owns the current question batch */
+  active_question_task_id?: string | null;
+  /** Multi-batch: question IDs in the current batch (empty while a continuation task is running) */
+  active_question_ids?: string[];
 }
 
 /** Request for POST /api/v1/recipes/{recipe_id}/answers */
@@ -200,6 +204,9 @@ export interface SubmitRecipeAnswersResponse {
   message: string;
   recipe_id: string;
   new_status: string;
+  /** False when multi-batch: async continuation is running */
+  interview_complete?: boolean | null;
+  run_id?: string | null;
 }
 
 /** Response from POST /api/v1/recipes/{recipe_id}/spec/generate */

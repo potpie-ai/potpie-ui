@@ -15,10 +15,17 @@ interface AdditionalContextSectionProps {
   recipeId: string | null;
   /** When spec (next step) has already been generated once — show "Re-generate" label. */
   reGenerateImplementationPlan?: boolean;
+  /** Primary CTA label (e.g. Submit response during Q&A; generate plan when appropriate). */
+  submitLabel?: string;
+  /** When true, show evaluating copy on the button (e.g. after submitting answers). */
+  isEvaluating?: boolean;
+  evaluatingLabel?: string;
   unansweredCount?: number;
   /** Called when attached files change. removedIndex set when user removes file at that index. */
   onAttachmentChange?: (files: File[], removedIndex?: number) => void;
   attachmentUploading?: boolean;
+  /** False while continuation is in flight and the active question batch is empty (parent hides this section). */
+  hasVisibleQuestionBatch?: boolean;
 }
 
 function getFileTypeLabel(file: File): string {
@@ -40,9 +47,13 @@ export default function AdditionalContextSection({
   isGenerating,
   recipeId,
   reGenerateImplementationPlan = false,
+  submitLabel,
+  isEvaluating = false,
+  evaluatingLabel = "Evaluating your response…",
   unansweredCount: _unansweredCount,
   onAttachmentChange,
   attachmentUploading = false,
+  hasVisibleQuestionBatch = true,
 }: AdditionalContextSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -77,6 +88,12 @@ export default function AdditionalContextSection({
     setAttachedFilesAndNotify([...attachedFiles, ...newFiles]);
     e.target.value = "";
   };
+
+  const showSubmittingButton =
+    isEvaluating &&
+    hasVisibleQuestionBatch &&
+    !reGenerateImplementationPlan &&
+    Boolean(submitLabel?.trim());
 
   return (
     <div className="bg-background border-zinc-100 px-6 py-4">
@@ -150,7 +167,7 @@ export default function AdditionalContextSection({
                           index
                         )
                       }
-                      disabled={isGenerating}
+                      disabled={isGenerating || isEvaluating}
                       className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-zinc-600 hover:bg-zinc-300 disabled:opacity-50"
                       aria-label="Remove attachment"
                     >
@@ -165,7 +182,7 @@ export default function AdditionalContextSection({
               <button
                 type="button"
                 className="flex items-center gap-1.5 text-sm font-medium text-zinc-400 hover:text-zinc-500 focus:outline-none disabled:opacity-50"
-                disabled={isGenerating}
+                disabled={isGenerating || isEvaluating}
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Attach file"
               >
@@ -175,23 +192,39 @@ export default function AdditionalContextSection({
             </div>
           </div>
 
-          <div className="flex items-center justify-end">
-            <Button
-              onClick={onGeneratePlan}
-              disabled={isGenerating || !recipeId}
-              className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-                  GENERATING...
-                </>
-              ) : reGenerateImplementationPlan ? (
-                "RE-GENERATE IMPLEMENTATION PLAN"
-              ) : (
-                "GENERATE IMPLEMENTATION PLAN"
-              )}
-            </Button>
+          <div className="flex items-center justify-end min-h-[44px]">
+            {showSubmittingButton ? (
+              <Button
+                type="button"
+                disabled
+                className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
+                aria-live="polite"
+              >
+                <Loader2 className="w-3 h-3 shrink-0 animate-spin" aria-hidden />
+                SUBMITTING
+              </Button>
+            ) : (
+              <Button
+                onClick={onGeneratePlan}
+                disabled={isGenerating || isEvaluating || !recipeId}
+                className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
+              >
+                {isGenerating || isEvaluating ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                    {isEvaluating
+                      ? evaluatingLabel.toUpperCase()
+                      : "GENERATING..."}
+                  </>
+                ) : reGenerateImplementationPlan ? (
+                  "RE-GENERATE IMPLEMENTATION PLAN"
+                ) : submitLabel?.trim() ? (
+                  submitLabel.toUpperCase()
+                ) : (
+                  "GENERATE IMPLEMENTATION PLAN"
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>

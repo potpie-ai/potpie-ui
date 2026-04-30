@@ -595,15 +595,31 @@ const PlanPage = () => {
   }, [streamItems.length]);
 
   // When we land on the plan page with "not_started" status, start plan generation (run_id comes from GET plan response, then we connect to stream)
-  const hasTriggeredPlanGenRef = useRef(false);
+  const hasTriggeredPlanGenRef = useRef(!!runIdFromUrl);
+  if (runIdFromUrl && !hasTriggeredPlanGenRef.current) {
+    hasTriggeredPlanGenRef.current = true;
+  }
+  
   useEffect(() => {
     if (!recipeId || isLoadingStatus || runIdFromUrl || hasTriggeredPlanGenRef.current) return;
     if (statusData?.generation_status !== "not_started") return;
 
     hasTriggeredPlanGenRef.current = true;
-    PlanService.submitPlanGeneration({ recipe_id: recipeId })
-      .then(() => invalidatePlanStatusAndBuildFlowNav())
-      .catch(() => {});
+
+    // Live re-check to avoid triggering on stale 'not_started' cache immediately after a stream ends
+    PlanService.getPlanStatusByRecipeId(recipeId).then((freshStatus) => {
+      if (freshStatus.generation_status !== "not_started") {
+        hasTriggeredPlanGenRef.current = false;
+        return;
+      }
+      return PlanService.submitPlanGeneration({ recipe_id: recipeId })
+        .then(() => invalidatePlanStatusAndBuildFlowNav())
+        .catch((err) => {
+          hasTriggeredPlanGenRef.current = false;
+        });
+    }).catch((err) => {
+      hasTriggeredPlanGenRef.current = false;
+    });
   }, [recipeId, isLoadingStatus, statusData, runIdFromUrl, invalidatePlanStatusAndBuildFlowNav]);
 
   // Extract plan items from phases (new API)

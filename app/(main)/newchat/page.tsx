@@ -339,6 +339,7 @@ export default function NewChatPage() {
       let runId: string | undefined;
       try {
         const result = await QuestionService.startQuestionsGenerationStream(recipeId, {
+          streamTokens: true,
           consumeStream: false,
         });
         if (result.runId?.trim()) runId = result.runId.trim();

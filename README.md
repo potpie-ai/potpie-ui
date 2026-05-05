@@ -11,6 +11,8 @@
 
 ## Potpie
 
+**Author:** Potpie
+
 
 <p align="center">
 <img width="700" alt="Potpie Dashboard" src="assets/dashboard.gif" />

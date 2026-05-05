@@ -79,8 +79,8 @@ export default function AdditionalContextSection({
   };
 
   return (
-    <div className="bg-background border-zinc-100 px-6 py-4">
-      <div className="max-w-3xl mx-auto">
+    <div className="bg-background border-zinc-100 py-4">
+      <div className="w-full">
         <div className="space-y-3">
           <div>
             <h2 className="text-xs font-bold text-primary-color uppercase tracking-wide mb-1">

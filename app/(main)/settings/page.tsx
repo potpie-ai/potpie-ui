@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import axios from "axios";
-import { CalendarIcon, Plus } from "lucide-react";
+import { CalendarIcon, Copy, Eye, EyeOff, Plus } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -321,6 +321,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
 
   const [dateRange, setDateRange] = useState("today");
+  const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
 
   const { data: userProjects } = useQuery({
     queryKey: ["user-projects"],
@@ -577,13 +578,38 @@ export default function SettingsPage() {
             {/* Your API Key */}
             <div className="border border-gray-200 rounded-xl p-5 bg-white">
               <p className="text-sm font-semibold text-gray-800 mb-4">Your API Key</p>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Input
                   readOnly
-                  className="flex-1 bg-gray-50 text-gray-400 text-sm"
-                  value={isLoadingKey ? "Loading…" : apiKeyData?.api_key ? maskedKey(apiKeyData.api_key) : ""}
+                  className="flex-1 bg-gray-50 text-gray-400 text-sm font-mono"
+                  value={isLoadingKey ? "Loading…" : apiKeyData?.api_key ? (isApiKeyVisible ? apiKeyData.api_key : maskedKey(apiKeyData.api_key)) : ""}
                   placeholder="No API key found. Generate one to get started."
                 />
+                {apiKeyData?.api_key && (
+                  <>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => setIsApiKeyVisible((v) => !v)}
+                      title={isApiKeyVisible ? "Hide key" : "Show key"}
+                    >
+                      {isApiKeyVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(apiKeyData.api_key);
+                        toast.success("API key copied to clipboard");
+                      }}
+                      title="Copy key"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
                 {!apiKeyData?.api_key && (
                   <Button size="sm" onClick={() => generateApiKey()} disabled={isGenerating} className="whitespace-nowrap">
                     <Plus className="w-3.5 h-3.5 mr-1" />

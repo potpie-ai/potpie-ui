@@ -140,6 +140,119 @@ export default class BranchAndRepositoryService {
       }
   }
 
+    static async getProjectContextGraph(
+      potId: string,
+      options: { pr_number?: number; limit?: number } = {}
+    ) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+      try {
+        const response = await axios.post(
+          `${baseUrl}/api/v1/context/query/project-graph`,
+          {
+            pot_id: potId,
+            pr_number: options.pr_number,
+            limit: options.limit ?? 12,
+          },
+          { headers }
+        );
+        return response.data;
+      } catch (error) {
+        throw new Error("Error fetching project context graph");
+      }
+    }
+
+    static async getPots() {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      try {
+        const response = await axios.get(`${baseUrl}/api/v1/context/pots`, { headers });
+        return response.data as Array<{
+          id: string;
+          display_name: string | null;
+          slug: string | null;
+          primary_repo_name: string | null;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+          role: string;
+        }>;
+      } catch (error) {
+        throw new Error("Error fetching pots");
+      }
+    }
+
+    static async createPot(body: { slug: string; display_name?: string; primary_repo_name?: string }) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      try {
+        const response = await axios.post(`${baseUrl}/api/v1/context/pots`, body, { headers });
+        return response.data;
+      } catch (error) {
+        throw new Error("Error creating pot");
+      }
+    }
+
+    static async patchPot(potId: string, body: { display_name?: string; slug?: string; archived?: boolean }) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      try {
+        const response = await axios.patch(`${baseUrl}/api/v1/context/pots/${potId}`, body, { headers });
+        return response.data;
+      } catch (error) {
+        throw new Error("Error updating pot");
+      }
+    }
+
+    static async getPotRepositories(potId: string) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      try {
+        const response = await axios.get(`${baseUrl}/api/v1/context/pots/${potId}/repositories`, { headers });
+        return response.data as Array<{
+          id: string;
+          repo_name: string;
+          owner: string;
+          repo: string;
+          default_branch: string | null;
+          provider: string;
+          created_at: string | null;
+        }>;
+      } catch (error) {
+        throw new Error("Error fetching pot repositories");
+      }
+    }
+
+    static async addPotRepository(potId: string, body: { owner: string; repo: string; default_branch?: string }) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      try {
+        const response = await axios.post(
+          `${baseUrl}/api/v1/context/pots/${potId}/repositories`,
+          { provider: "github", provider_host: "github.com", ...body },
+          { headers }
+        );
+        return response.data;
+      } catch (error) {
+        throw new Error("Error adding repository to pot");
+      }
+    }
+
+    static async deletePotRepository(potId: string, repositoryId: string) {
+      const headers = await getHeaders();
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      try {
+        const response = await axios.delete(
+          `${baseUrl}/api/v1/context/pots/${potId}/repositories/${repositoryId}`,
+          { headers }
+        );
+        return response.data;
+      } catch (error) {
+        throw new Error("Error removing repository from pot");
+      }
+    }
+
     static async getBranchList(repoName: string, search?: string) {
         const headers = await getHeaders();
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;

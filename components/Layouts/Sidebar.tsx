@@ -37,6 +37,7 @@ import { Skeleton } from "../ui/skeleton";
 import * as Progress from "@radix-ui/react-progress";
 import { Separator } from "../ui/separator";
 import { NavUser } from "./minors/nav-user";
+import PotsMenu from "./minors/PotsMenu";
 import { Button } from "@/components/ui/button";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
 import formbricksApp from "@formbricks/js";
@@ -272,43 +273,46 @@ export function AppSidebar() {
                   }
                 };
                 return (
-                  <SidebarMenuItem key={link.title}>
-                    <SidebarMenuButton
-                      asChild={!link.showProModal && !isWorkflowsLink}
-                      isActive={isActive}
-                      disabled={link.disabled || (isWorkflowsLink && isCheckingBackend)}
-                      onClick={link.showProModal || isWorkflowsLink ? handleClick : link.handleTrack ? handleTrack : undefined}
-                      tooltip={link.title}
-                    >
-                      {link.showProModal || isWorkflowsLink ? (
-                        <button
-                          className="flex gap-2 items-center w-full overflow-hidden"
-                          onClick={handleClick}
-                        >
-                          {link.icons && <span className="shrink-0">{link.icons}</span>}
-                          <span className="group-data-[collapsible=icon]:hidden truncate">{link.title}</span>
-                          {link.description && (
-                            <span className="border border-primary text-emerald-950 group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
-                              {link.description}
-                            </span>
-                          )}
-                        </button>
-                      ) : (
-                        <Link
-                          href={link.href}
-                          className="flex gap-2 items-center w-full overflow-hidden"
-                        >
-                          {link.icons && <span className="shrink-0">{link.icons}</span>}
-                          <span className="group-data-[collapsible=icon]:hidden truncate">{link.title}</span>
-                          {link.description && (
-                            <span className="border border-primary text-emerald-950 group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
-                              {link.description}
-                            </span>
-                          )}
-                        </Link>
-                      )}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <React.Fragment key={link.title}>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild={!link.showProModal && !isWorkflowsLink}
+                        isActive={isActive}
+                        disabled={link.disabled || (isWorkflowsLink && isCheckingBackend)}
+                        onClick={link.showProModal || isWorkflowsLink ? handleClick : link.handleTrack ? handleTrack : undefined}
+                        tooltip={link.title}
+                      >
+                        {link.showProModal || isWorkflowsLink ? (
+                          <button
+                            className="flex gap-2 items-center w-full overflow-hidden"
+                            onClick={handleClick}
+                          >
+                            {link.icons && <span className="shrink-0">{link.icons}</span>}
+                            <span className="group-data-[collapsible=icon]:hidden truncate">{link.title}</span>
+                            {link.description && (
+                              <span className="border border-primary text-emerald-950 group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
+                                {link.description}
+                              </span>
+                            )}
+                          </button>
+                        ) : (
+                          <Link
+                            href={link.href}
+                            className="flex gap-2 items-center w-full overflow-hidden"
+                          >
+                            {link.icons && <span className="shrink-0">{link.icons}</span>}
+                            <span className="group-data-[collapsible=icon]:hidden truncate">{link.title}</span>
+                            {link.description && (
+                              <span className="border border-primary text-emerald-950 group-hover/menu-item:border-sidebar bg-gradient-to-r from-blue-100 via-pink-100 to-white group-hover/menu-item:bg-white group-hover/menu-item:text-foreground rounded-full px-2 text-[0.6rem] transition-all duration-300 ml-auto group-data-[collapsible=icon]:hidden">
+                                {link.description}
+                              </span>
+                            )}
+                          </Link>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    {link.href === "/all-agents" && <PotsMenu />}
+                  </React.Fragment>
                 );
               })}
             </SidebarMenu>
@@ -323,7 +327,7 @@ export function AppSidebar() {
       {!subscriptionLoading && userSubscription && open && (
         <div className="px-4 pt-3 pb-3">
           <div className="bg-white rounded-lg border border-zinc-200 p-3">
-            <p className="text-sm font-medium text-emerald-950 mb-1">
+            <p className="text-sm font-medium text-[#00291C] mb-1">
               {userSubscription?.plan_type === planTypesEnum.PRO ? "Pro Plan" : "Free Plan"}
             </p>
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -342,8 +346,8 @@ export function AppSidebar() {
               />
             </Progress.Root>
             <button
-              onClick={() => router.push("/user-subscription")}
-              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-[#FFFFFF] text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
+              onClick={() => setProModalOpen(true)}
+              className="w-full py-2 px-4 rounded-lg border border-zinc-300 bg-white text-xs font-medium text-[#00291C] hover:bg-zinc-50 transition-colors"
             >
               UPGRADE
             </button>

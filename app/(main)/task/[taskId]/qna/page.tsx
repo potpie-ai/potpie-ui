@@ -28,7 +28,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { FileText, Info } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  FileText,
+  Github,
+  GitBranch,
+  Info,
+  Loader2,
+  Wrench,
+} from "lucide-react";
 import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 import { hasSpecBeenCompletedOnce } from "@/lib/buildFlow";
 import {
@@ -45,6 +54,19 @@ import type {
 } from "@/types/question";
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { ParsingStatusEnum } from "@/lib/Constants";
+
+const Badge = ({
+  children,
+  icon: Icon,
+}: {
+  children: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+}) => (
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-zinc-500">
+    {Icon && <Icon className="w-3.5 h-3.5" />}
+    {children}
+  </div>
+);
 
 /** Sort section keys by DEFAULT_SECTION_ORDER, then alphabetically. */
 function getSortedSections(sectionKeys: Iterable<string>): string[] {
@@ -2285,7 +2307,14 @@ export default function QnaPage() {
             className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden"
             style={{ backgroundColor: "#FAF8F7" }}
           >
-            <aside className="flex-1 min-h-0 w-full min-w-[280px] flex flex-col overflow-hidden pt-6">
+            {/* Repo/branch badges on right side */}
+            <div className="flex justify-end items-center px-6 pt-6 pb-4 shrink-0 gap-2">
+              {repoName && repoName !== "Unknown Repository" && (
+                <Badge icon={Github}>{repoName}</Badge>
+              )}
+              {branchName && <Badge icon={GitBranch}>{branchName}</Badge>}
+            </div>
+            <aside className="flex-1 min-h-0 w-full min-w-[280px] flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto min-h-0 py-3 pl-6 pr-8">
                 <h2 className="text-sm font-bold mb-2 text-left text-primary-color">
                   Clarifying Questions

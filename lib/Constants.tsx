@@ -1,6 +1,6 @@
 import { auth } from "@/configs/Firebase-config";
 import formbricksApp from "@formbricks/js";
-import { CircleAlert, Code2, Network } from "lucide-react";
+import { CircleAlert, Code2 } from "lucide-react";
 import Image from "next/image";
 
 const user = auth.currentUser || ("" as any);
@@ -132,12 +132,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
         ),
         title: "Integrations",
         href: "/integrations",
-        disabled: false,
-      },
-      {
-        icons: <Network className="size-5 shrink-0" />,
-        title: "Context Graph",
-        href: "/context-graph",
         disabled: false,
       },
       {

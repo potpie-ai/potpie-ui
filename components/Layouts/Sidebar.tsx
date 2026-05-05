@@ -311,7 +311,7 @@ export function AppSidebar() {
                         )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                    {link.href === "/all-chats" && <PotsMenu />}
+                    {link.href === "/all-agents" && <PotsMenu />}
                   </React.Fragment>
                 );
               })}

@@ -7,6 +7,7 @@ import {
   Check,
   Loader2,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   FileCode,
@@ -282,6 +283,8 @@ const PlanPage = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [selectedPhaseIndex, setSelectedPhaseIndex] = useState(0);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([0]));
+  const [collapsedArchitectureDiagrams, setCollapsedArchitectureDiagrams] =
+    useState<Set<string>>(new Set());
   const [isRegeneratingPlan, setIsRegeneratingPlan] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasChatInitializedRef = useRef(false);
@@ -887,7 +890,7 @@ const PlanPage = () => {
         </div>
 
         {/* Right: Phase Plan panel (top bar matches Spec page) */}
-        <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 border-l border-[#E5E8E6]">
+        <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0">
           <div className="p-6 border-b border-[#E5E8E6] bg-[#FFFDFC] shrink-0">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
@@ -1053,32 +1056,71 @@ const PlanPage = () => {
                   <TabsContent value="architecture" className="mt-4 pt-2 pb-12 pr-4">
                     <div className="py-5 pr-2 space-y-6">
                       {phase.diagrams && phase.diagrams.length > 0 ? (
-                        phase.diagrams.map((d) => (
-                          <div
-                            key={d.diagram_id}
-                            className="border rounded-lg p-4 overflow-x-auto bg-[#FFFDFC]"
-                            style={{ borderColor: "#CCD3CF" }}
-                          >
-                            <h4 className="text-sm font-semibold text-[#022019] mb-1">{d.title}</h4>
-                            {d.description && (
-                              <p className="text-xs text-[#374151] mb-3 leading-relaxed">{d.description}</p>
-                            )}
-                            {d.mermaid_code ? (
-                              looksLikeMermaid(d.mermaid_code) ? (
-                                <MermaidDiagram chart={d.mermaid_code} />
-                              ) : (
-                                <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap break-words m-0 p-0">
-                                  {d.mermaid_code}
-                                </pre>
-                              )
-                            ) : (
-                              <p className="text-xs text-zinc-500 italic">No diagram content.</p>
-                            )}
-                            {d.validation_error && (
-                              <p className="text-xs text-amber-700 mt-2">Validation: {d.validation_error}</p>
-                            )}
-                          </div>
-                        ))
+                        phase.diagrams.map((d) => {
+                          const diagramKey = `${selectedPhaseIndex}-${d.diagram_id}`;
+                          const isCollapsed =
+                            collapsedArchitectureDiagrams.has(diagramKey);
+                          return (
+                            <div
+                              key={d.diagram_id}
+                              className="border rounded-lg p-4 overflow-x-auto bg-[#FFFDFC]"
+                              style={{ borderColor: "#CCD3CF" }}
+                            >
+                              <div className="flex items-start justify-between gap-3 mb-1">
+                                <h4 className="text-sm font-semibold text-[#022019]">
+                                  {d.title}
+                                </h4>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCollapsedArchitectureDiagrams((prev) => {
+                                      const next = new Set(prev);
+                                      if (isCollapsed) {
+                                        next.delete(diagramKey);
+                                      } else {
+                                        next.add(diagramKey);
+                                      }
+                                      return next;
+                                    })
+                                  }
+                                  className="shrink-0 rounded-sm p-1 text-[#747575] hover:text-[#022019] hover:bg-zinc-100 transition-colors"
+                                  aria-label={`${isCollapsed ? "Open" : "Collapse"} ${d.title} diagram`}
+                                  title={isCollapsed ? "Open diagram" : "Collapse diagram"}
+                                >
+                                  {isCollapsed ? (
+                                    <ChevronDown className="w-4 h-4" />
+                                  ) : (
+                                    <ChevronUp className="w-4 h-4" />
+                                  )}
+                                </button>
+                              </div>
+                              {d.description && (
+                                <p className="text-xs text-[#374151] mb-3 leading-relaxed">
+                                  {d.description}
+                                </p>
+                              )}
+                              {!isCollapsed &&
+                                (d.mermaid_code ? (
+                                  looksLikeMermaid(d.mermaid_code) ? (
+                                    <MermaidDiagram chart={d.mermaid_code} />
+                                  ) : (
+                                    <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap break-words m-0 p-0">
+                                      {d.mermaid_code}
+                                    </pre>
+                                  )
+                                ) : (
+                                  <p className="text-xs text-zinc-500 italic">
+                                    No diagram content.
+                                  </p>
+                                ))}
+                              {d.validation_error && (
+                                <p className="text-xs text-amber-700 mt-2">
+                                  Validation: {d.validation_error}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })
                       ) : (
                         <p className="text-sm text-[#374151] leading-relaxed">
                           No architecture diagram available for this phase.

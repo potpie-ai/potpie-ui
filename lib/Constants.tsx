@@ -98,19 +98,6 @@ export const SidebarItems: { title: string; links: any[] }[] = [
       {
         icons: (
           <Image
-            src="/images/All chat.svg"
-            alt="All chats"
-            width={20}
-            height={20}
-          />
-        ),
-        title: "All chats",
-        href: "/all-chats",
-        disabled: false,
-      },
-      {
-        icons: (
-          <Image
             src="/images/Custom Agents.svg"
             alt="Custom Agents"
             width={20}

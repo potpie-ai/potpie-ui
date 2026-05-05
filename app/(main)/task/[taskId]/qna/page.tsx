@@ -40,6 +40,8 @@ import {
   Loader2,
   Wrench,
 } from "lucide-react";
+import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
+import { hasSpecBeenCompletedOnce } from "@/lib/buildFlow";
 import {
   RecipeQuestionsResponse,
   RecipeQuestion,
@@ -55,6 +57,19 @@ import type {
 } from "@/types/question";
 import { DEFAULT_SECTION_ORDER } from "@/types/question";
 import { ParsingStatusEnum } from "@/lib/Constants";
+
+const Badge = ({
+  children,
+  icon: Icon,
+}: {
+  children: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+}) => (
+  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-zinc-200 rounded text-xs font-medium text-zinc-500">
+    {Icon && <Icon className="w-3.5 h-3.5" />}
+    {children}
+  </div>
+);
 
 /** Sort section keys by DEFAULT_SECTION_ORDER, then alphabetically. */
 function getSortedSections(sectionKeys: Iterable<string>): string[] {
@@ -75,19 +90,6 @@ function getSortedSections(sectionKeys: Iterable<string>): string[] {
     return a.localeCompare(b);
   });
 }
-
-const Badge = ({
-  children,
-  icon: Icon,
-}: {
-  children: React.ReactNode;
-  icon?: React.ComponentType<{ className?: string }>;
-}) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-border-light rounded text-xs font-medium text-primary-color">
-    {Icon && <Icon className="w-3.5 h-3.5" />}
-    {children}
-  </div>
-);
 
 const RECIPE_ID_UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -171,6 +173,16 @@ export default function QnaPage() {
     questionGenerationStatus: null,
     questionGenerationError: null,
   });
+
+  const { data: recipeDetailsForGenerateLabel } = useQuery({
+    queryKey: ["recipe-details", recipeId, "qna-generate-label"],
+    queryFn: () => SpecService.getRecipeDetails(recipeId!),
+    enabled: !!recipeId,
+    staleTime: 10_000,
+  });
+  const reGenerateImplementationPlan = hasSpecBeenCompletedOnce(
+    recipeDetailsForGenerateLabel?.status,
+  );
 
   // Fetch recipe details when recipeId is available (same priority as spec: API then localStorage)
   useEffect(() => {
@@ -1312,10 +1324,64 @@ export default function QnaPage() {
         answersPayload["additional_context"] = state.additionalContext.trim();
       }
 
-      await SpecService.submitAnswers(recipeId, answersPayload);
-      const { runId } = await SpecService.startSpecGenerationStream(recipeId, {
-        consumeStream: false,
-      });
+      // Check recipe status to determine if we need to submit answers or just regenerate
+      let shouldRegenerate = false;
+      let recipeStatus: string | null = null;
+      try {
+        const recipeDetails = await SpecService.getRecipeDetails(recipeId);
+        recipeStatus = (recipeDetails as any)?.status || null;
+      } catch {
+        // If status lookup fails, we'll try to submit answers anyway
+      }
+
+      // Only submit answers if recipe is in QUESTIONS_READY or ANSWERS_SUBMITTED state
+      // If already in SPEC_IN_PROGRESS or SPEC_READY, skip to regeneration
+      const canSubmitAnswers = !recipeStatus || recipeStatus === "QUESTIONS_READY" || recipeStatus === "ANSWERS_SUBMITTED";
+      const alreadyInSpecPhase = recipeStatus === "SPEC_IN_PROGRESS" || recipeStatus === "SPEC_READY";
+
+      if (canSubmitAnswers) {
+        // Submit answers (idempotent on backend)
+        await SpecService.submitAnswers(recipeId, answersPayload);
+      } else if (alreadyInSpecPhase) {
+        console.log("[QnA Page] Recipe already in spec phase, skipping submitAnswers");
+        shouldRegenerate = true;
+      }
+
+      // Check spec generation status to determine if we should regenerate
+      if (!shouldRegenerate) {
+        try {
+          const current = await SpecService.getSpecProgressByRecipeId(recipeId);
+          const genStatus =
+            "generation_status" in current
+              ? (current as any).generation_status
+              : "spec_gen_status" in current
+                ? (current as any).spec_gen_status
+                : "spec_generation_step_status" in current
+                  ? (current as any).spec_generation_step_status
+                  : null;
+          // If any spec generation has already been started (pending/processing/completed/failed),
+          // treat this click as an explicit request to regenerate.
+          if (genStatus && genStatus !== "not_started") {
+            shouldRegenerate = true;
+          }
+        } catch {
+          // If status lookup fails, assume first-time generation.
+        }
+      }
+
+      let runId: string | undefined;
+
+      if (shouldRegenerate) {
+        // Start a fresh spec generation run; SpecPage will poll /spec and, if provided,
+        // attach to the new run's stream via its own run_id handshake.
+        await SpecService.regenerateSpec(recipeId);
+      } else {
+        // First-time generation: start via generate-stream to get run_id for live updates.
+        const res = await SpecService.startSpecGenerationStream(recipeId, {
+          consumeStream: false,
+        });
+        runId = res.runId;
+      }
 
       // Clear localStorage only after both calls succeed so we don't lose answers on submission failure
       if (typeof window !== "undefined" && recipeId) {
@@ -1740,20 +1806,24 @@ export default function QnaPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans antialiased">
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+        <BuildFlowChatHeader
+          recipeId={recipeId}
+          title={`${featureIdea?.slice(0, 50) || "Clarifying Questions"}${
+            (featureIdea?.length ?? 0) > 50 ? "…" : ""
+          }`}
+          repoName={repoName || "Unknown Repository"}
+          branchName={branchName || "main"}
+        />
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: questions area — same structure as spec chat */}
         {/* Full width when no questions, half width when questions ready */}
         <div
           className={`flex flex-col min-w-0 min-h-0 overflow-hidden transition-all duration-300 ${hasQuestionsReady ? 'flex-1' : 'w-full'}`}
           style={{ backgroundColor: "#FAF8F7" }}
         >
-          {/* Title on left side */}
-          <div className="shrink-0 px-6 pt-6 pb-4">
-            <h1 className="text-lg font-bold text-primary-color truncate capitalize min-w-0">
-              {featureIdea?.slice(0, 50) || "Clarifying Questions"}
-              {(featureIdea?.length ?? 0) > 50 ? "…" : ""}
-            </h1>
-          </div>
           <div
             className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ msOverflowStyle: "none" }}
@@ -1865,6 +1935,7 @@ export default function QnaPage() {
                 onGeneratePlan={handleGeneratePlan}
                 isGenerating={state.isGenerating}
                 recipeId={recipeId}
+                reGenerateImplementationPlan={reGenerateImplementationPlan}
                 onAttachmentChange={handleAttachmentChange}
                 attachmentUploading={state.attachmentUploading}
               />

@@ -102,6 +102,8 @@ function MonacoDiffViewInner({
             minimap: { enabled: false },
             fontSize: 12,
             lineNumbers: "on",
+            lineNumbersMinChars: 2,
+            glyphMargin: false,
             folding: false,
             wordWrap: "on",
           }}
@@ -132,6 +134,8 @@ function MonacoDiffViewInner({
           minimap: { enabled: false },
           fontSize: 12,
           lineNumbers: "on",
+          lineNumbersMinChars: 2,
+          glyphMargin: false,
           folding: false,
           renderOverviewRuler: false,
         }}

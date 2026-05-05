@@ -467,6 +467,7 @@ export interface RecipeDetailsResponse {
   repo_name?: string | null;
   branch_name?: string | null;
   questions_and_answers: QuestionAnswerPair[];
+  status?: string | null;
 }
 
 // Spec Editor Chat API types

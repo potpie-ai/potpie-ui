@@ -560,6 +560,7 @@ export default class SpecService {
         repo_name: recipe.repo_name || null,
         branch_name: recipe.branch_name || null,
         questions_and_answers: questionsAndAnswers,
+        status: recipe.status || null,
       };
     } catch (error: any) {
       if (error?.response?.status === 404) {

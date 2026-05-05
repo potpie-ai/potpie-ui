@@ -19,16 +19,9 @@ const FIGMA = {
   modelDropdownText: "#00291C",
 } as const;
 
-const UPGRADE_DROPDOWN_PLACEHOLDER_MODELS = [
-  "GPT-5.2",
-  "Claude Sonnet 4.5",
-  "DeepSeek V3",
-  "Gemini 2.0 Flash",
-];
-
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal, ExternalLink } from "lucide-react";
+import { Send, Loader2, ChevronDown, Plus, Check, FolderOpen, Github, GitBranch, FileText, X, Search, Bot, Globe, Paperclip, Lock, SendHorizonal, ExternalLink, Crown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuthContext } from "@/contexts/AuthContext";
 import MinorService from "@/services/minorService";
-import ModelService from "@/services/ModelService";
+import ModelService, { type Model } from "@/services/ModelService";
 import { planTypesEnum } from "@/lib/Constants";
 import { useGithubAppPopup } from "../hooks/useGithubAppPopup";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
@@ -88,6 +81,8 @@ interface IdeaInputCardProps {
   onRepoSearchChange?: (value: string) => void;
   /** Handler for branch search term changes (debounced — called after user stops typing) */
   onBranchSearchChange?: (value: string) => void;
+  /** When true, show "Generate spec" option under Debug (e.g. only on localhost in new chat) */
+  showSpecGenOption?: boolean;
 }
 
 export default function IdeaInputCard({
@@ -118,6 +113,7 @@ export default function IdeaInputCard({
   attachmentUploading = false,
   onRepoSearchChange,
   onBranchSearchChange,
+  showSpecGenOption = false,
 }: IdeaInputCardProps) {
   const router = useRouter();
   const { user } = useAuthContext();
@@ -169,7 +165,14 @@ export default function IdeaInputCard({
     name: string;
     provider: string;
   } | null>({ id: "", name: "glm 4.7", provider: "z.ai" });
-  const [modelList, setModelList] = useState<{ id: string; name: string; provider: string }[]>([]);
+  const [modelList, setModelList] = useState<Model[]>([]);
+  /** Pro users: all models. Free users: all except OpenAI, Anthropic, Gemini (those show upgrade flag). */
+  const isModelAvailable = (model: Model) => {
+    if (!isFreeUser) return true;
+    const p = (model.provider || "").toLowerCase().replace(/[\s.-]/g, "");
+    if (p === "openai" || p === "anthropic" || p === "gemini") return false;
+    return true;
+  };
   const loadCurrentModel = useCallback(async () => {
     try {
       const res = await ModelService.getCurrentModel();
@@ -187,20 +190,24 @@ export default function IdeaInputCard({
   const loadModelList = useCallback(async () => {
     try {
       const res = await ModelService.listModels();
-      const list = (res.models ?? []).map((m) => ({
-        id: m.id,
-        name: m.name,
-        provider: m.provider,
-      }));
-      setModelList(list);
+      setModelList(res.models ?? []);
     } catch {
       setModelList([]);
     }
   }, []);
-  // Don't load current model on mount so we keep ZLM 4.7 as default; user can change via dropdown
+  // Load model list for all users so dropdown shows API models (free users see grayed + Upgrade for non-available)
   useEffect(() => {
-    if (!isFreeUser) loadModelList();
-  }, [isFreeUser, loadModelList]);
+    loadModelList();
+  }, [loadModelList]);
+
+  // For free users, show free models first and paid/locked models after.
+  const orderedModelList = useMemo(() => {
+    if (!modelList || modelList.length === 0) return [];
+    if (!isFreeUser) return modelList;
+    const freeModels = modelList.filter((m) => isModelAvailable(m));
+    const paidModels = modelList.filter((m) => !isModelAvailable(m));
+    return [...freeModels, ...paidModels];
+  }, [modelList, isFreeUser]);
 
   const attachedFiles =
     controlledFiles !== undefined ? controlledFiles : localFiles;
@@ -416,6 +423,7 @@ export default function IdeaInputCard({
     { value: "ask", label: "Ask a question" },
     { value: "build", label: "Build a feature" },
     { value: "debug", label: "Debug an issue" },
+    ...(showSpecGenOption ? [{ value: "spec_gen" as const, label: "Generate a spec" }] : []),
     { value: "code", label: "Make a change" },
   ];
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
@@ -932,39 +940,82 @@ export default function IdeaInputCard({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            {isFreeUser ? (
-              <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full border"
-                    style={{
-                      backgroundColor: FIGMA.claudeDropdownBg,
-                      borderColor: FIGMA.inputBorder,
-                      color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
-                      opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
-                    }}
-                    aria-label="Upgrade to change plan"
-                  >
-                    <Lock className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
-                    <span className="shrink-0">{displayModelName}</span>
-                    <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[200px] w-[200px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+            <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full border"
+                  style={{
+                    backgroundColor: FIGMA.claudeDropdownBg,
+                    borderColor: FIGMA.inputBorder,
+                    color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
+                    opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
+                  }}
+                  aria-label={isFreeUser ? "Upgrade to change plan" : "Change model"}
                 >
-                  <div className="py-1 max-h-[240px] overflow-y-auto">
-                    {UPGRADE_DROPDOWN_PLACEHOLDER_MODELS.map((name) => (
-                      <div
-                        key={name}
-                        className="px-4 py-2.5 text-sm text-zinc-400 cursor-default select-none"
-                      >
-                        {name}
-                      </div>
-                    ))}
-                  </div>
+                  <Lock className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
+                  <span className="shrink-0">{displayModelName}</span>
+                  <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="min-w-[280px] w-[280px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+                style={{ color: FIGMA.modelDropdownText }}
+              >
+                <div className="py-1 max-h-[320px] overflow-y-auto">
+                  {orderedModelList.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-zinc-500">Loading models…</div>
+                  ) : (
+                    orderedModelList.map((model) => {
+                      const available = isModelAvailable(model);
+                      return (
+                        <DropdownMenuItem
+                          key={model.id}
+                          title={model.description ?? undefined}
+                          onClick={async (e) => {
+                            if (!available) {
+                              e.preventDefault();
+                              setModelDropdownOpen(false);
+                              router.push("/user-subscription");
+                              return;
+                            }
+                            try {
+                              await ModelService.setCurrentModel(model.id);
+                              await loadCurrentModel();
+                            } catch {
+                              // keep current selection on error
+                            }
+                            setModelDropdownOpen(false);
+                          }}
+                          className={`flex flex-col items-start gap-0.5 py-2.5 ${available ? "cursor-pointer" : "cursor-default opacity-90"} ${currentModel?.id === model.id ? "bg-zinc-100 font-medium" : ""}`}
+                          style={{
+                            color: available ? FIGMA.modelDropdownText : "#9ca3af",
+                          }}
+                        >
+                          <div className="flex w-full items-center gap-2 flex-wrap">
+                            <span className={available ? "" : "text-gray-400"}>{model.name}</span>
+                            {!available && (
+                              <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-gray-700">
+                                <Crown className="h-3 w-3 shrink-0" />
+                                Upgrade Plan
+                              </span>
+                            )}
+                          </div>
+                          {model.description && (
+                            <span
+                              className="text-xs italic block mt-0.5"
+                              style={{ color: available ? FIGMA.textMuted : "#9ca3af" }}
+                            >
+                              {model.description}
+                            </span>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })
+                  )}
+                </div>
+                {isFreeUser && (
                   <div className="p-3 border-t border-zinc-100">
                     <button
                       type="button"
@@ -977,55 +1028,9 @@ export default function IdeaInputCard({
                       Upgrade to change plan
                     </button>
                   </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium cursor-pointer hover:opacity-90 focus:outline-none transition-opacity rounded-full border"
-                    style={{
-                      backgroundColor: FIGMA.claudeDropdownBg,
-                      borderColor: FIGMA.inputBorder,
-                      color: terminalDisabled ? "#003130" : FIGMA.modelDropdownText,
-                      opacity: terminalDisabled ? FIGMA.claudeDropdownOpacity : 1,
-                    }}
-                    aria-label="Change model"
-                  >
-                    <Lock className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
-                    <span className="shrink-0">{displayModelName}</span>
-                    <ChevronDown className="h-4 w-4 shrink-0" style={{ color: terminalDisabled ? FIGMA.textPrimary : "#6B7280" }} aria-hidden />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[200px] w-[200px] p-0 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
-                  style={{ color: FIGMA.modelDropdownText }}
-                >
-                  <div className="py-1 max-h-[240px] overflow-y-auto">
-                    {modelList.map((model) => (
-                      <DropdownMenuItem
-                        key={model.id}
-                        onClick={async () => {
-                          try {
-                            await ModelService.setCurrentModel(model.id);
-                            await loadCurrentModel();
-                          } catch {
-                            // keep current selection on error
-                          }
-                          setModelDropdownOpen(false);
-                        }}
-                        className={`cursor-pointer ${currentModel?.id === model.id ? "bg-zinc-100 font-medium" : ""}`}
-                        style={{ color: FIGMA.modelDropdownText }}
-                      >
-                        {model.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               type="button"
               onClick={() => {

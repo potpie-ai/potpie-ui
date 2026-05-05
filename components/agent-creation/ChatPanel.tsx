@@ -27,7 +27,7 @@ interface Message {
 const CustomMarkdown = ({ content }: { content: string }) => {
   return (
     <ReactMarkdown
-      className="markdown-content break-words break-before-avoid [&_p]:!leading-tight [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
+      className="markdown-content text-sm [&_p]:!leading-relaxed [&_p]:!my-0.5 [&_li]:!my-0.5 animate-blink"
       components={{
         p: ({ children }) => <p className="text-slate-900">{children}</p>,
         code: ({ children, className }) => {
@@ -89,12 +89,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   // Check if scroll is at bottom
   const checkIfScrollAtBottom = useCallback(() => {
     if (!messagesContainerRef.current) return;
-    
+
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
     const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 20;
     setIsAtBottom(isBottom);
     setShowScrollButton(!isBottom);
-    
+
     // Save last position
     setLastScrollTop(scrollTop);
     setLastScrollHeight(scrollHeight);
@@ -120,7 +120,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    
+
     container.addEventListener('scroll', checkIfScrollAtBottom);
     return () => container.removeEventListener('scroll', checkIfScrollAtBottom);
   }, [checkIfScrollAtBottom]);
@@ -129,7 +129,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    
+
     if (isLoading) {
       // Don't force scroll while loading, let user control
     } else if (isAtBottom && messages.length > 0) {
@@ -143,7 +143,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       // but don't manipulate scroll position
       setNewMessageCount(prev => prev + 1);
     }
-    
+
     // Update scroll height after rendering
     setLastScrollHeight(container.scrollHeight);
   }, [messages, isAtBottom, isLoading]);
@@ -154,7 +154,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
     // Reset new message counter when user sends a message
     setNewMessageCount(0);
-    
+
     // Set isAtBottom to true when sending new message
     setIsAtBottom(true);
 
@@ -165,7 +165,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       sender: "user",
     };
     setMessages((prev) => [...prev, userMessage]);
-    
+
     // Clear input
     const messageToSend = inputMessage;
     setInputMessage("");
@@ -180,7 +180,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         sender: "agent",
         citations: [],
       };
-      
+
       setMessages((prev) => [...prev, tempAgentMessage]);
 
       // Stream the message
@@ -212,7 +212,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       setIsLoading(false);
     }
   };
-  
+
   // Handle pressing Enter to send message
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -239,21 +239,25 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         ) : (
           messages.map((message) => (
-            <div 
-              key={message.id} 
-              className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+            <div
+              key={message.id}
+              className={`flex w-full mb-4 ${message.sender === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div 
-                className={`max-w-[80%] p-3 rounded-lg ${
-                  message.sender === "user" 
-                    ? "bg-primary/10 text-foreground" 
-                    : "bg-muted/30 text-foreground"
-                }`}
+              <div
+                className={`inline-block max-w-[85%] rounded-2xl px-5 py-3 text-base shadow-sm ${message.sender === "user"
+                  ? "bg-[#E6F0FF] text-blue-900 rounded-tr-sm"
+                  : "bg-gray-100 text-gray-800 rounded-tl-sm"
+                  }`}
+                style={{ wordBreak: "break-word" }}
               >
                 {message.sender === "user" ? (
-                  <p className="break-words">{message.text}</p>
+                  <div className="whitespace-pre-wrap">{message.text}</div>
                 ) : (
-                  <CustomMarkdown content={message.text} />
+                  <div className="prose prose-sm md:prose-base max-w-none text-gray-800">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {message.text}
+                    </ReactMarkdown>
+                  </div>
                 )}
               </div>
             </div>
@@ -272,9 +276,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         )}
         <div ref={messagesEndRef} />
       </div>
-      
+
       {/* Fixed-height input area at bottom */}
-      <div 
+      <div
         className="absolute bottom-0 left-0 right-0 p-4 border-t bg-background flex-none z-10"
         style={{ height: `${footerHeight}px` }}
       >
@@ -300,7 +304,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </Button>
         </div>
       </div>
-      
+
       {/* Scroll to bottom button */}
       {showScrollButton && newMessageCount > 0 && (
         <button

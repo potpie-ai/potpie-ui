@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  Github,
-  GitBranch,
   Check,
   Loader2,
   ChevronDown,
@@ -23,10 +22,12 @@ import {
   RotateCcw,
   RotateCw,
   Wrench,
+  Download,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
 import { toast } from "@/components/ui/sonner";
+import { downloadSpecAsMarkdown } from "@/lib/utils/markdownExport";
 import { useNavigationProgress } from "@/contexts/NavigationProgressContext";
 import {
   SpecPlanStatusResponse,
@@ -59,6 +60,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import Image from "next/image";
+import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 
 interface FileItem {
   path: string;
@@ -371,13 +373,6 @@ function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
   );
 }
 
-const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#E5E8E6] rounded text-xs font-medium text-primary-color">
-    {Icon && <Icon className="w-3.5 h-3.5" />}
-    {children}
-  </div>
-);
-
 const PlanTabs = ({ plan }: { plan: Plan }) => {
   // Combine all items from all categories
   const allItems = [...plan.add, ...plan.modify, ...plan.fix];
@@ -540,6 +535,7 @@ const SpecPage = () => {
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isRegeneratingSpec, setIsRegeneratingSpec] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [regenerateSpecKey, setRegenerateSpecKey] = useState(0);
   /** Live streaming progress when using spec generate-stream (step + message). */
   const [streamProgress, setStreamProgress] = useState<{ step: string; message: string } | null>(null);
@@ -975,18 +971,48 @@ const SpecPage = () => {
     };
   }, [recipeId, regenerateSpecKey, runIdFromUrl]);
 
-  // Calculate status (support new API: generation_status, and legacy formats)
-  const status = (specProgress 
-    ? ('generation_status' in specProgress
-        ? ((specProgress as any).generation_status === 'completed' ? 'COMPLETED' : (specProgress as any).generation_status === 'failed' ? 'FAILED' : (specProgress as any).generation_status === 'processing' || (specProgress as any).generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
-        : ('spec_gen_status' in specProgress ? specProgress.spec_gen_status : ('spec_generation_step_status' in specProgress ? specProgress.spec_generation_step_status : null)))
-    : null) as 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null;
-  const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
+  // Calculate status from backend generation_status (source of truth).
+  // Treat only "pending" and "processing" as in-progress; "completed"/"failed" as terminal; anything else as idle.
+  const rawGenerationStatus: string | null = specProgress
+    ? ("generation_status" in specProgress
+        ? (specProgress as any).generation_status
+        : "spec_gen_status" in specProgress
+          ? (specProgress as any).spec_gen_status
+          : "spec_generation_step_status" in specProgress
+            ? (specProgress as any).spec_generation_step_status
+            : null)
+    : null;
+
+  // Normalize to lowercase for case-insensitive comparison (handles legacy uppercase values)
+  const normalizedStatus = rawGenerationStatus?.toLowerCase();
+  const status = (normalizedStatus === "completed"
+    ? "COMPLETED"
+    : normalizedStatus === "failed"
+      ? "FAILED"
+      : normalizedStatus === "pending" || normalizedStatus === "processing" || normalizedStatus === "in_progress"
+        ? "IN_PROGRESS"
+        : null) as "IN_PROGRESS" | "COMPLETED" | "FAILED" | null;
+
+  const isGenerating = status === "IN_PROGRESS";
   const errorMessageFromApi = specProgress && typeof (specProgress as any).error_message === 'string' ? (specProgress as any).error_message : null;
 
   // Normalize spec from potpie-workflows GET /api/v1/recipes/{id}/spec
   const { plan: normalizedPlan, rawSpec: rawSpecification } = normalizeSpecFromProgress(specProgress ?? undefined);
   const hasSpecContent = normalizedPlan !== null || rawSpecification !== null;
+
+  const { data: planStatusForLabel } = useQuery({
+    queryKey: ["plan-status", recipeId],
+    queryFn: () => PlanService.getPlanStatusByRecipeId(recipeId!),
+    enabled:
+      !!recipeId &&
+      status === "COMPLETED" &&
+      !isCancelled &&
+      hasSpecContent,
+    staleTime: 30_000,
+  });
+  const planGenForLabel = planStatusForLabel?.generation_status?.toLowerCase();
+  const showReGeneratePlanButton =
+    planGenForLabel === "completed" || planGenForLabel === "failed";
 
   // Persist stream timeline when spec is completed so it survives refresh
   useEffect(() => {
@@ -1092,25 +1118,28 @@ const SpecPage = () => {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      {/* Full-width build flow bar — tabs extend to the right edge */}
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+        <BuildFlowChatHeader
+          recipeId={recipeId}
+          title={`${recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}${
+            (recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""
+          }`}
+          repoName={
+            repoNameFromUrl ||
+            storedRepoContext?.repoName ||
+            projectData?.repo ||
+            "Unknown Repository"
+          }
+          branchName={
+            storedRepoContext?.branchName || projectData?.branch || "main"
+          }
+        />
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
         <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-r-[1px] border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
-          {/* Chat header */}
-          <div className="flex justify-between items-center px-6 py-4 shrink-0">
-            <h1 className="text-lg font-bold text-primary-color truncate capitalize">
-              {recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}
-              {(recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""}
-            </h1>
-            <div className="flex items-center gap-2 shrink-0">
-              <Badge icon={Github}>
-                {repoNameFromUrl || storedRepoContext?.repoName || projectData?.repo || "Unknown Repository"}
-              </Badge>
-              <Badge icon={GitBranch}>
-                {storedRepoContext?.branchName || projectData?.branch || "main"}
-              </Badge>
-            </div>
-          </div>
-
           {/* Messages — only this section scrolls */}
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
             {chatMessages.map((msg, i) => (
@@ -1254,6 +1283,17 @@ const SpecPage = () => {
                       try {
                         // Call regenerate first to reset recipe state
                         await SpecService.regenerateSpec(recipeId);
+                        // Clear transient stream state and errors but keep specProgress populated
+                        // so the right pane remains open during regeneration
+                        setError(null);
+                        setStreamProgress(null);
+                        setStreamItems([]);
+                        // Also clear persisted timeline so restore effect cannot rehydrate stale data
+                        try {
+                          sessionStorage.removeItem(`${THINKING_STORAGE_KEY}_${recipeId}`);
+                        } catch {
+                          // ignore storage errors
+                        }
                         // Then try to start streaming to get run_id for live updates
                         let runId = "";
                         try {
@@ -1268,8 +1308,6 @@ const SpecPage = () => {
                         toast.success("Spec regeneration started");
                         if (!runId) {
                           // No run_id - fall back to polling
-                          setSpecProgress(null);
-                          setError(null);
                           setRegenerateSpecKey((k) => k + 1);
                         } else {
                           // Navigate with run_id for streaming
@@ -1277,6 +1315,7 @@ const SpecPage = () => {
                         }
                       } catch (err: any) {
                         console.error("Error regenerating spec:", err);
+                        setError(err?.message ?? "Failed to regenerate spec");
                         toast.error(err?.message ?? "Failed to regenerate spec");
                       } finally {
                         setIsRegeneratingSpec(false);
@@ -1292,6 +1331,20 @@ const SpecPage = () => {
                       <RotateCw className="w-4 h-4" style={{ color: "#022019" }} />
                     )}
                   </button>
+                  {status === "COMPLETED" && rawSpecification && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadSpecAsMarkdown(rawSpecification, recipeId);
+                        toast.success("Specification downloaded as Markdown");
+                      }}
+                      className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0"
+                      aria-label="Export spec as Markdown"
+                      title="Export as Markdown"
+                    >
+                      <Download className="w-4 h-4" style={{ color: "#022019" }} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1320,13 +1373,45 @@ const SpecPage = () => {
             {status === "COMPLETED" && !isCancelled && hasSpecContent && (
               <div className="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-[#E5E8E6] flex justify-end">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    if (!recipeId || isGeneratingPlan) return;
+                    setIsGeneratingPlan(true);
                     startNavigation();
-                    router.push(`/task/${recipeId}/plan`);
+                    try {
+                      // Check current plan status to decide action:
+                      // - not_started: start new generation
+                      // - pending/processing: navigate directly (job already in progress)
+                      // - completed/failed: regenerate
+                      let planAction: "submit" | "navigate" | "regenerate" = "submit";
+                      try {
+                        const current = await PlanService.getPlanStatusByRecipeId(recipeId);
+                        const genStatus = current?.generation_status?.toLowerCase();
+                        if (genStatus === "pending" || genStatus === "processing" || genStatus === "in_progress") {
+                          planAction = "navigate";
+                        } else if (genStatus === "completed" || genStatus === "failed") {
+                          planAction = "regenerate";
+                        }
+                      } catch {
+                        // If status lookup fails, assume first-time generation.
+                      }
+
+                      if (planAction === "regenerate") {
+                        await PlanService.regeneratePlan(recipeId);
+                      } else if (planAction === "submit") {
+                        await PlanService.submitPlanGeneration({ recipe_id: recipeId });
+                      }
+                      router.push(`/task/${recipeId}/plan`);
+                    } catch (err: any) {
+                      console.error("Error starting plan generation:", err);
+                      toast.error(err?.message ?? "Failed to start plan generation");
+                    } finally {
+                      setIsGeneratingPlan(false);
+                    }
                   }}
+                  disabled={isGeneratingPlan}
                   className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                 >
-                  GENERATE PLAN
+                  {showReGeneratePlanButton ? "RE-GENERATE PLAN" : "GENERATE PLAN"}
                 </button>
               </div>
             )}

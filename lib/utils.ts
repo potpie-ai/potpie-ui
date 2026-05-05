@@ -5,6 +5,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const DEFAULT_MARKER_PATTERNS: (string | RegExp)[] = [
+  /--generated diff--/gi,
+];
+
+export function stripAssistantMarkers(
+  text: string | undefined | null,
+  markers: (string | RegExp)[] = DEFAULT_MARKER_PATTERNS
+): string {
+  if (text == null || typeof text !== "string" || !text) return "";
+  let out = text;
+  for (const marker of markers) {
+    if (typeof marker === "string") {
+      const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(escaped, "gi");
+      out = out.replace(re, "");
+    } else {
+      out = out.replace(marker, "");
+    }
+  }
+  return out.trim();
+}
+
 /**
  * Extract complete JSON objects from a stream buffer (same pattern as ChatService).
  * Used for parsing streaming JSON responses in SpecService and PlanService.
@@ -464,6 +486,17 @@ export function looksLikeMarkdown(text: string): boolean {
  * Format tool result for display: valid JSON is pretty-printed; otherwise return as-is.
  * Caller should use JSON view for parseable JSON and markdown/plain for the rest.
  */
+const AGENT_MODE_LABELS: Record<string, string> = {
+  codebase_qna_agent: "QnA",
+  debugging_agent: "Debug",
+  spec_generation_agent: "SpecGen",
+  code_generation_agent: "CodeGen",
+};
+
+export function getAgentDisplayLabel(agentId: string, fallbackName?: string): string {
+  return AGENT_MODE_LABELS[agentId] || fallbackName || agentId;
+}
+
 export function formatToolResultForDisplay(raw: string): {
   kind: "json" | "markdown" | "plain";
   content: string;

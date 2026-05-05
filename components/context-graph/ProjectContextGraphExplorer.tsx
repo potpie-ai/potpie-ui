@@ -36,11 +36,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-type ProjectOption = {
+type PotOption = {
   id: string;
-  repo_name: string;
-  branch_name?: string;
-  status: string;
+  display_name: string | null;
+  slug: string | null;
+  primary_repo_name: string | null;
 };
 
 type GraphNodeRecord = {
@@ -182,13 +182,13 @@ function StatChip({
 }
 
 export function ProjectContextGraphExplorer({
-  projects,
-  loadingProjects,
+  pots,
+  loadingPots,
 }: {
-  projects: ProjectOption[];
-  loadingProjects: boolean;
+  pots: PotOption[];
+  loadingPots: boolean;
 }) {
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [selectedPotId, setSelectedPotId] = useState<string>("");
   const [graphLimit, setGraphLimit] = useState<number>(12);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [enabledNodeTypes, setEnabledNodeTypes] = useState<Set<string>>(new Set());
@@ -201,14 +201,14 @@ export function ProjectContextGraphExplorer({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].id);
+    if (!selectedPotId && pots.length > 0) {
+      setSelectedPotId(pots[0].id);
     }
-  }, [projects, selectedProjectId]);
+  }, [pots, selectedPotId]);
 
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId]
+  const selectedPot = useMemo(
+    () => pots.find((pot) => pot.id === selectedPotId) ?? null,
+    [pots, selectedPotId]
   );
 
   const selectedNode = useMemo(
@@ -216,12 +216,12 @@ export function ProjectContextGraphExplorer({
     [graph, selectedNodeId]
   );
 
-  const loadGraph = useCallback(async (projectId: string) => {
-    if (!projectId) return;
+  const loadGraph = useCallback(async (potId: string) => {
+    if (!potId) return;
     setLoading(true);
     setError(null);
     try {
-      const data = (await BranchAndRepositoryService.getProjectContextGraph(projectId, {
+      const data = (await BranchAndRepositoryService.getProjectContextGraph(potId, {
         limit: graphLimit,
       })) as GraphResponse;
       setGraph(data);
@@ -243,13 +243,13 @@ export function ProjectContextGraphExplorer({
   }, [graphLimit]);
 
   useEffect(() => {
-    if (selectedProjectId) {
-      void loadGraph(selectedProjectId);
+    if (selectedPotId) {
+      void loadGraph(selectedPotId);
     }
-  }, [selectedProjectId, loadGraph]);
+  }, [selectedPotId, loadGraph]);
 
   const handleRefresh = () => {
-    void loadGraph(selectedProjectId);
+    void loadGraph(selectedPotId);
   };
 
   const filteredNodeIds = useMemo(() => {
@@ -296,19 +296,19 @@ export function ProjectContextGraphExplorer({
       <CardHeader className="gap-4">
         <div className="grid w-full gap-2 md:grid-cols-4">
           <Select
-            value={selectedProjectId}
+            value={selectedPotId}
             onValueChange={(value) => {
-              setSelectedProjectId(value);
+              setSelectedPotId(value);
             }}
-            disabled={loadingProjects || projects.length === 0}
+            disabled={loadingPots || pots.length === 0}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select a project" />
+              <SelectValue placeholder="Select a pot" />
             </SelectTrigger>
             <SelectContent>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.repo_name}
+              {pots.map((pot) => (
+                <SelectItem key={pot.id} value={pot.id}>
+                  {pot.slug ?? pot.primary_repo_name ?? pot.id}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -331,7 +331,7 @@ export function ProjectContextGraphExplorer({
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
           />
-          <Button onClick={handleRefresh} disabled={!selectedProjectId || loading}>
+          <Button onClick={handleRefresh} disabled={!selectedPotId || loading}>
             <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
             Refresh graph
           </Button>
@@ -368,9 +368,9 @@ export function ProjectContextGraphExplorer({
           <Badge variant="outline" className="bg-violet-50">Decision</Badge>
           <Badge variant="outline" className="bg-emerald-50">File</Badge>
           <Badge variant="outline" className="bg-orange-50">Code node</Badge>
-          {selectedProject ? (
+          {selectedPot ? (
             <span className="ml-2">
-              Viewing project: <span className="font-medium text-foreground">{selectedProject.repo_name}</span>
+              Pot: <span className="font-medium text-foreground">{selectedPot.slug ?? selectedPot.primary_repo_name ?? selectedPot.id}</span>
             </span>
           ) : null}
         </div>

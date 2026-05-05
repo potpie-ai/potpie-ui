@@ -9,28 +9,24 @@ import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { toast } from "@/components/ui/sonner";
 
 export default function ContextGraphPage() {
-  const [loadingProjects, setLoadingProjects] = useState(true);
-  const [projects, setProjects] = useState<
-    Array<{ id: string; repo_name: string; branch_name?: string; status: string }>
+  const [loadingPots, setLoadingPots] = useState(true);
+  const [pots, setPots] = useState<
+    Array<{ id: string; display_name: string | null; slug: string | null; primary_repo_name: string | null; archived_at: string | null }>
   >([]);
 
   useEffect(() => {
-    const loadProjects = async () => {
-      setLoadingProjects(true);
+    const loadPots = async () => {
+      setLoadingPots(true);
       try {
-        const data = await BranchAndRepositoryService.getUserProjects();
-        const readyProjects = (Array.isArray(data) ? data : []).filter(
-          (p: { repo_name?: string; status?: string }) =>
-            Boolean(p.repo_name) && (p.status || "").toLowerCase() === "ready"
-        );
-        setProjects(readyProjects);
+        const data = await BranchAndRepositoryService.getPots();
+        setPots(data.filter((p) => !p.archived_at));
       } catch (_error) {
-        toast.error("Failed to load projects for context graph explorer.");
+        toast.error("Failed to load pots for context graph explorer.");
       } finally {
-        setLoadingProjects(false);
+        setLoadingPots(false);
       }
     };
-    void loadProjects();
+    void loadPots();
   }, []);
 
   return (
@@ -38,14 +34,13 @@ export default function ContextGraphPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Context Graph</h1>
         <p className="text-muted-foreground">
-          Explore project context relationships across pull requests, decisions,
-          commits, files, code entities, and integration-linked nodes.
+          Explore context relationships across your pots — services, features, repositories, and more.
         </p>
       </div>
 
       <ProjectContextGraphExplorer
-        projects={projects}
-        loadingProjects={loadingProjects}
+        pots={pots}
+        loadingPots={loadingPots}
       />
     </div>
   );

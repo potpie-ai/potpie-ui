@@ -48,7 +48,7 @@ export default function JoinPotPage() {
             <>
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle2 className="h-5 w-5" />
-                <p className="text-sm font-medium">You're in.</p>
+                <p className="text-sm font-medium">You&apos;re in.</p>
               </div>
               <Button className="w-full" onClick={() => router.push(`/pots`)}>
                 Open pots

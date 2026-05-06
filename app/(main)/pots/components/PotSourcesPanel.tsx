@@ -819,7 +819,7 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
           {confirmDelete ? (
             <div className="space-y-2 py-2 text-sm">
               <p>
-                You're about to remove{" "}
+                You&apos;re about to remove{" "}
                 <strong>{describeSource(confirmDelete).title}</strong> from this pot.
               </p>
               <p className="text-xs text-muted-foreground">

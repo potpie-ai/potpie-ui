@@ -9,7 +9,7 @@ overrides:
   follow-redirects: 1.16.0
   postcss: 8.5.10
   uuid@>=11.0.0 <11.1.1: 11.1.1
-  axios: 1.13.5
+  axios: 1.15.2
   minimatch@>=9.0.0 <9.0.7: 9.0.9
   form-data: ^4.0.4
   glob: 10.5.0
@@ -19,7 +19,7 @@ overrides:
   brace-expansion: ^2.0.2
   js-yaml: ^4.1.1
   prismjs: ^1.30.0
-  dompurify: ^3.3.4
+  dompurify: ^3.4.2
   lodash-es: ^4.18.1
 
 importers:
@@ -132,8 +132,8 @@ importers:
         specifier: 6.14.0
         version: 6.14.0
       axios:
-        specifier: ^1.15.0
-        version: 1.15.0
+        specifier: 1.15.2
+        version: 1.15.2
       chart.js:
         specifier: ^4.4.7
         version: 4.5.1
@@ -156,7 +156,7 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0
       dompurify:
-        specifier: ^3.3.4
+        specifier: ^3.4.2
         version: 3.4.2
       elkjs:
         specifier: ^0.9.3
@@ -2617,8 +2617,8 @@ packages:
     resolution: {integrity: sha512-BASOg+YwO2C+346x3LZOeoovTIoTrRqEsqMa6fmfAV0P+U9mFr9NsyOEpiYvFjbc64NMrSswhV50WdXzdb/Z5A==}
     engines: {node: '>=4'}
 
-  axios@1.15.0:
-    resolution: {integrity: sha512-wWyJDlAatxk30ZJer+GeCWS209sA42X+N5jU2jy6oHTp7ufw8uzUTVFBX9+wTfAlhiJXGS0Bq7X6efruWjuK9Q==}
+  axios@1.15.2:
+    resolution: {integrity: sha512-wLrXxPtcrPTsNlJmKjkPnNPK2Ihe0hn0wGSaTEiHRPxwjvJwT3hKmXF4dpqxmPO9SoNb2FsYXj/xEo0gHN+D5A==}
 
   axobject-query@4.1.0:
     resolution: {integrity: sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ==}
@@ -4478,8 +4478,8 @@ packages:
   property-information@7.1.0:
     resolution: {integrity: sha512-TwEZ+X+yCJmYfL7TPUOcvBZ4QfoT5YenQiJuX//0th53DE6w0xxLEtfK3iyryQFddXuvkIk51EEgrJQ0WJkOmQ==}
 
-  protobufjs@7.5.4:
-    resolution: {integrity: sha512-CvexbZtbov6jW2eXAvLukXjXUW1TzFaivC46BpWc/3BpcCysb5Vffu+B3XHMm8lVEuy2Mm4XGex8hBSg1yapPg==}
+  protobufjs@7.5.5:
+    resolution: {integrity: sha512-3wY1AxV+VBNW8Yypfd1yQY9pXnqTAN+KwQxL8iYm3/BjKYMNg4i0owhEe26PWDOMaIrzeeF98Lqd5NGz4omiIg==}
     engines: {node: '>=12.0.0'}
 
   proxy-from-env@2.1.0:
@@ -6045,7 +6045,7 @@ snapshots:
     dependencies:
       lodash.camelcase: 4.3.0
       long: 5.3.2
-      protobufjs: 7.5.4
+      protobufjs: 7.5.5
       yargs: 17.7.2
 
   '@hookform/resolvers@3.10.0(react-hook-form@7.71.1(react@18.3.1))':
@@ -6375,7 +6375,7 @@ snapshots:
       '@opentelemetry/sdk-logs': 0.208.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-metrics': 2.2.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 2.2.0(@opentelemetry/api@1.9.0)
-      protobufjs: 7.5.4
+      protobufjs: 7.5.5
 
   '@opentelemetry/resources@2.2.0(@opentelemetry/api@1.9.0)':
     dependencies:
@@ -7810,7 +7810,7 @@ snapshots:
 
   axe-core@4.11.1: {}
 
-  axios@1.15.0:
+  axios@1.15.2:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.5
@@ -10081,7 +10081,7 @@ snapshots:
 
   property-information@7.1.0: {}
 
-  protobufjs@7.5.4:
+  protobufjs@7.5.5:
     dependencies:
       '@protobufjs/aspromise': 1.1.2
       '@protobufjs/base64': 1.1.2

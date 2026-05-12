@@ -2917,7 +2917,7 @@ export default function VerticalTaskExecution() {
                     rel="noreferrer"
                     className="shrink-0 px-5 py-2.5 rounded-lg font-semibold text-xs bg-[#022019] text-[#B4D13F] hover:opacity-90"
                   >
-                    VIEW PR
+                    PR CREATED - VIEW PR
                   </a>
                 ) : (
                   <button

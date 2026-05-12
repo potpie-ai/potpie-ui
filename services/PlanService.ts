@@ -9,6 +9,14 @@ import {
   PlanChatRequest,
   PlanChatResponse,
 } from "@/lib/types/spec";
+import {
+  connectDemoPlanStream,
+  DEMO_PLAN_RUN_ID,
+  getDemoPlanChatResponse,
+  getDemoPlanStatus,
+  isDemoRecipeId,
+  startDemoPlanGeneration,
+} from "@/lib/mock/demoBuildFlow";
 
 export default class PlanService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
@@ -20,6 +28,9 @@ export default class PlanService {
    * POST /api/v1/recipes/{recipe_id}/plan/regenerate → 202 Accepted.
    */
   static async regeneratePlan(recipeId: string): Promise<PlanSubmitResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return startDemoPlanGeneration();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.post<PlanSubmitResponse>(
@@ -42,6 +53,9 @@ export default class PlanService {
   static async submitPlanGeneration(
     request: PlanGenerationRequest
   ): Promise<PlanSubmitResponse> {
+    if (isDemoRecipeId(request.recipe_id)) {
+      return startDemoPlanGeneration();
+    }
     try {
       const recipeId = request.recipe_id;
       if (!recipeId) {
@@ -71,6 +85,9 @@ export default class PlanService {
   static async getPlanStatusByRecipeId(
     recipeId: string
   ): Promise<PlanStatusResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return getDemoPlanStatus();
+    }
     try {
       console.log("[PlanService] Fetching plan status for recipe:", recipeId);
       const headers = await getHeaders();
@@ -119,6 +136,13 @@ export default class PlanService {
       signal?: AbortSignal;
     }
   ): Promise<{ runId: string }> {
+    if (isDemoRecipeId(recipeId)) {
+      startDemoPlanGeneration();
+      if (options.consumeStream !== false && options.onEvent) {
+        connectDemoPlanStream(options);
+      }
+      return { runId: DEMO_PLAN_RUN_ID };
+    }
     const headers = await getHeaders();
     const url = `${this.API_BASE}/${recipeId}/plan/generate-stream${options.streamTokens !== false ? "?stream_tokens=true" : ""}`;
     const response = await fetch(url, {
@@ -222,6 +246,9 @@ export default class PlanService {
     recipeId: string,
     request: PlanChatRequest,
   ): Promise<PlanChatResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return getDemoPlanChatResponse(request.message);
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.post<{
@@ -268,6 +295,10 @@ export default class PlanService {
       signal?: AbortSignal;
     }
   ): void {
+    if (isDemoRecipeId(recipeId)) {
+      connectDemoPlanStream(options);
+      return;
+    }
     const url = `${this.API_BASE}/${recipeId}/plan/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
     getHeaders()
       .then((headers) =>

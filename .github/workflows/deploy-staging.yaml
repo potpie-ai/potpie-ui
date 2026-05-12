@@ -7,12 +7,12 @@ on:
         description: >
           Customer / internal builds without Firebase: omit Firebase NEXT_PUBLIC_* at
           docker build so the app uses mock auth and /api/login. Requires secret
-          STAGE_NEXT_PUBLIC_LOGIN_PASSWORD. Pushes to main ignore this (full staging build).
+          STAGE_NEXT_PUBLIC_LOGIN_PASSWORD. Pushes to staging ignore this (full staging build).
         type: boolean
         default: false
   push:
     branches:
-      - main
+      - staging
 
 env:
   # Set STAGE_GCLOUD_PROJECT_ID to staging-433102 in GitHub Actions secrets.

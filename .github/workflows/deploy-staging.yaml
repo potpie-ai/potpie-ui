@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - staging
 
 env:
   PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}

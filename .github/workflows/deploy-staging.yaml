@@ -17,11 +17,10 @@ on:
 env:
   # Set STAGE_GCLOUD_PROJECT_ID to staging-433102 in GitHub Actions secrets.
   PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}
-  # Matches Artifact Registry: asia-south1/.../potpie-frontend-aws/potpie-ui-aws
-  IMAGE: potpie-ui-aws
-  GAR_ZONE: asia-south1
-  GAR_REPO: potpie-frontend-aws
-  CLOUD_RUN_SERVICE: potpie-frontend-stage
+  IMAGE: potpie-app-stage # updated image name
+  GAR_ZONE: us-central1 # artifact registry zone (temporary mom-staging target)
+  GAR_REPO: potpie-frontend # updated artifact registry repository
+  CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
   # Branches listed here build without Firebase so the UI uses local/mock auth.
   LOCAL_MODE_BRANCH: cc-deployment
 
@@ -63,24 +62,6 @@ jobs:
           echo "Active GCP identity for this job:"
           gcloud auth list --filter=status:ACTIVE --format="table(account,status)"
           echo "Target project: ${PROJECT_ID}"
-
-      - name: Resolve Artifact Registry target
-        run: |-
-          if gcloud artifacts repositories describe "$GAR_REPO" --location="$GAR_ZONE" --project="$PROJECT_ID" >/dev/null 2>&1; then
-            echo "Using Artifact Registry target: $PROJECT_ID/$GAR_ZONE/$GAR_REPO/$IMAGE"
-          elif gcloud artifacts repositories describe "potpie-frontend" --location="asia-south1" --project="$PROJECT_ID" >/dev/null 2>&1; then
-            echo "Primary registry $GAR_REPO not found; falling back to existing asia-south1/potpie-frontend"
-            echo "GAR_REPO=potpie-frontend" >> "$GITHUB_ENV"
-            echo "IMAGE=potpie-app-stage" >> "$GITHUB_ENV"
-          elif gcloud artifacts repositories describe "potpie-frontend" --location="us-central1" --project="$PROJECT_ID" >/dev/null 2>&1; then
-            echo "Primary registry $GAR_REPO not found; falling back to existing us-central1/potpie-frontend"
-            echo "GAR_ZONE=us-central1" >> "$GITHUB_ENV"
-            echo "GAR_REPO=potpie-frontend" >> "$GITHUB_ENV"
-            echo "IMAGE=potpie-app-stage" >> "$GITHUB_ENV"
-          else
-            echo "::error::No usable Artifact Registry repository found. Expected $PROJECT_ID/$GAR_ZONE/$GAR_REPO or fallback potpie-frontend in asia-south1/us-central1."
-            exit 1
-          fi
 
       # Install gke-gcloud-auth-plugin
       - name: Install gke-gcloud-auth-plugin

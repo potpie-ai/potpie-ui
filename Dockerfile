@@ -4,8 +4,9 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install pnpm globally
-RUN npm install -g pnpm
+# Keep pnpm on v9 for this lockfile. Newer pnpm versions require interactive
+# build-script approvals and fail CI installs without a committed allowlist.
+RUN npm install -g pnpm@9
 
 # Copy the package.json and pnpm-lock.yaml files
 COPY package.json pnpm-lock.yaml ./
@@ -17,7 +18,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 COPY next.config.mjs ./
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9
 
 ARG NEXT_PUBLIC_FIREBASE_API_KEY
 ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN

@@ -15,12 +15,12 @@ on:
       - main
 
 env:
-  # Set STAGE_GCLOUD_PROJECT_ID to staging-433102 in GitHub Actions secrets.
-  PROJECT_ID: ${{ secrets.STAGE_GCLOUD_PROJECT_ID }}
-  IMAGE: potpie-app-stage # updated image name
-  GAR_ZONE: us-central1 # artifact registry zone (temporary mom-staging target)
-  GAR_REPO: potpie-frontend # updated artifact registry repository
-  CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
+  PROJECT_ID: staging-433102
+  # Matches Artifact Registry: asia-south1/staging-433102/potpie-frontend-aws/potpie-ui-aws
+  IMAGE: potpie-ui-aws
+  GAR_ZONE: asia-south1
+  GAR_REPO: potpie-frontend-aws
+  CLOUD_RUN_SERVICE: potpie-frontend-stage
   # Branches listed here build without Firebase so the UI uses local/mock auth.
   LOCAL_MODE_BRANCH: cc-deployment
 

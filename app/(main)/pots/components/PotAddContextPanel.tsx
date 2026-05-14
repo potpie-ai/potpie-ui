@@ -1,46 +1,49 @@
 "use client";
 
-import React, { useState } from "react";
-import { FileText, Link as LinkIcon, Send, Tag } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Send } from "lucide-react";
 import PotService from "@/services/PotService";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
+import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 
 type Props = { potId: string };
 
+const URL_ONLY_REGEX = /^https?:\/\/\S+$/i;
+
+function deriveTitle(content: string): string {
+  for (const raw of content.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const stripped = line.replace(/^#{1,6}\s+/, "").trim();
+    if (stripped) return stripped.slice(0, 80);
+  }
+  return "Untitled note";
+}
+
 export default function PotAddContextPanel({ potId }: Props) {
-  const [name, setName] = useState("");
-  const [content, setContent] = useState("");
-  const [url, setUrl] = useState("");
+  const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const trimmed = body.trim();
+  const isUrlOnly = useMemo(() => URL_ONLY_REGEX.test(trimmed), [trimmed]);
+
   const handleSubmit = async () => {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      toast.error("Add a short title");
-      return;
-    }
-    const trimmedContent = content.trim();
-    const trimmedUrl = url.trim();
-    if (!trimmedContent && !trimmedUrl) {
-      toast.error("Provide content or a URL");
+    if (!trimmed) {
+      toast.error("Add some content or a URL");
       return;
     }
     setSubmitting(true);
     try {
       const out = await PotService.submitRawIngestion(potId, {
-        name: trimmedName,
-        content: trimmedContent || undefined,
-        url: trimmedUrl || undefined,
+        name: deriveTitle(trimmed),
+        content: isUrlOnly ? undefined : trimmed,
+        url: isUrlOnly ? trimmed : undefined,
       });
       toast.success(`Submitted — event ${out.event_id.slice(0, 8)} is ${out.status}`);
-      setName("");
-      setContent("");
-      setUrl("");
+      setBody("");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to submit");
     } finally {
@@ -49,82 +52,49 @@ export default function PotAddContextPanel({ potId }: Props) {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-4 max-w-3xl">
       <div>
         <h2 className="text-base font-semibold">Add context manually</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Paste a note, markdown snippet, or a URL to ingest into this pot. Both owners and members
-          can submit; track progress on the Events tab.
+          Paste notes, markdown, or a URL. Anything you drop here gets ingested into this pot —
+          track progress on the Events tab.
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Tag className="h-4 w-4 text-muted-foreground" />
-            Title
-          </CardTitle>
-          <CardDescription className="text-xs">
-            A short label to identify this context entry.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Input
-            placeholder="e.g. Auth design decisions"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <FileText className="h-4 w-4 text-muted-foreground" />
-            Content
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Paste notes, a decision log, code snippets, or any markdown you want ingested.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Tabs defaultValue="write" className="w-full">
+        <TabsList>
+          <TabsTrigger value="write">Write</TabsTrigger>
+          <TabsTrigger value="preview" disabled={!trimmed}>
+            Preview
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="write" className="mt-3">
           <Textarea
-            rows={10}
-            placeholder="Paste your notes or markdown here…"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="resize-y font-mono text-sm"
+            rows={18}
+            placeholder={"# Auth design decisions\n\nNotes, markdown, or a URL — paste anything…"}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            className="resize-y font-mono text-sm min-h-[360px]"
           />
-        </CardContent>
-      </Card>
+        </TabsContent>
+        <TabsContent value="preview" className="mt-3">
+          <div className="rounded-md border bg-background p-4 min-h-[360px] text-sm">
+            {trimmed ? (
+              <SharedMarkdown content={trimmed} />
+            ) : (
+              <p className="text-muted-foreground">Nothing to preview yet.</p>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <Separator className="flex-1" />
-        <span>or</span>
-        <Separator className="flex-1" />
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <LinkIcon className="h-4 w-4 text-muted-foreground" />
-            URL
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Submit a link for agent-assisted ingestion instead of pasting content directly.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Input
-            placeholder="https://…"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end">
-        <Button onClick={handleSubmit} disabled={submitting} className="gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {isUrlOnly
+            ? "Detected URL — will be submitted for agent-assisted ingestion."
+            : "Markdown supported. The first heading or line becomes the title."}
+        </p>
+        <Button onClick={handleSubmit} disabled={submitting || !trimmed} className="gap-2">
           <Send className="h-3.5 w-3.5" />
           {submitting ? "Submitting…" : "Submit"}
         </Button>

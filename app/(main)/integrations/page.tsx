@@ -1007,6 +1007,11 @@ const Integrations = () => {
                       <div className="text-xs text-gray-600">
                         <div className="flex flex-col gap-1">
                           <span>Last sync: {integration.lastSync}</span>
+                          <span>
+                            {integration.linkedPotsCount === 0
+                              ? "Not linked to any pots yet"
+                              : `Linked to ${integration.linkedPotsCount} pot${integration.linkedPotsCount === 1 ? "" : "s"}`}
+                          </span>
                           {integration.errorMessage && (
                             <span className="text-red-600 font-medium">
                               Error: {integration.errorMessage}

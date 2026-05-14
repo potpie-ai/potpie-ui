@@ -34,6 +34,7 @@ export interface ConnectedIntegrationResponse {
       created_by: string;
       created_at: string;
       updated_at: string;
+      linked_pots_count?: number;
     };
   };
 }
@@ -53,6 +54,7 @@ export interface ConnectedIntegration {
   uniqueIdentifier?: string;
   createdAt: string;
   updatedAt: string;
+  linkedPotsCount: number;
 }
 
 export default class IntegrationService {
@@ -88,6 +90,7 @@ export default class IntegrationService {
         uniqueIdentifier: integration.unique_identifier,
         createdAt: integration.created_at,
         updatedAt: integration.updated_at,
+        linkedPotsCount: integration.linked_pots_count ?? 0,
       }));
 
       return connectedIntegrations;

@@ -13,70 +13,65 @@ import {
 import { CheckCircle, XCircle, Loader2, ArrowLeft } from "lucide-react";
 import Image from "next/image";
 
+type RedirectStatus = "loading" | "success" | "already_exists" | "error";
+
 export default function LinearRedirectPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<"loading" | "success" | "error">(
-    "loading"
-  );
+  const [status, setStatus] = useState<RedirectStatus>("loading");
   const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
       try {
-        // Extract parameters from URL
         const code = searchParams.get("code");
         const error = searchParams.get("error");
-        const state = searchParams.get("state");
         const success = searchParams.get("success");
+        const alreadyExists = searchParams.get("already_exists");
+        const callbackUserName = searchParams.get("user_name");
 
-        console.log("🔍 Linear OAuth Callback Debug Info:");
-        console.log("- URL:", window.location.href);
-        console.log(
-          "- Code:",
-          code ? `${code.substring(0, 10)}...` : "MISSING"
-        );
-        console.log("- Error:", error || "None");
-        console.log("- State:", state || "None");
-        console.log("- Success:", success || "None");
-        console.log("- Timestamp:", new Date().toISOString());
-
-        // Check for OAuth errors
         if (error) {
           throw new Error(`OAuth error: ${error}`);
         }
 
-        // If backend redirected here with success=true, integration is complete
         if (success === "true") {
-          setStatus("success");
-          setMessage("Successfully connected to Linear!");
+          if (alreadyExists === "true") {
+            setStatus("already_exists");
+            setMessage(
+              "This Linear workspace is already connected to your account."
+            );
+          } else {
+            setStatus("success");
+            setMessage(
+              callbackUserName
+                ? `Connected to Linear as ${callbackUserName}.`
+                : "Successfully connected to Linear."
+            );
+          }
 
-          // Redirect to integrations page after 2 seconds
           setTimeout(() => {
             router.push("/integrations");
-          }, 2000);
+          }, 2500);
           return;
         }
 
-        // If we have a code, the backend should have already processed it
-        // and redirected us back with success=true
+        // We received an OAuth code but the backend should have already
+        // converted it into a redirect with success=true. Treat as success
+        // but don't trust the message.
         if (code) {
-          // This shouldn't happen in the backend-only flow, but handle it gracefully
           setStatus("success");
-          setMessage("Linear integration completed!");
-
+          setMessage("Linear integration completed.");
           setTimeout(() => {
             router.push("/integrations");
-          }, 2000);
+          }, 2500);
           return;
         }
 
-        // No code and no success parameter - something went wrong
         throw new Error("No authorization code or success parameter received");
-      } catch (error) {
-        console.error("❌ Linear OAuth callback error:", error);
+      } catch (e) {
+        console.error("Linear OAuth callback error:", e);
         setMessage(
-          error instanceof Error ? error.message : "An unknown error occurred"
+          e instanceof Error ? e.message : "An unknown error occurred"
         );
         setStatus("error");
       }
@@ -110,6 +105,7 @@ export default function LinearRedirectPage() {
             <CardDescription>
               {status === "loading" && "Connecting to Linear..."}
               {status === "success" && "Successfully connected to Linear!"}
+              {status === "already_exists" && "Already connected"}
               {status === "error" && "Connection Failed"}
             </CardDescription>
           </CardHeader>
@@ -129,6 +125,16 @@ export default function LinearRedirectPage() {
                 <p className="text-sm text-gray-600">{message}</p>
                 <p className="text-sm text-gray-600">
                   Redirecting to integrations page...
+                </p>
+              </div>
+            )}
+
+            {status === "already_exists" && (
+              <div className="flex flex-col items-center space-y-4">
+                <CheckCircle className="w-8 h-8 text-amber-500" />
+                <p className="text-sm text-gray-600">{message}</p>
+                <p className="text-xs text-gray-500">
+                  Returning to your integrations...
                 </p>
               </div>
             )}

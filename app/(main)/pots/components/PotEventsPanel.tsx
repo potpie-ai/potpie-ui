@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Inbox,
   RefreshCcw,
+  RotateCcw,
   Search,
   SlidersHorizontal,
   X,
@@ -124,6 +125,158 @@ function getWorkEventTitle(event: PotReconciliationWorkEvent): string {
   return event.title || WORK_EVENT_LABELS[event.event_kind] || event.event_kind;
 }
 
+function EventPayloadView({ event }: { event: PotEvent }) {
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
+  const fields: Array<{ label: string; value: React.ReactNode }> = [];
+
+  // Raw episode payloads carry the actual ingested text in `episode_body`.
+  // Decision/record payloads nest the agent's facts under `payload.record`.
+  const episodeBody =
+    typeof payload.episode_body === "string" ? payload.episode_body : null;
+  const sourceDescription =
+    typeof payload.source_description === "string"
+      ? payload.source_description
+      : null;
+  const referenceTime =
+    typeof payload.reference_time === "string" ? payload.reference_time : null;
+  const record =
+    payload.record && typeof payload.record === "object"
+      ? (payload.record as Record<string, unknown>)
+      : null;
+
+  // Header chips: source description, reference time, idempotency key.
+  if (sourceDescription) {
+    fields.push({
+      label: "Source",
+      value: (
+        <span className="font-mono text-[11px]">{sourceDescription}</span>
+      ),
+    });
+  }
+  if (referenceTime) {
+    fields.push({
+      label: "Reference time",
+      value: (
+        <span className="text-[11px] text-muted-foreground">
+          {formatDate(referenceTime)}
+        </span>
+      ),
+    });
+  }
+
+  // Render the decision / context_record body when present.
+  let recordBlock: React.ReactNode = null;
+  if (record) {
+    const summary =
+      typeof record.summary === "string" ? record.summary : null;
+    const recordType =
+      typeof record.type === "string" ? record.type : null;
+    const visibility =
+      typeof record.visibility === "string" ? record.visibility : null;
+    const confidence =
+      typeof record.confidence === "number" ? record.confidence : null;
+    const details =
+      record.details && typeof record.details === "object"
+        ? (record.details as Record<string, unknown>)
+        : null;
+    const sourceRefs = Array.isArray(record.source_refs)
+      ? record.source_refs.filter(
+          (s): s is string => typeof s === "string" && s.length > 0,
+        )
+      : [];
+
+    recordBlock = (
+      <div className="space-y-2 rounded-md border border-border/50 bg-background/60 p-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {recordType ? (
+            <Badge variant="secondary" className="text-[10px] capitalize">
+              {recordType}
+            </Badge>
+          ) : null}
+          {visibility ? (
+            <Badge variant="outline" className="text-[10px] capitalize">
+              {visibility}
+            </Badge>
+          ) : null}
+          {confidence != null ? (
+            <Badge variant="outline" className="text-[10px]">
+              confidence {Math.round(confidence * 100)}%
+            </Badge>
+          ) : null}
+        </div>
+        {summary ? (
+          <p className="text-sm font-medium leading-snug">{summary}</p>
+        ) : null}
+        {details
+          ? Object.entries(details)
+              .filter(([, v]) => typeof v === "string" && v.length > 0)
+              .map(([k, v]) => (
+                <div key={k}>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {k}
+                  </p>
+                  <p className="text-xs leading-snug">{String(v)}</p>
+                </div>
+              ))
+          : null}
+        {sourceRefs.length > 0 ? (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {sourceRefs.map((ref) => (
+              <Badge
+                key={ref}
+                variant="outline"
+                className="font-mono text-[10px] font-normal"
+              >
+                {ref}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const hasContent =
+    !!episodeBody || !!recordBlock || fields.length > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div className="mt-2 space-y-2 rounded-md border border-border/50 bg-muted/15 px-3 py-3">
+      {fields.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {fields.map((f) => (
+            <span key={f.label} className="flex items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {f.label}
+              </span>
+              {f.value}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {recordBlock}
+      {episodeBody ? (
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            Episode body
+          </p>
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded bg-background/70 p-3 text-[11px] leading-5 text-foreground">
+            {episodeBody}
+          </pre>
+        </div>
+      ) : null}
+      <details>
+        <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground hover:text-foreground">
+          Raw payload
+        </summary>
+        <pre className="mt-1.5 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-background/70 p-2 text-[11px] leading-4 text-foreground">
+          {stringifyPayload(event.payload)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
 function AgentWorkDetails({
   loading,
   event,
@@ -140,97 +293,108 @@ function AgentWorkDetails({
     );
   }
 
-  const runs = event?.reconciliation_runs ?? [];
-  const steps = event?.episode_steps ?? [];
-
   if (!event) return null;
 
+  const runs = event.reconciliation_runs ?? [];
+  const steps = event.episode_steps ?? [];
+  const hasPayload =
+    !!event.payload && Object.keys(event.payload).length > 0;
+
   if (runs.length === 0 && steps.length === 0) {
+    // Phase 4 batched reconciliation no longer writes per-event runs for
+    // raw_episode / context_record paths. Fall back to the payload — that's
+    // where the actual ingested content lives.
+    if (hasPayload) {
+      return <EventPayloadView event={event} />;
+    }
     return (
       <div className="mt-2 rounded-md border border-border/50 bg-muted/20 px-3 py-3 text-[11px] text-muted-foreground">
-        No reconciliation trace is stored for this event.
+        No payload or reconciliation trace stored for this event.
       </div>
     );
   }
 
   return (
-    <div className="mt-2 space-y-2 rounded-md border border-border/50 bg-muted/15 px-3 py-3">
-      {runs.length > 0 ? (
-        <div className="space-y-3">
-          {runs.map((run) => (
-            <div key={run.id} className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="text-[10px]">
-                  Attempt {run.attempt_number}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "text-[10px] capitalize",
-                    run.status === "succeeded"
-                      ? "bg-green-500/15 text-green-700 border-green-400/40"
-                      : run.status === "failed"
-                        ? "bg-red-500/15 text-red-700 border-red-400/40"
-                        : "bg-blue-500/15 text-blue-700 border-blue-400/40",
-                  )}
-                >
-                  {run.status}
-                </Badge>
-                {run.agent_name ? (
-                  <span className="text-[11px] text-muted-foreground">
-                    {run.agent_name}
-                  </span>
-                ) : null}
-                {run.started_at ? (
-                  <span className="text-[11px] text-muted-foreground">
-                    {formatDate(run.started_at)}
-                  </span>
-                ) : null}
-              </div>
-
-              {run.plan_summary ? (
-                <p className="text-xs text-foreground">{run.plan_summary}</p>
-              ) : null}
-
-              {run.error ? (
-                <p className="text-[11px] text-red-600">{run.error}</p>
-              ) : null}
-
-              {Array.isArray(run.work_events) && run.work_events.length > 0 ? (
-                <div className="space-y-1.5">
-                  {run.work_events.map((workEvent) => (
-                    <AgentWorkEventRow key={workEvent.id} event={workEvent} />
-                  ))}
+    <>
+      {hasPayload ? <EventPayloadView event={event} /> : null}
+      <div className="mt-2 space-y-2 rounded-md border border-border/50 bg-muted/15 px-3 py-3">
+        {runs.length > 0 ? (
+          <div className="space-y-3">
+            {runs.map((run) => (
+              <div key={run.id} className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="text-[10px]">
+                    Attempt {run.attempt_number}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] capitalize",
+                      run.status === "succeeded"
+                        ? "bg-green-500/15 text-green-700 border-green-400/40"
+                        : run.status === "failed"
+                          ? "bg-red-500/15 text-red-700 border-red-400/40"
+                          : "bg-blue-500/15 text-blue-700 border-blue-400/40",
+                    )}
+                  >
+                    {run.status}
+                  </Badge>
+                  {run.agent_name ? (
+                    <span className="text-[11px] text-muted-foreground">
+                      {run.agent_name}
+                    </span>
+                  ) : null}
+                  {run.started_at ? (
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatDate(run.started_at)}
+                    </span>
+                  ) : null}
                 </div>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  No agent work events captured for this run.
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : null}
 
-      {steps.length > 0 ? (
-        <div className="border-t border-border/50 pt-2">
-          <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
-            Episode steps
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {steps.map((step) => (
-              <Badge
-                key={`${step.sequence}-${step.step_kind}`}
-                variant="outline"
-                className="max-w-full text-[10px]"
-              >
-                {step.sequence}. {step.step_kind} · {step.status}
-              </Badge>
+                {run.plan_summary ? (
+                  <p className="text-xs text-foreground">{run.plan_summary}</p>
+                ) : null}
+
+                {run.error ? (
+                  <p className="text-[11px] text-red-600">{run.error}</p>
+                ) : null}
+
+                {Array.isArray(run.work_events) && run.work_events.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {run.work_events.map((workEvent) => (
+                      <AgentWorkEventRow key={workEvent.id} event={workEvent} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    No agent work events captured for this run.
+                  </p>
+                )}
+              </div>
             ))}
           </div>
-        </div>
-      ) : null}
-    </div>
+        ) : null}
+
+        {steps.length > 0 ? (
+          <div className="border-t border-border/50 pt-2">
+            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+              Episode steps
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {steps.map((step) => (
+                <Badge
+                  key={`${step.sequence}-${step.step_kind}`}
+                  variant="outline"
+                  className="max-w-full text-[10px]"
+                >
+                  {step.sequence}. {step.step_kind} · {step.status}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 }
 
@@ -285,6 +449,7 @@ export default function PotEventsPanel({ potId }: Props) {
     {},
   );
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+  const [retryingEventId, setRetryingEventId] = useState<string | null>(null);
 
   // filters
   const [search, setSearch] = useState("");
@@ -340,6 +505,26 @@ export default function PotEventsPanel({ potId }: Props) {
   const handleRefresh = () => load();
   const handleLoadMore = () => {
     if (nextCursor) load(nextCursor);
+  };
+
+  const handleRetry = async (eventId: string) => {
+    setRetryingEventId(eventId);
+    try {
+      await PotService.retryEvent(eventId);
+      toast.success("Ingestion re-queued");
+      // Drop the cached detail so the next expand pulls fresh runs/work events.
+      setEventDetails((prev) => {
+        if (!(eventId in prev)) return prev;
+        const next = { ...prev };
+        delete next[eventId];
+        return next;
+      });
+      void load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to retry ingestion");
+    } finally {
+      setRetryingEventId(null);
+    }
   };
 
   const toggleDetails = async (eventId: string) => {
@@ -571,12 +756,23 @@ export default function PotEventsPanel({ potId }: Props) {
                       isExpanded ? "bg-muted/20" : "hover:bg-muted/30",
                     )}
                   >
-                    <button
-                      type="button"
-                      disabled={!eventId}
-                      onClick={() => eventId && void toggleDetails(eventId)}
+                    <div
+                      role="button"
+                      tabIndex={eventId ? 0 : -1}
                       aria-expanded={isExpanded}
-                      className="flex w-full items-start gap-3 px-3 py-2.5 text-left disabled:cursor-default"
+                      aria-disabled={!eventId}
+                      onClick={() => eventId && void toggleDetails(eventId)}
+                      onKeyDown={(e) => {
+                        if (!eventId) return;
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          void toggleDetails(eventId);
+                        }
+                      }}
+                      className={cn(
+                        "flex w-full items-start gap-3 px-3 py-2.5 text-left",
+                        eventId ? "cursor-pointer" : "cursor-default",
+                      )}
                     >
                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
                         {isExpanded ? (
@@ -660,17 +856,48 @@ export default function PotEventsPanel({ potId }: Props) {
                           </span>
                         ) : null}
                       </span>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "mt-0.5 shrink-0 text-[10px] capitalize",
-                          STATUS_COLORS[status] ??
-                            "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {getStatusLabel(status)}
-                      </Badge>
-                    </button>
+                      <span className="mt-0.5 flex shrink-0 items-center gap-1.5">
+                        {eventId ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={retryingEventId === eventId}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleRetry(eventId);
+                            }}
+                            title={
+                              status === "error"
+                                ? "Retry ingestion"
+                                : "Re-queue ingestion"
+                            }
+                            className="h-6 gap-1 px-2 text-[10px]"
+                          >
+                            <RotateCcw
+                              className={cn(
+                                "h-3 w-3",
+                                retryingEventId === eventId && "animate-spin",
+                              )}
+                            />
+                            {retryingEventId === eventId
+                              ? "Re-queuing…"
+                              : status === "error"
+                                ? "Retry"
+                                : "Re-queue"}
+                          </Button>
+                        ) : null}
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] capitalize",
+                            STATUS_COLORS[status] ??
+                              "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {getStatusLabel(status)}
+                        </Badge>
+                      </span>
+                    </div>
                     {isExpanded ? (
                       <div className="border-t border-border/50 px-3 pb-3">
                         <AgentWorkDetails

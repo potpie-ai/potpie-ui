@@ -12,44 +12,54 @@ import { Plug, ArrowLeft, ChevronRight, Home } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useAuthContext } from "@/contexts/AuthContext";
+import getHeaders from "@/app/utils/headers.util";
 
 export default function LinearIntegrationPage() {
   const router = useRouter();
   const [isConnecting, setIsConnecting] = useState(false);
+  const { user } = useAuthContext();
 
   const handleBack = () => {
     router.push("/integrations");
   };
 
   const handleConnect = async () => {
+    if (!user?.uid) {
+      alert("You need to be signed in to connect Linear. Please log in and try again.");
+      return;
+    }
     setIsConnecting(true);
 
     try {
-      console.log("🚀 Initiating Linear OAuth flow...");
-
-      // Step 1: Direct redirect to backend OAuth initiation endpoint
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+      // The /linear/callback path is what Linear is registered to redirect to;
+      // /linear/initiate validates that we pass it the same value.
       const redirectUri =
         process.env.NEXT_PUBLIC_LINEAR_REDIRECT_URI ||
-        "http://localhost:8001/integrations/linear/redirect";
+        `${baseUrl}/api/v1/integrations/linear/callback`;
 
-      console.log("📡 Redirecting to backend OAuth initiation:");
-      console.log(
-        "- Backend URL:",
-        `${baseUrl}/api/v1/integrations/linear/redirect`
-      );
-      console.log("- Redirect URI:", redirectUri);
-
-      // Create state parameter for CSRF protection
-      const state = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      // Direct redirect to backend - backend will handle OAuth flow
-      const oauthUrl = `${baseUrl}/api/v1/integrations/linear/redirect?redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
-
-      console.log("🔗 Redirecting to backend OAuth endpoint...");
-      window.location.href = oauthUrl;
+      // Server-side initiation: backend reads the authenticated user from
+      // the Bearer token, signs that user_id into state, and hands us
+      // back the Linear auth_url to navigate to. The frontend never has
+      // a chance to mis-identify the user.
+      const headers = await getHeaders();
+      const resp = await fetch(`${baseUrl}/api/v1/integrations/linear/initiate`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ redirect_uri: redirectUri }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(text || `initiate failed with HTTP ${resp.status}`);
+      }
+      const { authorization_url: authUrl } = await resp.json();
+      if (!authUrl) {
+        throw new Error("Server did not return an authorization URL");
+      }
+      window.location.href = authUrl;
     } catch (error) {
-      console.error("❌ Failed to connect Linear integration:", error);
+      console.error("Failed to start Linear OAuth flow:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
       alert(`Failed to start OAuth flow: ${errorMessage}`);

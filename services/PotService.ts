@@ -784,6 +784,26 @@ export default class PotService {
     }
   }
 
+  static async retryEvent(
+    eventId: string,
+  ): Promise<{ status: string; event_id: string; batch_id: string | null }> {
+    const headers = await getHeaders();
+    try {
+      const response = await axios.post(
+        `${baseUrl()}/api/v1/context/events/${encodeURIComponent(eventId)}/retry`,
+        null,
+        { headers },
+      );
+      return response.data as {
+        status: string;
+        event_id: string;
+        batch_id: string | null;
+      };
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error retrying event"));
+    }
+  }
+
   static async submitRawIngestion(
     potId: string,
     body: {
@@ -835,11 +855,17 @@ export default class PotService {
       limit?: number;
     } = {},
   ): Promise<ProjectGraph> {
+    // The Phase 3 reader registry treats `include` as reader-family routing;
+    // prepend the `project_graph` family so the structural traversal reader
+    // is invoked. The reader itself still consumes the remaining keys as
+    // project-map label buckets (service_map, feature_map, deployments, …).
+    const userIncludes = (body.include ?? []).filter((k) => k !== "project_graph");
+    const include = ["project_graph", ...userIncludes];
     const envelope = await this.queryContextGraph<ProjectGraph>({
       pot_id: potId,
       goal: "neighborhood",
       strategy: "traversal",
-      include: body.include ?? [],
+      include,
       limit: body.limit ?? 25,
       scope: {
         services: body.services ?? [],
@@ -850,7 +876,17 @@ export default class PotService {
         ...(body.pr_number ? { pr_number: body.pr_number } : {}),
       },
     });
-    return envelope.result;
+    // With multiple registered families the registry returns
+    // `{ kind: "multi", result: { <family>: payload } }`. Defensively unwrap
+    // the project_graph leg so callers always see the same shape.
+    const raw = envelope.result as ProjectGraph | Record<string, ProjectGraph>;
+    if (raw && typeof raw === "object" && !Array.isArray((raw as ProjectGraph).nodes)) {
+      const multi = raw as Record<string, ProjectGraph>;
+      if (multi.project_graph && Array.isArray(multi.project_graph.nodes)) {
+        return multi.project_graph;
+      }
+    }
+    return raw as ProjectGraph;
   }
 
   static async searchContext(

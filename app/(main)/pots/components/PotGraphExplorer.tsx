@@ -1065,6 +1065,25 @@ function GraphVisualizationPanel({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading
                 subgraph…
               </div>
+            ) : projectGraph.isError ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+                <AlertTriangle className="h-5 w-5 text-rose-500" />
+                <p className="text-sm font-medium">
+                  Failed to load project graph
+                </p>
+                <p className="max-w-md text-xs text-muted-foreground">
+                  {projectGraph.error instanceof Error
+                    ? projectGraph.error.message
+                    : "Unknown error"}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => projectGraph.refetch()}
+                >
+                  <RefreshCw className="mr-1 h-4 w-4" /> Retry
+                </Button>
+              </div>
             ) : flowNodes.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
                 <Info className="h-5 w-5 text-muted-foreground" />

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import type { GraphEdge, GraphNode } from "reagraph";
+import { iconKeyForNode, nodeIconDataUri } from "./graph/nodeIcons";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -938,14 +939,19 @@ function GraphVisualizationPanel({
         return; // never downgrade a loaded node back to a frontier stub
       }
       const cat = categoryForLabels(labels, labelCategoryMap);
+      const color = cat
+        ? cssFromTailwindBorder(CATEGORY_META[cat].border)
+        : "#94a3b8";
       nodes.set(key, {
         id: key,
         label: name || key,
-        fill: frontier
-          ? "#cbd5e1"
-          : cat
-            ? cssFromTailwindBorder(CATEGORY_META[cat].border)
-            : "#94a3b8",
+        fill: frontier ? "#cbd5e1" : color,
+        // Loaded nodes keep their category-coloured sphere with a white type
+        // icon composited inside (see renderNode in PotGraphCanvas); frontier
+        // stubs stay plain grey spheres so "grey = unloaded" still reads.
+        icon: frontier
+          ? undefined
+          : nodeIconDataUri(iconKeyForNode(labels, key), "#ffffff"),
         data: { frontier, category: cat, labels },
       });
     };

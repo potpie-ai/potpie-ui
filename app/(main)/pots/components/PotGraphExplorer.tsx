@@ -1,18 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import ELK from "elkjs/lib/elk.bundled.js";
-import {
-  Background,
-  Controls,
-  MiniMap,
-  Position,
-  ReactFlow,
-  type Edge as FlowEdge,
-  type Node as FlowNode,
-} from "reactflow";
-import "reactflow/dist/style.css";
+import type { GraphEdge, GraphNode } from "reagraph";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -779,8 +770,6 @@ const PROJECT_GRAPH_INCLUDE_GROUPS: Array<{ key: string; label: string }> = [
   { key: "agent_instructions", label: "Agent instructions" },
 ];
 
-const elk = new ELK();
-
 function categoryForLabels(
   labels: string[],
   labelCategoryMap: Record<string, string>,
@@ -790,63 +779,6 @@ function categoryForLabels(
     if (c) return c as CategoryKey;
   }
   return null;
-}
-
-async function layoutFlow(
-  nodes: Array<{ id: string; label: string; labels: string[]; cat: CategoryKey | null }>,
-  edges: Array<{ id: string; source: string; target: string; type: string }>,
-): Promise<{ nodes: FlowNode[]; edges: FlowEdge[] }> {
-  const layouted = await elk.layout({
-    id: "pot-graph",
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": "RIGHT",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "120",
-      "elk.spacing.nodeNode": "50",
-    },
-    children: nodes.map((n) => ({ id: n.id, width: 200, height: 72 })),
-    edges: edges.map((e) => ({
-      id: e.id,
-      sources: [e.source],
-      targets: [e.target],
-    })),
-  });
-
-  const flowNodes: FlowNode[] = nodes.map((n) => {
-    const layoutNode = layouted.children?.find((c) => c.id === n.id);
-    const meta = n.cat ? CATEGORY_META[n.cat] : null;
-    return {
-      id: n.id,
-      position: { x: layoutNode?.x ?? 0, y: layoutNode?.y ?? 0 },
-      data: { label: n.label, labels: n.labels },
-      type: "default",
-      style: {
-        width: 200,
-        borderRadius: 12,
-        border: `1.5px solid ${meta ? cssFromTailwindBorder(meta.border) : "#94a3b8"}`,
-        background: meta ? cssFromTailwindBg(meta.bg) : "#f8fafc",
-        padding: 8,
-        fontSize: 12,
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-    };
-  });
-
-  const flowEdges: FlowEdge[] = edges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    type: "smoothstep",
-    label: e.type.replaceAll("_", " ").toLowerCase(),
-    labelStyle: { fill: "#475569", fontSize: 10 },
-    labelBgPadding: [4, 2],
-    labelBgBorderRadius: 4,
-    labelBgStyle: { fill: "#ffffff", fillOpacity: 0.8 },
-    style: { stroke: "#64748b", strokeWidth: 1.25 },
-  }));
-
-  return { nodes: flowNodes, edges: flowEdges };
 }
 
 function cssFromTailwindBorder(tw: string): string {
@@ -862,19 +794,17 @@ function cssFromTailwindBorder(tw: string): string {
   };
   return map[tw] ?? "#94a3b8";
 }
-function cssFromTailwindBg(tw: string): string {
-  const map: Record<string, string> = {
-    "bg-sky-50": "#f0f9ff",
-    "bg-violet-50": "#f5f3ff",
-    "bg-amber-50": "#fffbeb",
-    "bg-emerald-50": "#ecfdf5",
-    "bg-rose-50": "#fff1f2",
-    "bg-indigo-50": "#eef2ff",
-    "bg-teal-50": "#f0fdfa",
-    "bg-slate-50": "#f8fafc",
-  };
-  return map[tw] ?? "#f8fafc";
-}
+
+// Reagraph renders through WebGL and cannot be server-rendered in the Next.js
+// app router, so the canvas is loaded client-side only.
+const PotGraphCanvas = dynamic(() => import("./graph/PotGraphCanvas"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Initialising graph…
+    </div>
+  ),
+});
 
 function GraphVisualizationPanel({
   potId,
@@ -921,61 +851,166 @@ function GraphVisualizationPanel({
     staleTime: 30_000,
   });
 
-  const [flowNodes, setFlowNodes] = useState<FlowNode[]>([]);
-  const [flowEdges, setFlowEdges] = useState<FlowEdge[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [labelMode, setLabelMode] = useState<"auto" | "all">("auto");
 
-  useEffect(() => {
-    const data = projectGraph.data;
-    if (!data) {
-      setFlowNodes([]);
-      setFlowEdges([]);
-      return;
-    }
-    const nodeInputs = data.nodes.map((n) => ({
-      id: n.entity_key,
-      label:
-        (n.properties?.name as string | undefined) ||
-        (n.properties?.title as string | undefined) ||
-        (n.properties?.statement as string | undefined) ||
-        n.entity_key,
-      labels: n.labels,
-      cat: categoryForLabels(n.labels, labelCategoryMap),
-    }));
-    const seenIds = new Set(nodeInputs.map((n) => n.id));
-    const edgeInputs = data.edges
-      .filter((e) => seenIds.has(e.from) && seenIds.has(e.to))
-      .map((e, idx) => ({
-        id: `${e.from}-${e.type}-${e.to}-${idx}`,
-        source: e.from,
-        target: e.to,
-        type: e.type,
-      }));
-    let cancelled = false;
-    void layoutFlow(nodeInputs, edgeInputs).then(({ nodes, edges }) => {
-      if (cancelled) return;
-      setFlowNodes(
-        nodes.map((node) => ({
-          ...node,
-          data: {
-            ...(typeof node.data === "object" && node.data !== null ? node.data : {}),
-            label: node.data?.label,
-          },
-        })),
-      );
-      setFlowEdges(edges);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectGraph.data, labelCategoryMap]);
+  const loadedKeys = useMemo(
+    () => new Set((projectGraph.data?.nodes ?? []).map((n) => n.entity_key)),
+    [projectGraph.data],
+  );
 
-  const selectedNode = useMemo(() => {
-    if (!selectedEntityKey || !projectGraph.data) return null;
+  const nodeName = useCallback((n: ProjectGraphNode) => {
+    const p = n.properties ?? {};
     return (
-      projectGraph.data.nodes.find((n) => n.entity_key === selectedEntityKey) ??
-      null
+      (p.name as string | undefined) ||
+      (p.title as string | undefined) ||
+      (p.statement as string | undefined) ||
+      n.entity_key
     );
-  }, [selectedEntityKey, projectGraph.data]);
+  }, []);
+
+  // Build the Reagraph model from the loaded neighbourhood plus, for any nodes
+  // the user has expanded, a "frontier" ring synthesised from the relationship
+  // metadata each node already carries. Growing the graph one hop at a time
+  // needs no extra fetch — see `onExpand` for what double-click does.
+  const { graphNodes, graphEdges } = useMemo(() => {
+    const data = projectGraph.data;
+    const nodes = new Map<string, GraphNode>();
+    const edges = new Map<string, GraphEdge>();
+
+    const addNode = (
+      key: string,
+      labels: string[],
+      name: string,
+      frontier: boolean,
+    ) => {
+      const existing = nodes.get(key);
+      if (existing && !(existing.data as { frontier?: boolean })?.frontier) {
+        return; // never downgrade a loaded node back to a frontier stub
+      }
+      const cat = categoryForLabels(labels, labelCategoryMap);
+      nodes.set(key, {
+        id: key,
+        label: name || key,
+        subLabel: labels[0],
+        fill: frontier
+          ? "#cbd5e1"
+          : cat
+            ? cssFromTailwindBorder(CATEGORY_META[cat].border)
+            : "#94a3b8",
+        data: { frontier, category: cat, labels },
+      });
+    };
+
+    const addEdge = (
+      source: string,
+      type: string,
+      target: string,
+      frontier: boolean,
+    ) => {
+      const id = `${source}|${type}|${target}`;
+      if (edges.has(id)) return;
+      edges.set(id, {
+        id,
+        source,
+        target,
+        label: type.replaceAll("_", " ").toLowerCase(),
+        fill: frontier ? "#e2e8f0" : undefined,
+        data: { frontier },
+      });
+    };
+
+    if (data) {
+      for (const n of data.nodes) {
+        addNode(n.entity_key, n.labels, nodeName(n), false);
+      }
+      for (const e of data.edges) {
+        if (loadedKeys.has(e.from) && loadedKeys.has(e.to)) {
+          addEdge(e.from, e.type, e.to, false);
+        }
+      }
+      // One-hop frontier ring for every node the user expanded.
+      for (const n of data.nodes) {
+        if (!expanded.has(n.entity_key)) continue;
+        for (const rel of n.relationships ?? []) {
+          if (rel.direction === "out") {
+            const tk = rel.target_key;
+            if (!tk) continue;
+            const known = loadedKeys.has(tk);
+            if (!known) {
+              addNode(tk, rel.target_labels ?? [], rel.target_name || tk, true);
+            }
+            addEdge(n.entity_key, rel.type, tk, !known);
+          } else {
+            const sk = rel.source_key;
+            if (!sk) continue;
+            const known = loadedKeys.has(sk);
+            if (!known) {
+              addNode(sk, rel.source_labels ?? [], rel.source_name || sk, true);
+            }
+            addEdge(sk, rel.type, n.entity_key, !known);
+          }
+        }
+      }
+      // Fallback so a sparse pot still shows seeds to start expanding from.
+      if (data.nodes.length === 0) {
+        for (const t of overview.top_entities_by_degree) {
+          addNode(t.entity_key, t.labels, t.name || t.entity_key, true);
+        }
+      }
+    }
+
+    return {
+      graphNodes: Array.from(nodes.values()),
+      graphEdges: Array.from(edges.values()),
+    };
+  }, [
+    projectGraph.data,
+    labelCategoryMap,
+    expanded,
+    loadedKeys,
+    nodeName,
+    overview.top_entities_by_degree,
+  ]);
+
+  const onExpand = useCallback(
+    (key: string) => {
+      if (loadedKeys.has(key)) {
+        // Loaded node → reveal its one-hop frontier from embedded relations.
+        setExpanded((prev) => {
+          if (prev.has(key)) return prev;
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+        return;
+      }
+      // Frontier stub → there is no node-anchored backend reader, so pull a
+      // wider slice of the graph; the stub usually resolves to a real node.
+      setLimit((l) => Math.min(50, l + 15));
+    },
+    [loadedKeys],
+  );
+
+  const selectedNode = useMemo<ProjectGraphNode | null>(() => {
+    if (!selectedEntityKey) return null;
+    const loaded = projectGraph.data?.nodes.find(
+      (n) => n.entity_key === selectedEntityKey,
+    );
+    if (loaded) return loaded;
+    // Synthesise a minimal record for frontier stubs so the inspector still
+    // shows the name/labels we know from the relationship metadata.
+    const stub = graphNodes.find((n) => n.id === selectedEntityKey);
+    if (!stub) return null;
+    const meta = stub.data as { labels?: string[] } | undefined;
+    return {
+      id: selectedEntityKey,
+      entity_key: selectedEntityKey,
+      labels: meta?.labels ?? [],
+      properties: { name: stub.label ?? selectedEntityKey },
+      relationships: [],
+    };
+  }, [selectedEntityKey, projectGraph.data, graphNodes]);
 
   const toggleInclude = (key: string) => {
     setInclude((prev) => {
@@ -996,8 +1031,9 @@ function GraphVisualizationPanel({
                 Structural subgraph
               </CardTitle>
               <CardDescription className="text-xs">
-                Selected from the canonical project map. Node color indicates
-                ontology category; edges are labeled with their type.
+                Force-directed view of the canonical project map. Node color is
+                the ontology category; click to inspect, double-click to expand
+                a node&apos;s neighbours, drag to rearrange.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1022,6 +1058,25 @@ function GraphVisualizationPanel({
                 className="h-8 w-20"
                 title="Node limit"
               />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setLabelMode((m) => (m === "auto" ? "all" : "auto"))
+                }
+                title="Toggle edge/node label density"
+              >
+                Labels: {labelMode === "auto" ? "Auto" : "All"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setExpanded(new Set())}
+                disabled={expanded.size === 0}
+                title="Collapse all expanded neighbourhoods"
+              >
+                Collapse
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -1057,6 +1112,10 @@ function GraphVisualizationPanel({
             })}
           </div>
           <CategoryLegend />
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            <span className="mr-1 inline-block h-2 w-2 rounded-full bg-slate-300 align-middle" />
+            Grey nodes are unloaded neighbours — double-click to pull them in.
+          </p>
         </CardHeader>
         <CardContent>
           <div className="h-[560px] w-full rounded-md border bg-muted/20">
@@ -1084,7 +1143,7 @@ function GraphVisualizationPanel({
                   <RefreshCw className="mr-1 h-4 w-4" /> Retry
                 </Button>
               </div>
-            ) : flowNodes.length === 0 ? (
+            ) : graphNodes.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
                 <Info className="h-5 w-5 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
@@ -1093,37 +1152,16 @@ function GraphVisualizationPanel({
                 </p>
               </div>
             ) : (
-              <ReactFlow
-                nodes={flowNodes}
-                edges={flowEdges}
-                fitView
-                minZoom={0.2}
-                maxZoom={1.5}
-                onNodeClick={(_, n) => setSelectedEntityKey(n.id)}
-                nodesDraggable
-                nodesConnectable={false}
-                elementsSelectable
-                proOptions={{ hideAttribution: true }}
-              >
-                <Background gap={16} size={1} />
-                <Controls showInteractive={false} />
-                <MiniMap
-                  pannable
-                  zoomable
-                  nodeColor={(n) => {
-                    const nodeData = projectGraph.data?.nodes.find(
-                      (d) => d.entity_key === n.id,
-                    );
-                    const cat = categoryForLabels(
-                      nodeData?.labels ?? [],
-                      labelCategoryMap,
-                    );
-                    return cat
-                      ? cssFromTailwindBorder(CATEGORY_META[cat].border)
-                      : "#94a3b8";
-                  }}
+              <div className="relative h-full w-full">
+                <PotGraphCanvas
+                  nodes={graphNodes}
+                  edges={graphEdges}
+                  selectedId={selectedEntityKey}
+                  onSelect={setSelectedEntityKey}
+                  onExpand={onExpand}
+                  labelType={labelMode}
                 />
-              </ReactFlow>
+              </div>
             )}
           </div>
         </CardContent>

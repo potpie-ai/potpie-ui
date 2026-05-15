@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { usePots, useInvalidatePots } from "@/lib/hooks/usePots";
+import { PotInvitationBanner } from "@/app/(main)/pots/components/PotInvitationBanner";
 
 export default function PotsPage() {
   const router = useRouter();
@@ -121,11 +122,17 @@ export default function PotsPage() {
               const label = pot.display_name || pot.slug || pot.id;
               const hrefId = pot.slug || pot.id;
               return (
-                <Link
-                  key={pot.id}
-                  href={`/pots/${hrefId}`}
-                  className="group flex flex-col rounded-xl border border-border bg-card hover:border-border/80 hover:shadow-sm transition-all"
-                >
+                <div key={pot.id} className="flex flex-col gap-2">
+                  {pot.pending_invitation ? (
+                    <PotInvitationBanner
+                      invitation={pot.pending_invitation}
+                      potLabel={label}
+                    />
+                  ) : null}
+                  <Link
+                    href={`/pots/${hrefId}`}
+                    className="group flex flex-col rounded-xl border border-border bg-card hover:border-border/80 hover:shadow-sm transition-all"
+                  >
                   <div className="flex-1 px-4 pt-4 pb-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -144,12 +151,13 @@ export default function PotsPage() {
                       <p className="text-xs text-muted-foreground/50 italic pl-6">No primary repo</p>
                     )}
                   </div>
-                  <div className="flex items-center justify-end px-4 py-2 border-t border-border/50 bg-muted/20 rounded-b-xl">
-                    <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors flex items-center gap-1">
-                      Open <ArrowRight className="h-3 w-3" />
-                    </span>
-                  </div>
-                </Link>
+                    <div className="flex items-center justify-end px-4 py-2 border-t border-border/50 bg-muted/20 rounded-b-xl">
+                      <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors flex items-center gap-1">
+                        Open <ArrowRight className="h-3 w-3" />
+                      </span>
+                    </div>
+                  </Link>
+                </div>
               );
             })}
           </div>

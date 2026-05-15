@@ -1,937 +1,335 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  Inbox,
-  RefreshCcw,
-  RotateCcw,
-  Search,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
-import PotService, {
-  PotEvent,
-  PotReconciliationRun,
-  PotReconciliationWorkEvent,
-} from "@/services/PotService";
+// Top-level orchestrator for the events screen. Owns filter / search / selection
+// state and stitches together the data hooks with the presentational pieces.
+// Everything heavier-weight (rendering, payload formatting, agent activity)
+// lives in ./events/* so this file stays a thin coordinator.
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshCcw, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/sonner";
+import {
+  EventBulkActionBar,
+  EventDetailSheet,
+  EventFilters,
+  EventIngestionSettings,
+  EventList,
+  IngestionPipeline,
+  defaultFilters,
+  flattenPages,
+  getEffectiveStatus,
+  isFiltersActive,
+  useBatchRetryEvents,
+  useEventsList,
+  useForceFlushPot,
+  useIngestionConfig,
+  usePotEventsLiveSync,
+  useRetryEvent,
+  type EventsFilters,
+} from "./events";
+import { ACTIVE_STATUSES } from "./events/constants";
 
 type Props = { potId: string };
 
-const PAGE_SIZE = 25;
-
-const LIFECYCLE_LABELS: Record<string, string> = {
-  done: "Processed",
-  reconciled: "Processed",
-  queued: "Queued",
-  processing: "Processing",
-  error: "Error",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  done: "bg-green-500/15 text-green-700 border-green-400/40",
-  reconciled: "bg-green-500/15 text-green-700 border-green-400/40",
-  queued: "bg-yellow-500/15 text-yellow-700 border-yellow-400/40",
-  processing: "bg-blue-500/15 text-blue-700 border-blue-400/40",
-  error: "bg-red-500/15 text-red-700 border-red-400/40",
-};
-
-const SOURCE_LABELS: Record<string, string> = {
-  ui_raw_ingest: "Added from UI",
-  manual: "Manual",
-  github: "GitHub",
-  webhook: "Webhook",
-  cli: "CLI",
-  http: "API",
-  unknown: "Unknown",
-};
-
-const KIND_LABELS: Record<string, string> = {
-  raw_episode: "Raw note",
-  agent_reconciliation: "Agent ingestion",
-  github_merged_pr: "Merged PR",
-};
-
-const WORK_EVENT_LABELS: Record<string, string> = {
-  prompt: "Prompt",
-  model_messages: "Messages",
-  tool_call: "Tool call",
-  tool_result: "Tool result",
-  plan_output: "Plan",
-  error: "Error",
-};
-
-function getEventTitle(ev: PotEvent): string {
-  if (ev.payload) {
-    const p = ev.payload as Record<string, unknown>;
-    if (typeof p.name === "string" && p.name) return p.name;
-    if (typeof p.title === "string" && p.title) return p.title;
-  }
-  return KIND_LABELS[ev.ingestion_kind] ?? ev.ingestion_kind;
-}
-
-function getSourceLabel(ev: PotEvent): string {
-  if (ev.source_channel && SOURCE_LABELS[ev.source_channel]) {
-    return SOURCE_LABELS[ev.source_channel];
-  }
-  if (ev.source_system && ev.source_system !== "context_engine_raw") {
-    return ev.source_system;
-  }
-  return ev.source_channel ?? ev.source_system ?? "—";
-}
-
-function getStatusLabel(status: string): string {
-  return LIFECYCLE_LABELS[status] ?? status;
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function stringifyPayload(value: unknown): string {
-  if (value == null) return "";
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function getRunWorkCount(run: PotReconciliationRun): number {
-  return Array.isArray(run.work_events) ? run.work_events.length : 0;
-}
-
-function getWorkEventTitle(event: PotReconciliationWorkEvent): string {
-  return event.title || WORK_EVENT_LABELS[event.event_kind] || event.event_kind;
-}
-
-function EventPayloadView({ event }: { event: PotEvent }) {
-  const payload = (event.payload ?? {}) as Record<string, unknown>;
-  const fields: Array<{ label: string; value: React.ReactNode }> = [];
-
-  // Raw episode payloads carry the actual ingested text in `episode_body`.
-  // Decision/record payloads nest the agent's facts under `payload.record`.
-  const episodeBody =
-    typeof payload.episode_body === "string" ? payload.episode_body : null;
-  const sourceDescription =
-    typeof payload.source_description === "string"
-      ? payload.source_description
-      : null;
-  const referenceTime =
-    typeof payload.reference_time === "string" ? payload.reference_time : null;
-  const record =
-    payload.record && typeof payload.record === "object"
-      ? (payload.record as Record<string, unknown>)
-      : null;
-
-  // Header chips: source description, reference time, idempotency key.
-  if (sourceDescription) {
-    fields.push({
-      label: "Source",
-      value: (
-        <span className="font-mono text-[11px]">{sourceDescription}</span>
-      ),
-    });
-  }
-  if (referenceTime) {
-    fields.push({
-      label: "Reference time",
-      value: (
-        <span className="text-[11px] text-muted-foreground">
-          {formatDate(referenceTime)}
-        </span>
-      ),
-    });
-  }
-
-  // Render the decision / context_record body when present.
-  let recordBlock: React.ReactNode = null;
-  if (record) {
-    const summary =
-      typeof record.summary === "string" ? record.summary : null;
-    const recordType =
-      typeof record.type === "string" ? record.type : null;
-    const visibility =
-      typeof record.visibility === "string" ? record.visibility : null;
-    const confidence =
-      typeof record.confidence === "number" ? record.confidence : null;
-    const details =
-      record.details && typeof record.details === "object"
-        ? (record.details as Record<string, unknown>)
-        : null;
-    const sourceRefs = Array.isArray(record.source_refs)
-      ? record.source_refs.filter(
-          (s): s is string => typeof s === "string" && s.length > 0,
-        )
-      : [];
-
-    recordBlock = (
-      <div className="space-y-2 rounded-md border border-border/50 bg-background/60 p-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {recordType ? (
-            <Badge variant="secondary" className="text-[10px] capitalize">
-              {recordType}
-            </Badge>
-          ) : null}
-          {visibility ? (
-            <Badge variant="outline" className="text-[10px] capitalize">
-              {visibility}
-            </Badge>
-          ) : null}
-          {confidence != null ? (
-            <Badge variant="outline" className="text-[10px]">
-              confidence {Math.round(confidence * 100)}%
-            </Badge>
-          ) : null}
-        </div>
-        {summary ? (
-          <p className="text-sm font-medium leading-snug">{summary}</p>
-        ) : null}
-        {details
-          ? Object.entries(details)
-              .filter(([, v]) => typeof v === "string" && v.length > 0)
-              .map(([k, v]) => (
-                <div key={k}>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {k}
-                  </p>
-                  <p className="text-xs leading-snug">{String(v)}</p>
-                </div>
-              ))
-          : null}
-        {sourceRefs.length > 0 ? (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {sourceRefs.map((ref) => (
-              <Badge
-                key={ref}
-                variant="outline"
-                className="font-mono text-[10px] font-normal"
-              >
-                {ref}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  const hasContent =
-    !!episodeBody || !!recordBlock || fields.length > 0;
-  if (!hasContent) return null;
-
-  return (
-    <div className="mt-2 space-y-2 rounded-md border border-border/50 bg-muted/15 px-3 py-3">
-      {fields.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {fields.map((f) => (
-            <span key={f.label} className="flex items-center gap-1.5">
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {f.label}
-              </span>
-              {f.value}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      {recordBlock}
-      {episodeBody ? (
-        <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Episode body
-          </p>
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded bg-background/70 p-3 text-[11px] leading-5 text-foreground">
-            {episodeBody}
-          </pre>
-        </div>
-      ) : null}
-      <details>
-        <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground hover:text-foreground">
-          Raw payload
-        </summary>
-        <pre className="mt-1.5 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-background/70 p-2 text-[11px] leading-4 text-foreground">
-          {stringifyPayload(event.payload)}
-        </pre>
-      </details>
-    </div>
-  );
-}
-
-function AgentWorkDetails({
-  loading,
-  event,
-}: {
-  loading: boolean;
-  event?: PotEvent;
-}) {
-  if (loading) {
-    return (
-      <div className="mt-2 rounded-md border border-border/50 bg-muted/20 px-3 py-3">
-        <div className="h-3 w-28 rounded bg-muted animate-pulse" />
-        <div className="mt-2 h-2.5 w-2/3 rounded bg-muted/70 animate-pulse" />
-      </div>
-    );
-  }
-
-  if (!event) return null;
-
-  const runs = event.reconciliation_runs ?? [];
-  const steps = event.episode_steps ?? [];
-  const hasPayload =
-    !!event.payload && Object.keys(event.payload).length > 0;
-
-  if (runs.length === 0 && steps.length === 0) {
-    // Phase 4 batched reconciliation no longer writes per-event runs for
-    // raw_episode / context_record paths. Fall back to the payload — that's
-    // where the actual ingested content lives.
-    if (hasPayload) {
-      return <EventPayloadView event={event} />;
-    }
-    return (
-      <div className="mt-2 rounded-md border border-border/50 bg-muted/20 px-3 py-3 text-[11px] text-muted-foreground">
-        No payload or reconciliation trace stored for this event.
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {hasPayload ? <EventPayloadView event={event} /> : null}
-      <div className="mt-2 space-y-2 rounded-md border border-border/50 bg-muted/15 px-3 py-3">
-        {runs.length > 0 ? (
-          <div className="space-y-3">
-            {runs.map((run) => (
-              <div key={run.id} className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="text-[10px]">
-                    Attempt {run.attempt_number}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-[10px] capitalize",
-                      run.status === "succeeded"
-                        ? "bg-green-500/15 text-green-700 border-green-400/40"
-                        : run.status === "failed"
-                          ? "bg-red-500/15 text-red-700 border-red-400/40"
-                          : "bg-blue-500/15 text-blue-700 border-blue-400/40",
-                    )}
-                  >
-                    {run.status}
-                  </Badge>
-                  {run.agent_name ? (
-                    <span className="text-[11px] text-muted-foreground">
-                      {run.agent_name}
-                    </span>
-                  ) : null}
-                  {run.started_at ? (
-                    <span className="text-[11px] text-muted-foreground">
-                      {formatDate(run.started_at)}
-                    </span>
-                  ) : null}
-                </div>
-
-                {run.plan_summary ? (
-                  <p className="text-xs text-foreground">{run.plan_summary}</p>
-                ) : null}
-
-                {run.error ? (
-                  <p className="text-[11px] text-red-600">{run.error}</p>
-                ) : null}
-
-                {Array.isArray(run.work_events) && run.work_events.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {run.work_events.map((workEvent) => (
-                      <AgentWorkEventRow key={workEvent.id} event={workEvent} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    No agent work events captured for this run.
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {steps.length > 0 ? (
-          <div className="border-t border-border/50 pt-2">
-            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
-              Episode steps
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {steps.map((step) => (
-                <Badge
-                  key={`${step.sequence}-${step.step_kind}`}
-                  variant="outline"
-                  className="max-w-full text-[10px]"
-                >
-                  {step.sequence}. {step.step_kind} · {step.status}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </>
-  );
-}
-
-function AgentWorkEventRow({ event }: { event: PotReconciliationWorkEvent }) {
-  const payloadText = stringifyPayload(event.payload);
-  const hasPayload = payloadText.length > 0 && payloadText !== "{}";
-  const body = event.body?.trim();
-
-  return (
-    <div className="rounded-md border border-border/40 bg-background/70 px-2.5 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[10px] text-muted-foreground">
-          #{event.sequence}
-        </span>
-        <Badge variant="outline" className="text-[10px]">
-          {WORK_EVENT_LABELS[event.event_kind] ?? event.event_kind}
-        </Badge>
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">
-          {getWorkEventTitle(event)}
-        </span>
-        <span className="text-[10px] text-muted-foreground">
-          {formatDate(event.created_at)}
-        </span>
-      </div>
-      {body ? (
-        <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-muted/50 p-2 text-[11px] leading-4 text-foreground">
-          {body}
-        </pre>
-      ) : null}
-      {hasPayload ? (
-        <details className="mt-1.5">
-          <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground hover:text-foreground">
-            Payload
-          </summary>
-          <pre className="mt-1.5 max-h-56 overflow-auto whitespace-pre-wrap rounded bg-muted/50 p-2 text-[11px] leading-4 text-foreground">
-            {payloadText}
-          </pre>
-        </details>
-      ) : null}
-    </div>
-  );
-}
-
 export default function PotEventsPanel({ potId }: Props) {
-  const [events, setEvents] = useState<PotEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
-  const [eventDetails, setEventDetails] = useState<Record<string, PotEvent>>(
-    {},
-  );
-  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
-  const [retryingEventId, setRetryingEventId] = useState<string | null>(null);
+  // Filter + search state lives here so it can drive the React Query key.
+  const [filters, setFilters] = useState<EventsFilters>(defaultFilters);
+  // Local search input is debounced into the filters key so we don't
+  // refetch on every keystroke. Server-side search since Phase 6.
+  const [searchInput, setSearchInput] = useState("");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
-  // filters
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-
-  const buildOptions = useCallback(
-    (cursor?: string) => ({
-      limit: PAGE_SIZE,
-      cursor,
-      status: statusFilter !== "all" ? [statusFilter] : undefined,
-      source_system:
-        sourceFilter !== "all" && sourceFilter !== "ui_raw_ingest"
-          ? [sourceFilter]
-          : undefined,
-      from_date: fromDate || undefined,
-      to_date: toDate || undefined,
-    }),
-    [statusFilter, sourceFilter, fromDate, toDate],
-  );
-
-  const load = useCallback(
-    async (cursor?: string) => {
-      const isFirst = !cursor;
-      if (isFirst) setLoading(true);
-      else setLoadingMore(true);
-      try {
-        const opts = buildOptions(cursor);
-        // Source channel filter is client-side only (API filters by source_system)
-        const page = await PotService.listEvents(potId, opts);
-        let items = page.items;
-        if (sourceFilter === "ui_raw_ingest") {
-          items = items.filter((e) => e.source_channel === "ui_raw_ingest");
-        }
-        setEvents((prev) => (isFirst ? items : [...prev, ...items]));
-        setNextCursor(page.next_cursor);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load events");
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [potId, buildOptions, sourceFilter],
-  );
-
+  // Debounce 250ms — matches the typical typing cadence and stays under
+  // the request latency budget so the user sees results "while" typing.
   useEffect(() => {
-    void load();
-  }, [load]);
+    const t = window.setTimeout(() => {
+      setFilters((f) => (f.search === searchInput ? f : { ...f, search: searchInput }));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
 
-  const handleRefresh = () => load();
-  const handleLoadMore = () => {
-    if (nextCursor) load(nextCursor);
-  };
+  // Selection is local — survives only while the user is in the screen.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
 
-  const handleRetry = async (eventId: string) => {
-    setRetryingEventId(eventId);
-    try {
-      await PotService.retryEvent(eventId);
-      toast.success("Ingestion re-queued");
-      // Drop the cached detail so the next expand pulls fresh runs/work events.
-      setEventDetails((prev) => {
-        if (!(eventId in prev)) return prev;
-        const next = { ...prev };
-        delete next[eventId];
+  // Open event for the side panel. Keeps the row reference for header fallback.
+  const [openEventId, setOpenEventId] = useState<string | null>(null);
+
+  const eventsQuery = useEventsList(potId, filters);
+  const retryMutation = useRetryEvent(potId);
+  const batchRetryMutation = useBatchRetryEvents(potId);
+  const flushMutation = useForceFlushPot(potId);
+  const { data: ingestionConfig } = useIngestionConfig(potId);
+
+  // Live updates + self-healing reconciliation, all in one module: patches
+  // the list/detail cache from the status stream, and resyncs against the
+  // server on reconnect / refocus / online / an adaptive heartbeat so a
+  // lost delta can never strand a stale row.
+  const liveSync = usePotEventsLiveSync(potId, /* enabled */ true);
+
+  const allEvents = useMemo(() => flattenPages(eventsQuery.data), [eventsQuery.data]);
+  // Phase 6: search is server-side — no client filtering pass. We still
+  // keep the alias so the rest of this component reads naturally.
+  const displayed = allEvents;
+
+  const openEvent = useMemo(
+    () => allEvents.find((e) => (e.event_id || e.id) === openEventId),
+    [allEvents, openEventId],
+  );
+
+  const toggleSelected = useCallback((id: string, selected: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selected) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllVisible = useCallback(
+    (selected: boolean) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const ev of displayed) {
+          const id = ev.event_id || ev.id;
+          if (!id) continue;
+          if (selected) next.add(id);
+          else next.delete(id);
+        }
         return next;
       });
-      void load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to retry ingestion");
-    } finally {
-      setRetryingEventId(null);
-    }
-  };
+    },
+    [displayed],
+  );
 
-  const toggleDetails = async (eventId: string) => {
-    if (expandedEventId === eventId) {
-      setExpandedEventId(null);
-      return;
-    }
-    setExpandedEventId(eventId);
-    if (eventDetails[eventId]) return;
-    setLoadingDetailId(eventId);
+  const handleClearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const handleRetry = useCallback(
+    (id: string) => {
+      retryMutation.mutate(id, {
+        onSuccess: () => toast.success("Ingestion re-queued"),
+        onError: (e: Error) =>
+          toast.error(e?.message ?? "Failed to retry ingestion"),
+      });
+    },
+    [retryMutation],
+  );
+
+  // One backend call coalesces all selections into a single open batch
+  // and enqueues once — much cheaper than N parallel retries.
+  const handleBulkReprocess = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
     try {
-      const detail = await PotService.getEvent(eventId);
-      setEventDetails((prev) => ({ ...prev, [eventId]: detail }));
-    } catch (e) {
-      toast.error(
-        e instanceof Error ? e.message : "Failed to load event details",
+      const result = await batchRetryMutation.mutateAsync(ids);
+      toast.success(
+        `Re-queued ${result.count} event${result.count === 1 ? "" : "s"}`,
       );
-    } finally {
-      setLoadingDetailId(null);
+      setSelectedIds(new Set());
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to re-queue events";
+      toast.error(msg);
     }
-  };
+  }, [selectedIds, batchRetryMutation]);
 
-  const clearFilters = () => {
-    setStatusFilter("all");
-    setSourceFilter("all");
-    setFromDate("");
-    setToDate("");
-  };
+  const handleCopyId = useCallback((id: string) => {
+    void navigator.clipboard
+      .writeText(id)
+      .then(() => toast.success("Event ID copied"))
+      .catch(() => toast.error("Could not copy event ID"));
+  }, []);
 
-  const hasActiveFilters =
-    statusFilter !== "all" || sourceFilter !== "all" || fromDate || toDate;
+  // Count queued/processing events in the loaded pages. This is a lower
+  // bound (server may have more on later pages), but it reflects what the
+  // user can see now and is enough signal for the "Queued: N ⚡" CTA.
+  const queuedCount = useMemo(
+    () =>
+      allEvents.filter((ev) =>
+        ACTIVE_STATUSES.has(getEffectiveStatus(ev)),
+      ).length,
+    [allEvents],
+  );
 
-  // client-side text search
-  const displayed = search.trim()
-    ? events.filter((ev) => {
-        const q = search.toLowerCase();
-        return (
-          getEventTitle(ev).toLowerCase().includes(q) ||
-          ev.event_id?.toLowerCase().includes(q) ||
-          ev.repo_name?.toLowerCase().includes(q) ||
-          ev.source_system?.toLowerCase().includes(q) ||
-          ev.action?.toLowerCase().includes(q)
-        );
-      })
-    : events;
+  // Events the agent is actively working right now — drives the pipeline
+  // "Processing" phase + the graph pulse animation.
+  const processingCount = useMemo(
+    () =>
+      allEvents.filter((ev) => getEffectiveStatus(ev) === "processing").length,
+    [allEvents],
+  );
+
+  const handleForceFlush = useCallback(async () => {
+    try {
+      const res = await flushMutation.mutateAsync();
+      if (res.batch_id) {
+        toast.success("Open batch queued for ingestion");
+      } else {
+        toast.info("No pending batch to flush");
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to flush";
+      toast.error(msg);
+    }
+  }, [flushMutation]);
+
+  const refreshing = eventsQuery.isFetching && !eventsQuery.isFetchingNextPage;
+
+  // Connection affordance: steady green when live, amber only after a
+  // sustained drop (the by-design idle-timeout reconnect stays green),
+  // red when retries keep failing.
+  const connMeta =
+    liveSync.connectionStatus === "connected"
+      ? {
+          wrap: "bg-green-500/15 text-green-700",
+          dot: "bg-green-500 animate-pulse",
+          label: "Live",
+        }
+      : liveSync.connectionStatus === "reconnecting"
+        ? {
+            wrap: "bg-amber-500/15 text-amber-700",
+            dot: "bg-amber-500 animate-pulse",
+            label: "Reconnecting…",
+          }
+        : {
+            wrap: "bg-red-500/15 text-red-700",
+            dot: "bg-red-500",
+            label: "Disconnected",
+          };
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="space-y-3 pb-3">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base font-semibold">
-            Ingestion events
-          </CardTitle>
-          <div className="flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowFilters((v) => !v)}
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-base font-semibold">Ingestion events</CardTitle>
+            {ingestionConfig?.mode === "windowed" ? (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {ingestionConfig.window_minutes}-min batches
+              </span>
+            ) : null}
+            <span
               className={cn(
-                "gap-1.5 text-xs",
-                (showFilters || hasActiveFilters) && "bg-muted text-foreground",
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                connMeta.wrap,
               )}
+              title={
+                liveSync.connectionStatus === "offline"
+                  ? "Live updates unavailable — retrying. The list still refreshes periodically."
+                  : liveSync.lastSyncAt
+                    ? `Last synced ${new Date(liveSync.lastSyncAt).toLocaleTimeString()}`
+                    : "Syncing…"
+              }
             >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              Filters
-              {hasActiveFilters && (
-                <span className="rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 py-0 leading-4">
-                  !
-                </span>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleRefresh}
-              disabled={loading}
-            >
-              <RefreshCcw
-                className={cn("h-3.5 w-3.5", loading && "animate-spin")}
+              <span
+                className={cn("h-1.5 w-1.5 rounded-full", connMeta.dot)}
               />
-            </Button>
+              {connMeta.label}
+            </span>
           </div>
-        </div>
-
-        {/* Search bar */}
-        <div className="relative mt-2">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Search events…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-sm"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Expanded filter row */}
-        {showFilters && (
-          <div className="mt-2 flex flex-wrap gap-2 items-end">
-            <div className="flex flex-col gap-1 min-w-[120px]">
-              <span className="text-[11px] text-muted-foreground font-medium">
-                Status
-              </span>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="queued">Queued</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="done">Processed</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex flex-col gap-1 min-w-[150px]">
-              <span className="text-[11px] text-muted-foreground font-medium">
-                Source
-              </span>
-              <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All sources</SelectItem>
-                  <SelectItem value="ui_raw_ingest">Added from UI</SelectItem>
-                  <SelectItem value="github">GitHub</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-muted-foreground font-medium">
-                From
-              </span>
-              <Input
-                type="datetime-local"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="h-8 text-xs w-[175px]"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-muted-foreground font-medium">
-                To
-              </span>
-              <Input
-                type="datetime-local"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="h-8 text-xs w-[175px]"
-              />
-            </div>
-
-            {hasActiveFilters && (
+          <div className="flex items-center gap-1.5">
+            {queuedCount > 0 ? (
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={clearFilters}
-                className="h-8 text-xs gap-1 self-end"
+                onClick={() => void handleForceFlush()}
+                disabled={flushMutation.isPending}
+                className="h-7 gap-1.5 px-2 text-xs"
+                title="Process all queued events now"
               >
-                <X className="h-3 w-3" />
-                Clear
+                <Zap
+                  className={cn(
+                    "h-3.5 w-3.5 text-amber-500",
+                    flushMutation.isPending && "animate-pulse",
+                  )}
+                />
+                <span>Queued: {queuedCount}</span>
               </Button>
-            )}
+            ) : null}
+            <EventIngestionSettings potId={potId} />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => eventsQuery.refetch()}
+              disabled={refreshing}
+              aria-label="Refresh"
+            >
+              <RefreshCcw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+            </Button>
           </div>
-        )}
+        </div>
+
+        <EventFilters
+          search={searchInput}
+          onSearchChange={setSearchInput}
+          filters={filters}
+          onFiltersChange={(f) => {
+            setFilters(f);
+            // Filter change can change what's selected. Drop selection rather
+            // than carrying stale IDs forward.
+            setSelectedIds(new Set());
+          }}
+          expanded={filtersExpanded}
+          onExpandedChange={setFiltersExpanded}
+        />
+
+        <EventBulkActionBar
+          selectedCount={selectedIds.size}
+          reprocessing={batchRetryMutation.isPending}
+          onReprocess={handleBulkReprocess}
+          onClear={handleClearSelection}
+        />
       </CardHeader>
 
-      <CardContent>
-        {loading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-lg border border-border/40 px-3 py-3 animate-pulse"
-              >
-                <div className="flex justify-between">
-                  <div className="h-3.5 w-1/3 rounded bg-muted" />
-                  <div className="h-5 w-16 rounded-full bg-muted" />
-                </div>
-                <div className="h-2.5 w-1/2 rounded bg-muted/60 mt-2" />
-              </div>
-            ))}
-          </div>
-        ) : displayed.length === 0 ? (
-          <div className="py-12 text-center">
-            <Inbox className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">
-              {hasActiveFilters || search
-                ? "No events match your filters."
-                : "No ingestion events yet."}
-            </p>
+      <CardContent className="space-y-4">
+        <IngestionPipeline
+          potId={potId}
+          queuedCount={queuedCount}
+          processingCount={processingCount}
+          onForceFlush={() => void handleForceFlush()}
+          flushing={flushMutation.isPending}
+        />
+        {eventsQuery.isError ? (
+          <div className="rounded-md border border-red-300/40 bg-red-50/40 px-3 py-2 text-sm text-red-700 dark:bg-red-950/20">
+            {eventsQuery.error?.message ?? "Failed to load events"}
+            <Button
+              size="sm"
+              variant="link"
+              className="ml-2 h-auto p-0 text-xs"
+              onClick={() => eventsQuery.refetch()}
+            >
+              Retry
+            </Button>
           </div>
         ) : (
-          <>
-            <div className="space-y-1.5">
-              {displayed.map((ev, idx) => {
-                const key = `${ev.id ?? ev.event_id ?? "noid"}-${idx}`;
-                const status = ev.lifecycle_status || ev.status;
-                const title = getEventTitle(ev);
-                const source = getSourceLabel(ev);
-                const ts = ev.received_at || ev.submitted_at;
-                const eventId = ev.event_id || ev.id;
-                const isExpanded = expandedEventId === eventId;
-                const detail = eventId ? eventDetails[eventId] : undefined;
-                const workEventCount =
-                  detail?.reconciliation_runs?.reduce(
-                    (sum, run) => sum + getRunWorkCount(run),
-                    0,
-                  ) ?? 0;
-
-                return (
-                  <div
-                    key={key}
-                    className={cn(
-                      "rounded-lg border border-border/60 transition-colors",
-                      isExpanded ? "bg-muted/20" : "hover:bg-muted/30",
-                    )}
-                  >
-                    <div
-                      role="button"
-                      tabIndex={eventId ? 0 : -1}
-                      aria-expanded={isExpanded}
-                      aria-disabled={!eventId}
-                      onClick={() => eventId && void toggleDetails(eventId)}
-                      onKeyDown={(e) => {
-                        if (!eventId) return;
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          void toggleDetails(eventId);
-                        }
-                      }}
-                      className={cn(
-                        "flex w-full items-start gap-3 px-3 py-2.5 text-left",
-                        eventId ? "cursor-pointer" : "cursor-default",
-                      )}
-                    >
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
-                        {isExpanded ? (
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        ) : (
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                          {title}
-                        </span>
-                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <span className="text-[11px] text-muted-foreground">
-                            {KIND_LABELS[ev.ingestion_kind] ??
-                              ev.ingestion_kind}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">
-                            ·
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {source}
-                          </span>
-                          {ev.repo_name &&
-                          ev.source_channel !== "ui_raw_ingest" &&
-                          ev.source_system !== "manual" ? (
-                            <>
-                              <span className="text-[11px] text-muted-foreground">
-                                ·
-                              </span>
-                              <span className="font-mono text-[11px] text-muted-foreground">
-                                {ev.repo_name}
-                              </span>
-                            </>
-                          ) : null}
-                          {ts ? (
-                            <>
-                              <span className="text-[11px] text-muted-foreground">
-                                ·
-                              </span>
-                              <span className="text-[11px] text-muted-foreground">
-                                {formatDate(ts)}
-                              </span>
-                            </>
-                          ) : null}
-                          {workEventCount > 0 ? (
-                            <>
-                              <span className="text-[11px] text-muted-foreground">
-                                ·
-                              </span>
-                              <span className="text-[11px] text-muted-foreground">
-                                {workEventCount} work event
-                                {workEventCount !== 1 ? "s" : ""}
-                              </span>
-                            </>
-                          ) : null}
-                        </span>
-                        {ev.event_id ? (
-                          <span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">
-                            {ev.event_id}
-                          </span>
-                        ) : null}
-                        {ev.error ? (
-                          <span className="mt-1.5 block truncate text-[11px] text-red-600">
-                            {ev.error}
-                          </span>
-                        ) : null}
-                        {ev.step_total != null && ev.step_total > 0 ? (
-                          <span className="mt-1.5 flex items-center gap-2">
-                            <span className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
-                              <span
-                                className="block h-full rounded-full bg-primary transition-all"
-                                style={{
-                                  width: `${Math.round(((ev.step_done ?? 0) / ev.step_total) * 100)}%`,
-                                }}
-                              />
-                            </span>
-                            <span className="shrink-0 text-[10px] text-muted-foreground">
-                              {ev.step_done}/{ev.step_total}
-                            </span>
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="mt-0.5 flex shrink-0 items-center gap-1.5">
-                        {eventId ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={retryingEventId === eventId}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleRetry(eventId);
-                            }}
-                            title={
-                              status === "error"
-                                ? "Retry ingestion"
-                                : "Re-queue ingestion"
-                            }
-                            className="h-6 gap-1 px-2 text-[10px]"
-                          >
-                            <RotateCcw
-                              className={cn(
-                                "h-3 w-3",
-                                retryingEventId === eventId && "animate-spin",
-                              )}
-                            />
-                            {retryingEventId === eventId
-                              ? "Re-queuing…"
-                              : status === "error"
-                                ? "Retry"
-                                : "Re-queue"}
-                          </Button>
-                        ) : null}
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-[10px] capitalize",
-                            STATUS_COLORS[status] ??
-                              "bg-muted text-muted-foreground",
-                          )}
-                        >
-                          {getStatusLabel(status)}
-                        </Badge>
-                      </span>
-                    </div>
-                    {isExpanded ? (
-                      <div className="border-t border-border/50 px-3 pb-3">
-                        <AgentWorkDetails
-                          loading={loadingDetailId === eventId}
-                          event={detail}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-
-            {nextCursor && !search && (
-              <div className="mt-3 flex justify-center">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="text-xs"
-                >
-                  {loadingMore ? "Loading…" : "Load more"}
-                </Button>
-              </div>
-            )}
-
-            <p className="mt-3 text-center text-[11px] text-muted-foreground">
-              {displayed.length} event{displayed.length !== 1 ? "s" : ""}
-              {nextCursor && !search ? " (more available)" : ""}
-            </p>
-          </>
+          <EventList
+            events={displayed}
+            loading={eventsQuery.isPending}
+            loadingMore={eventsQuery.isFetchingNextPage}
+            hasMore={!!eventsQuery.hasNextPage}
+            onLoadMore={() => eventsQuery.fetchNextPage()}
+            selectedIds={selectedIds}
+            onToggleSelected={toggleSelected}
+            onSelectAllVisible={handleSelectAllVisible}
+            onOpenEvent={setOpenEventId}
+            onCopyEventId={handleCopyId}
+            onRetryEvent={handleRetry}
+            retryingId={retryMutation.isPending ? (retryMutation.variables ?? null) : null}
+            highlightedId={openEventId}
+            hasSearchOrFilters={!!filters.search.trim() || isFiltersActive(filters)}
+          />
         )}
       </CardContent>
+
+      <EventDetailSheet
+        eventId={openEventId}
+        fallbackEvent={openEvent}
+        open={!!openEventId}
+        onOpenChange={(open) => !open && setOpenEventId(null)}
+        onRetry={handleRetry}
+        retrying={retryMutation.isPending && retryMutation.variables === openEventId}
+      />
     </Card>
   );
 }

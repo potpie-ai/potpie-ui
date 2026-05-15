@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { usePots, useInvalidatePots } from "@/lib/hooks/usePots";
+import { PotInvitationBanner } from "@/app/(main)/pots/components/PotInvitationBanner";
 import { PotContextProvider } from "./PotContext";
 
 const SECTIONS = [
@@ -65,6 +66,13 @@ export default function PotLayout({ children }: { children: React.ReactNode }) {
             Manage members, sources, integrations, and ingestion for this pot.
           </p>
         </div>
+
+        {pot.pending_invitation ? (
+          <PotInvitationBanner
+            invitation={pot.pending_invitation}
+            potLabel={potLabel}
+          />
+        ) : null}
 
         <nav className="flex gap-1 border-b border-border/60">
           {SECTIONS.map((s) => {

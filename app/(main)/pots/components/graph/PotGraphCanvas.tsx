@@ -13,6 +13,8 @@ import {
   type GraphNode,
   type LabelVisibilityType,
   type Theme,
+  Icon,
+  Sphere,
   lightTheme,
   useSelection,
 } from "reagraph";
@@ -116,6 +118,22 @@ export default function PotGraphCanvas({
       edgeInterpolation="curved"
       draggable
       animated
+      // Keep the category-coloured sphere and composite the type icon on top
+      // of it (white glyph, sized to sit inside the circle with a colour rim
+      // showing). Reagraph's default icon renderer replaces the sphere; its
+      // built-in SphereWithIcon draws the icon larger than the sphere, so we
+      // compose our own.
+      renderNode={(p) => {
+        const icon = p.node.icon;
+        return icon ? (
+          <>
+            <Sphere {...p} />
+            <Icon {...p} image={icon} size={p.size * 1.15} />
+          </>
+        ) : (
+          <Sphere {...p} />
+        );
+      }}
       onNodeClick={(node) => {
         onSelectionNodeClick?.(node);
         onSelect(node.id);

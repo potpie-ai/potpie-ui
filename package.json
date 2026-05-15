@@ -64,7 +64,7 @@
     "mermaid": "^11.15.0",
     "minimatch": "^10.2.5",
     "motion": "^12.5.0",
-    "next": "^15.5.15",
+    "next": "^15.5.18",
     "next-themes": "^0.3.0",
     "posthog-js": "^1.231.0",
     "prism-react-renderer": "^2.4.1",
@@ -103,7 +103,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "autoprefixer": "^10.4.21",
     "eslint": "^8.57.1",
-    "eslint-config-next": "15.5.15",
+    "eslint-config-next": "15.5.18",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.3",
     "husky": "^9.1.7",
@@ -116,7 +116,8 @@
   },
   "pnpm": {
     "overrides": {
-      "protobufjs": "7.5.5",
+      "protobufjs": "7.5.6",
+      "@protobufjs/utf8": "1.1.1",
       "follow-redirects": "1.16.0",
       "postcss": "8.5.10",
       "uuid@>=11.0.0 <11.1.1": "11.1.1",

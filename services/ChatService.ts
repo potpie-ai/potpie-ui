@@ -5,6 +5,11 @@ import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 import { getEffectiveMimeType } from "@/lib/utils/fileTypes";
 import { ValidationResponse, AttachmentUploadResponse, AttachmentInfo, ContextUsageResponse } from "@/lib/types/attachment";
+import {
+  logStreamFailure,
+  normalizeStreamFailureDiagnostics,
+  runIdFromUrl,
+} from "./streamDiagnostics";
 
 /** Tool call from message history / stream API */
 export interface ToolCall {
@@ -666,6 +671,17 @@ export default class ChatService {
           sessionId: currentSessionId!,
         };
       }
+      logStreamFailure(
+        {
+          source: "chat",
+          runId: currentSessionId,
+          conversationId,
+          failingPhase: "frontend_stream_connect",
+          errorType: error instanceof Error ? error.name : "Error",
+          message: error instanceof Error ? error.message : String(error),
+        },
+        error
+      );
       console.error("Stream failed, attempting fallback polling:", error);
 
       // Fallback to polling if stream fails completely
@@ -712,6 +728,8 @@ export default class ChatService {
         let currentToolCalls: any[] = [];
         let currentThinking: string | null = null;
         let buffer = ""; // Buffer for incomplete JSON chunks
+        let streamFailure: Error | null = null;
+        const streamRunId = runIdFromUrl(url);
         const thinkParserState = {
           insideThinkBlock: false,
           pendingTagBuffer: "",
@@ -722,6 +740,20 @@ export default class ChatService {
 
           try {
             const data = JSON.parse(jsonStr);
+            const diagnostics = normalizeStreamFailureDiagnostics(
+              "chat",
+              data,
+              streamRunId
+            );
+            if (diagnostics) {
+              const error = new Error(
+                diagnostics.message || "Chat stream failed"
+              );
+              logStreamFailure(diagnostics, error);
+              streamFailure = error;
+              return;
+            }
+
             let didUpdate = false;
 
             if (data.message !== undefined) {
@@ -818,11 +850,13 @@ export default class ChatService {
               const extracted = ChatService.extractJsonObjects(buffer);
               buffer = extracted.remaining;
               extracted.objects.forEach(processJsonSegment);
+              if (streamFailure) throw streamFailure;
             }
 
             const extracted = ChatService.extractJsonObjects(buffer);
             buffer = extracted.remaining;
             extracted.objects.forEach(processJsonSegment);
+            if (streamFailure) throw streamFailure;
 
             if (thinkParserState.pendingTagBuffer) {
               if (thinkParserState.insideThinkBlock) {

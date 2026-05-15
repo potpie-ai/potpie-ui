@@ -2,6 +2,10 @@ import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { parseApiError, extractJsonObjects, parseSSEBuffer, isSSEResponse } from "@/lib/utils";
 import {
+  logStreamFailure,
+  normalizeStreamFailureDiagnostics,
+} from "./streamDiagnostics";
+import {
   SpecPlanRequest,
   SpecPlanSubmitResponse,
   SpecPlanStatusResponse,
@@ -359,6 +363,12 @@ export default class SpecService {
                   data?.data && typeof data.data === "object" && data.data !== null
                     ? (data.data as Record<string, unknown>)
                     : data ?? {};
+                const diagnostics = normalizeStreamFailureDiagnostics(
+                  "spec",
+                  { ...payload, event: eventType },
+                  runId
+                );
+                if (diagnostics) logStreamFailure(diagnostics);
                 options.onEvent?.(eventType, payload);
                 if (eventType === "end" || eventType === "error") return;
               }
@@ -374,6 +384,12 @@ export default class SpecService {
                       ? (data.data as Record<string, unknown>)
                       : data;
                   if (typeof data.eventId === "string") payload.eventId = data.eventId;
+                  const diagnostics = normalizeStreamFailureDiagnostics(
+                    "spec",
+                    { ...payload, event: eventType },
+                    runId
+                  );
+                  if (diagnostics) logStreamFailure(diagnostics);
                   options.onEvent?.(eventType, payload);
                   if (eventType === "end" || eventType === "error") return;
                 } catch {
@@ -383,6 +399,16 @@ export default class SpecService {
             }
           }
         } catch (e) {
+          logStreamFailure(
+            {
+              source: "spec",
+              runId,
+              failingPhase: "frontend_stream_read",
+              errorType: e instanceof Error ? e.name : "Error",
+              message: e instanceof Error ? e.message : String(e),
+            },
+            e
+          );
           options.onError?.(e instanceof Error ? e.message : String(e));
         }
       })();
@@ -436,6 +462,12 @@ export default class SpecService {
                   data?.data && typeof data.data === "object" && data.data !== null
                     ? (data.data as Record<string, unknown>)
                     : data ?? {};
+                const diagnostics = normalizeStreamFailureDiagnostics(
+                  "spec",
+                  { ...payload, event: eventType },
+                  runId
+                );
+                if (diagnostics) logStreamFailure(diagnostics);
                 options.onEvent(eventType, payload);
                 if (eventType === "end" || eventType === "error") return;
               }
@@ -451,6 +483,12 @@ export default class SpecService {
                       ? (data.data as Record<string, unknown>)
                       : data;
                   if (typeof data.eventId === "string") payload.eventId = data.eventId;
+                  const diagnostics = normalizeStreamFailureDiagnostics(
+                    "spec",
+                    { ...payload, event: eventType },
+                    runId
+                  );
+                  if (diagnostics) logStreamFailure(diagnostics);
                   options.onEvent(eventType, payload);
                   if (eventType === "end" || eventType === "error") return;
                 } catch {
@@ -460,10 +498,32 @@ export default class SpecService {
             }
           }
         } catch (e) {
+          logStreamFailure(
+            {
+              source: "spec",
+              runId,
+              failingPhase: "frontend_stream_read",
+              errorType: e instanceof Error ? e.name : "Error",
+              message: e instanceof Error ? e.message : String(e),
+            },
+            e
+          );
           options.onError?.(e instanceof Error ? e.message : String(e));
         }
       })
-      .catch((e) => options.onError?.(e instanceof Error ? e.message : String(e)));
+      .catch((e) => {
+        logStreamFailure(
+          {
+            source: "spec",
+            runId,
+            failingPhase: "frontend_stream_connect",
+            errorType: e instanceof Error ? e.name : "Error",
+            message: e instanceof Error ? e.message : String(e),
+          },
+          e
+        );
+        options.onError?.(e instanceof Error ? e.message : String(e));
+      });
   }
 
   /**

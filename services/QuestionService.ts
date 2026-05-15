@@ -1,6 +1,10 @@
 import axios, { AxiosError } from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { RecipeQuestionsResponse } from "@/lib/types/spec";
+import {
+  logStreamFailure,
+  normalizeStreamFailureDiagnostics,
+} from "./streamDiagnostics";
 
 /** Normalized option for UI (supports both string and {label, description} formats) */
 export interface MCQOption {
@@ -344,11 +348,27 @@ export default class QuestionService {
                 }
               }
               if (eventId) data.eventId = eventId;
+              const diagnostics = normalizeStreamFailureDiagnostics(
+                "questions",
+                { ...data, event: eventType },
+                runId
+              );
+              if (diagnostics) logStreamFailure(diagnostics);
               options.onEvent?.(eventType, data);
               if (eventType === "end" || eventType === "error") return;
             }
           }
         } catch (e) {
+          logStreamFailure(
+            {
+              source: "questions",
+              runId,
+              failingPhase: "frontend_stream_read",
+              errorType: e instanceof Error ? e.name : "Error",
+              message: e instanceof Error ? e.message : String(e),
+            },
+            e
+          );
           options.onError?.(e instanceof Error ? e.message : String(e));
         } finally {
           try {
@@ -428,6 +448,12 @@ export default class QuestionService {
                 }
                 if (eventId) data.eventId = eventId;
                 console.log("[QuestionService.connectQuestionsStream] Parsed event:", eventType, data);
+                const diagnostics = normalizeStreamFailureDiagnostics(
+                  "questions",
+                  { ...data, event: eventType },
+                  runId
+                );
+                if (diagnostics) logStreamFailure(diagnostics);
                 options.onEvent?.(eventType, data);
                 if (eventType === "end" || eventType === "error") return;
               }
@@ -443,6 +469,16 @@ export default class QuestionService {
             console.log("[QuestionService.connectQuestionsStream] Stream aborted (cleanup)");
             return;
           }
+          logStreamFailure(
+            {
+              source: "questions",
+              runId,
+              failingPhase: "frontend_stream_connect",
+              errorType: e instanceof Error ? e.name : "Error",
+              message: e instanceof Error ? e.message : String(e),
+            },
+            e
+          );
           console.error("[QuestionService.connectQuestionsStream] Error:", e);
           options.onError?.(e instanceof Error ? e.message : String(e));
         });
@@ -452,6 +488,16 @@ export default class QuestionService {
         console.log("[QuestionService.connectQuestionsStream] getHeaders aborted");
         return;
       }
+      logStreamFailure(
+        {
+          source: "questions",
+          runId,
+          failingPhase: "frontend_stream_connect",
+          errorType: e instanceof Error ? e.name : "Error",
+          message: e instanceof Error ? e.message : String(e),
+        },
+        e
+      );
       console.error("[QuestionService.connectQuestionsStream] getHeaders failed:", e);
       options.onError?.(e instanceof Error ? e.message : String(e));
     });

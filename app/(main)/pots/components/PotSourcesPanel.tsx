@@ -20,6 +20,14 @@ function GithubIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+function LinearIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.886 4.18ZM1.06 6.811a11.95 11.95 0 0 0-.973 3.207l13.89 13.888a11.95 11.95 0 0 0 3.206-.973L1.06 6.81ZM.002 12.066l11.93 11.931c-.642-.057-1.27-.166-1.879-.323L.325 13.945a11.96 11.96 0 0 1-.323-1.879Zm.467 4.528a12.06 12.06 0 0 0 6.937 6.937L.469 16.594Z" />
+    </svg>
+  );
+}
 import PotService, { PotSource } from "@/services/PotService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import IntegrationService, {
@@ -138,13 +146,13 @@ function describeSource(s: PotSource): { title: string; subtitle: string | null;
   if (s.source_kind === "issue_tracker_team" && s.provider === "linear") {
     const teamName = (s.scope.team_name as string | undefined) || null;
     const teamId = (s.scope.team_id as string | undefined) || null;
-    return { title: teamName || teamId || s.id, subtitle: teamName && teamId ? teamId : null, url: null, avatarUrl: null };
+    return { title: teamName || teamId || s.id, subtitle: null, url: null, avatarUrl: null };
   }
   return { title: s.id, subtitle: null, url: null, avatarUrl: null };
 }
 
 function sourceIcon(s: PotSource) {
-  if (s.provider === "linear") return <Users className="h-4 w-4 text-[#5E6AD2]" />;
+  if (s.provider === "linear") return <LinearIcon className="h-4 w-4 text-[#5E6AD2]" />;
   return <GithubIcon className="h-4 w-4 text-foreground" />;
 }
 

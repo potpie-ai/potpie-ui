@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.2.5",
@@ -81,6 +83,7 @@
     "react-redux": "^9.2.0",
     "react-syntax-highlighter": "^15.6.1",
     "reactflow": "^11.11.4",
+    "reagraph": "^4.22.0",
     "redux": "^5.0.1",
     "redux-persist": "^6.0.0",
     "remark-breaks": "^4.0.0",
@@ -95,24 +98,31 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/dompurify": "^3.2.0",
     "@types/node": "^20.17.24",
     "@types/prismjs": "^1.26.5",
     "@types/react": "^18.3.20",
     "@types/react-dom": "^18.3.6",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/ui": "^4.1.6",
     "autoprefixer": "^10.4.21",
     "eslint": "^8.57.1",
     "eslint-config-next": "15.5.15",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.3",
+    "happy-dom": "^20.9.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.0",
     "postcss": "^8.5.3",
     "prettier": "^3.5.3",
     "prismjs": "^1.30.0",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.6"
   },
   "pnpm": {
     "overrides": {

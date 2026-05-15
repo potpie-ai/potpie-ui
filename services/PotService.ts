@@ -5,6 +5,17 @@ const baseUrl = () => process.env.NEXT_PUBLIC_BASE_URL;
 
 export type PotRole = "owner" | "user";
 
+// The not-yet-answered invite for the signed-in user on a pot they can
+// already see (invitees are auto-added on invite). Drives the Accept /
+// Decline banner; `token` is what the accept/decline endpoints take.
+export type PotPendingInvitation = {
+  id: string;
+  role: PotRole;
+  token: string;
+  status: "pending";
+  expires_at: string | null;
+};
+
 export type Pot = {
   id: string;
   display_name: string | null;
@@ -15,6 +26,7 @@ export type Pot = {
   updated_at: string;
   archived_at: string | null;
   role: PotRole;
+  pending_invitation: PotPendingInvitation | null;
 };
 
 export type PotSlugAvailability = {
@@ -51,7 +63,7 @@ export type PotInvitation = {
   pot_id: string;
   email: string;
   role: PotRole;
-  status: "pending" | "accepted" | "revoked" | "expired";
+  status: "pending" | "accepted" | "revoked" | "expired" | "declined";
   invited_by_user_id: string;
   accepted_by_user_id: string | null;
   expires_at: string | null;
@@ -151,9 +163,30 @@ export type PotReconciliationRun = {
   work_events?: PotReconciliationWorkEvent[];
 };
 
+export type PotIngestionConfig = {
+  pot_id: string;
+  mode: "immediate" | "windowed";
+  window_minutes: number;
+  min_batch_size: number | null;
+};
+
 export type PotEventPage = {
   items: PotEvent[];
   next_cursor: string | null;
+};
+
+export type PotIngestPipeline = {
+  pot_id: string;
+  mode: "immediate" | "windowed";
+  window_minutes: number;
+  min_batch_size: number | null;
+  open_batch: {
+    batch_id: string;
+    created_at: string | null;
+    event_count: number;
+    window_deadline: string | null;
+  } | null;
+  queued_event_count: number;
 };
 
 export type RawIngestionResult = {
@@ -575,6 +608,20 @@ export default class PotService {
     }
   }
 
+  static async resendInvitation(potId: string, invitationId: string) {
+    const headers = await getHeaders();
+    try {
+      const response = await axios.post(
+        `${baseUrl()}/api/v1/context/pots/${potId}/invitations/${invitationId}/resend`,
+        null,
+        { headers },
+      );
+      return response.data as { ok: boolean; invitation_id: string };
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error resending invitation"));
+    }
+  }
+
   static async acceptInvitation(token: string) {
     const headers = await getHeaders();
     try {
@@ -586,6 +633,24 @@ export default class PotService {
       return response.data as { ok: boolean; pot_id: string; role: PotRole };
     } catch (error) {
       throw new Error(errorMessage(error, "Error accepting invitation"));
+    }
+  }
+
+  static async declineInvitation(token: string) {
+    const headers = await getHeaders();
+    try {
+      const response = await axios.post(
+        `${baseUrl()}/api/v1/context/pot-invitations/${encodeURIComponent(token)}/decline`,
+        null,
+        { headers },
+      );
+      return response.data as {
+        ok: boolean;
+        pot_id: string;
+        declined: boolean;
+      };
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error declining invitation"));
     }
   }
 
@@ -734,6 +799,7 @@ export default class PotService {
       source_system?: string[];
       from_date?: string;
       to_date?: string;
+      q?: string;
     } = {},
   ): Promise<PotEventPage> {
     const headers = await getHeaders();
@@ -748,6 +814,7 @@ export default class PotService {
       params.source_system = options.source_system;
     if (options.from_date) params.from_date = options.from_date;
     if (options.to_date) params.to_date = options.to_date;
+    if (options.q) params.q = options.q;
     try {
       const response = await axios.get(
         `${baseUrl()}/api/v1/context/pots/${potId}/events`,
@@ -801,6 +868,106 @@ export default class PotService {
       };
     } catch (error) {
       throw new Error(errorMessage(error, "Error retrying event"));
+    }
+  }
+
+  static async getIngestionConfig(
+    potId: string,
+  ): Promise<PotIngestionConfig> {
+    const headers = await getHeaders();
+    try {
+      const response = await axios.get(
+        `${baseUrl()}/api/v1/context/pots/${encodeURIComponent(potId)}/ingestion-config`,
+        { headers },
+      );
+      return response.data as PotIngestionConfig;
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error fetching ingestion config"));
+    }
+  }
+
+  static async updateIngestionConfig(
+    potId: string,
+    body: {
+      mode: "immediate" | "windowed";
+      window_minutes: number;
+      min_batch_size?: number | null;
+    },
+  ): Promise<PotIngestionConfig> {
+    const headers = await getHeaders();
+    try {
+      const response = await axios.put(
+        `${baseUrl()}/api/v1/context/pots/${encodeURIComponent(potId)}/ingestion-config`,
+        body,
+        { headers },
+      );
+      return response.data as PotIngestionConfig;
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error updating ingestion config"));
+    }
+  }
+
+  static async forceFlushPot(
+    potId: string,
+  ): Promise<{ pot_id: string; batch_id: string | null; status: string }> {
+    const headers = await getHeaders();
+    try {
+      const response = await axios.post(
+        `${baseUrl()}/api/v1/context/pots/${encodeURIComponent(potId)}/ingest/flush`,
+        null,
+        { headers },
+      );
+      return response.data as {
+        pot_id: string;
+        batch_id: string | null;
+        status: string;
+      };
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error forcing flush"));
+    }
+  }
+
+  static async getIngestPipeline(
+    potId: string,
+  ): Promise<PotIngestPipeline> {
+    const headers = await getHeaders();
+    try {
+      const response = await axios.get(
+        `${baseUrl()}/api/v1/context/pots/${encodeURIComponent(potId)}/ingest/pipeline`,
+        { headers },
+      );
+      return response.data as PotIngestPipeline;
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error fetching ingest pipeline"));
+    }
+  }
+
+  static async batchRetryEvents(
+    potId: string,
+    eventIds: string[],
+  ): Promise<{
+    status: string;
+    pot_id: string;
+    batch_id: string | null;
+    event_ids: string[];
+    count: number;
+  }> {
+    const headers = await getHeaders();
+    try {
+      const response = await axios.post(
+        `${baseUrl()}/api/v1/context/pots/${encodeURIComponent(potId)}/events/batch-retry`,
+        { event_ids: eventIds },
+        { headers },
+      );
+      return response.data as {
+        status: string;
+        pot_id: string;
+        batch_id: string | null;
+        event_ids: string[];
+        count: number;
+      };
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error re-queuing events"));
     }
   }
 

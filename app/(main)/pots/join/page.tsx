@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, UserPlus } from "lucide-react";
 import PotService from "@/services/PotService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,13 +11,27 @@ type State =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "success"; potId: string }
+  | { kind: "needsSignup" }
   | { kind: "error"; message: string };
+
+// Backend signals "authenticated but no account yet" with this phrase
+// (account creation is owned by the frontend signup flow).
+function isSignupRequired(message: string): boolean {
+  return /sign up/i.test(message);
+}
 
 export default function JoinPotPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token");
   const [state, setState] = useState<State>({ kind: "idle" });
+
+  // Bring the user back to this exact link after they finish signing up.
+  const returnTo = token
+    ? `/pots/join?token=${encodeURIComponent(token)}`
+    : "/pots";
+  const signUpHref = `/sign-up?redirect=${encodeURIComponent(returnTo)}`;
+  const signInHref = `/sign-in?redirect=${encodeURIComponent(returnTo)}`;
 
   useEffect(() => {
     if (!token) {
@@ -27,12 +41,15 @@ export default function JoinPotPage() {
     setState({ kind: "loading" });
     PotService.acceptInvitation(token)
       .then((out) => setState({ kind: "success", potId: out.pot_id }))
-      .catch((err) =>
-        setState({
-          kind: "error",
-          message: err instanceof Error ? err.message : "Could not accept invitation",
-        })
-      );
+      .catch((err) => {
+        const message =
+          err instanceof Error ? err.message : "Could not accept invitation";
+        setState(
+          isSignupRequired(message)
+            ? { kind: "needsSignup" }
+            : { kind: "error", message },
+        );
+      });
   }, [token]);
 
   return (
@@ -43,7 +60,9 @@ export default function JoinPotPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {state.kind === "loading" || state.kind === "idle" ? (
-            <p className="text-sm text-muted-foreground">Accepting invitation…</p>
+            <p className="text-sm text-muted-foreground">
+              Accepting invitation…
+            </p>
           ) : state.kind === "success" ? (
             <>
               <div className="flex items-center gap-2 text-green-600">
@@ -52,6 +71,32 @@ export default function JoinPotPage() {
               </div>
               <Button className="w-full" onClick={() => router.push(`/pots`)}>
                 Open pots
+              </Button>
+            </>
+          ) : state.kind === "needsSignup" ? (
+            <>
+              <div className="flex items-center gap-2 text-foreground">
+                <UserPlus className="h-5 w-5 text-primary" />
+                <p className="text-sm font-medium">
+                  Create your account to join this pot.
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Sign up with the same email this invitation was sent to —
+                we&apos;ll bring you right back here to finish joining.
+              </p>
+              <Button
+                className="w-full"
+                onClick={() => router.push(signUpHref)}
+              >
+                Sign up to continue
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => router.push(signInHref)}
+              >
+                I already have an account
               </Button>
             </>
           ) : (

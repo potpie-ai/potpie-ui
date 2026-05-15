@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Copy, Mail, Plus, Trash2 } from "lucide-react";
+import { Copy, Mail, Plus, Send, Trash2 } from "lucide-react";
 import PotService, { PotInvitation, PotMember } from "@/services/PotService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -107,6 +107,18 @@ export default function PotMembersPanel({ potId, isOwner }: Props) {
     }
   };
 
+  const handleResendInvite = async (invitationId: string) => {
+    setPendingAction(invitationId);
+    try {
+      await PotService.resendInvitation(potId, invitationId);
+      toast.success("Invitation email resent.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to resend invite");
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
   const copyInviteLink = (invite: PotInvitation) => {
     if (!invite.token) return;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -196,15 +208,38 @@ export default function PotMembersPanel({ potId, isOwner }: Props) {
                   </p>
                 </div>
                 {isOwner ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={pendingAction === i.id}
-                    onClick={() => handleRevokeInvite(i.id)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    Revoke
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {i.token ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Copy invite link"
+                        onClick={() => copyInviteLink(i)}
+                        className="text-muted-foreground"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Resend invite email"
+                      disabled={pendingAction === i.id}
+                      onClick={() => handleResendInvite(i.id)}
+                      className="text-muted-foreground"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={pendingAction === i.id}
+                      onClick={() => handleRevokeInvite(i.id)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      Revoke
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             ))

@@ -50,20 +50,20 @@ const potTheme: Theme = {
   },
   edge: {
     ...lightTheme.edge,
-    fill: "#cbd5e1",
+    fill: "#64748b",
     activeFill: "#0ea5e9",
-    opacity: 0.85,
+    opacity: 1,
     selectedOpacity: 1,
-    inactiveOpacity: 0.12,
+    inactiveOpacity: 0.25,
     label: {
-      color: "#64748b",
+      color: "#475569",
       stroke: "#f8fafc",
       activeColor: "#0f172a",
       fontSize: 5,
     },
   },
-  ring: { ...lightTheme.ring, fill: "#cbd5e1", activeFill: "#0ea5e9" },
-  arrow: { ...lightTheme.arrow, fill: "#cbd5e1", activeFill: "#0ea5e9" },
+  ring: { ...lightTheme.ring, fill: "#64748b", activeFill: "#0ea5e9" },
+  arrow: { ...lightTheme.arrow, fill: "#64748b", activeFill: "#0ea5e9" },
 };
 
 export default function PotGraphCanvas({

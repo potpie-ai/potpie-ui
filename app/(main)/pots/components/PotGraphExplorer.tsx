@@ -795,6 +795,44 @@ function cssFromTailwindBorder(tw: string): string {
   return map[tw] ?? "#94a3b8";
 }
 
+// Stable colour per relationship type so edges of the same kind read the same
+// across the graph (and against the inspector's relationship list). Sky
+// (#0ea5e9) is intentionally omitted — it is the canvas active/selection colour
+// and would be ambiguous as a default edge tint.
+const EDGE_PALETTE = [
+  "#dc2626", // red-600
+  "#ea580c", // orange-600
+  "#ca8a04", // yellow-600
+  "#65a30d", // lime-600
+  "#16a34a", // green-600
+  "#047857", // emerald-700
+  "#0d9488", // teal-600
+  "#0891b2", // cyan-600
+  "#2563eb", // blue-600
+  "#4f46e5", // indigo-600
+  "#7c3aed", // violet-600
+  "#9333ea", // purple-600
+  "#c026d3", // fuchsia-600
+  "#db2777", // pink-600
+  "#e11d48", // rose-600
+  "#b45309", // amber-700
+  "#57534e", // stone-600
+  "#475569", // slate-600
+];
+
+const EDGE_FALLBACK_COLOR = "#94a3b8"; // slate-400, also used for frontier edges
+
+// Assign palette colours by the type's position in the sorted set of distinct
+// relationship types present. This is deterministic for a given dataset and
+// collision-free until the type count exceeds the palette (then it wraps),
+// unlike a hash which can collide on common types like "uses"/"implements".
+function buildEdgeColorMap(types: Iterable<string>): Map<string, string> {
+  const sorted = Array.from(new Set(types)).sort();
+  const map = new Map<string, string>();
+  sorted.forEach((t, i) => map.set(t, EDGE_PALETTE[i % EDGE_PALETTE.length]));
+  return map;
+}
+
 // Reagraph renders through WebGL and cannot be server-rendered in the Next.js
 // app router, so the canvas is loaded client-side only.
 const PotGraphCanvas = dynamic(() => import("./graph/PotGraphCanvas"), {
@@ -859,6 +897,17 @@ function GraphVisualizationPanel({
     [projectGraph.data],
   );
 
+  // One colour per relationship type, derived from every type in the dataset
+  // (graph edges + per-node relationship metadata) so the graph and the
+  // inspector's relationship list stay in sync.
+  const edgeColorMap = useMemo(() => {
+    const types: string[] = [];
+    for (const e of projectGraph.data?.edges ?? []) types.push(e.type);
+    for (const n of projectGraph.data?.nodes ?? [])
+      for (const r of n.relationships ?? []) types.push(r.type);
+    return buildEdgeColorMap(types);
+  }, [projectGraph.data]);
+
   const nodeName = useCallback((n: ProjectGraphNode) => {
     const p = n.properties ?? {};
     return (
@@ -892,7 +941,6 @@ function GraphVisualizationPanel({
       nodes.set(key, {
         id: key,
         label: name || key,
-        subLabel: labels[0],
         fill: frontier
           ? "#cbd5e1"
           : cat
@@ -915,7 +963,9 @@ function GraphVisualizationPanel({
         source,
         target,
         label: type.replaceAll("_", " ").toLowerCase(),
-        fill: frontier ? "#e2e8f0" : undefined,
+        fill: frontier
+          ? EDGE_FALLBACK_COLOR
+          : edgeColorMap.get(type) ?? EDGE_FALLBACK_COLOR,
         data: { frontier },
       });
     };
@@ -970,6 +1020,7 @@ function GraphVisualizationPanel({
     expanded,
     loadedKeys,
     nodeName,
+    edgeColorMap,
     overview.top_entities_by_degree,
   ]);
 
@@ -1172,6 +1223,7 @@ function GraphVisualizationPanel({
         onClose={() => setSelectedEntityKey(null)}
         topEntities={overview.top_entities_by_degree}
         onPickTopEntity={(key) => setSelectedEntityKey(key)}
+        edgeColorMap={edgeColorMap}
       />
     </div>
   );
@@ -1195,11 +1247,13 @@ function NodeInspector({
   onClose,
   topEntities,
   onPickTopEntity,
+  edgeColorMap,
 }: {
   node: ProjectGraphNode | null;
   onClose: () => void;
   topEntities: GraphOverview["top_entities_by_degree"];
   onPickTopEntity: (entityKey: string) => void;
+  edgeColorMap: Map<string, string>;
 }) {
   if (!node) {
     return (
@@ -1257,7 +1311,7 @@ function NodeInspector({
     node.entity_key;
 
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
@@ -1277,7 +1331,7 @@ function NodeInspector({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex min-h-0 flex-1 flex-col space-y-3 overflow-hidden">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
             Entity key
@@ -1305,27 +1359,32 @@ function NodeInspector({
           </ScrollArea>
         </div>
         {node.relationships && node.relationships.length > 0 ? (
-          <div>
+          <div className="flex min-h-0 flex-1 flex-col">
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
               Relationships ({node.relationships.length})
             </p>
-            <ScrollArea className="mt-1 h-40 rounded-md border bg-muted/30 p-2">
+            <ScrollArea className="mt-1 min-h-0 flex-1 rounded-md border bg-muted/30 p-2">
               <ul className="space-y-1 text-xs">
-                {node.relationships.map((rel, idx) => (
-                  <li key={idx} className="flex items-center gap-2">
-                    <Badge
-                      variant={rel.direction === "out" ? "default" : "secondary"}
-                      className="text-[10px] font-normal"
-                    >
-                      {rel.direction === "out" ? "→" : "←"} {rel.type}
-                    </Badge>
-                    <span className="truncate">
-                      {rel.direction === "out"
-                        ? rel.target_name || rel.target_key
-                        : rel.source_name || rel.source_key}
-                    </span>
-                  </li>
-                ))}
+                {node.relationships.map((rel, idx) => {
+                  const color =
+                    edgeColorMap.get(rel.type) ?? EDGE_FALLBACK_COLOR;
+                  return (
+                    <li key={idx} className="flex items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 text-[10px] font-normal"
+                        style={{ color, borderColor: color }}
+                      >
+                        {rel.direction === "out" ? "→" : "←"} {rel.type}
+                      </Badge>
+                      <span className="truncate">
+                        {rel.direction === "out"
+                          ? rel.target_name || rel.target_key
+                          : rel.source_name || rel.source_key}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </ScrollArea>
           </div>

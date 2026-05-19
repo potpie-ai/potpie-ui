@@ -39,6 +39,13 @@ jobs:
           curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
           sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
 
+      - name: Check Artifact Registry repository
+        run: |-
+          if ! gcloud artifacts repositories describe "$GAR_REPO" --location="$GAR_ZONE" --project="$PROJECT_ID" >/dev/null 2>&1; then
+            echo "::warning::Artifact Registry repository $GAR_REPO does not exist or is not readable; skipping PR preview deployment."
+            echo "SKIP_PREVIEW_DEPLOY=true" >> "$GITHUB_ENV"
+          fi
+
       # Configure Docker to use the gcloud command-line tool as a credential
       # helper for authentication
       - name: Docker configuration
@@ -108,6 +115,7 @@ jobs:
 
       # Build the Docker image
       - name: Build
+        if: env.SKIP_PREVIEW_DEPLOY != 'true'
         run: |-
           IMAGE_TAG="$GAR_ZONE-docker.pkg.dev/$PROJECT_ID/$GAR_REPO/nextjs-app-pr:$SANITIZED_BRANCH_NAME-$GITHUB_SHA"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -141,14 +149,30 @@ jobs:
 
       # Push the Docker image to Google Artifact Registry
       - name: Publish
+        if: env.SKIP_PREVIEW_DEPLOY != 'true'
         run: |-
           docker push "$IMAGE_TAG"
 
+      - name: Capture image digest
+        if: env.SKIP_PREVIEW_DEPLOY != 'true'
+        run: |-
+          IMAGE_DIGEST_REF=$(gcloud artifacts docker images describe "$IMAGE_TAG" --format='value(image_summary.fully_qualified_digest)' || true)
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            IMAGE_DIGEST_REF=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_TAG" || true)
+          fi
+          if [ -z "$IMAGE_DIGEST_REF" ]; then
+            echo "Failed to resolve digest for $IMAGE_TAG" >&2
+            exit 1
+          fi
+          echo "IMAGE_DIGEST_REF=$IMAGE_DIGEST_REF" >> $GITHUB_ENV
+
       # Deploy to Cloud Run
       - name: Deploy to Cloud Run
+        if: env.SKIP_PREVIEW_DEPLOY != 'true'
         run: |-
           gcloud run deploy "pr-${SANITIZED_BRANCH_NAME}" \
-            --image "$IMAGE_TAG" \
+            --image "$IMAGE_DIGEST_REF" \
+            --project "$PROJECT_ID" \
             --region $GAR_ZONE \
             --platform managed \
             --allow-unauthenticated \
@@ -156,11 +180,12 @@ jobs:
             --memory 2Gi \
             --cpu 2
 
-          SERVICE_URL=$(gcloud run services describe "pr-${SANITIZED_BRANCH_NAME}" --region $GAR_ZONE --format 'value(status.url)')
+          SERVICE_URL=$(gcloud run services describe "pr-${SANITIZED_BRANCH_NAME}" --project "$PROJECT_ID" --region $GAR_ZONE --format 'value(status.url)')
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
 
       # Post a comment on the pull request with the Cloud Run URL
       - name: Comment on PR
+        if: env.SKIP_PREVIEW_DEPLOY != 'true'
         uses: actions/github-script@v6
         with:
           script: |
@@ -177,6 +202,9 @@ jobs:
     if: github.event.action == 'closed'
     name: Cleanup Cloud Run Service
     runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -216,4 +244,4 @@ jobs:
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/-*$//')
 
           echo "Deleting Cloud Run service: pr-${BRANCH_NAME}"
-          gcloud run services delete "pr-${BRANCH_NAME}" --region $GAR_ZONE --platform managed --quiet
+          gcloud run services delete "pr-${BRANCH_NAME}" --project "$PROJECT_ID" --region $GAR_ZONE --platform managed --quiet

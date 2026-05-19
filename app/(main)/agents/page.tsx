@@ -30,7 +30,7 @@ import InputField from "./components/InputFields";
 import Footer from "./components/Footer";
 import { CustomAgentsFormSchema, CustomAgentsFormValues } from "@/lib/Schema";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { auth } from "@/configs/Firebase-config";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/state/store";

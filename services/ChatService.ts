@@ -4,7 +4,99 @@ import { Visibility } from "@/lib/Constants";
 import { SessionInfo, TaskStatus } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 
+/** Tool call from message history / stream API */
+export interface ToolCall {
+  call_id: string;
+  event_type: "call" | "result" | "delegation_call" | "delegation_result" | "error";
+  tool_name: string;
+  tool_response: string;
+  tool_call_details: {
+    summary?: string;
+    [key: string]: unknown;
+  };
+  stream_part?: string | null;
+  is_complete: boolean;
+}
+
+/** Message shape returned by loadMessages (includes thinking & tool_calls) */
+export interface LoadedMessage {
+  id: string;
+  text: string;
+  sender: "user" | "agent";
+  citations: string[];
+  has_attachments: boolean;
+  attachments: unknown[];
+  tool_calls: ToolCall[] | null;
+  thinking: string | null;
+}
+
 export default class ChatService {
+  private static readonly THINK_OPEN_TAG = "<think>";
+  private static readonly THINK_CLOSE_TAG = "</think>";
+
+  private static normalizeThinkingField(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    if (!value || value === "None") return null;
+    return value;
+  }
+
+  private static getSafeStreamSplitIndex(input: string, marker: string): number {
+    const maxCandidateLength = Math.min(marker.length - 1, input.length);
+    for (let i = maxCandidateLength; i > 0; i--) {
+      if (input.endsWith(marker.slice(0, i))) {
+        return input.length - i;
+      }
+    }
+    return input.length;
+  }
+
+  private static parseThinkTaggedChunk(
+    chunk: string,
+    state: { insideThinkBlock: boolean; pendingTagBuffer: string }
+  ): { messageSegment: string; thinkingSegment: string } {
+    let input = `${state.pendingTagBuffer}${chunk}`;
+    state.pendingTagBuffer = "";
+
+    let messageSegment = "";
+    let thinkingSegment = "";
+
+    while (input.length > 0) {
+      if (state.insideThinkBlock) {
+        const closeIdx = input.indexOf(ChatService.THINK_CLOSE_TAG);
+        if (closeIdx === -1) {
+          const splitIdx = ChatService.getSafeStreamSplitIndex(
+            input,
+            ChatService.THINK_CLOSE_TAG
+          );
+          thinkingSegment += input.slice(0, splitIdx);
+          state.pendingTagBuffer = input.slice(splitIdx);
+          break;
+        }
+
+        thinkingSegment += input.slice(0, closeIdx);
+        input = input.slice(closeIdx + ChatService.THINK_CLOSE_TAG.length);
+        state.insideThinkBlock = false;
+      } else {
+        const openIdx = input.indexOf(ChatService.THINK_OPEN_TAG);
+        if (openIdx === -1) {
+          const splitIdx = ChatService.getSafeStreamSplitIndex(
+            input,
+            ChatService.THINK_OPEN_TAG
+          );
+          messageSegment += input.slice(0, splitIdx);
+          state.pendingTagBuffer = input.slice(splitIdx);
+          break;
+        }
+
+        messageSegment += input.slice(0, openIdx);
+        input = input.slice(openIdx + ChatService.THINK_OPEN_TAG.length);
+        state.insideThinkBlock = true;
+      }
+    }
+
+    return { messageSegment, thinkingSegment };
+  }
+
   private static extractJsonObjects(input: string): {
     objects: string[];
     remaining: string;
@@ -81,7 +173,7 @@ export default class ChatService {
       }
 
       const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/`,
+        `${baseUrl}/api/v1/conversations`,
         requestBody,
         { headers }
       );
@@ -182,6 +274,7 @@ export default class ChatService {
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -190,34 +283,20 @@ export default class ChatService {
                   String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
               );
               currentMessage += messageWithEmojis;
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations
-              );
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
-              // DEBUG: Log raw tool calls from backend (resume)
-              console.log(
-                "[SubAgent Stream] Raw tool_calls received (resume):",
-                {
-                  count: data.tool_calls.length,
-                  tool_calls: data.tool_calls,
-                  full_data: data,
-                }
-              );
-
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations
-              );
+              didUpdate = true;
             }
 
             if (data.citations !== undefined) {
               currentCitations = data.citations;
+              didUpdate = true;
+            }
+
+            if (didUpdate) {
               onMessageUpdate(
                 currentMessage,
                 currentToolCalls,
@@ -287,14 +366,26 @@ export default class ChatService {
     chatId: string,
     sessionId: string,
     cursor: string,
-    onMessageUpdate: (message: string, tool_calls: any[]) => void,
+    onMessageUpdate: (
+      message: string,
+      tool_calls: any[],
+      thinking?: string | null
+    ) => void,
     abortSignal?: AbortSignal
   ): Promise<void> {
     try {
       const headers = await getHeaders();
 
+      // Build URL with cursor as query parameter
+      const url = new URL(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${chatId}/resume/${sessionId}`
+      );
+      if (cursor) {
+        url.searchParams.set("cursor", cursor);
+      }
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${chatId}/resume/${sessionId}?cursor=${cursor}`,
+        url.toString(),
         {
           method: "POST",
           headers: headers as HeadersInit,
@@ -311,7 +402,12 @@ export default class ChatService {
       const decoder = new TextDecoder();
       let currentMessage = "";
       let currentToolCalls: any[] = [];
+      let currentThinking: string | null = null;
       let buffer = "";
+      const thinkParserState = {
+        insideThinkBlock: false,
+        pendingTagBuffer: "",
+      };
 
       if (reader) {
         const processJsonSegment = (jsonStr: string) => {
@@ -319,6 +415,7 @@ export default class ChatService {
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -328,13 +425,38 @@ export default class ChatService {
                     parseInt(match.replace(/\\u/g, ""), 16)
                   )
               );
-              currentMessage += messageWithEmojis;
-              onMessageUpdate(currentMessage, currentToolCalls);
+              const { messageSegment, thinkingSegment } =
+                ChatService.parseThinkTaggedChunk(
+                  messageWithEmojis,
+                  thinkParserState
+                );
+
+              if (messageSegment) {
+                currentMessage += messageSegment;
+              }
+              if (thinkingSegment) {
+                currentThinking = `${currentThinking ?? ""}${thinkingSegment}`;
+              }
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(currentMessage, currentToolCalls);
+              didUpdate = true;
+            }
+
+            if (data.thinking !== undefined) {
+              const normalizedThinking = ChatService.normalizeThinkingField(
+                data.thinking
+              );
+              if (normalizedThinking !== null) {
+                currentThinking = `${currentThinking ?? ""}${normalizedThinking}`;
+                didUpdate = true;
+              }
+            }
+
+            if (didUpdate) {
+              onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
             }
           } catch (e) {
             const extracted = ChatService.extractJsonObjects(jsonStr);
@@ -385,6 +507,16 @@ export default class ChatService {
           buffer = extracted.remaining;
           extracted.objects.forEach(processJsonSegment);
 
+          if (thinkParserState.pendingTagBuffer) {
+            if (thinkParserState.insideThinkBlock) {
+              currentThinking = `${currentThinking ?? ""}${thinkParserState.pendingTagBuffer}`;
+            } else {
+              currentMessage += thinkParserState.pendingTagBuffer;
+            }
+            thinkParserState.pendingTagBuffer = "";
+            onMessageUpdate(currentMessage, currentToolCalls, currentThinking);
+          }
+
           if (buffer.trim()) {
             console.warn("Unprocessed JSON buffer after resumeWithCursor stream end:", buffer);
           }
@@ -416,10 +548,12 @@ export default class ChatService {
     onMessageUpdate: (
       message: string,
       tool_calls: any[],
-      citations: string[]
+      citations: string[],
+      thinking?: string | null
     ) => void,
     sessionId?: string, // New optional parameter
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    attachmentIds?: string[] // Pre-uploaded attachment IDs (non-multimodal path)
   ): Promise<{ message: string; citations: string[]; sessionId: string }> {
     let currentSessionId = sessionId;
 
@@ -446,16 +580,49 @@ export default class ChatService {
 
       formData.append("content", message);
       formData.append("node_ids", JSON.stringify(selectedNodes));
-      formData.append("session_id", currentSessionId);
 
       // Only process images if multimodal is enabled
       const enabledImages = isMultimodalEnabled() ? images : [];
+      console.log(
+        "[ChatService] Preparing image attachments",
+        {
+          multimodalEnabled: isMultimodalEnabled(),
+          providedImageCount: images.length,
+          enabledImageCount: enabledImages.length,
+        }
+      );
       enabledImages.forEach((image, index) => {
         formData.append("images", image);
+        console.log("[ChatService] Appended image attachment", {
+          index,
+          name: image.name,
+          type: image.type,
+          size: image.size,
+        });
       });
 
+      // Append pre-uploaded attachment IDs (from docs pre-uploaded via MediaService)
+      console.log("[ChatService] Preparing attachment IDs", {
+        attachmentIdCount: attachmentIds?.length ?? 0,
+      });
+      if (attachmentIds && attachmentIds.length > 0) {
+        attachmentIds.forEach((id) => {
+          formData.append("attachment_ids", id);
+          console.log("[ChatService] Appended attachment_id", { id });
+        });
+      }
+
+      // Build URL with query parameters
+      const url = new URL(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message`
+      );
+      url.searchParams.set("stream", "true");
+      if (currentSessionId) {
+        url.searchParams.set("session_id", currentSessionId);
+      }
+
       const response = await this.streamWithRetry(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/message/`,
+        url.toString(),
         {
           method: "POST",
           headers: headers as HeadersInit,
@@ -501,7 +668,8 @@ export default class ChatService {
     onMessageUpdate: (
       message: string,
       tool_calls: any[],
-      citations: string[]
+      citations: string[],
+      thinking?: string | null
     ) => void,
     maxRetries: number,
     abortSignal?: AbortSignal
@@ -525,13 +693,19 @@ export default class ChatService {
         let currentMessage = "";
         let currentCitations: string[] = [];
         let currentToolCalls: any[] = [];
+        let currentThinking: string | null = null;
         let buffer = ""; // Buffer for incomplete JSON chunks
+        const thinkParserState = {
+          insideThinkBlock: false,
+          pendingTagBuffer: "",
+        };
 
         const processJsonSegment = (jsonStr: string) => {
           if (!jsonStr) return;
 
           try {
             const data = JSON.parse(jsonStr);
+            let didUpdate = false;
 
             if (data.message !== undefined) {
               const messageWithEmojis = data.message.replace(
@@ -539,39 +713,47 @@ export default class ChatService {
                 (match: string) =>
                   String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
               );
-              currentMessage += messageWithEmojis;
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations
-              );
+              const { messageSegment, thinkingSegment } =
+                ChatService.parseThinkTaggedChunk(
+                  messageWithEmojis,
+                  thinkParserState
+                );
+
+              if (messageSegment) {
+                currentMessage += messageSegment;
+              }
+              if (thinkingSegment) {
+                currentThinking = `${currentThinking ?? ""}${thinkingSegment}`;
+              }
+              didUpdate = true;
             }
 
             if (data.tool_calls !== undefined) {
-              // DEBUG: Log raw tool calls from backend (streamMessage)
-              console.log(
-                "[SubAgent Stream] Raw tool_calls received (stream):",
-                {
-                  count: data.tool_calls.length,
-                  tool_calls: data.tool_calls,
-                  full_data: data,
-                }
-              );
-
               currentToolCalls.push(...data.tool_calls);
-              onMessageUpdate(
-                currentMessage,
-                currentToolCalls,
-                currentCitations
-              );
+              didUpdate = true;
             }
 
             if (data.citations !== undefined) {
               currentCitations = data.citations;
+              didUpdate = true;
+            }
+
+            if (data.thinking !== undefined) {
+              const normalizedThinking = ChatService.normalizeThinkingField(
+                data.thinking
+              );
+              if (normalizedThinking !== null) {
+                currentThinking = `${currentThinking ?? ""}${normalizedThinking}`;
+                didUpdate = true;
+              }
+            }
+
+            if (didUpdate) {
               onMessageUpdate(
                 currentMessage,
                 currentToolCalls,
-                currentCitations
+                currentCitations,
+                currentThinking
               );
             }
           } catch (e) {
@@ -624,6 +806,21 @@ export default class ChatService {
             const extracted = ChatService.extractJsonObjects(buffer);
             buffer = extracted.remaining;
             extracted.objects.forEach(processJsonSegment);
+
+            if (thinkParserState.pendingTagBuffer) {
+              if (thinkParserState.insideThinkBlock) {
+                currentThinking = `${currentThinking ?? ""}${thinkParserState.pendingTagBuffer}`;
+              } else {
+                currentMessage += thinkParserState.pendingTagBuffer;
+              }
+              thinkParserState.pendingTagBuffer = "";
+              onMessageUpdate(
+                currentMessage,
+                currentToolCalls,
+                currentCitations,
+                currentThinking
+              );
+            }
 
             if (buffer.trim()) {
               console.warn("Unprocessed JSON buffer after stream end:", buffer);
@@ -695,10 +892,10 @@ export default class ChatService {
     conversationId: string,
     start: number,
     limit: number
-  ) {
+  ): Promise<LoadedMessage[]> {
     const headers = await getHeaders();
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/messages/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/messages`,
       {
         headers,
         params: { start, limit },
@@ -707,19 +904,23 @@ export default class ChatService {
 
     return response.data.map(
       (message: {
-        id: any;
-        content: any;
+        id: string;
+        content: string;
         type: string;
-        citations: any;
+        citations?: string[] | null;
         has_attachments?: boolean;
-        attachments?: any[];
+        attachments?: unknown[];
+        tool_calls?: ToolCall[] | null;
+        thinking?: string | null;
       }) => ({
         id: message.id,
-        text: message.content,
+        text: message.content ?? "",
         sender: message.type === "HUMAN" ? "user" : "agent",
-        citations: message.citations || [],
-        has_attachments: message.has_attachments || false,
-        attachments: message.attachments || [],
+        citations: message.citations ?? [],
+        has_attachments: message.has_attachments ?? false,
+        attachments: message.attachments ?? [],
+        tool_calls: message.tool_calls ?? null,
+        thinking: message.thinking ?? null,
       })
     );
   }
@@ -729,7 +930,7 @@ export default class ChatService {
 
     try {
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/info/`,
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/info`,
         { headers }
       );
       return response.data;
@@ -791,8 +992,15 @@ export default class ChatService {
     try {
       const headers = await getHeaders();
 
+      // Build URL with query parameters
+      const url = new URL(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/regenerate`
+      );
+      url.searchParams.set("stream", "true");
+      url.searchParams.set("background", "true");
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/regenerate/`,
+        url.toString(),
         {
           method: "POST",
           headers: {
@@ -821,6 +1029,7 @@ export default class ChatService {
 
         try {
           const data = JSON.parse(jsonStr);
+          let didUpdate = false;
 
           if (data.message !== undefined) {
             const messageWithEmojis = data.message.replace(
@@ -829,16 +1038,20 @@ export default class ChatService {
                 String.fromCodePoint(parseInt(match.replace(/\\u/g, ""), 16))
             );
             currentMessage += messageWithEmojis;
-            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            didUpdate = true;
           }
 
           if (data.tool_calls !== undefined) {
             currentToolCalls.push(...data.tool_calls);
-            onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
+            didUpdate = true;
           }
 
           if (data.citations !== undefined) {
             currentCitations = data.citations;
+            didUpdate = true;
+          }
+
+          if (didUpdate) {
             onMessageUpdate(currentMessage, currentToolCalls, currentCitations);
           }
         } catch (e) {
@@ -908,7 +1121,8 @@ export default class ChatService {
     agentId: string,
     isHidden: boolean = false,
     repoName?: string | null,
-    branchName?: string | null
+    branchName?: string | null,
+    attachmentIds?: string[]
   ) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;
@@ -930,9 +1144,12 @@ export default class ChatService {
       if (branchName) {
         requestBody.branch_name = branchName;
       }
+      if (attachmentIds && attachmentIds.length > 0) {
+        requestBody.attachment_ids = attachmentIds;
+      }
 
       const response = await axios.post(
-        `${baseUrl}/api/v1/conversations/`,
+        `${baseUrl}/api/v1/conversations`,
         requestBody,
         { 
           headers: headers,
@@ -949,7 +1166,7 @@ export default class ChatService {
   static async getAllChats() {
     const headers = await getHeaders();
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations`,
       {
         params: {
           start: 0,
@@ -964,7 +1181,7 @@ export default class ChatService {
   static async renameChat(conversationId: string, title: string) {
     const headers = await getHeaders();
     const response = await axios.patch(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/rename/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/rename`,
       {
         title: title,
       },
@@ -976,7 +1193,7 @@ export default class ChatService {
   static async deleteChat(conversationId: string) {
     const headers = await getHeaders();
     const response = await axios.delete(
-      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/`,
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}`,
       {
         headers,
       }
@@ -1066,11 +1283,17 @@ export default class ChatService {
     }
   }
 
-  static async stopMessage(conversationId: string): Promise<void> {
+  static async stopMessage(conversationId: string, sessionId?: string): Promise<void> {
     try {
       const headers = await getHeaders();
+      const url = new URL(
+        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/stop`
+      );
+      if (sessionId) {
+        url.searchParams.set("session_id", sessionId);
+      }
       await axios.post(
-        `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/stop/`,
+        url.toString(),
         {},
         { headers }
       );
@@ -1078,5 +1301,15 @@ export default class ChatService {
       console.error("Error stopping message:", error);
       // Don't throw - we still want to clean up even if stop endpoint fails
     }
+  }
+
+  static async updateAgent(conversationId: string, agentId: string) {
+    const headers = await getHeaders();
+    const response = await axios.patch(
+      `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/agent`,
+      { agent_id: agentId },
+      { headers }
+    );
+    return response.data;
   }
 }

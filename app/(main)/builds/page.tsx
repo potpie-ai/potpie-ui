@@ -8,15 +8,15 @@ export default function BuildsPage() {
   const router = useRouter();
 
   const handleBuildFeature = () => {
-    router.push("/idea");
+    router.push("/newchat");
   };
 
   const handleBuildWorkflow = () => {
-    router.push("/idea");
+    router.push("/newchat");
   };
 
   const handleDebugError = () => {
-    router.push("/idea?demo=true");
+    router.push("/newchat?demo=true");
   };
 
   return (

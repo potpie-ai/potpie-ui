@@ -15,7 +15,11 @@ import {
   type PendingAttachment,
 } from "@assistant-ui/react";
 import { useEffect, useCallback, useMemo, useState, useRef } from "react";
-import ChatService from "@/services/ChatService";
+import ChatService, {
+  type ToolCall,
+  type LoadedMessage,
+} from "@/services/ChatService";
+import MediaService from "@/services/MediaService";
 import { SessionInfo } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 import { useDispatch, useSelector } from "react-redux";
@@ -28,8 +32,16 @@ interface ToolCallResult {
   event_type: string;
   response: string;
   details: {
-    summary: string;
+    summary?: string;
+    command?: string;
+    [key: string]: unknown;
   };
+  is_complete?: boolean;
+  stream_part?: string | null;
+  accumulated_stream_part?: string;
+  latest_tool_response?: string;
+  derived_preview?: string;
+  preview_text?: string;
 }
 
 interface StreamingToolCallPart extends ToolCallMessagePart {
@@ -38,19 +50,325 @@ interface StreamingToolCallPart extends ToolCallMessagePart {
   isError?: boolean;
 }
 
-// Type for backend message structure
-interface BackendMessage {
-  id: string;
-  text: string;
-  sender: "user" | "agent";
-  citations: unknown[];
-  has_attachments?: boolean;
-  attachments?: Array<{
-    attachment_type: string;
-    download_url?: string;
-  }>;
-  created_at?: string;
-}
+const THINK_BLOCK_REGEX = /<think>([\s\S]*?)<\/think>/gi;
+
+const extractThinkingFromText = (
+  input: string | null | undefined
+): { cleanText: string; extractedThinking: string | null } => {
+  const raw = input ?? "";
+  if (!raw) {
+    return { cleanText: "", extractedThinking: null };
+  }
+
+  const thinkingParts: string[] = [];
+  const cleanText = raw
+    .replace(THINK_BLOCK_REGEX, (_, block: string) => {
+      const trimmed = block?.trim?.() ?? "";
+      if (trimmed) {
+        thinkingParts.push(trimmed);
+      }
+      return "";
+    })
+    .replace(/<\/?think>/gi, "");
+
+  return {
+    cleanText,
+    extractedThinking:
+      thinkingParts.length > 0 ? thinkingParts.join("\n\n") : null,
+  };
+};
+
+type ChronologicalPart =
+  | { type: "text"; id: string; text: string }
+  | { type: "tool-call-ref"; toolCallId: string };
+
+const toThreadContent = (
+  chronologicalParts: ChronologicalPart[],
+  toolCallsMap: Map<string, StreamingToolCallPart>,
+  thinking?: string | null
+): (
+  | TextMessagePart
+  | ToolCallMessagePart
+  | { type: "reasoning"; text: string }
+)[] => {
+  const content: (
+    | TextMessagePart
+    | ToolCallMessagePart
+    | { type: "reasoning"; text: string }
+  )[] = [];
+
+  if (thinking && thinking.trim()) {
+    content.push({ type: "reasoning", text: thinking });
+  }
+
+  chronologicalParts.forEach((part) => {
+    if (part.type === "text") {
+      if (part.text) {
+        content.push({ type: "text", text: part.text });
+      }
+      return;
+    }
+
+    const tool = toolCallsMap.get(part.toolCallId);
+    if (tool?.toolCallId && tool.toolName) {
+      content.push(tool);
+    }
+  });
+
+  return content;
+};
+
+const upsertStreamingToolCall = (
+  toolCallsMap: Map<string, StreamingToolCallPart>,
+  toolCallJson: unknown
+): { toolCallId: string; isNew: boolean } | null => {
+  try {
+    const parsed =
+      typeof toolCallJson === "string" ? JSON.parse(toolCallJson) : toolCallJson;
+    const {
+      call_id,
+      tool_name,
+      tool_call_details,
+      event_type,
+      tool_response,
+    } = parsed as Record<string, any>;
+
+    if (!call_id || !tool_name) {
+      return null;
+    }
+
+    const trimToNonEmpty = (value: unknown): string | null => {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed ? trimmed : null;
+    };
+    const derivePreviewFromArgs = (
+      rawArgsValue: unknown,
+      argsTextValue?: string
+    ): string | null => {
+      const candidatesFromObj = (obj: Record<string, unknown>): string | null => {
+        const candidates = [
+          obj.file_path,
+          obj.file_paths,
+          obj.path,
+          obj.paths,
+          obj.file,
+          obj.target,
+          obj.query,
+          obj.pattern,
+          obj.symbol,
+          obj.command,
+          obj.search_term,
+        ];
+        for (const candidate of candidates) {
+          if (typeof candidate === "string" && candidate.trim()) {
+            return candidate.trim();
+          }
+          if (Array.isArray(candidate) && candidate.length > 0) {
+            const asStrings = candidate
+              .filter((item) => typeof item === "string")
+              .map((item) => item.trim())
+              .filter(Boolean);
+            if (asStrings.length > 0) {
+              return asStrings.join(", ");
+            }
+          }
+        }
+        return null;
+      };
+
+      if (rawArgsValue && typeof rawArgsValue === "object") {
+        const fromObject = candidatesFromObj(rawArgsValue as Record<string, unknown>);
+        if (fromObject) return fromObject;
+      }
+
+      if (typeof rawArgsValue === "string") {
+        try {
+          const parsed = JSON.parse(rawArgsValue) as Record<string, unknown>;
+          const fromParsed = candidatesFromObj(parsed);
+          if (fromParsed) return fromParsed;
+        } catch {
+          const compact = rawArgsValue.replace(/\s+/g, " ").trim();
+          if (compact) return compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
+        }
+      }
+
+      if (argsTextValue) {
+        try {
+          const parsed = JSON.parse(argsTextValue) as Record<string, unknown>;
+          const fromParsed = candidatesFromObj(parsed);
+          if (fromParsed) return fromParsed;
+        } catch {
+          // ignore parse errors for partial stream payloads
+        }
+      }
+
+      return null;
+    };
+    const selectPreview = ({
+      latestToolResponse,
+      derivedPreview,
+      argsTextValue,
+    }: {
+      latestToolResponse?: string | null;
+      derivedPreview?: string | null;
+      argsTextValue?: string;
+    }): string => {
+      const normalizedResponse = trimToNonEmpty(latestToolResponse);
+      if (normalizedResponse) return normalizedResponse;
+      const normalizedDerived = trimToNonEmpty(derivedPreview);
+      if (normalizedDerived) return normalizedDerived;
+      const normalizedArgs = trimToNonEmpty(argsTextValue);
+      if (normalizedArgs) return normalizedArgs;
+      return "Calling tool...";
+    };
+
+    const rawArgs = tool_call_details?.arguments;
+    const rawCommand = tool_call_details?.command;
+    const rawStreamPart = parsed.stream_part;
+    const streamPart =
+      typeof rawStreamPart === "string" ? rawStreamPart : null;
+    const isComplete =
+      typeof parsed.is_complete === "boolean" ? parsed.is_complete : undefined;
+    const command =
+      typeof rawCommand === "string" && rawCommand.trim()
+        ? rawCommand.trim()
+        : null;
+    const hadEntry = toolCallsMap.has(call_id);
+    const previous =
+      toolCallsMap.get(call_id) ??
+      ({
+        type: "tool-call" as const,
+        toolCallId: call_id,
+        toolName: tool_name,
+        args:
+          typeof rawArgs === "object" && rawArgs !== null
+            ? rawArgs
+            : command
+              ? { command }
+              : {},
+        argsText:
+          typeof rawArgs === "string"
+            ? rawArgs
+            : command
+              ? command
+              : streamPart
+                ? streamPart
+                : JSON.stringify(rawArgs ?? {}, null, 2),
+      } as StreamingToolCallPart);
+
+    const normalizedEventType =
+      typeof event_type === "string" ? event_type.toLowerCase() : "";
+    const isDeltaEvent = normalizedEventType.includes("delta");
+    const previousEventType = (previous.streamState as ToolCallResult | undefined)
+      ?.event_type;
+    const previousWasDelta =
+      typeof previousEventType === "string"
+        ? previousEventType.toLowerCase().includes("delta")
+        : false;
+    const shouldAccumulateDelta =
+      isDeltaEvent &&
+      typeof streamPart === "string" &&
+      streamPart.trim().length > 0 &&
+      isComplete !== true;
+    const resetOnFirstDelta = shouldAccumulateDelta && !previousWasDelta;
+
+    const argsValue =
+      rawArgs === undefined
+        ? command
+          ? { command }
+          : previous.args
+        : typeof rawArgs === "object" && rawArgs !== null
+          ? rawArgs
+          : {};
+
+    const argsTextValue =
+      rawArgs === undefined
+        ? command
+          ? command
+          : streamPart
+            ? (shouldAccumulateDelta
+                ? resetOnFirstDelta
+                  ? streamPart
+                  : hadEntry && typeof previous.argsText === "string"
+                    ? previous.argsText === "{}"
+                      ? streamPart
+                      : previous.argsText + streamPart
+                    : streamPart
+                : previous.argsText)
+            : previous.argsText
+        : typeof rawArgs === "string"
+          ? rawArgs
+          : JSON.stringify(rawArgs, null, 2);
+
+    const previousStreamState = previous.streamState as ToolCallResult | undefined;
+    const previousAccumulated =
+      typeof (previous.streamState as ToolCallResult | undefined)
+        ?.accumulated_stream_part === "string"
+        ? (previous.streamState as ToolCallResult).accumulated_stream_part
+        : "";
+
+    const accumulated_stream_part = shouldAccumulateDelta
+      ? resetOnFirstDelta
+        ? streamPart ?? previousAccumulated
+        : (previousAccumulated ?? "") + (streamPart ?? "")
+      : previousAccumulated;
+
+    const latestToolResponse =
+      trimToNonEmpty(tool_response) ??
+      trimToNonEmpty(previousStreamState?.latest_tool_response) ??
+      trimToNonEmpty(previousStreamState?.response) ??
+      null;
+    const derivedPreview =
+      derivePreviewFromArgs(rawArgs, argsTextValue) ??
+      trimToNonEmpty(previousStreamState?.derived_preview);
+    const previewText = selectPreview({
+      latestToolResponse,
+      derivedPreview,
+      argsTextValue,
+    });
+
+    const streamState: ToolCallResult = {
+      event_type,
+      response: latestToolResponse ?? "",
+      details: tool_call_details,
+      is_complete: isComplete,
+      stream_part: streamPart,
+      accumulated_stream_part: accumulated_stream_part,
+      latest_tool_response: latestToolResponse ?? undefined,
+      derived_preview: derivedPreview ?? undefined,
+      preview_text: previewText,
+    };
+
+    const next: StreamingToolCallPart = {
+      ...previous,
+      streamState,
+      toolName: tool_name,
+      args: argsValue,
+      argsText: argsTextValue,
+    };
+
+    if (
+      event_type === "result" ||
+      event_type === "delegation_result" ||
+      event_type === "error"
+    ) {
+      next.result = streamState;
+      next.isError = event_type === "error";
+    } else {
+      next.result = undefined;
+      next.isError = false;
+    }
+
+    toolCallsMap.set(call_id, next);
+    return { toolCallId: call_id, isNew: !hadEntry };
+  } catch {
+    return null;
+  }
+};
+
+// Backend message shape (loadMessages returns LoadedMessage[])
+type BackendMessage = LoadedMessage & { created_at?: string };
 
 // Resume session info interface
 interface ResumeSessionInfo {
@@ -98,23 +416,17 @@ const createChatAdapter = (
         let finished = false;
 
         const pushToQueue = (
-          accumulatedText: string,
-          toolCallsMap: Map<string, any>
+          chronologicalParts: ChronologicalPart[],
+          toolCallsMap: Map<string, StreamingToolCallPart>,
+          accumulatedThinking?: string | null
         ) => {
-          const content: (TextMessagePart | ToolCallMessagePart)[] = [];
-
-          // Reasoning (tool calls) first, then text - reasoning appears at top
-          // Ensure tool calls are valid before pushing
-          for (const tool of toolCallsMap.values()) {
-            if (tool.toolCallId && tool.toolName) {
-              content.push(tool);
-            }
-          }
-
-          // Always ensure text is a valid string, even if empty
-          content.push({ type: "text", text: accumulatedText || "" });
-
-          const chunk = { content };
+          const chunk = {
+            content: toThreadContent(
+              chronologicalParts,
+              toolCallsMap,
+              accumulatedThinking
+            ),
+          };
           if (resolve) {
             resolve(chunk);
             resolve = null;
@@ -125,90 +437,64 @@ const createChatAdapter = (
 
         // Map to accumulate tool calls during resume
         const accumulatedToolCalls = new Map<string, StreamingToolCallPart>();
+        let accumulatedThinking: string | null = null;
+        let lastMessageLength = 0;
+        let textPartCounter = 0;
+        const chronologicalParts: ChronologicalPart[] = [];
 
         // 2. Start the backend call
         ChatService.resumeWithCursor(
           chatId,
           sessionId,
           cursor,
-          (message, tool_calls) => {
-            // Process tool calls into the map
+          (message, tool_calls, thinking) => {
+            const { cleanText, extractedThinking } = extractThinkingFromText(message);
+            if (thinking !== undefined) {
+              accumulatedThinking = thinking ?? null;
+            } else if (extractedThinking) {
+              accumulatedThinking = extractedThinking;
+            }
+
+            if (cleanText.length > lastMessageLength) {
+              const textDelta = cleanText.slice(lastMessageLength);
+              lastMessageLength = cleanText.length;
+              const lastPart = chronologicalParts.at(-1);
+              if (lastPart?.type === "text") {
+                lastPart.text += textDelta;
+              } else {
+                chronologicalParts.push({
+                  type: "text",
+                  id: `resume-text-${textPartCounter++}`,
+                  text: textDelta,
+                });
+              }
+            } else {
+              lastMessageLength = cleanText.length;
+            }
+
             tool_calls.forEach((toolCallJson) => {
-              try {
-                const parsed =
-                  typeof toolCallJson === "string"
-                    ? JSON.parse(toolCallJson)
-                    : toolCallJson;
-                const {
-                  call_id,
-                  tool_name,
-                  tool_call_details,
-                  event_type,
-                  tool_response,
-                } = parsed;
-
-                const rawArgs = tool_call_details?.arguments;
-
-                const previous =
-                  accumulatedToolCalls.get(call_id) ??
-                  ({
-                    type: "tool-call" as const,
-                    toolCallId: call_id,
-                    toolName: tool_name,
-                    args:
-                      typeof rawArgs === "object" && rawArgs !== null
-                        ? rawArgs
-                        : {},
-                    argsText:
-                      typeof rawArgs === "string"
-                        ? rawArgs
-                        : JSON.stringify(rawArgs ?? {}, null, 2),
-                  } as StreamingToolCallPart);
-
-                const argsValue =
-                  rawArgs === undefined
-                    ? previous.args
-                    : typeof rawArgs === "object" && rawArgs !== null
-                      ? rawArgs
-                      : {};
-
-                const argsTextValue =
-                  rawArgs === undefined
-                    ? previous.argsText
-                    : typeof rawArgs === "string"
-                      ? rawArgs
-                      : JSON.stringify(rawArgs, null, 2);
-
-                const streamState: ToolCallResult = {
-                  event_type,
-                  response: tool_response,
-                  details: tool_call_details,
-                };
-
-                const next: StreamingToolCallPart = {
-                  ...previous,
-                  streamState,
-                  toolName: tool_name,
-                  args: argsValue,
-                  argsText: argsTextValue,
-                };
-
-                if (event_type === "result" || event_type === "error") {
-                  next.result = streamState;
-                  next.isError = event_type === "error";
-                } else {
-                  next.result = undefined;
-                  next.isError = false;
-                }
-
-                accumulatedToolCalls.set(call_id, next);
-              } catch (e) {
-                console.error("Error processing tool call during resume:", e);
+              const upsertResult = upsertStreamingToolCall(
+                accumulatedToolCalls,
+                toolCallJson
+              );
+              if (!upsertResult) {
+                console.error("Error processing tool call during resume");
+                return;
+              }
+              if (upsertResult.isNew) {
+                chronologicalParts.push({
+                  type: "tool-call-ref",
+                  toolCallId: upsertResult.toolCallId,
+                });
               }
             });
 
             // Push the current state to the queue
-            pushToQueue(message, accumulatedToolCalls);
+            pushToQueue(
+              chronologicalParts,
+              accumulatedToolCalls,
+              accumulatedThinking
+            );
           },
           abortSignal
         )
@@ -257,30 +543,50 @@ const createChatAdapter = (
         throw new Error("Message must contain text");
       }
 
-      // Extract custom config (selectedNodes)
+      // Extract custom config (selectedNodes and attachmentIds)
       interface RunConfig {
         custom?: {
           selectedNodes?: unknown[];
+          attachmentIds?: string[];
         };
       }
       const runConfig = (context as { runConfig?: RunConfig }).runConfig;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
+      const attachmentIds =
+        (runConfig?.custom?.attachmentIds as string[]) || [];
 
-      // Extract images from message attachments (the assistant-ui way)
+      // Extract files for multipart upload and collect non-image attachment IDs.
       const images: File[] = [];
+      const messageAttachmentIds: string[] = [];
       if (isMultimodalEnabled() && lastMessage.role === "user") {
         const userMessage = lastMessage as ThreadUserMessage;
         if (userMessage.attachments) {
-          userMessage.attachments.forEach((attachment) => {
-            if (
-              attachment.type === "image" &&
-              "file" in attachment &&
-              attachment.file
-            ) {
+          for (const attachment of userMessage.attachments) {
+            if ("file" in attachment && attachment.file) {
+              // Backend upload handler accepts any file type from this multipart field.
               images.push(attachment.file);
+
+              if (attachment.type === "image") {
+                continue;
+              }
             }
-          });
+
+            if (attachment.type !== "image" && attachment.id) {
+              messageAttachmentIds.push(attachment.id);
+              continue;
+            }
+
+            if (attachment.type !== "image" && "file" in attachment && attachment.file) {
+              try {
+                const uploaded = await MediaService.uploadFile(attachment.file);
+                messageAttachmentIds.push(uploaded.id);
+              } catch (error) {
+                console.error("[Runtime] Failed to upload document attachment:", error);
+                toast.error(`Failed to upload ${attachment.file.name}`);
+              }
+            }
+          }
         }
       }
 
@@ -292,7 +598,11 @@ const createChatAdapter = (
       // Convert callback-based ChatService to async iterable
       const streamAsyncIterable = async function* () {
         let accumulatedText = "";
+        let accumulatedThinking: string | null = null;
         let accumulatedToolCalls = new Map<string, StreamingToolCallPart>();
+        let lastMessageLength = 0;
+        let textPartCounter = 0;
+        const chronologicalParts: ChronologicalPart[] = [];
         let resolveNext: ((value: boolean) => void) | null = null;
         let rejectStream: ((error: Error) => void) | null = null;
         let hasUpdate = false;
@@ -336,84 +646,53 @@ const createChatAdapter = (
           textContent.text,
           selectedNodes,
           images,
-          (message: string, tool_calls: any[], citations: string[]) => {
+          (
+            message: string,
+            tool_calls: any[],
+            citations: string[],
+            thinking?: string | null
+          ) => {
             if (abortSignal?.aborted || aborted) return;
 
+            const { cleanText, extractedThinking } = extractThinkingFromText(message);
             // Update accumulated state
-            accumulatedText = message;
+            accumulatedText = cleanText;
+            if (cleanText.length > lastMessageLength) {
+              const textDelta = cleanText.slice(lastMessageLength);
+              lastMessageLength = cleanText.length;
+              const lastPart = chronologicalParts.at(-1);
+              if (lastPart?.type === "text") {
+                lastPart.text += textDelta;
+              } else {
+                chronologicalParts.push({
+                  type: "text",
+                  id: `stream-text-${textPartCounter++}`,
+                  text: textDelta,
+                });
+              }
+            } else {
+              lastMessageLength = cleanText.length;
+            }
+            if (thinking !== undefined) {
+              accumulatedThinking = thinking ?? null;
+            } else if (extractedThinking) {
+              accumulatedThinking = extractedThinking;
+            }
 
             tool_calls.forEach((toolCallJson) => {
-              try {
-                // Detect whether toolCallJson is a string or already an object
-                const parsed =
-                  typeof toolCallJson === "string"
-                    ? JSON.parse(toolCallJson)
-                    : toolCallJson;
-                const {
-                  call_id,
-                  tool_name,
-                  tool_call_details,
-                  event_type,
-                  tool_response,
-                } = parsed;
-
-                const rawArgs = tool_call_details?.arguments;
-
-                const previous =
-                  accumulatedToolCalls.get(call_id) ??
-                  ({
-                    type: "tool-call" as const,
-                    toolCallId: call_id,
-                    toolName: tool_name,
-                    args:
-                      typeof rawArgs === "object" && rawArgs !== null
-                        ? rawArgs
-                        : {},
-                    argsText:
-                      typeof rawArgs === "string"
-                        ? rawArgs
-                        : JSON.stringify(rawArgs ?? {}, null, 2),
-                  } as StreamingToolCallPart);
-
-                const argsValue =
-                  rawArgs === undefined
-                    ? previous.args
-                    : typeof rawArgs === "object" && rawArgs !== null
-                      ? rawArgs
-                      : {};
-
-                const argsTextValue =
-                  rawArgs === undefined
-                    ? previous.argsText
-                    : typeof rawArgs === "string"
-                      ? rawArgs
-                      : JSON.stringify(rawArgs, null, 2);
-
-                const streamState: ToolCallResult = {
-                  event_type,
-                  response: tool_response,
-                  details: tool_call_details,
-                };
-
-                const next: StreamingToolCallPart = {
-                  ...previous,
-                  streamState,
-                  toolName: tool_name,
-                  args: argsValue,
-                  argsText: argsTextValue,
-                };
-
-                if (event_type === "result" || event_type === "error") {
-                  next.result = streamState;
-                  next.isError = event_type === "error";
-                } else {
-                  next.result = undefined;
-                  next.isError = false;
-                }
-
-                accumulatedToolCalls.set(call_id, next);
-              } catch (e) {
-                console.warn("Error parsing tool call:", e);
+              const upsertResult = upsertStreamingToolCall(
+                accumulatedToolCalls,
+                toolCallJson
+              );
+              if (!upsertResult) {
+                console.warn("Error parsing tool call");
+                return;
+              }
+              if (upsertResult.isNew) {
+                chronologicalParts.push({
+                  type: "tool-call-ref",
+                  toolCallId: upsertResult.toolCallId,
+                });
               }
             });
 
@@ -429,7 +708,8 @@ const createChatAdapter = (
             }
           },
           streamingStateRef.current.sessionId || undefined,
-          abortSignal ?? undefined
+          abortSignal ?? undefined,
+          [...attachmentIds, ...messageAttachmentIds]
         )
           .then((result) => {
             // Store final session ID
@@ -466,30 +746,39 @@ const createChatAdapter = (
             if (hasUpdate && !aborted) {
               hasUpdate = false;
 
-              // Yield current accumulated state
-              // Reasoning (tool calls) first, then text - reasoning appears at top
               yield {
-                content: [
-                  ...Array.from(accumulatedToolCalls.values()),
-                  ...(accumulatedText
-                    ? [{ type: "text" as const, text: accumulatedText }]
-                    : []),
-                ] as readonly (TextMessagePart | ToolCallMessagePart)[],
+                content: toThreadContent(
+                  chronologicalParts,
+                  accumulatedToolCalls,
+                  accumulatedThinking
+                ) as readonly (
+                  | TextMessagePart
+                  | ToolCallMessagePart
+                  | { type: "reasoning"; text: string }
+                )[],
               };
             }
           }
 
           // Final yield after stream completes to ensure all content is sent
-          // Reasoning (tool calls) first, then text - reasoning appears at top
-          if (!aborted && accumulatedText) {
-            yield {
-              content: [
-                ...Array.from(accumulatedToolCalls.values()),
-                ...(accumulatedText
-                  ? [{ type: "text" as const, text: accumulatedText }]
-                  : []),
-              ] as readonly (TextMessagePart | ToolCallMessagePart)[],
-            };
+          if (!aborted) {
+            const hasContent =
+              accumulatedThinking ||
+              accumulatedToolCalls.size > 0 ||
+              accumulatedText;
+            if (hasContent) {
+              yield {
+                content: toThreadContent(
+                  chronologicalParts,
+                  accumulatedToolCalls,
+                  accumulatedThinking
+                ) as readonly (
+                  | TextMessagePart
+                  | ToolCallMessagePart
+                  | { type: "reasoning"; text: string }
+                )[],
+              };
+            }
           }
         } catch (error) {
           if (!aborted) {
@@ -520,85 +809,156 @@ const createChatAdapter = (
   };
 };
 
-// Helper function to convert messages to ThreadMessage format
-const convertToThreadMessage = (msg: BackendMessage): ThreadMessage => {
-  const content: (TextMessagePart | ImageMessagePart)[] = [
-    { type: "text", text: msg.text || "" },
-  ];
+// Map API tool call to assistant-ui ToolCallMessagePart (for history-loaded messages)
+function apiToolCallToPart(tc: ToolCall): StreamingToolCallPart {
+  const rawArgs = tc.tool_call_details?.arguments;
+  const args: Record<string, unknown> =
+    typeof rawArgs === "object" && rawArgs !== null ? (rawArgs as Record<string, unknown>) : {};
+  const argsText =
+    typeof rawArgs === "string"
+      ? rawArgs
+      : JSON.stringify(rawArgs ?? {}, null, 2);
+  const result: ToolCallResult = {
+    event_type: tc.event_type,
+    response: tc.tool_response,
+    details:
+      typeof tc.tool_call_details === "object" && tc.tool_call_details !== null
+        ? {
+            ...tc.tool_call_details,
+            summary: tc.tool_call_details.summary ?? "",
+          }
+        : { summary: "" },
+  };
+  return {
+    type: "tool-call",
+    toolCallId: tc.call_id,
+    toolName: tc.tool_name,
+    args: args as ToolCallMessagePart["args"],
+    argsText,
+    result,
+    isError: tc.event_type === "error",
+  };
+}
 
-  // Prepare attachments array for Assistant UI
-  const attachments: CompleteAttachment[] = [];
-
-  // Add image content and attachments if multimodal enabled and attachments exist
-  if (
-    isMultimodalEnabled() &&
-    msg.has_attachments &&
-    msg.attachments &&
-    msg.attachments.length > 0
-  ) {
-    const imageAttachments = msg.attachments.filter(
-      (attachment) =>
-        attachment.attachment_type === "image" && attachment.download_url
-    );
-
-    imageAttachments.forEach((attachment, index) => {
-      if (attachment.download_url) {
-        // Add to content for inline display
-        content.push({
-          type: "image",
-          image: attachment.download_url,
-        });
-
-        // Add to attachments array for Assistant UI's attachment components
-        attachments.push({
-          id: `${msg.id}-attachment-${index}`,
-          type: "image",
-          name: `Image ${index + 1}`,
-          contentType: "image/*",
-          status: { type: "complete" },
-          content: [
-            {
-              type: "image",
-              image: attachment.download_url,
-            },
-          ],
+// Deduplicate API tool_calls by call_id (API may send same call_id for "call" and "result" events)
+// and merge into one part per tool call, preserving first-seen order.
+function dedupeToolCalls(toolCalls: ToolCall[]): ToolCall[] {
+  const byId = new Map<string, ToolCall>();
+  for (const tc of toolCalls) {
+    const existing = byId.get(tc.call_id);
+    if (!existing) {
+      byId.set(tc.call_id, { ...tc });
+    } else {
+      // Merge: prefer result/delegation_result (or error) event for final state
+      if (
+        tc.event_type === "result" ||
+        tc.event_type === "delegation_result" ||
+        tc.event_type === "error"
+      ) {
+        byId.set(tc.call_id, {
+          ...existing,
+          ...tc,
+          tool_response: tc.tool_response,
+          tool_call_details: tc.tool_call_details ?? existing.tool_call_details,
+          is_complete: tc.is_complete ?? existing.is_complete,
         });
       }
-    });
+    }
   }
+  return Array.from(byId.values());
+}
 
+// Helper function to convert messages to ThreadMessage format
+const convertToThreadMessage = (msg: BackendMessage): ThreadMessage => {
   const role = msg.sender === "user" ? "user" : "assistant";
   const createdAt = msg.created_at ? new Date(msg.created_at) : new Date();
 
-  if (role === "assistant") {
-    const assistantMessage: ThreadAssistantMessage = {
-      id: msg.id,
-      role: "assistant",
-      content: content as ThreadAssistantMessage["content"],
-      status: { type: "complete", reason: "stop" },
-      metadata: {
-        unstable_state: null,
-        unstable_annotations: [],
-        unstable_data: [],
-        steps: [],
-        custom: {},
-      },
-      createdAt,
-    };
-    return assistantMessage;
-  } else {
-    const userMessage: ThreadUserMessage = {
+  // User messages: text + optional images
+  if (role === "user") {
+    const content: (TextMessagePart | ImageMessagePart)[] = [
+      { type: "text", text: msg.text || "" },
+    ];
+    const attachments: CompleteAttachment[] = [];
+
+    if (
+      isMultimodalEnabled() &&
+      msg.has_attachments &&
+      msg.attachments &&
+      msg.attachments.length > 0
+    ) {
+      const attachmentList = msg.attachments as Array<{
+        attachment_type: string;
+        download_url?: string;
+      }>;
+      const imageAttachments = attachmentList.filter(
+        (attachment) =>
+          attachment.attachment_type === "image" && attachment.download_url
+      );
+      imageAttachments.forEach((attachment, index) => {
+        if (attachment.download_url) {
+          content.push({
+            type: "image",
+            image: attachment.download_url,
+          });
+          attachments.push({
+            id: `${msg.id}-attachment-${index}`,
+            type: "image",
+            name: `Image ${index + 1}`,
+            contentType: "image/*",
+            status: { type: "complete" },
+            content: [
+              { type: "image", image: attachment.download_url },
+            ],
+          });
+        }
+      });
+    }
+
+    return {
       id: msg.id,
       role: "user",
       content: content as ThreadUserMessage["content"],
-      attachments, // Now populated with actual attachments
-      metadata: {
-        custom: {},
-      },
+      attachments,
+      metadata: { custom: {} },
       createdAt,
     };
-    return userMessage;
   }
+
+  // Assistant messages: thinking (reasoning) first, then tool calls, then text; optional images
+  const assistantContent: (
+    | TextMessagePart
+    | ImageMessagePart
+    | ToolCallMessagePart
+    | { type: "reasoning"; text: string }
+  )[] = [];
+
+  const { cleanText: cleanAssistantText, extractedThinking } = extractThinkingFromText(
+    msg.text || ""
+  );
+  const resolvedThinking = msg.thinking?.trim() || extractedThinking;
+  if (resolvedThinking && resolvedThinking.trim()) {
+    assistantContent.push({ type: "reasoning", text: resolvedThinking });
+  }
+  if (msg.tool_calls && msg.tool_calls.length > 0) {
+    const uniqueToolCalls = dedupeToolCalls(msg.tool_calls);
+    assistantContent.push(...uniqueToolCalls.map(apiToolCallToPart));
+  }
+  assistantContent.push({ type: "text", text: cleanAssistantText || "" });
+
+  return {
+    id: msg.id,
+    role: "assistant",
+    content: assistantContent as ThreadAssistantMessage["content"],
+    status: { type: "complete", reason: "stop" },
+    metadata: {
+      unstable_state: null,
+      unstable_annotations: [],
+      unstable_data: [],
+      steps: [],
+      custom: {},
+    },
+    createdAt,
+  };
 };
 
 // Create Thread History Adapter
@@ -636,17 +996,19 @@ const createHistoryAdapter = (chatId: string): ThreadHistoryAdapter => {
 };
 
 // Create Attachments Adapter
-// This adapter handles file attachments (images)
+// This adapter handles composer file attachments.
 const createAttachmentsAdapter = (): AttachmentAdapter => {
   // Track object URLs so we can revoke them and prevent memory leaks
   const objectUrls = new Map<string, string>();
 
   return {
-    accept: "image/*",
+    accept:
+      "image/*,.pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.rtf,.xlsx,.xls,.ppt,.pptx",
     async add({ file }: { file: File }): Promise<PendingAttachment> {
       // Create object URL for preview
       const objectUrl = URL.createObjectURL(file);
       const attachmentId = crypto.randomUUID();
+      const isImage = file.type.startsWith("image/");
 
       // Store the URL so we can revoke it later
       objectUrls.set(attachmentId, objectUrl);
@@ -654,17 +1016,19 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
       // Return the pending attachment object
       const attachment: PendingAttachment = {
         id: attachmentId,
-        type: "image",
+        type: isImage ? "image" : "file",
         name: file.name,
         contentType: file.type,
         status: { type: "requires-action", reason: "composer-send" },
         file,
-        content: [
-          {
-            type: "image",
-            image: objectUrl,
-          },
-        ],
+        content: isImage
+          ? [
+              {
+                type: "image",
+                image: objectUrl,
+              },
+            ]
+          : [],
       };
 
       return attachment;
@@ -686,7 +1050,27 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
         objectUrls.delete(attachment.id);
       }
 
-      // IMPORTANT: Preserve the file property so runtime can extract it later
+      const isImage = attachment.type === "image";
+      if (!isImage && attachment.file) {
+        try {
+          const uploaded = await MediaService.uploadFile(attachment.file);
+          return {
+            id: uploaded.id,
+            type: "document",
+            name: attachment.name,
+            contentType: attachment.contentType,
+            status: { type: "complete" },
+            file: attachment.file,
+            content: attachment.content || [],
+          };
+        } catch (error) {
+          console.error("[Runtime] Failed to upload attachment in adapter:", error);
+          toast.error(`Failed to upload ${attachment.name}`);
+          throw error;
+        }
+      }
+
+      // Preserve image file property so runtime can stream upload it via images[].
       const completeAttachment: CompleteAttachment = {
         id: attachment.id,
         type: attachment.type,
@@ -941,7 +1325,7 @@ export function useChatRuntime(
   };
 }
 
-// Hook for handling pending messages from idea page
+// Hook for handling pending messages from newchat page
 export function usePendingMessageHandler(
   runtime: ReturnType<typeof useLocalRuntime>,
   chatId: string | null | undefined
@@ -985,7 +1369,14 @@ export function usePendingMessageHandler(
           return;
         }
 
-        composer.setText(pendingMessage);
+        composer.setText(pendingMessage.text);
+        if (pendingMessage.attachmentIds?.length) {
+          composer.setRunConfig({
+            custom: {
+              attachmentIds: pendingMessage.attachmentIds,
+            },
+          });
+        }
 
         // Trigger send
         await composer.send();

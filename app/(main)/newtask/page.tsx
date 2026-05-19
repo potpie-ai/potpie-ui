@@ -2,16 +2,16 @@
  * @deprecated This file is part of Flow A (mock flow) and will be removed in a future version.
  * 
  * Flow A has been replaced by Flow B which uses real API integration:
- * - Entry: /idea (instead of /newtask)
- * - Q&A: /repo (instead of /task/[taskId]/userqa)
+ * - Entry: /newchat (instead of /newtask)
+ * - Q&A: /task/[taskId]/qna
  * - Spec: /task/[recipeId]/spec (now uses real API instead of mock data)
  * - Plan: /task/[recipeId]/plan_overview
  * 
  * This file should be removed after Flow B is fully tested and stable.
  * 
  * @see IMPLEMENTATION_PLAN_FLOW_B_SPEC_INTEGRATION.md
- * @see /app/(main)/idea/page.tsx - New entry point
- * @see /app/(main)/repo/page.tsx - Real Q&A flow
+ * @see /app/(main)/newchat/page.tsx - New entry point
+ * @see /app/(main)/task/[taskId]/qna/page.tsx - Real Q&A flow
  */
 "use client";
 
@@ -20,7 +20,7 @@ import { ArrowUp } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import {
   createMockTaskResponse,

@@ -9,7 +9,7 @@ import {
   Send,
   ChevronUp,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { useDispatch } from "react-redux";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { queryClient } from "@/app/utils/queryClient";
@@ -32,7 +32,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
 import ParsingProgress, { ParsingStatusEnum } from "./ParsingProgress";
 import { CustomAgentsFormValues } from "@/lib/Schema";
 
@@ -214,14 +213,14 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
             setParsingStatus(ParsingStatusEnum.ERROR);
           } else if (
             status === "submitted" ||
-            status === "processing" ||
             status === "cloned" ||
             status === "parsed" ||
+            status === "inferring" ||
             status === "ready"
           ) {
             setParsingStatus(status as ParsingStatusEnum);
           } else {
-            setParsingStatus(ParsingStatusEnum.PROCESSING);
+            setParsingStatus(ParsingStatusEnum.INFERRING);
           }
         },
         async () => {
@@ -405,31 +404,36 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                             )}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full p-0" align="start">
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                           <Command>
                             <CommandInput
                               placeholder="Search repositories..."
                               value={repoSearchTerm}
                               onValueChange={setRepoSearchTerm}
                             />
-                            <CommandList className="custom-scrollbar max-h-60 overflow-y-auto">
+                            <CommandList className="overflow-y-hidden">
                               <CommandEmpty>
                                 No repositories found.
                               </CommandEmpty>
-                              <CommandGroup>
-                                {repositories?.map((repo: any) => (
-                                  <CommandItem
-                                    key={repo.id}
-                                    value={repo.full_name}
-                                    onSelect={() => {
-                                      setSelectedRepo(repo);
-                                      setRepoOpen(false);
-                                    }}
-                                  >
-                                    {repo.full_name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
+                              <div
+                                style={{ maxHeight: "240px", overflowY: "auto" }}
+                                onWheel={(e) => e.stopPropagation()}
+                              >
+                                <CommandGroup>
+                                  {repositories?.map((repo: any) => (
+                                    <CommandItem
+                                      key={repo.id}
+                                      value={repo.full_name}
+                                      onSelect={() => {
+                                        setSelectedRepo(repo);
+                                        setRepoOpen(false);
+                                      }}
+                                    >
+                                      {repo.full_name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </div>
                             </CommandList>
                           </Command>
                         </PopoverContent>
@@ -458,30 +462,35 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                             )}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full p-0" align="start">
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                           <Command>
                             <CommandInput
                               placeholder="Search branches..."
                               value={branchSearchTerm}
                               onValueChange={setBranchSearchTerm}
                             />
-                            <CommandList className="custom-scrollbar max-h-60 overflow-y-auto">
+                            <CommandList className="overflow-y-hidden">
                               <CommandEmpty>No branches found.</CommandEmpty>
-                              <CommandGroup>
-                                {Array.isArray(branches) &&
-                                  branches.map((branch: string) => (
-                                    <CommandItem
-                                      key={branch}
-                                      value={branch}
-                                      onSelect={() => {
-                                        setSelectedBranch(branch);
-                                        setBranchOpen(false);
-                                      }}
-                                    >
-                                      {branch}
-                                    </CommandItem>
-                                  ))}
-                              </CommandGroup>
+                              <div
+                                style={{ maxHeight: "240px", overflowY: "auto" }}
+                                onWheel={(e) => e.stopPropagation()}
+                              >
+                                <CommandGroup>
+                                  {Array.isArray(branches) &&
+                                    branches.map((branch: string) => (
+                                      <CommandItem
+                                        key={branch}
+                                        value={branch}
+                                        onSelect={() => {
+                                          setSelectedBranch(branch);
+                                          setBranchOpen(false);
+                                        }}
+                                      >
+                                        {branch}
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </div>
                             </CommandList>
                           </Command>
                         </PopoverContent>
@@ -505,18 +514,18 @@ const AgentCreationChatPanel: React.FC<AgentCreationChatPanelProps> = ({
                         !selectedBranch ||
                         [
                           ParsingStatusEnum.SUBMITTED,
-                          ParsingStatusEnum.PROCESSING,
                           ParsingStatusEnum.CLONED,
                           ParsingStatusEnum.PARSED,
+                          ParsingStatusEnum.INFERRING,
                         ].includes(parsingStatus as ParsingStatusEnum)
                       }
                       onClick={parseRepo}
                     >
                       {[
                         ParsingStatusEnum.SUBMITTED,
-                        ParsingStatusEnum.PROCESSING,
                         ParsingStatusEnum.CLONED,
                         ParsingStatusEnum.PARSED,
+                        ParsingStatusEnum.INFERRING,
                       ].includes(parsingStatus as ParsingStatusEnum) ? (
                         <>
                           <Loader className="mr-2 h-4 w-4 animate-spin" />

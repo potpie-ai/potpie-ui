@@ -28,6 +28,13 @@ export interface QuestionAnswer {
 /**
  * Page state for repository analysis
  */
+/** Question generation status from GET /api/v1/recipes/{id}/questions */
+export type QuestionGenerationStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed";
+
 export interface RepoPageState {
   pageState: "generating" | "questions" | "plan";
   questions: MCQQuestion[];
@@ -41,6 +48,18 @@ export interface RepoPageState {
   /** IDs of questions that need answers (for validation highlighting) */
   unansweredQuestionIds?: Set<string>;
   isGenerating: boolean;
+  /** Attachment IDs from media upload (for additional context) */
+  attachmentIds: string[];
+  attachmentUploading: boolean;
+  /** Status from backend while questions are being generated (pending/processing/completed/failed) */
+  questionGenerationStatus?: QuestionGenerationStatus | null;
+  /** Error message when question generation failed */
+  questionGenerationError?: string | null;
+  /**
+   * Multi-batch: IDs in the current answer round. `null` = entire list is one batch (legacy API).
+   * Empty array while continuation is evaluating (no new batch rows yet).
+   */
+  activeQuestionIds?: string[] | null;
 }
 
 /**

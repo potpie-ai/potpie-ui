@@ -2,12 +2,12 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Loader, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 
-// Enum for parsing status
+// Enum for parsing status (aligned with backend: submitted → cloned → parsed → inferring → ready)
 export enum ParsingStatusEnum {
   SUBMITTED = "submitted",
-  PROCESSING = "processing",
   CLONED = "cloned",
   PARSED = "parsed",
+  INFERRING = "inferring",
   READY = "ready",
   ERROR = "error"
 }
@@ -30,12 +30,12 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
     switch (status) {
       case ParsingStatusEnum.SUBMITTED:
         return "Repository parsing request submitted";
-      case ParsingStatusEnum.PROCESSING:
-        return "Processing repository...";
       case ParsingStatusEnum.CLONED:
         return "Repository cloned, analyzing code...";
       case ParsingStatusEnum.PARSED:
         return "Code analyzed, finalizing...";
+      case ParsingStatusEnum.INFERRING:
+        return "Understanding your codebase...";
       case ParsingStatusEnum.READY:
         return "Repository parsed successfully!";
       case ParsingStatusEnum.ERROR:
@@ -55,9 +55,9 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
       case ParsingStatusEnum.ERROR:
         return <AlertCircle className="h-5 w-5 text-red-500" />;
       case ParsingStatusEnum.SUBMITTED:
-      case ParsingStatusEnum.PROCESSING:
       case ParsingStatusEnum.CLONED:
       case ParsingStatusEnum.PARSED:
+      case ParsingStatusEnum.INFERRING:
         return <Loader className="h-5 w-5 animate-spin text-blue-500" />;
       default:
         return null;
@@ -94,9 +94,8 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
               className="bg-primary h-1.5 rounded-full transition-all duration-500"
               style={{ 
                 width: status === ParsingStatusEnum.SUBMITTED ? '10%' : 
-                       status === ParsingStatusEnum.PROCESSING ? '30%' : 
                        status === ParsingStatusEnum.CLONED ? '60%' : 
-                       status === ParsingStatusEnum.PARSED ? '90%' : '0%' 
+                       status === ParsingStatusEnum.PARSED || status === ParsingStatusEnum.INFERRING ? '90%' : '30%' 
               }}
             ></div>
           </div>

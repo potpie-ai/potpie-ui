@@ -401,27 +401,16 @@ const PlanOverviewPage = () => {
         setIsLoading(true);
         setError(null);
 
-        // Get spec progress from recipe codegen API
-        let progress: SpecStatusResponse | SpecPlanStatusResponse;
-        const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
-        
-        if (storedSpecId) {
-          progress = await SpecService.getSpecProgressBySpecId(storedSpecId);
-        } else {
-          progress = await SpecService.getSpecProgressByRecipeId(recipeId);
-          
-          // Store spec_id if available
-          if ('spec_id' in progress && progress.spec_id) {
-            localStorage.setItem(`spec_${recipeId}`, progress.spec_id);
-          }
-        }
+        // Get spec progress from recipe codegen API (recipe_id only in new API)
+        const progress = await SpecService.getSpecProgressByRecipeId(recipeId);
 
         // Store progress for display
         setSpecProgress(progress);
 
-        // Extract spec output
-        if (progress.spec_output) {
-          setSpecOutput(progress.spec_output);
+        // Extract spec output (legacy spec_output or new API specification)
+        const specData = (progress as any).spec_output ?? (progress as any).specification;
+        if (specData) {
+          setSpecOutput(specData as SpecOutput);
           setIsGenerating(false);
           setIsPlanExpanded(false);
           setPlanProgress(100);
@@ -543,13 +532,13 @@ const PlanOverviewPage = () => {
         setSpecOutput(mockSpecOutput);
         setSpecProgress({
           recipe_id: recipeId,
-          spec_id: `mock-spec-${recipeId}`,
-          spec_gen_status: "COMPLETED",
+          spec_generation_step_status: "COMPLETED",
           step_index: 5,
           progress_percent: 100,
           step_statuses: {},
           spec_output: mockSpecOutput,
-        });
+          celery_task_id: null,
+        } as SpecPlanStatusResponse);
         setIsGenerating(false);
         setIsPlanExpanded(false);
         setPlanProgress(100);
@@ -588,10 +577,10 @@ const PlanOverviewPage = () => {
           <h2 className="text-2xl font-semibold mb-2">Error loading plan</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
-            onClick={() => router.push("/idea")}
+            onClick={() => router.push("/newchat")}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            Go to Idea Page
+            Go to New chat
           </button>
         </div>
       </div>
@@ -608,10 +597,10 @@ const PlanOverviewPage = () => {
             The recipe ID was not found in the URL. Please start a new task.
           </p>
           <button
-            onClick={() => router.push("/idea")}
+            onClick={() => router.push("/newchat")}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            Go to Idea Page
+            Go to New chat
           </button>
         </div>
       </div>

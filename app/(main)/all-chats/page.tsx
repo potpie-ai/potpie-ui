@@ -17,11 +17,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LucideEdit, LucideTrash } from "lucide-react";
 import ChatService from "@/services/ChatService";
-import RecipeService from "@/services/RecipeService"; 
+import RecipeService from "@/services/RecipeService";
+import { getRecipeRedirectUrl } from "@/lib/utils/recipeRedirect";
 
 const AllChats = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -91,9 +92,16 @@ const AllChats = () => {
   const allItems = React.useMemo(() => {
     const items: any[] = [];
 
-    // Add chats
+    // Add chats (excluding those that have a recipe_id, as they're already shown as recipes)
     if (Array.isArray(data) && data.length > 0) {
       data.forEach((chat: any) => {
+        // Skip conversations that have a recipe_id - they're already shown as recipes
+        // Check for both recipe_id and recipeId field names
+        const chatRecipeId = chat.recipe_id || chat.recipeId;
+        if (chatRecipeId) {
+          return; // Skip this conversation as it's already represented by a recipe
+        }
+        
         items.push({
           ...chat,
           type: 'chat',
@@ -108,13 +116,14 @@ const AllChats = () => {
       recipes.forEach((recipe: any) => {
         items.push({
           ...recipe,
-          id: recipe.recipe_id,
+          id: recipe.id || recipe.recipe_id,
           type: 'recipe',
           title: recipe.user_prompt,
           created_at: recipe.created_at,
           status: recipe.status,
           repository: recipe.repo_name,
           branch: recipe.branch_name,
+          project_id: recipe.project_id,
         });
       });
     }
@@ -191,7 +200,7 @@ const AllChats = () => {
                       {item.title}
                     </Link>
                   ) : (
-                    <Link href={`/build/${item.id}`}>
+                    <Link href={getRecipeRedirectUrl(item)}>
                       {item.title.length > 50 ? item.title.substring(0, 50) + '...' : item.title}
                     </Link>
                   )}
@@ -202,7 +211,9 @@ const AllChats = () => {
                       {item.agent_id ? item.agent_id.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'N/A'}
                     </Link>
                   ) : (
-                    <span className="text-sm">{item.status || 'N/A'}</span>
+                    <Link href={getRecipeRedirectUrl(item)}>
+                      <span className="text-sm">{item.status || 'N/A'}</span>
+                    </Link>
                   )}
                 </TableCell>
                 <TableCell>
@@ -211,7 +222,7 @@ const AllChats = () => {
                       {item?.repository || 'N/A'}
                     </Link>
                   ) : (
-                    <Link href={`/build/${item.id}`}>
+                    <Link href={getRecipeRedirectUrl(item)}>
                       {item?.repository || 'N/A'}
                     </Link>
                   )}
@@ -222,7 +233,7 @@ const AllChats = () => {
                       {item?.branch || 'N/A'}
                     </Link>
                   ) : (
-                    <Link href={`/build/${item.id}`}>
+                    <Link href={getRecipeRedirectUrl(item)}>
                       {item?.branch || 'N/A'}
                     </Link>
                   )}
@@ -234,7 +245,9 @@ const AllChats = () => {
                         {new Date(item.created_at).toLocaleString()}
                       </Link>
                     ) : (
-                      <span>{new Date(item.created_at).toLocaleString()}</span>
+                      <Link href={getRecipeRedirectUrl(item)}>
+                        {new Date(item.created_at).toLocaleString()}
+                      </Link>
                     )
                   ) : (
                     <span className="text-gray-500">N/A</span>
@@ -283,9 +296,11 @@ const AllChats = () => {
                         </Button>
                       </>
                     ) : (
-                      <Button variant="outline" className="configure-button hover:bg-gray-200">
-                        View Build
-                      </Button>
+                      <Link href={getRecipeRedirectUrl(item)}>
+                        <Button variant="outline" className="configure-button hover:bg-gray-200">
+                          View Build
+                        </Button>
+                      </Link>
                     )}
                   </div>
                 </TableCell>

@@ -1,6 +1,7 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { parseApiError } from "@/lib/utils";
+import { throwIfProFeatureError } from "@/lib/hooks/useProFeatureError";
 
 // Helper function to convert camelCase fields to snake_case and prioritize snake_case
 const normalizeWorkflowData = (data: any): any => {
@@ -228,6 +229,9 @@ export default class WorkflowService {
       return response.data.available_triggers;
     } catch (error: any) {
       console.error("Error fetching triggers:", error);
+      
+      throwIfProFeatureError(error, "Workflows feature is not available");
+      
       const errorMessage = parseApiError(error);
 
       // toast.error("Failed to fetch triggers", {
@@ -248,6 +252,9 @@ export default class WorkflowService {
       return response.data.workflows;
     } catch (error: any) {
       console.error("Error fetching workflows:", error);
+      
+      throwIfProFeatureError(error, "Workflows feature is not available");
+      
       const errorMessage = parseApiError(error);
 
       // toast.error("Failed to fetch workflows", {
@@ -301,6 +308,9 @@ export default class WorkflowService {
       return normalizedWorkflow;
     } catch (error: any) {
       console.error("Error fetching workflow:", error);
+      
+      throwIfProFeatureError(error, "Workflows feature is not available");
+      
       const errorMessage = parseApiError(error);
 
       // toast.error("Failed to fetch workflow", {
@@ -348,6 +358,9 @@ export default class WorkflowService {
       return response.data;
     } catch (error: any) {
       console.error("Error creating workflow:", error);
+      
+      throwIfProFeatureError(error, "Workflows feature is not available");
+      
       const errorMessage = parseApiError(error);
 
       // Don't show toast here - let the calling component handle error display
@@ -389,6 +402,9 @@ export default class WorkflowService {
       return response.data;
     } catch (error: any) {
       console.error("Error updating workflow:", error);
+      
+      throwIfProFeatureError(error, "Workflows feature is not available");
+      
       const errorMessage = parseApiError(error);
 
       // Don't show toast here - let the calling component handle error display

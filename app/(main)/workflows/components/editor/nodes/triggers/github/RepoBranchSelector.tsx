@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -13,13 +13,9 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Skeleton } from "@/components/ui/skeleton";
 import { GitBranch, Github, Folder, Loader2, RefreshCw } from "lucide-react";
-import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
-import {
-  setWithExpiry,
-  getWithExpiry,
-} from "../../../services/localStorageService";
+import { useRepoSearch } from "@/lib/hooks/useRepoSearch";
+import { useBranchSearch } from "@/lib/hooks/useBranchSearch";
 
 interface RepoBranchSelectorProps {
   repoName: string;
@@ -40,18 +36,39 @@ export const RepoBranchSelector = ({
 }: RepoBranchSelectorProps) => {
   const [repoOpen, setRepoOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
-  const [UserRepositorys, setUserRepositorys] = useState<any[]>([]);
-  const [UserBranch, setUserBranch] = useState<string[]>([]);
-  const [UserRepositorysLoading, setUserRepositorysLoading] = useState(false);
-  const [UserBranchLoading, setUserBranchLoading] = useState(false);
-  const [repositoriesLoaded, setRepositoriesLoaded] = useState(false);
-  const [branchCache, setBranchCache] = useState<Record<string, string[]>>({});
-  // Add refresh state to trigger loading
-  const [repoRefreshKey, setRepoRefreshKey] = useState(0);
-  const [branchRefreshKey, setBranchRefreshKey] = useState(0);
 
-  // Memoize the callbacks to prevent unnecessary re-renders
+  // Resolve full GitHub URL → owner/repo format
+  const resolvedRepoName = (() => {
+    const regex = /https:\/\/github\.com\/([^/]+)\/([^/]+)/;
+    const match = repoName.match(regex);
+    return match ? `${match[1]}/${match[2]}` : repoName;
+  })();
+
+  const {
+    displayedRepos: UserRepositorys,
+    isLoading: UserRepositorysLoading,
+    isSearching: repoSearching,
+    searchInput: searchValue,
+    handleSearchChange: setSearchValue,
+    hasNextPage: repoHasNextPage,
+    loadMore: loadMoreRepos,
+    refresh: handleRepoRefresh,
+  } = useRepoSearch({ enabled: repoOpen });
+
+  const {
+    displayedBranches: UserBranch,
+    isLoading: UserBranchLoading,
+    isSearching: branchSearching,
+    searchInput: branchSearchValue,
+    handleSearchChange: setBranchSearchValue,
+    hasNextPage: branchHasNextPage,
+    loadMore: loadMoreBranches,
+    refresh: handleBranchRefreshAction,
+  } = useBranchSearch({
+    repoName: resolvedRepoName,
+    enabled: !repoOnly && branchOpen && !!resolvedRepoName,
+  });
+
   const handleRepoChange = useCallback(
     (repo: string) => {
       if (readOnly) return;
@@ -69,118 +86,6 @@ export const RepoBranchSelector = ({
     },
     [onBranchChange, readOnly]
   );
-
-  // Load repositories only when the popover is opened and we don't have them loaded yet
-  useEffect(() => {
-    if (
-      (repoOpen && !repositoriesLoaded && UserRepositorys.length === 0) ||
-      repoRefreshKey > 0
-    ) {
-      setUserRepositorysLoading(true);
-
-      if (repoRefreshKey === 0) {
-        const cachedRepos = getWithExpiry("user_repositories");
-        if (cachedRepos) {
-          setUserRepositorys(cachedRepos);
-          setUserRepositorysLoading(false);
-          setRepositoriesLoaded(true);
-          return;
-        }
-      }
-
-      BranchAndRepositoryService.getUserRepositories().then((repos) => {
-        setUserRepositorys(repos);
-        setUserRepositorysLoading(false);
-        setRepositoriesLoaded(true);
-        setWithExpiry("user_repositories", repos, 5 * 60 * 1000); // 5 minutes
-      });
-    }
-  }, [repoOpen, repositoriesLoaded, UserRepositorys.length, repoRefreshKey]);
-
-  // Load branches only when the branch popover is opened and we don't have cached branches for this repo
-  useEffect(() => {
-    // Skip branch loading if in repo-only mode
-    if (repoOnly) return;
-
-    if (!branchOpen) return;
-
-    if (!repoName) {
-      setUserBranch([]);
-      return;
-    }
-
-    const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
-    const match = repoName.match(regex);
-    let ownerRepo = repoName;
-    if (match) {
-      ownerRepo = `${match[1]}/${match[2]}`;
-    }
-
-    const cacheKey = `branches_${ownerRepo}`;
-    if (branchRefreshKey === 0) {
-      const cachedBranches = getWithExpiry(cacheKey);
-      if (cachedBranches) {
-        setUserBranch(cachedBranches);
-        return;
-      }
-    }
-
-    // Check if we already have branches cached for this repo in memory
-    if (branchCache[ownerRepo] && branchRefreshKey === 0) {
-      setUserBranch(branchCache[ownerRepo]);
-      return;
-    }
-
-    // Only load if we don't have branches for this repo
-    setUserBranchLoading(true);
-    BranchAndRepositoryService.getBranchList(ownerRepo).then((branches) => {
-      setUserBranch(branches);
-      setUserBranchLoading(false);
-      setBranchCache((prev) => ({ ...prev, [ownerRepo]: branches }));
-      setWithExpiry(cacheKey, branches, 5 * 60 * 1000); // 5 minutes
-      // Auto-select branch if there's only one and no branch is currently selected
-      if (branches?.length === 1 && !branchName) {
-        handleBranchChange(branches[0]);
-      }
-    });
-  }, [
-    repoOnly,
-    branchOpen,
-    repoName,
-    branchCache,
-    branchName,
-    handleBranchChange,
-    branchRefreshKey,
-  ]);
-
-  // Helper to clear repo cache and force refresh
-  const handleRepoRefresh = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    localStorage.removeItem("user_repositories");
-    setUserRepositorys([]);
-    setRepositoriesLoaded(false);
-    setRepoRefreshKey((k) => k + 1);
-  };
-
-  // Helper to clear branch cache and force refresh
-  const handleBranchRefresh = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
-    const match = repoName.match(regex);
-    let ownerRepo = repoName;
-    if (match) {
-      ownerRepo = `${match[1]}/${match[2]}`;
-    }
-    const cacheKey = `branches_${ownerRepo}`;
-    localStorage.removeItem(cacheKey);
-    setUserBranch([]);
-    setBranchCache((prev) => {
-      const newCache = { ...prev };
-      delete newCache[ownerRepo];
-      return newCache;
-    });
-    setBranchRefreshKey((k) => k + 1);
-  };
 
   return (
     <div className={`flex gap-4 w-full mt-2 ${repoOnly ? "" : ""}`}>
@@ -230,17 +135,17 @@ export const RepoBranchSelector = ({
           )}
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-          <Command>
+          <Command shouldFilter={false}>
             <div className="relative">
               <CommandInput
                 value={searchValue}
-                onValueChange={setSearchValue}
+                onValueChange={readOnly ? undefined : setSearchValue}
                 placeholder="Search repo.."
                 style={readOnly ? { pointerEvents: "none" } : {}}
               />
               <button
                 type="button"
-                onClick={readOnly ? undefined : handleRepoRefresh}
+                onClick={readOnly ? undefined : (e) => { e.stopPropagation(); handleRepoRefresh(); }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
                 title="Refresh repositories"
                 style={readOnly ? { pointerEvents: "none" } : {}}
@@ -249,7 +154,16 @@ export const RepoBranchSelector = ({
               </button>
             </div>
             <CommandList>
-              <CommandEmpty>No results found.</CommandEmpty>
+              <CommandEmpty>
+                {UserRepositorysLoading || repoSearching ? (
+                  <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {UserRepositorysLoading ? "Loading repositories..." : "Searching..."}
+                  </div>
+                ) : (
+                  "No results found."
+                )}
+              </CommandEmpty>
               <CommandGroup>
                 {UserRepositorysLoading ? (
                   <div className="flex items-center justify-center py-4">
@@ -266,9 +180,7 @@ export const RepoBranchSelector = ({
                       onSelect={
                         readOnly
                           ? undefined
-                          : (selectedValue) => {
-                              handleRepoChange(selectedValue);
-                            }
+                          : (selectedValue) => handleRepoChange(selectedValue)
                       }
                       style={readOnly ? { pointerEvents: "none" } : {}}
                     >
@@ -277,6 +189,19 @@ export const RepoBranchSelector = ({
                   ))
                 )}
               </CommandGroup>
+              {repoHasNextPage && (
+                <CommandItem
+                  onSelect={loadMoreRepos}
+                  className="justify-center text-sm text-muted-foreground"
+                  style={readOnly ? { pointerEvents: "none" } : {}}
+                >
+                  {repoSearching ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Load more repositories..."
+                  )}
+                </CommandItem>
+              )}
             </CommandList>
           </Command>
         </PopoverContent>
@@ -327,16 +252,18 @@ export const RepoBranchSelector = ({
                 )}
               </PopoverTrigger>
               <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                <Command>
+                <Command shouldFilter={false}>
                   <div className="relative">
                     <CommandInput
+                      value={branchSearchValue}
+                      onValueChange={readOnly ? undefined : setBranchSearchValue}
                       placeholder="Search branch..."
                       disabled={readOnly}
                       style={readOnly ? { pointerEvents: "none" } : {}}
                     />
                     <button
                       type="button"
-                      onClick={readOnly ? undefined : handleBranchRefresh}
+                      onClick={readOnly ? undefined : (e) => { e.stopPropagation(); handleBranchRefreshAction(); }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded"
                       title="Refresh branches"
                       style={readOnly ? { pointerEvents: "none" } : {}}
@@ -345,7 +272,16 @@ export const RepoBranchSelector = ({
                     </button>
                   </div>
                   <CommandList>
-                    <CommandEmpty>No branch found.</CommandEmpty>
+                    <CommandEmpty>
+                      {UserBranchLoading || branchSearching ? (
+                        <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {UserBranchLoading ? "Loading branches..." : "Searching..."}
+                        </div>
+                      ) : (
+                        "No branch found."
+                      )}
+                    </CommandEmpty>
                     <CommandGroup>
                       {UserBranchLoading ? (
                         <div className="flex items-center justify-center py-4">
@@ -359,9 +295,7 @@ export const RepoBranchSelector = ({
                           <CommandItem
                             key={value}
                             value={value}
-                            onSelect={(selectedValue) => {
-                              handleBranchChange(selectedValue);
-                            }}
+                            onSelect={(selectedValue) => handleBranchChange(selectedValue)}
                             style={readOnly ? { pointerEvents: "none" } : {}}
                           >
                             {value}
@@ -369,6 +303,19 @@ export const RepoBranchSelector = ({
                         ))
                       )}
                     </CommandGroup>
+                    {branchHasNextPage && (
+                      <CommandItem
+                        onSelect={loadMoreBranches}
+                        className="justify-center text-sm text-muted-foreground"
+                        style={readOnly ? { pointerEvents: "none" } : {}}
+                      >
+                        {branchSearching ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Load more branches..."
+                        )}
+                      </CommandItem>
+                    )}
                   </CommandList>
                 </Command>
               </PopoverContent>

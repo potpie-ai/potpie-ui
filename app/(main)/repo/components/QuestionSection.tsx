@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import QuestionCard from "./QuestionCard";
 import type { MCQQuestion, QuestionAnswer } from "@/types/question";
 
@@ -11,6 +10,7 @@ interface QuestionSectionProps {
   hoveredQuestion: string | null;
   expandedOptions: Set<string>;
   skippedQuestions: Set<string>;
+  unansweredQuestionIds?: Set<string>;
   onHover: (questionId: string | null) => void;
   onAnswerChange: (questionId: string, answer: Partial<QuestionAnswer>) => void;
   onSave: (questionId: string) => void;
@@ -26,6 +26,7 @@ export default function QuestionSection({
   hoveredQuestion,
   expandedOptions,
   skippedQuestions,
+  unansweredQuestionIds: _unansweredQuestionIds,
   onHover,
   onAnswerChange,
   onSave,
@@ -36,10 +37,11 @@ export default function QuestionSection({
   if (questions.length === 0) return null;
 
   return (
-    <>
+    <div className="space-y-6">
       {questions.map((question) => (
         <QuestionCard
           key={question.id}
+          id={`question-${question.id}`}
           question={question}
           answer={answers.get(question.id)}
           isHovered={hoveredQuestion === question.id}
@@ -54,6 +56,6 @@ export default function QuestionSection({
           onToggleSkip={() => onToggleSkip(question.id)}
         />
       ))}
-    </>
+    </div>
   );
 }

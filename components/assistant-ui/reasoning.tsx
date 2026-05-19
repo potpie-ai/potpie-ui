@@ -1,8 +1,7 @@
 "use client";
 
 import { type FC, type PropsWithChildren, useState, useEffect } from "react";
-import { ChevronDownIcon, Loader } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ChevronsUpDown, Loader } from "lucide-react";
 import type { ReasoningMessagePart } from "@assistant-ui/react";
 import { useThreadRuntime, useMessage } from "@assistant-ui/react";
 import {
@@ -13,9 +12,19 @@ import {
 } from "@/components/ui/accordion";
 
 export const Reasoning: FC<ReasoningMessagePart> = ({ text }) => {
+  const raw = text ?? "";
+  const normalized = raw
+    .replace(/<\/?think>/gi, "\n")
+    .replace(/^\s*thinking[\s:-]*/i, "")
+    .trim();
+
+  if (!normalized) {
+    return null;
+  }
+
   return (
-    <div className="whitespace-pre-wrap text-sm text-muted-foreground italic leading-relaxed">
-      {text}
+    <div className="whitespace-pre-wrap rounded-md bg-white/45 px-3 py-2 text-xs leading-relaxed text-zinc-700 backdrop-blur-sm">
+      {normalized}
     </div>
   );
 };
@@ -77,34 +86,27 @@ export const ReasoningGroup: FC<
   };
 
   return (
-    <div className="my-2 rounded-lg border border-muted bg-muted/30">
-      <Accordion
-        type="single"
-        collapsible
-        value={isStreaming ? "reasoning" : accordionValue}
-        onValueChange={handleValueChange}
-      >
-        <AccordionItem value="reasoning" className="border-0">
-          <AccordionTrigger className="px-3 py-2 hover:no-underline">
-            <span className="flex items-center gap-2 text-sm font-medium">
-              {isStreaming ? (
-                <>
-                  <Loader className="h-4 w-4 animate-spin" />
-                  <span>Reasoning in progress...</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-muted-foreground">🤔</span>
-                  <span>Reasoning completed</span>
-                </>
-              )}
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="px-3 pb-3">
-            <div className="space-y-2">{children}</div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-    </div>
+    <Accordion
+      type="single"
+      collapsible
+      value={isStreaming ? "reasoning" : accordionValue}
+      onValueChange={handleValueChange}
+      className="my-2"
+    >
+      <AccordionItem value="reasoning" className="rounded-xl border border-transparent py-2 data-[state=open]:border-white/35 data-[state=open]:bg-white/45 data-[state=open]:backdrop-blur-sm">
+        <AccordionTrigger className="w-fit px-0 py-0 text-sm text-zinc-700 hover:no-underline [&>svg]:hidden">
+          <span className="flex items-center gap-1.5 font-semibold">
+            {isStreaming && <Loader className="h-3.5 w-3.5 animate-spin" />}
+            <span>Thinking</span>
+            <ChevronsUpDown className="h-3.5 w-3.5 opacity-70" />
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="pt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+          <div className="max-h-52 space-y-2 overflow-y-auto rounded-lg border border-zinc-300/70 bg-white/70 px-3 pr-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.5)_rgba(244,244,245,0.8)]">
+            {children}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 };

@@ -68,10 +68,6 @@ function getUserFriendlyMessage(message: string): string {
   if (lowerMessage.includes('weak password') || lowerMessage.includes('password is too weak')) {
     return 'Password is too weak. Please use a stronger password (at least 6 characters).';
   }
-  
-  if (lowerMessage.includes('email not verified')) {
-    return 'Please verify your email address before signing in.';
-  }
 
   // SSO/Provider errors
   if (lowerMessage.includes('sso') && lowerMessage.includes('failed')) {

@@ -304,7 +304,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
                     placeholder="Search tools..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-8 h-9 bg-background/50 border-border/50 focus:border-accent/50"
+                    className="w-full pl-9 pr-8 h-9 bg-background/50 border-border/50 focus:border-accent/50 text-white placeholder:text-white/60"
                     autoComplete="off"
                   />
                   {searchTerm && (
@@ -322,6 +322,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
               {/* Tool listing with scrollable area */}
               <div
                 className="custom-scrollbar overflow-y-auto flex-1 relative max-h-[250px] min-h-[100px] overflow-x-hidden"
+                onWheel={(e) => e.stopPropagation()}
               >
                 {isLoading ? (
                   <div className="flex justify-center items-center py-8">
@@ -342,7 +343,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
                                   : "bg-muted/20 hover:bg-muted/40"
                               }`}
                             >
-                              <span className="flex-1 text-sm truncate text-left mr-1">
+                              <span className="flex-1 text-sm truncate text-left mr-1 text-white">
                                 {tool.name}
                               </span>
 
@@ -365,7 +366,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
                                     <TooltipContent
                                       side="right"
                                       align="start"
-                                      className="max-w-[250px] z-[9999] bg-background border shadow-lg p-2"
+                                      className="max-w-[250px] z-[9999] bg-white border shadow-lg p-2"
                                       collisionPadding={20}
                                     >
                                       <p className="text-sm">
@@ -408,7 +409,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({
                     variant="default"
                     size="sm"
                     onClick={selectAllTools}
-                    className="text-xs h-8 px-2 bg-accent hover:bg-accent/90"
+                    className="text-xs h-8 px-2 bg-accent hover:bg-accent/90 text-green-800"
                     type="button"
                   >
                     Select All

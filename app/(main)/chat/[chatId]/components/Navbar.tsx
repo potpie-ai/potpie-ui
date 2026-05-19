@@ -19,10 +19,10 @@ import { setChat } from "@/lib/state/Reducers/chat";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { usePathname } from "next/navigation";
 import { z } from "zod";
-import { ClipboardCheck, Share2, X } from "lucide-react";
+import { Paperclip, Share2, X } from "lucide-react";
 import ChatService from "@/services/ChatService";
 import {
   Select,
@@ -56,9 +56,11 @@ const Navbar = ({
   className?: string;
   showTitle?: boolean;
 }) => {
-  const { title, agentId, allAgents } = useSelector(
+  const { title, agentId, allAgents, temporaryContext } = useSelector(
     (state: RootState) => state.chat
   );
+  const repoName = useSelector((state: RootState) => state.RepoAndBranch.repoName);
+  const resolvedRepoName = (repoName || temporaryContext?.repo || "").trim();
   const pathname = usePathname();
   const { user } = useAuthContext();
   const dispatch = useDispatch();
@@ -101,7 +103,7 @@ const Navbar = ({
       const headers = await getHeaders();
       try {
         const response = await axios.patch(
-          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename/`,
+          `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${currentConversationId}/rename`,
           { title: inputValue },
           { headers }
         );
@@ -153,12 +155,7 @@ const Navbar = ({
       const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`;
       navigator.clipboard.writeText(shareUrl);
 
-      toast.message(
-        <div className="flex flex-col gap-1">
-          <p className="text-primary font-semibold">URL copied to clipboard</p>
-          <p className="text-sm text-muted">{shareUrl}</p>
-        </div>
-      );
+      toast.success("URL copied to clipboard");
 
       return res;
     },
@@ -193,12 +190,7 @@ const Navbar = ({
   const handleCopyLink = () => {
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}${pathname}`;
     navigator.clipboard.writeText(shareUrl);
-    toast.message(
-      <div className="flex flex-col gap-1">
-        <p className="text-primary font-semibold">URL copied to clipboard</p>
-        <p className="text-sm text-muted">{shareUrl}</p>
-      </div>
-    );
+    toast.success("URL copied to clipboard");
   };
 
   const isShareDisabled = () => {
@@ -277,27 +269,43 @@ const Navbar = ({
   }, [isDialogOpen]);
 
   if (hidden) return null;
+  const isNewChat = pathname?.endsWith("/newchat") ?? false;
   return (
-    <header className="sticky top-0 z-50 bg-[#FFFDFC] border-b border-[#E3E3E3]">
+    <header
+      className={
+        isNewChat
+          ? "sticky top-0 z-50 border-b border-border-light"
+          : "sticky top-0 z-50 bg-[#FFFDFC] border-b border-[#E3E3E3]"
+      }
+      style={isNewChat ? { backgroundColor: "#FAF8F7" } : undefined}
+    >
       {showTitle && (
         <div className="flex h-[52px] w-full">
           <div className="flex items-center justify-between w-full px-4 lg:px-6">
-            <div className="flex items-center gap-5 min-w-0 flex-1">
-              <Image
-                src={"/images/msg-grey.svg"}
-                alt="logo"
-                width={20}
-                height={20}
-                className="flex-shrink-0"
-              />
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <Dialog
                 open={isTitleDialogOpen}
                 onOpenChange={setIsTitleDialogOpen}
               >
                 <DialogTrigger className="min-w-0 flex-1 text-left">
-                  <span className="text-black text-xl truncate block">
-                    {displayTitle}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="text-black text-xl truncate block">
+                      {displayTitle}
+                    </span>
+                    {resolvedRepoName && (
+                      <span className="text-xs text-zinc-500 truncate block mt-0.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Image
+                            src="/images/github.svg"
+                            alt="Repository"
+                            width={12}
+                            height={12}
+                          />
+                          <span className="truncate">{resolvedRepoName}</span>
+                        </span>
+                      </span>
+                    )}
+                  </div>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[487px]" showX={false}>
                   <DialogHeader>
@@ -336,11 +344,15 @@ const Navbar = ({
             <div className="flex items-center gap-4">
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger hidden={!showShare}>
-                  <Button size="icon" variant="outline">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="border-none bg-transparent shadow-none hover:bg-transparent"
+                  >
                     <Share2 className="text-gray-500 hover:text-gray-700 w-5 h-5" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-background p-6">
+                <DialogContent className="sm:max-w-[487px] rounded-lg shadow-lg bg-white p-6">
                   <DialogHeader>
                     <DialogTitle className="text-center font-semibold text-xl">
                       Share Chat with Others
@@ -367,7 +379,7 @@ const Navbar = ({
                           placeholder="Enter Email"
                           value={emailValue}
                           onChange={handleEmailChange}
-                          className="border rounded-md p-2"
+                          className="border rounded-md p-3 w-full h-15"
                         />
                         {emailError && (
                           <p className="text-red-500 text-sm">{emailError}</p>
@@ -427,9 +439,9 @@ const Navbar = ({
                       className="gap-2"
                       variant="outline"
                       onClick={handleCopyLink}
-                      disabled={hasPendingChanges || disableShare}
+                      disabled={(!shareWithLink && hasPendingChanges) || disableShare}
                     >
-                      <ClipboardCheck className="w-4 h-4" /> Copy Link
+                      <Paperclip className="w-4 h-4" /> Copy Link
                     </Button>
                     <Button
                       type="button"
@@ -441,18 +453,6 @@ const Navbar = ({
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-              {agentId && allAgents && (
-                <div className="flex items-center gap-3 px-4 py-2 shadow-md rounded-lg cursor-pointer bg-gray-100">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-ping flex-shrink-0"></span>
-                  <span className="text-gray-700 truncate max-w-[200px]">
-                    {allAgents.find((agent) => agent.id === agentId)?.name ||
-                      agentId
-                        .replace(/_/g, " ")
-                        .replace(/([a-z])([A-Z])/g, "$1 $2")
-                        .replace(/\b\w/g, (char) => char.toUpperCase())}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
         </div>

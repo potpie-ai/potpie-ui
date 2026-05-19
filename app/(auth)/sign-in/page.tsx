@@ -8,22 +8,25 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  signInWithCustomToken,
 } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { getUserFriendlyError } from "@/lib/utils/errorMessages";
 import { testimonials } from "@/lib/utils/testimonials";
 import { isNewUser, deleteUserAndSignOut } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
 
-import { LucideGithub, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { useSearchParams, useRouter } from "next/navigation";
-import { LinkProviderDialog } from '@/components/auth/LinkProviderDialog';
-import type { SSOLoginResponse } from '@/types/auth';
+import { LinkProviderDialog } from "@/components/auth/LinkProviderDialog";
+import type { SSOLoginResponse } from "@/types/auth";
+import { authClient } from "@/lib/sso/unified-auth";
+import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
 
 export default function Signin() {
   const router = useRouter();
@@ -31,9 +34,12 @@ export default function Signin() {
   const source = searchParams.get("source");
   const agent_id = searchParams.get("agent_id");
   const redirectUrl = searchParams.get("redirect");
+  const redirect_uri = searchParams.get("redirect_uri");
 
   // SSO state
-  const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(null);
+  const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(
+    null,
+  );
   const [showLinkingDialog, setShowLinkingDialog] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
@@ -47,7 +53,7 @@ export default function Signin() {
       const url = new URL(redirectPath, window.location.origin);
       redirectAgent_id = url.searchParams.get("agent_id") || "";
     } catch (e) {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.error("Error parsing redirect URL:", e);
       }
     }
@@ -74,11 +80,18 @@ export default function Signin() {
 
   const googleProvider = new GoogleAuthProvider();
 
-  const handleExternalRedirect = async (token: string) => {
+  const handleExternalRedirect = (
+    token: string,
+    customToken?: string | null,
+  ) => {
     if (finalAgent_id) {
       window.location.href = `/shared-agent?agent_id=${finalAgent_id}`;
     } else if (source === "vscode") {
-      window.location.href = `http://localhost:54333/auth/callback?token=${token}`;
+      window.location.href = buildVSCodeCallbackUrl(
+        token,
+        customToken,
+        redirect_uri ?? undefined,
+      );
     }
   };
 
@@ -91,9 +104,13 @@ export default function Signin() {
           const userSignup = await AuthService.signupWithEmailPassword(user);
 
           if (userSignup.needs_github_linking) {
-            toast.info('Almost there! Link your GitHub to unlock the magic');
+            toast.info("Almost there! Link your GitHub to unlock the magic");
             const urlSearchParams = new URLSearchParams(window.location.search);
-            const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+            const plan = (
+              urlSearchParams.get("plan") ||
+              urlSearchParams.get("PLAN") ||
+              ""
+            ).toLowerCase();
             const prompt = urlSearchParams.get("prompt") || "";
 
             const onboardingParams = new URLSearchParams({
@@ -111,15 +128,21 @@ export default function Signin() {
 
           if (source === "vscode") {
             if (userSignup.token) {
-              handleExternalRedirect(userSignup.token);
+              const customToken =
+                userSignup.customToken ?? (await AuthService.getCustomToken());
+              handleExternalRedirect(userSignup.token, customToken);
             }
           } else if (finalAgent_id) {
             handleExternalRedirect("");
           } else {
-            router.push('/idea');
+            router.push("/newchat");
           }
 
-          toast.success("Welcome back " + (user.displayName || user.email) + "! Ready to build?");
+          toast.success(
+            "Welcome back " +
+              (user.displayName || user.email) +
+              "! Ready to build?",
+          );
         } catch (error: any) {
           toast.error(error.message || "Signup call unsuccessful");
         }
@@ -135,34 +158,43 @@ export default function Signin() {
       .then(async (result) => {
         // VALIDATION CHECKPOINT: Block new GitHub signups
         const isNew = isNewUser(result);
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log('GitHub sign-in - Is New User:', isNew);
+
+        if (process.env.NODE_ENV === "development") {
+          console.log("GitHub sign-in - Is New User:", isNew);
         }
-        
+
         // Block all new GitHub signups
         if (isNew) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('Blocking new GitHub signup attempt');
+          if (process.env.NODE_ENV === "development") {
+            console.log("Blocking new GitHub signup attempt");
           }
-          
+
           // Delete Firebase user account and sign out
           const deletionSucceeded = await deleteUserAndSignOut(result.user);
-          
+
           // Log deletion failure for monitoring (caller can act on result if needed)
           if (!deletionSucceeded) {
-            console.error('[ERROR] Failed to delete blocked GitHub signup user:', {
-              userId: result.user?.uid,
-              email: result.user?.email,
-            });
+            if (process.env.NODE_ENV !== "production") {
+              console.error(
+                "[ERROR] Failed to delete blocked GitHub signup user:",
+                { userId: result.user?.uid, email: result.user?.email },
+              );
+            } else {
+              console.error(
+                "[ERROR] Failed to delete blocked GitHub signup user (uid only)",
+                { userId: result.user?.uid },
+              );
+            }
           }
-          
+
           // Show concise error message
-          toast.error('GitHub sign-ups are no longer supported — please sign in with Google.');
-          
+          toast.error(
+            "GitHub sign-ups are no longer supported — please sign in with Google.",
+          );
+
           return; // Don't proceed to backend
         }
-        
+
         // Existing users can proceed
         const credential = GithubAuthProvider.credentialFromResult(result);
         if (credential && credential.accessToken) {
@@ -170,7 +202,7 @@ export default function Signin() {
             const userSignup = await AuthService.signupWithGitHub(
               result.user,
               credential.accessToken,
-              (result as any)._tokenResponse.screenName
+              (result as any)._tokenResponse.screenName,
             );
 
             posthog.identify(result.user.uid, {
@@ -179,36 +211,60 @@ export default function Signin() {
             });
 
             if (userSignup.needs_github_linking) {
-              toast.info('Almost there! Link your GitHub to unlock the magic');
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              toast.info("Almost there! Link your GitHub to unlock the magic");
+              const urlSearchParams = new URLSearchParams(
+                window.location.search,
+              );
+              const plan = (
+                urlSearchParams.get("plan") ||
+                urlSearchParams.get("PLAN") ||
+                ""
+              ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
               const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+              if (result.user.uid)
+                onboardingParams.append("uid", result.user.uid);
+              if (result.user.email)
+                onboardingParams.append("email", result.user.email);
+              if (result.user.displayName)
+                onboardingParams.append("name", result.user.displayName);
+              if (plan) onboardingParams.append("plan", plan);
+              if (prompt) onboardingParams.append("prompt", prompt);
+              if (finalAgent_id)
+                onboardingParams.append("agent_id", finalAgent_id);
 
               window.location.href = `/onboarding?${onboardingParams.toString()}`;
               return;
             }
 
             if (!userSignup.exists) {
-              toast.success("Welcome aboard " + result.user.displayName + "! Let's get started");
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
+              toast.success(
+                "Welcome aboard " +
+                  result.user.displayName +
+                  "! Let's get started",
+              );
+              const urlSearchParams = new URLSearchParams(
+                window.location.search,
+              );
+              const plan = (
+                urlSearchParams.get("plan") ||
+                urlSearchParams.get("PLAN") ||
+                ""
+              ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
               const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
+              if (result.user.uid)
+                onboardingParams.append("uid", result.user.uid);
+              if (result.user.email)
+                onboardingParams.append("email", result.user.email);
+              if (result.user.displayName)
+                onboardingParams.append("name", result.user.displayName);
+              if (plan) onboardingParams.append("plan", plan);
+              if (prompt) onboardingParams.append("prompt", prompt);
+              if (finalAgent_id)
+                onboardingParams.append("agent_id", finalAgent_id);
 
               window.location.href = `/onboarding?${onboardingParams.toString()}`;
               return;
@@ -216,15 +272,22 @@ export default function Signin() {
 
             if (source === "vscode") {
               if (userSignup.token) {
-                handleExternalRedirect(userSignup.token);
+                const customToken =
+                  userSignup.customToken ??
+                  (await AuthService.getCustomToken());
+                handleExternalRedirect(userSignup.token, customToken);
               }
             } else if (finalAgent_id) {
               handleExternalRedirect("");
             } else {
-              window.location.href = "/idea";
+              window.location.href = "/newchat";
             }
 
-            toast.success("Welcome back " + result.user.displayName + "! Let's build something amazing");
+            toast.success(
+              "Welcome back " +
+                result.user.displayName +
+                "! Let's build something amazing",
+            );
           } catch (e: any) {
             toast.error(e.message || "Sign-in unsuccessful");
           }
@@ -232,11 +295,14 @@ export default function Signin() {
       })
       .catch((error) => {
         // Handle user cancellation - don't show error
-        if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        if (
+          error.code === "auth/popup-closed-by-user" ||
+          error.code === "auth/cancelled-popup-request"
+        ) {
           // User cancelled, don't show error
           return;
         }
-        
+
         const errorCode = error.code;
         const errorMessage = error.message;
         const email = error.customData?.email;
@@ -249,66 +315,89 @@ export default function Signin() {
   const onGoogle = async () => {
     signInWithPopup(auth, googleProvider)
       .then(async (result) => {
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (credential) {
-          try {
-            const userSignup = await AuthService.signupWithEmailPassword(result.user);
+        try {
+          const user = result.user;
+          const firebaseIdToken = await user.getIdToken();
 
-            posthog.identify(result.user.uid, {
-              email: result.user.email,
-              name: result.user?.displayName || "",
+          if (!firebaseIdToken) {
+            throw new Error("Failed to get Firebase ID token");
+          }
+
+          const response = await authClient.ssoLogin(
+            user.email || "",
+            "google",
+            firebaseIdToken,
+            {
+              uid: user.uid,
+              sub: user.uid,
+              name: user.displayName || "",
+              given_name: user.displayName?.split(" ")[0] || "",
+              family_name: user.displayName?.split(" ").slice(1).join(" ") || "",
+              picture: user.photoURL || "",
+            },
+          );
+
+          if (response.firebase_token) {
+            await signInWithCustomToken(auth, response.firebase_token);
+          }
+
+          posthog.identify(user.uid, {
+            email: user.email,
+            name: user.displayName || "",
+          });
+
+          if (response.status === "needs_linking") {
+            setLinkingData(response);
+            setShowLinkingDialog(true);
+            return;
+          }
+
+          const urlSearchParams = new URLSearchParams(window.location.search);
+          const plan = (
+            urlSearchParams.get("plan") ||
+            urlSearchParams.get("PLAN") ||
+            ""
+          ).toLowerCase();
+          const prompt = urlSearchParams.get("prompt") || "";
+
+          if (response.status === "new_user" || response.needs_github_linking) {
+            toast.info("Almost there! Link your GitHub to unlock the magic");
+
+            const onboardingUid = response.user_id || user.uid;
+            const onboardingEmail = response.email || user.email || "";
+            const onboardingName =
+              response.display_name || user.displayName || "";
+
+            const onboardingParams = new URLSearchParams({
+              ...(onboardingUid && { uid: onboardingUid }),
+              ...(onboardingEmail && { email: onboardingEmail }),
+              ...(onboardingName && { name: onboardingName }),
+              ...(plan && { plan }),
+              ...(prompt && { prompt }),
+              ...(finalAgent_id && { agent_id: finalAgent_id }),
             });
 
-            if (userSignup.needs_github_linking) {
-              toast.info('Almost there! Link your GitHub to unlock the magic');
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
-              const prompt = urlSearchParams.get("prompt") || "";
-
-              const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
-
-              window.location.href = `/onboarding?${onboardingParams.toString()}`;
-              return;
-            }
-
-            if (!userSignup.exists) {
-              toast.success("Welcome aboard " + result.user.displayName + "! Let's get started");
-              const urlSearchParams = new URLSearchParams(window.location.search);
-              const plan = (urlSearchParams.get("plan") || urlSearchParams.get("PLAN") || "").toLowerCase();
-              const prompt = urlSearchParams.get("prompt") || "";
-
-              const onboardingParams = new URLSearchParams();
-              if (result.user.uid) onboardingParams.append('uid', result.user.uid);
-              if (result.user.email) onboardingParams.append('email', result.user.email);
-              if (result.user.displayName) onboardingParams.append('name', result.user.displayName);
-              if (plan) onboardingParams.append('plan', plan);
-              if (prompt) onboardingParams.append('prompt', prompt);
-              if (finalAgent_id) onboardingParams.append('agent_id', finalAgent_id);
-
-              window.location.href = `/onboarding?${onboardingParams.toString()}`;
-              return;
-            }
-
-            if (source === "vscode") {
-              if (userSignup.token) {
-                handleExternalRedirect(userSignup.token);
-              }
-            } else if (finalAgent_id) {
-              handleExternalRedirect("");
-            } else {
-              window.location.href = "/idea";
-            }
-
-            toast.success("Welcome back " + result.user.displayName + "! Let's build something amazing");
-          } catch (e: any) {
-            toast.error(e.message || "Sign-in unsuccessful");
+            window.location.href = `/onboarding?${onboardingParams.toString()}`;
+            return;
           }
+
+          if (source === "vscode") {
+            const customToken =
+              response.firebase_token ?? (await AuthService.getCustomToken());
+            handleExternalRedirect(firebaseIdToken, customToken);
+          } else if (finalAgent_id) {
+            handleExternalRedirect("");
+          } else {
+            window.location.href = "/newchat";
+          }
+
+          toast.success(
+            "Welcome back " +
+              (user.displayName || user.email) +
+              "! Let's build something amazing",
+          );
+        } catch (e: any) {
+          toast.error(e.message || "Sign-in unsuccessful");
         }
       })
       .catch((error) => {
@@ -319,11 +408,26 @@ export default function Signin() {
 
   const handleSSOLinked = () => {
     if (source === "vscode") {
-      router.push('/idea');
-    } else if (finalAgent_id) {
+      const user = auth.currentUser;
+      if (!user) {
+        router.push("/newchat");
+        return;
+      }
+      Promise.all([user.getIdToken(), AuthService.getCustomToken()])
+        .then(([token, customToken]) => {
+          window.location.href = buildVSCodeCallbackUrl(
+            token,
+            customToken,
+            redirect_uri ?? undefined,
+          );
+        })
+        .catch(() => router.push("/newchat"));
+      return;
+    }
+    if (finalAgent_id) {
       router.push(`/shared-agent?agent_id=${finalAgent_id}`);
     } else {
-      router.push('/idea');
+      router.push("/newchat");
     }
   };
 
@@ -366,161 +470,167 @@ export default function Signin() {
                 />
               </Link>
 
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-sm font-normal text-[#656969] hover:text-[#022D2C] transition-colors"
-              >
-                <Image
-                  src="/images/figma/auth/auth-signin-globe.svg"
-                  alt=""
-                  width={20}
-                  height={20}
-                />
-                <span className="px-1">ENG</span>
-                <Image
-                  src="/images/figma/auth/auth-signin-arrow-down.svg"
-                  alt=""
-                  width={20}
-                  height={20}
-                />
-              </button>
+
             </div>
 
             {/* Form content */}
             <div className="flex flex-1 items-center justify-center px-8 pb-8">
               <div className="w-full max-w-[392px]">
                 <div className="flex flex-col items-center gap-3">
-                <Image
-                  src="/images/figma/auth/auth-signin-icon.svg"
-                  alt=""
-                  width={80}
-                  height={80}
-                  priority
-                />
-                <h1 className="text-center text-2xl font-medium text-[#022D2C]">
-                  Sign in to your account
-                </h1>
-                </div>
-
-              {/* Social buttons (interactive, styled to match) */}
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={onGithub}
-                  className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
-                  aria-label="Continue with GitHub"
-                >
-                  <LucideGithub className="h-5 w-5 text-black" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onGoogle}
-                  className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
-                  aria-label="Continue with Google"
-                >
                   <Image
-                    src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-                    width={20}
-                    height={20}
-                    alt="Google"
+                    src="/images/figma/auth/auth-signin-icon.svg"
+                    alt=""
+                    width={80}
+                    height={80}
+                    priority
                   />
-                </button>
-              </div>
+                  <h1 className="text-center text-2xl font-medium text-[#022D2C]">
+                    Sign in to your account
+                  </h1>
+                </div>
 
-              {/* Divider */}
-              <div className="mt-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-[#EBEBEB]" />
-                <span className="text-[11px] font-medium tracking-[0.02em] text-[#A3A3A3]">
-                  OR
-                </span>
-                <div className="h-px flex-1 bg-[#EBEBEB]" />
-              </div>
-
-              {/* Email/Pass Form */}
-              <form onSubmit={form.handleSubmit(onSubmit)} className="mt-5 space-y-4">
-                <div className="space-y-1">
-                  <label className="block text-sm font-medium text-[#022D2C]">
-                    Email Address<span className="ml-0.5">*</span>
-                  </label>
-                  <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
+                {/* Social buttons (interactive, styled to match) */}
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={onGithub}
+                    className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
+                    aria-label="Continue with GitHub"
+                  >
+                    <svg height="20" width="20" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg">
+                      <path fill="#24292f" fillRule="evenodd" clipRule="evenodd" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onGoogle}
+                    className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
+                    aria-label="Continue with Google"
+                  >
                     <Image
-                      src="/images/figma/auth/auth-signin-mail.svg"
-                      alt=""
+                      src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
                       width={20}
                       height={20}
+                      alt="Google"
                     />
-                    <input
-                      type="email"
-                      placeholder="hello@potpie.com"
-                      {...form.register("email")}
-                      className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
-                    />
-                  </div>
-                  {form.formState.errors.email && (
-                    <p className="text-sm text-red-600">{form.formState.errors.email.message}</p>
-                  )}
+                  </button>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="block text-sm font-medium text-[#022D2C]">
-                    Password<span className="ml-0.5">*</span>
-                  </label>
-                  <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
-                    <Image
-                      src="/images/figma/auth/auth-signin-lock.svg"
-                      alt=""
-                      width={20}
-                      height={20}
-                    />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••••"
-                      {...form.register("password")}
-                      className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-[#656969] hover:text-[#022D2C] transition-colors"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                  {form.formState.errors.password && (
-                    <p className="text-sm text-red-600">{form.formState.errors.password.message}</p>
-                  )}
+                {/* Divider */}
+                <div className="mt-5 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-[#EBEBEB]" />
+                  <span className="text-[11px] font-medium tracking-[0.02em] text-[#A3A3A3]">
+                    OR
+                  </span>
+                  <div className="h-px flex-1 bg-[#EBEBEB]" />
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={keepLoggedIn}
-                      onChange={(e) => setKeepLoggedIn(e.target.checked)}
-                      className="h-4 w-4 rounded border border-[#EBEBEB] accent-[#B7F600]"
-                    />
-                    <span className="text-sm text-[#022D2C]">Keep me logged in</span>
-                  </label>
-                  <Link href="/forgot-password" className="text-sm font-medium text-[#656969] hover:text-[#022D2C]">
-                    Forgot password?
-                  </Link>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="mt-2 h-10 w-full rounded-lg bg-[#B7F600] text-[#00291C] hover:bg-[#a7e400] font-medium"
+                {/* Email/Pass Form */}
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="mt-5 space-y-4"
                 >
-                  Sign in
-                </Button>
-              </form>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-[#022D2C]">
+                      Email Address<span className="ml-0.5">*</span>
+                    </label>
+                    <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
+                      <Image
+                        src="/images/figma/auth/auth-signin-mail.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                      />
+                      <input
+                        type="email"
+                        placeholder="hello@potpie.com"
+                        {...form.register("email")}
+                        className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
+                      />
+                    </div>
+                    {form.formState.errors.email && (
+                      <p className="text-sm text-red-600">
+                        {form.formState.errors.email.message}
+                      </p>
+                    )}
+                  </div>
 
-              <p className="mt-4 text-center text-base font-medium text-[#656969]">
-                Don&apos;t have an account?{" "}
-                <Link href="/sign-up" className="text-[#656969] hover:text-[#022D2C] underline underline-offset-2">
-                  Sign up
-                </Link>
-              </p>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-[#022D2C]">
+                      Password<span className="ml-0.5">*</span>
+                    </label>
+                    <div className="flex items-center gap-2 rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5">
+                      <Image
+                        src="/images/figma/auth/auth-signin-lock.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                      />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••••"
+                        {...form.register("password")}
+                        className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-[#656969] hover:text-[#022D2C] transition-colors"
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
+                    {form.formState.errors.password && (
+                      <p className="text-sm text-red-600">
+                        {form.formState.errors.password.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={keepLoggedIn}
+                        onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                        className="h-4 w-4 rounded border border-[#EBEBEB] accent-[#B7F600]"
+                      />
+                      <span className="text-sm text-[#022D2C]">
+                        Keep me logged in
+                      </span>
+                    </label>
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm font-medium text-[#656969] hover:text-[#022D2C]"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="mt-2 h-10 w-full rounded-lg bg-[#B7F600] text-[#00291C] hover:bg-[#a7e400] font-medium"
+                  >
+                    Sign in
+                  </Button>
+                </form>
+
+                <p className="mt-4 text-center text-base font-medium text-[#656969]">
+                  Don&apos;t have an account?{" "}
+                  <Link
+                    href="/sign-up"
+                    className="text-[#656969] hover:text-[#022D2C] underline underline-offset-2"
+                  >
+                    Sign up
+                  </Link>
+                </p>
               </div>
             </div>
           </section>
@@ -541,7 +651,9 @@ export default function Signin() {
               </p>
 
               <div className="mt-7">
-                <p className="text-base font-medium text-[#FFF9F5]">{testimonials[currentTestimonial].name}</p>
+                <p className="text-base font-medium text-[#FFF9F5]">
+                  {testimonials[currentTestimonial].name}
+                </p>
                 <p className="mt-1 text-sm font-medium text-[rgba(255,249,245,0.72)]">
                   {testimonials[currentTestimonial].title}
                 </p>
@@ -560,7 +672,10 @@ export default function Signin() {
                       className="block h-1 rounded-full transition-all"
                       style={{
                         width: index === currentTestimonial ? 16 : 4,
-                        background: index === currentTestimonial ? "#FFF9F5" : "rgba(255,249,245,0.35)",
+                        background:
+                          index === currentTestimonial
+                            ? "#FFF9F5"
+                            : "rgba(255,249,245,0.35)",
                       }}
                     />
                   </button>

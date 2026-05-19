@@ -1,7 +1,10 @@
 import React from 'react';
 import { CheckCircle, Loader, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ParsingStatusEnum } from '@/lib/Constants';
+
+const BRAND_GREEN = 'text-[#B6E343]';
 
 interface ParsingProgressProps {
   status: string;
@@ -20,8 +23,8 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
   if (status === ParsingStatusEnum.READY) {
     return (
       <div className="flex justify-start items-center gap-3 mt-2">
-        <CheckCircle className="text-green-600 h-4 w-4" />
-        <span className="text-green-600">{displayStatus}</span>
+        <CheckCircle className={cn('h-4 w-4', BRAND_GREEN)} />
+        <span className={BRAND_GREEN}>{displayStatus}</span>
       </div>
     );
   }
@@ -46,15 +49,15 @@ const ParsingProgress: React.FC<ParsingProgressProps> = ({
     );
   }
   
-  // For in-progress statuses
-  if (status === ParsingStatusEnum.SUBMITTED || 
-      status === ParsingStatusEnum.CLONED || 
-      status === ParsingStatusEnum.PARSED || 
-      status === ParsingStatusEnum.PROCESSING ||
+  // For in-progress statuses (use brand green #B6E343 for progress)
+  if (status === ParsingStatusEnum.SUBMITTED ||
+      status === ParsingStatusEnum.CLONED ||
+      status === ParsingStatusEnum.PARSED ||
+      status === ParsingStatusEnum.INFERRING ||
       status === "loading") { // Include "loading" for backward compatibility
     return (
       <div className="flex justify-start items-center gap-3 mt-2">
-        <Loader className="animate-spin h-4 w-4" />
+        <Loader className={cn('animate-spin h-4 w-4', BRAND_GREEN)} />
         <span>{displayStatus}</span>
       </div>
     );

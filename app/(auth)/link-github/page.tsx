@@ -19,7 +19,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
 import React, { useRef } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 const LinkGithub = () => {
   const githubAppUrl =
@@ -93,7 +93,7 @@ const LinkGithub = () => {
         )
         .then((res: { data: any }) => {
           openPopup();
-          router.push(`/idea`);
+          router.push(`/newchat`);
           return res.data;
         })
         .catch((e: any) => {

@@ -1,34 +1,39 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  Github,
-  GitBranch,
   Check,
   Loader2,
   ChevronDown,
   X,
   FileCode,
   Zap,
-  Search,
   Layers,
-  Wand2,
-  ShieldCheck,
-  Flag,
   FileText,
   Package,
   Link2,
   Info,
+  Send,
+  Bot,
+  SendHorizonal,
+  RefreshCcw,
+  RotateCcw,
+  RotateCw,
+  Wrench,
+  Download,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
 import PlanService from "@/services/PlanService";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
+import { downloadSpecAsMarkdown } from "@/lib/utils/markdownExport";
+import { useNavigationProgress } from "@/contexts/NavigationProgressContext";
 import {
   SpecPlanStatusResponse,
   SpecStatusResponse,
   SpecOutput,
-  StepStatusValue,
+  SpecificationOutput,
 } from "@/lib/types/spec";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/state/store";
@@ -40,44 +45,22 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
-
-const PLAN_CHAPTERS = [
-  {
-    id: 1,
-    title: "Analyzing codebase",
-    icon: Search,
-    description: "Scanning repository structure and dependencies.",
-    progressThreshold: 20,
-  },
-  {
-    id: 2,
-    title: "Identifying dependencies",
-    icon: Layers,
-    description: "Mapping module relationships and imports.",
-    progressThreshold: 40,
-  },
-  {
-    id: 3,
-    title: "Generating implementation steps",
-    icon: Wand2,
-    description: "Creating detailed action items for the plan.",
-    progressThreshold: 60,
-  },
-  {
-    id: 4,
-    title: "Validating plan",
-    icon: ShieldCheck,
-    description: "Checking feasibility and completeness.",
-    progressThreshold: 80,
-  },
-  {
-    id: 5,
-    title: "Finalizing",
-    icon: Flag,
-    description: "Preparing the final implementation plan.",
-    progressThreshold: 100,
-  },
-];
+import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils";
+import {
+  StreamTimeline,
+  type StreamTimelineItem,
+} from "@/components/stream/StreamTimeline";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import Image from "next/image";
+import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 
 interface FileItem {
   path: string;
@@ -86,9 +69,16 @@ interface FileItem {
 
 interface PlanItem {
   id: string;
+  title: string;
+  details?: string;
   files: FileItem[];
+  /** Library/package names (npm, pip, etc.) — only from explicit API field e.g. libraries */
   dependencies?: string[];
+  /** Requirement IDs this item depends on (e.g. FR-001) — from API "dependencies" in functional_requirements */
+  requirementDependencies?: string[];
+  /** External services/APIs — from API external_dependencies */
   externalConnections?: string[];
+  context?: string;
   [key: string]: any;
 }
 
@@ -99,57 +89,307 @@ interface Plan {
   [key: string]: PlanItem[];
 }
 
-const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#D3E5E5] rounded text-xs font-medium text-primary-color">
-    {Icon && <Icon className="w-3.5 h-3.5" />}
-    {children}
-  </div>
-);
+/** Normalize one item from workflows API (add/modify/fix) to PlanItem shape. Libraries from libraries/packages/dependencies; requirement IDs from requirement_dependencies. */
+function normalizePlanItem(item: any, idx: number, prefix: string): PlanItem {
+  const id = item?.id ?? item?.item_id ?? `${prefix}-${idx}`;
+  const title = item?.title ?? item?.name ?? item?.description ?? `Item ${idx + 1}`;
+  const details = item?.details ?? item?.detailed_objective ?? item?.description ?? item?.context ?? "";
+  const files = Array.isArray(item?.files) ? item.files : Array.isArray(item?.target_files) ? item.target_files : [];
+  const rawLibs = Array.isArray(item?.libraries) ? item.libraries : Array.isArray(item?.packages) ? item.packages : Array.isArray(item?.dependencies) ? item.dependencies : [];
+  const rawReqDeps = Array.isArray(item?.requirement_dependencies) ? item.requirement_dependencies : [];
+  const rawConns = Array.isArray(item?.externalConnections) ? item.externalConnections : Array.isArray(item?.external_connections) ? item.external_connections : Array.isArray(item?.external_dependencies) ? item.external_dependencies : [];
+  const dependencies = rawLibs.map((d: any) => typeof d === "string" ? d : (d && typeof d === "object" && "name" in d ? String(d.name) : String(d)));
+  const requirementDependencies = rawReqDeps
+    .map((d: any) => typeof d === "string" ? d : (d?.id ?? d?.name ?? String(d)))
+    .filter((depId: string) => depId && String(depId).trim() !== "" && String(depId) !== String(id));
+  const externalConnections = rawConns.map((c: any) => typeof c === "string" ? c : (c && typeof c === "object" && "name" in c ? String(c.name) : String(c)));
+  const context = item?.context ?? "";
+  return {
+    id: String(id),
+    title: String(title),
+    details: typeof details === "string" ? details : typeof details === "object" ? JSON.stringify(details) : "",
+    files: files.map((f: any) => ({ path: f?.path ?? f?.file_path ?? String(f), type: f?.type ?? "modify" })),
+    dependencies,
+    requirementDependencies: requirementDependencies.length > 0 ? requirementDependencies : undefined,
+    externalConnections,
+    context: typeof context === "string" ? context : "",
+  };
+}
 
-const PlanTabs = ({ plan }: { plan: Plan }) => {
-  const [activeTab, setActiveTab] = useState("add");
+/** Convert SpecificationOutput (functional_requirements) into Plan. API: dependencies = requirement IDs; external_dependencies = external services; file_impact = files; libraries/packages = lib names. */
+function specOutputToPlan(raw: SpecificationOutput): Plan {
+  const addItems: PlanItem[] = [];
+  const fr = raw.functional_requirements;
+  if (Array.isArray(fr) && fr.length) {
+    fr.forEach((item: any, i: number) => {
+      const id = item?.id ?? item?.title ?? `fr-${i}`;
+      const title = item?.title ?? item?.id ?? `Requirement ${i + 1}`;
+      const desc = item?.description ?? item?.details ?? "";
+      const fileImpact = item?.file_impact ?? item?.file_impact_summary ?? item?.files;
+      const files = Array.isArray(fileImpact)
+        ? fileImpact.map((f: any) => ({ path: f?.path ?? f?.file_path ?? String(f), type: (f?.type ?? "modify") === "create" ? "Create" : "modify" }))
+        : typeof fileImpact === "string" ? [{ path: fileImpact, type: "modify" as string }] : [];
+      // API "dependencies" = IDs of *other* requirements this one depends on (exclude self)
+      const rawDeps = Array.isArray(item?.dependencies) ? item.dependencies : [];
+      const selfId = item?.id ?? item?.title ?? `fr-${i}`;
+      const requirementDeps = rawDeps
+        .map((d: any) => typeof d === "string" ? d : (d?.id ?? d?.name ?? String(d)))
+        .filter((depId: string) => depId && String(depId).trim() !== "" && String(depId) !== String(selfId));
+      // Library/package names only from explicit fields
+      const rawLibs = Array.isArray(item?.libraries) ? item.libraries : Array.isArray(item?.packages) ? item.packages : [];
+      const libraries = rawLibs.map((d: any) => typeof d === "string" ? d : (d?.name != null ? String(d.name) : String(d)));
+      const rawExt = Array.isArray(item?.external_dependencies) ? item.external_dependencies : [];
+      const extStrings = rawExt.map((e: any) => typeof e === "string" ? e : (e?.name != null ? String(e.name) : String(e)));
+      addItems.push({
+        id: String(id),
+        title: String(title),
+        details: typeof desc === "string" ? desc : JSON.stringify(desc ?? ""),
+        files,
+        dependencies: libraries,
+        requirementDependencies: requirementDeps,
+        externalConnections: extStrings,
+        context: item?.acceptance_criteria ? (Array.isArray(item.acceptance_criteria) ? item.acceptance_criteria.join("\n") : String(item.acceptance_criteria)) : "",
+      });
+    });
+  }
+  if (addItems.length === 0 && (raw.tl_dr || raw.success_metrics?.length)) {
+    addItems.push({
+      id: "spec-summary",
+      title: "Specification summary",
+      details: [raw.tl_dr, raw.success_metrics ? raw.success_metrics.join("\n") : ""].filter(Boolean).join("\n\n"),
+      files: [],
+      dependencies: [],
+      externalConnections: [],
+      context: "",
+    });
+  }
+  return {
+    add: addItems,
+    modify: [],
+    fix: [],
+  };
+}
 
-  const categories = [
-    { id: "add", label: "Create", count: plan.add.length },
-    { id: "modify", label: "Update", count: plan.modify.length },
-    { id: "fix", label: "Fix", count: plan.fix.length },
-  ];
+/** Normalize spec from GET /api/v1/recipes/{id}/spec response (potpie-workflows). Always returns plan in second-image format (Create/Update/Fix tabs). */
+function normalizeSpecFromProgress(progress: any): { plan: Plan | null; rawSpec: SpecificationOutput | null } {
+  if (!progress || typeof progress !== "object") return { plan: null, rawSpec: null };
+  let raw = progress.spec_output ?? progress.specification ?? progress.output ?? progress.spec;
+  if (!raw || typeof raw !== "object") return { plan: null, rawSpec: null };
+  if (raw.output && typeof raw.output === "object") raw = raw.output;
+  if (raw.spec && typeof raw.spec === "object") raw = raw.spec;
 
-  // Get all item IDs for the active tab to set as default open values
-  const defaultOpenValues = plan[activeTab].map((item) => item.id);
+  const addRaw = Array.isArray(raw.add) ? raw.add : Array.isArray((raw as any).Add) ? (raw as any).Add : [];
+  const modifyRaw = Array.isArray(raw.modify) ? raw.modify : Array.isArray((raw as any).Modify) ? (raw as any).Modify : [];
+  const fixRaw = Array.isArray(raw.fix) ? raw.fix : Array.isArray((raw as any).Fix) ? (raw as any).Fix : [];
+
+  if (addRaw.length || modifyRaw.length || fixRaw.length) {
+    const plan: Plan = {
+      add: addRaw.map((item: any, i: number) => normalizePlanItem(item, i, "add")),
+      modify: modifyRaw.map((item: any, i: number) => normalizePlanItem(item, i, "modify")),
+      fix: fixRaw.map((item: any, i: number) => normalizePlanItem(item, i, "fix")),
+    };
+    return { plan, rawSpec: null };
+  }
+
+  const spec = raw as SpecificationOutput;
+  const planFromSpec = specOutputToPlan(spec);
+  if (planFromSpec.add.length || planFromSpec.modify.length || planFromSpec.fix.length) {
+    return { plan: planFromSpec, rawSpec: null };
+  }
+  return { plan: null, rawSpec: spec };
+}
+
+/** Renders one functional requirement per API: id, title, description, acceptance_criteria, priority, dependencies (requirement IDs), guardrails, implementation_recommendations, external_dependencies. No file_impact/target files. */
+function FunctionalRequirementCard({ fr }: { fr: any }) {
+  const id = fr?.id ?? "";
+  const title = fr?.title ?? "Requirement";
+  const description = fr?.description ?? "";
+  const acceptanceCriteria = Array.isArray(fr?.acceptance_criteria) ? fr.acceptance_criteria : [];
+  const priority = fr?.priority;
+  // API: dependencies = IDs of *other* requirements this one depends on (exclude this requirement's own id)
+  const rawDeps = Array.isArray(fr?.dependencies) ? fr.dependencies : [];
+  const requirementDeps = rawDeps
+    .map((d: any) => typeof d === "string" ? d : (d?.id ?? d?.name ?? String(d)))
+    .filter((depId: string) => depId && String(depId).trim() !== "" && String(depId) !== String(id));
+  const guardrails = Array.isArray(fr?.guardrails) ? fr.guardrails : [];
+  const implRecs = Array.isArray(fr?.implementation_recommendations) ? fr.implementation_recommendations : [];
+  const externalDeps = Array.isArray(fr?.external_dependencies) ? fr.external_dependencies : [];
+  const extStrings = externalDeps.map((e: any) => typeof e === "string" ? e : (e?.name != null ? String(e.name) : String(e)));
+  const appendix = fr?.appendix != null && typeof fr.appendix === "object" ? fr.appendix : null;
+  return (
+    <div className="rounded-lg border border-[#E5E8E6] bg-zinc-50/50 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-xs font-mono text-primary-color">{id}</span>
+        {priority && <span className="text-xs font-medium text-zinc-600 capitalize">{priority}</span>}
+      </div>
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      {description && <SharedMarkdown content={description} className="text-sm text-muted-foreground [&_p]:my-0" />}
+      {acceptanceCriteria.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Acceptance criteria</p>
+          <ul className="list-disc pl-4 space-y-0.5 text-sm text-muted-foreground">
+            {acceptanceCriteria.map((c: any, i: number) => (
+              <li key={i}>{typeof c === "string" ? c : (c?.text ?? JSON.stringify(c))}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {requirementDeps.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Depends on</p>
+          <div className="flex flex-wrap gap-1.5">
+            {requirementDeps.map((reqId: string, i: number) => (
+              <span key={i} className="px-2 py-0.5 bg-zinc-100 border border-[#E5E8E6] rounded text-xs font-mono text-primary-color">
+                {reqId}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {guardrails.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Guardrails</p>
+          <ul className="list-disc pl-4 space-y-0.5 text-sm text-muted-foreground">
+            {guardrails.map((g: any, i: number) => (
+              <li key={i}>{typeof g === "string" ? g : (g?.text ?? JSON.stringify(g))}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {implRecs.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Implementation recommendations</p>
+          <ul className="list-disc pl-4 space-y-0.5 text-sm text-muted-foreground">
+            {implRecs.map((r: any, i: number) => (
+              <li key={i}>{typeof r === "string" ? r : (r?.text ?? JSON.stringify(r))}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {extStrings.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">External dependencies</p>
+          <div className="flex flex-wrap gap-1.5">
+            {extStrings.map((ext: string, i: number) => (
+              <span key={i} className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-600">
+                {ext}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {appendix && Object.keys(appendix).length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">Appendix</p>
+          <pre className="text-xs text-muted-foreground bg-white border border-[#E5E8E6] rounded p-3 overflow-x-auto">
+            {JSON.stringify(appendix, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SPEC_KNOWN_KEYS = [
+  "tl_dr", "functional_requirements", "non_functional_requirements", "architectural_decisions",
+  "success_metrics", "data_models", "context", "add", "modify", "fix", "interfaces", "external_dependencies_summary",
+];
+
+/** Renders specification.context with API sub-fields: original_request, janus_analysis, qa_answers, research_findings */
+function SpecContextBlock({ context }: { context: Record<string, any> }) {
+  const items: { label: string; value: string }[] = [];
+  if (context.original_request) items.push({ label: "Original request", value: String(context.original_request) });
+  if (context.janus_analysis) items.push({ label: "Janus analysis", value: String(context.janus_analysis) });
+  if (context.qa_answers) items.push({ label: "Q&A answers", value: String(context.qa_answers) });
+  if (context.research_findings) items.push({ label: "Research findings", value: String(context.research_findings) });
+  const rest = Object.entries(context).filter(([k]) => !["original_request", "janus_analysis", "qa_answers", "research_findings"].includes(k));
+  rest.forEach(([k, v]) => {
+    if (v != null && v !== "") items.push({ label: k.replace(/_/g, " "), value: typeof v === "string" ? v : JSON.stringify(v, null, 2) });
+  });
+  if (items.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      {items.map(({ label, value }, i) => (
+        <div key={i}>
+          <p className="text-xs font-semibold text-primary-color uppercase tracking-wide mb-1">{label}</p>
+          <SharedMarkdown content={value} className="text-sm text-muted-foreground [&_p]:my-0 rounded-md border border-[#E5E8E6] bg-zinc-50/50 p-3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Fallback view when API returns SpecificationOutput (GET /api/v1/recipes/{id}/spec). Section order and labels match API. */
+function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
+  const sections: { title: string; content: any; structured?: boolean; context?: boolean }[] = [];
+  if (spec.tl_dr) sections.push({ title: "Executive summary", content: spec.tl_dr });
+  if (spec.context && typeof spec.context === "object" && Object.keys(spec.context).length) {
+    sections.push({ title: "Context", content: spec.context, context: true });
+  }
+  if (spec.success_metrics?.length) sections.push({ title: "Success metrics", content: spec.success_metrics });
+  if (spec.functional_requirements?.length) sections.push({ title: "Functional requirements", content: spec.functional_requirements, structured: true });
+  if (spec.non_functional_requirements?.length) sections.push({ title: "Non-functional requirements", content: spec.non_functional_requirements });
+  if (spec.architectural_decisions?.length) sections.push({ title: "Architectural decisions", content: spec.architectural_decisions });
+  if (spec.data_models?.length) sections.push({ title: "Data models", content: spec.data_models });
+  if (spec.interfaces?.length) sections.push({ title: "Interfaces", content: spec.interfaces });
+  if (spec.external_dependencies_summary?.length) sections.push({ title: "External dependencies summary", content: spec.external_dependencies_summary });
+  const rest = Object.entries(spec).filter(([k]) => !SPEC_KNOWN_KEYS.includes(k) && typeof spec[k] !== "undefined" && spec[k] !== null);
+  rest.forEach(([key, value]) => {
+    if (Array.isArray(value) && value.length) sections.push({ title: key.replace(/_/g, " "), content: value });
+    else if (typeof value === "string" && value) sections.push({ title: key.replace(/_/g, " "), content: value });
+  });
+
+  if (sections.length === 0) return <p className="text-sm text-zinc-500">Specification generated. No structured sections to display.</p>;
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-1 border-b border-[#D3E5E5]">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveTab(cat.id)}
-            className={`px-4 py-2 text-xs font-semibold transition-all relative ${
-              activeTab === cat.id
-                ? "text-primary-color"
-                : "text-primary-color hover:text-primary-color"
-            }`}
-          >
-            {cat.label} ({cat.count})
-            {activeTab === cat.id && (
-              <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-primary-color" />
-            )}
-          </button>
-        ))}
-      </div>
+      {sections.map(({ title, content, structured, context: isContext }, i) => (
+        <div key={i} className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">{title}</h3>
+          {isContext && typeof content === "object" && content !== null ? (
+            <SpecContextBlock context={content} />
+          ) : structured && Array.isArray(content) && content.every((x: any) => x && typeof x === "object") ? (
+            <div className="space-y-3">
+              {content.map((item: any, j: number) => <FunctionalRequirementCard key={j} fr={item} />)}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground leading-relaxed rounded-md border border-[#E5E8E6] bg-zinc-50/50 p-4">
+              {Array.isArray(content) ? (
+                <ul className="list-disc pl-4 space-y-1">
+                  {content.map((item: any, j: number) => (
+                    <li key={j}>
+                      {typeof item === "string" ? <SharedMarkdown content={item} className="[&_p]:my-0" /> : <SharedMarkdown content={JSON.stringify(item)} className="[&_p]:my-0" />}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <SharedMarkdown content={String(content)} className="[&_p]:my-0 [&_p]:text-muted-foreground" />
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
-      <Accordion 
-        key={activeTab}
-        type="multiple" 
-        defaultValue={defaultOpenValues} 
+const PlanTabs = ({ plan }: { plan: Plan }) => {
+  // Combine all items from all categories
+  const allItems = [...plan.add, ...plan.modify, ...plan.fix];
+  const defaultOpenValues = allItems.map((item) => item.id);
+
+  return (
+    <div className="space-y-4">
+      <Accordion
+        type="multiple"
+        defaultValue={defaultOpenValues}
         className="space-y-4"
       >
-        {plan[activeTab].map((item) => (
+        {allItems.map((item) => (
           <AccordionItem
             key={item.id}
             value={item.id}
-            className="bg-background border border-[#D3E5E5] transition-all rounded-lg overflow-hidden data-[state=open]:border-[#D3E5E5] data-[state=open]:shadow-sm border-[#D3E5E5] hover:border-[#D3E5E5]"
+            className="bg-background border border-[#E5E8E6] transition-all rounded-lg overflow-hidden data-[state=open]:border-[#E5E8E6] data-[state=open]:shadow-sm border-[#E5E8E6] hover:border-[#E5E8E6]"
           >
             <AccordionTrigger className="p-4 flex justify-between items-start cursor-pointer select-none hover:no-underline [&>svg]:hidden [&[data-state=open] svg:last-child]:rotate-180">
               <div className="flex gap-3 flex-1 min-w-0">
@@ -162,7 +402,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
 
                   </div>
                   <div className="text-sm text-muted-foreground leading-relaxed font-sans text-left [&_p]:my-2 [&_p]:leading-relaxed [&_p]:text-left [&_p]:text-muted-foreground">
-                    <SharedMarkdown content={item.details} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left" />
+                    <SharedMarkdown content={item.details ?? ""} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left" />
                   </div>
                 </div>
               </div>
@@ -171,38 +411,30 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
               </div>
             </AccordionTrigger>
 
-            <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-[#D3E5E5] font-sans">
-              {/* Target Files */}
-              {item.files?.length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
-                    <FileCode className="w-3.5 h-3.5" />
-                    Target Files
-                  </p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {item.files.map((file, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between py-2.5 px-3 bg-zinc-50/50 border border-[#D3E5E5] rounded-md"
-                      >
-                        <code className="text-xs font-mono text-primary-color truncate pr-3">
-                          {file.path}
-                        </code>
-                        <span
-                          className={`text-xs font-medium uppercase shrink-0 ${file.type === "Create" ? "text-emerald-600" : "text-blue-600"}`}
-                        >
-                          {file.type}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Libraries & External Connections */}
-              {((item.dependencies?.length ?? 0) > 0 || (item.externalConnections?.length ?? 0) > 0) && (
+            <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-t-[1px] border-[#E5E8E6] font-sans">
+              {/* Depends on (requirement IDs), Libraries, External dependencies — no Target Files per API */}
+              {((item.requirementDependencies?.length ?? 0) > 0 || (item.dependencies?.length ?? 0) > 0 || (item.externalConnections?.length ?? 0) > 0) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                  {/* Libraries */}
+                  {/* Depends on (requirement IDs from API "dependencies") */}
+                  {(item.requirementDependencies?.length ?? 0) > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5" />
+                        Depends on
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {item.requirementDependencies?.map((reqId, i) => (
+                          <span
+                            key={i}
+                            className="px-3 py-1.5 bg-zinc-50 border border-[#E5E8E6] rounded-md text-xs font-mono text-primary-color"
+                          >
+                            {typeof reqId === "string" ? reqId : String(reqId)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Libraries (packages / npm / pip — only when API sends libraries/packages) */}
                   {(item.dependencies?.length ?? 0) > 0 && (
                     <div className="space-y-3">
                       <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
@@ -213,21 +445,20 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                         {item.dependencies?.map((dep, i) => (
                           <span
                             key={i}
-                            className="px-3 py-1.5 bg-zinc-50 border border-[#D3E5E5] rounded-md text-xs font-mono text-primary-color"
+                            className="px-3 py-1.5 bg-zinc-50 border border-[#E5E8E6] rounded-md text-xs font-mono text-primary-color"
                           >
-                            {dep}
+                            {typeof dep === "string" ? dep : (dep && typeof dep === "object" && "name" in dep ? String((dep as { name?: string }).name) : String(dep))}
                           </span>
                         ))}
                       </div>
                     </div>
                   )}
-                  
-                  {/* External Connections */}
+                  {/* External dependencies (third-party services, libraries, APIs — from API external_dependencies) */}
                   {(item.externalConnections?.length ?? 0) > 0 && (
                     <div className="space-y-3">
-                      <p className="text-xs font-semibold  text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                      <p className="text-xs font-semibold text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                         <Link2 className="w-3.5 h-3.5" />
-                        External
+                        External dependencies
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {item.externalConnections?.map((conn, i) => (
@@ -235,7 +466,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                             key={i}
                             className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-xs font-medium text-blue-600"
                           >
-                            {conn}
+                            {typeof conn === "string" ? conn : (conn && typeof conn === "object" && "name" in conn ? String((conn as { name?: string }).name) : String(conn))}
                           </span>
                         ))}
                       </div>
@@ -251,7 +482,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                     <Info className="w-3.5 h-3.5" />
                     Context
                   </p>
-                  <div className="bg-zinc-50 border border-[#D3E5E5] rounded-md p-4">
+                  <div className="bg-zinc-50 border border-[#E5E8E6] rounded-md p-4">
                     <div className="text-sm text-muted-foreground leading-relaxed">
                       <SharedMarkdown content={item.context} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left [&_p]:mb-2 [&_p:last-child]:mb-0" />
                     </div>
@@ -269,6 +500,7 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
 const SpecPage = () => {
   const params = useParams();
   const router = useRouter();
+  const { startNavigation } = useNavigationProgress();
   const dispatch = useDispatch<AppDispatch>();
   // Note: taskId in URL is actually recipeId now
   const recipeId = params?.taskId as string;
@@ -302,10 +534,96 @@ const SpecPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isCancelled, setIsCancelled] = useState(false);
-  const [isSubmittingPlan, setIsSubmittingPlan] = useState(false);
+  const [isRegeneratingSpec, setIsRegeneratingSpec] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [regenerateSpecKey, setRegenerateSpecKey] = useState(0);
+  /** Live streaming progress when using spec generate-stream (step + message). */
+  const [streamProgress, setStreamProgress] = useState<{ step: string; message: string } | null>(null);
+  /** Interleaved stream: chunks (thinking/response) and tool calls in arrival order. */
+  const [streamItems, setStreamItems] = useState<StreamTimelineItem[]>([]);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const streamItemIdRef = useRef(0);
+  const streamOutputEndRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
+  const runIdFromUrl = searchParams.get("run_id");
+  const repoNameFromUrl = searchParams.get("repoName");
+
+  // Chat UI state (first message = new chat input; wired to spec chat API)
+  type ChatMessage = { role: "user" | "assistant"; content: string };
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const planContentRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedRef = useRef(false);
+  const hasSpecPollStartedRef = useRef(false);
+  const hasChatInitializedRef = useRef(false);
+  const hasAppliedRunIdFromApiRef = useRef(false);
+  const hasRestoredThinkingRef = useRef<string | null>(null);
+  const THINKING_STORAGE_KEY = "potpie_thinking_spec";
+
+  // If backend includes run_id in GET spec response, attach to stream by adding run_id to URL (once)
+  useEffect(() => {
+    if (!recipeId || runIdFromUrl || hasAppliedRunIdFromApiRef.current || !specProgress) return;
+    // Only SpecStatusResponse has run_id; check if it exists
+    const runIdFromApi = "run_id" in specProgress ? specProgress.run_id : undefined;
+    if (typeof runIdFromApi === "string" && runIdFromApi.trim()) {
+      hasAppliedRunIdFromApiRef.current = true;
+      router.replace(`/task/${recipeId}/spec?run_id=${encodeURIComponent(runIdFromApi.trim())}`, { scroll: false });
+    }
+  }, [recipeId, runIdFromUrl, specProgress, router]);
+
+  // Auto-scroll to end when stream items change
+  useEffect(() => {
+    if (streamItems.length > 0) {
+      streamOutputEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [streamItems.length]);
+
+  // Initialize chat with user prompt (from new chat page) and assistant response
+  useEffect(() => {
+    if (!recipeData?.user_prompt || hasChatInitializedRef.current) return;
+    hasChatInitializedRef.current = true;
+    setChatMessages([
+      { role: "user", content: recipeData.user_prompt },
+      {
+        role: "assistant",
+        content:
+          "Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they&apos;re ready, we can refine them together.",
+      },
+    ]);
+  }, [recipeData?.user_prompt]);
+
+  // Send spec chat message via Spec Editor Agent (POST /{recipe_id}/edit?edit_type=spec)
+  const handleSendChatMessage = async () => {
+    const text = chatInput.trim();
+    if (!text || !recipeId || chatLoading) return;
+    setChatMessages((prev) => [...prev, { role: "user", content: text }]);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const res = await SpecService.specChat(recipeId, { message: text });
+      const assistantContent = res.explanation || res.message || "Done.";
+      setChatMessages((prev) => [...prev, { role: "assistant", content: assistantContent }]);
+      // Update right pane when spec_output changed
+      if (res.spec_output) {
+        setSpecProgress((prev: any) => ({
+          ...(prev || {}),
+          recipe_id: recipeId,
+          generation_status: "completed",
+          specification: res.spec_output,
+          spec_output: res.spec_output,
+        }));
+      }
+    } catch (err: any) {
+      const msg = err?.message ?? "Spec chat failed.";
+      setChatMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg}` }]);
+      toast.error(msg);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   // Update projectData when storedRepoContext changes (from Redux)
   useEffect(() => {
@@ -328,32 +646,48 @@ const SpecPage = () => {
     });
   }, [storedRepoContext]);
 
-  // Fetch recipe details including repo and branch information
+  // Fetch recipe details; prefer Redux (from newchat/repo) and localStorage for repo/branch/user_prompt when API omits them
   useEffect(() => {
     const fetchRecipeDetails = async () => {
       if (!recipeId) return;
-      
-      // Prevent multiple initializations
+
       if (hasInitializedRef.current) return;
-      
+
+      let fromStorage: { repo_name?: string; branch_name?: string; user_prompt?: string; project_id?: string } | null = null;
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem(`recipe_${recipeId}`);
+          if (raw) fromStorage = JSON.parse(raw);
+        } catch {
+          fromStorage = null;
+        }
+      }
+
       try {
         console.log("[Spec Page] Fetching recipe details for:", recipeId);
-        
-        // Fetch comprehensive recipe details from the API
         const recipeDetails = await SpecService.getRecipeDetails(recipeId);
         console.log("[Spec Page] Recipe details received:", recipeDetails);
-        
-        // Set recipe data
+
+        // User prompt: API first, then newchat localStorage (text area value from newchat page)
+        const userPrompt =
+          (recipeDetails.user_prompt && recipeDetails.user_prompt.trim()) ||
+          fromStorage?.user_prompt ||
+          "Implementation plan generation";
+
         setRecipeData({
           recipe_id: recipeDetails.recipe_id,
           project_id: recipeDetails.project_id,
-          user_prompt: recipeDetails.user_prompt,
+          user_prompt: userPrompt,
         });
 
-        // Set project data with repo and branch
-        const repoName = recipeDetails.repo_name || "Unknown Repository";
-        const branchName = recipeDetails.branch_name || "main";
-        
+        // Repo/branch: API first, then localStorage (set by newchat), so we don't show "Unknown" when API omits them
+        const repoName =
+          recipeDetails.repo_name?.trim() ||
+          fromStorage?.repo_name?.trim() ||
+          "Unknown Repository";
+        const branchName =
+          recipeDetails.branch_name?.trim() || fromStorage?.branch_name?.trim() || "main";
+
         setProjectData({
           repo: repoName,
           branch: branchName,
@@ -363,7 +697,6 @@ const SpecPage = () => {
           })),
         });
 
-        // Set answers
         const answersMap: Record<string, string> = {};
         recipeDetails.questions_and_answers.forEach((qa) => {
           if (qa.answer) {
@@ -372,143 +705,254 @@ const SpecPage = () => {
         });
         setAnswers(answersMap);
 
-        // Update Redux state
-        dispatch(
-          setRepoAndBranchForTask({
-            taskId: recipeId,
-            repoName: repoName,
-            branchName: branchName,
-            projectId: recipeDetails.project_id || undefined,
-          })
-        );
-        
+        if (!repoNameFromUrl?.trim() && typeof window !== "undefined" && !new URLSearchParams(window.location.search).get("repoName")?.trim()) {
+          dispatch(
+            setRepoAndBranchForTask({
+              taskId: recipeId,
+              repoName: repoName,
+              branchName: branchName,
+              projectId: recipeDetails.project_id || undefined,
+            })
+          );
+        }
+
         hasInitializedRef.current = true;
       } catch (err: any) {
         console.error("[Spec Page] Failed to fetch recipe details:", err);
-        // Set default values on error
+        // On error, use localStorage if available so repo/branch/prompt can still show
         setRecipeData({
           recipe_id: recipeId,
-          project_id: "",
-          user_prompt: "Implementation plan generation",
+          project_id: fromStorage?.project_id ?? "",
+          user_prompt: fromStorage?.user_prompt || "Implementation plan generation",
         });
         setProjectData({
-          repo: "Unknown Repository",
-          branch: "main",
+          repo: fromStorage?.repo_name?.trim() || "Unknown Repository",
+          branch: fromStorage?.branch_name?.trim() || "main",
           questions: [],
         });
         hasInitializedRef.current = true;
       }
     };
-    
+
     fetchRecipeDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeId]);
 
-  // Poll for spec progress
+  // When we have run_id in URL, show spec page immediately (streaming UI); don't wait for initial poll
+  useEffect(() => {
+    if (recipeId && runIdFromUrl) setIsLoading(false);
+  }, [recipeId, runIdFromUrl]);
+
+  // When navigated from repo with run_id, connect to SSE stream (potpie-workflows events)
+  // First check if spec is already completed before attempting stream connection
+  useEffect(() => {
+    if (!recipeId || !runIdFromUrl) return;
+
+    let cancelled = false;
+
+    const tryConnectStream = async () => {
+      // First check spec status - if already completed/failed, skip streaming
+      try {
+        const currentStatus = await SpecService.getSpecProgressByRecipeId(recipeId);
+        if (cancelled) return;
+        
+        const genStatus = "generation_status" in currentStatus ? currentStatus.generation_status : null;
+        if (genStatus === "completed" || genStatus === "failed") {
+          // Spec is already done, no need to stream - just update state and clear run_id from URL
+          setSpecProgress(currentStatus);
+          router.replace(`/task/${recipeId}/spec`, { scroll: false });
+          return;
+        }
+      } catch {
+        // If status check fails, still try to connect to stream
+      }
+
+      if (cancelled) return;
+
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = new AbortController();
+      setStreamProgress({ step: "Connecting…", message: "Opening live stream" });
+      setStreamItems([]);
+
+      SpecService.connectSpecStream(recipeId, runIdFromUrl, {
+        signal: streamAbortRef.current.signal,
+        onEvent: (eventType, data) => {
+          const payload = getStreamEventPayload(data);
+          // queued: task queued
+          if (eventType === "queued") {
+            setStreamProgress({ step: "Queued", message: (payload?.message as string) ?? "Task queued for processing" });
+          }
+          // start: pipeline started
+          if (eventType === "start") {
+            setStreamProgress({ step: "Starting", message: (payload?.message as string) ?? "Starting spec generation" });
+          }
+          // progress: step + message from backend
+          if (eventType === "progress" && payload) {
+            setStreamProgress({
+              step: (payload.step as string) ?? "Processing",
+              message: (payload.message as string) ?? "",
+            });
+          }
+          // chunk: append to last chunk item or push new (keeps thinking/response in order)
+          if (eventType === "chunk" && payload?.content) {
+            const content = String(payload.content);
+            setStreamItems((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.type === "chunk") {
+                return [...prev.slice(0, -1), { ...last, content: last.content + content }];
+              }
+              return [...prev, { type: "chunk", id: `chunk-${++streamItemIdRef.current}`, content }];
+            });
+          }
+          // tool_call_start: add tool inline (running)
+          if (eventType === "tool_call_start" && payload?.tool) {
+            const call_id = (payload.call_id as string) ?? `tool-${++streamItemIdRef.current}`;
+            const label = String(payload.tool);
+            setStreamItems((prev) => [
+              ...prev,
+              { type: "tool", id: call_id, label, phase: "running" as const },
+            ]);
+          }
+          // tool_call_end: mark that tool done and set result
+          if (eventType === "tool_call_end" && payload?.tool) {
+            const call_id = payload.call_id as string | undefined;
+            const label = String(payload.tool);
+            const result = payload.result;
+            const segmentContent =
+              result !== undefined && result !== null
+                ? typeof result === "object"
+                  ? JSON.stringify(result, null, 2)
+                  : String(result)
+                : "";
+            setStreamItems((prev) => {
+              const idx = call_id
+                ? prev.findIndex((it) => it.type === "tool" && it.id === call_id)
+                : prev.findLastIndex(
+                    (it) => it.type === "tool" && it.phase === "running" && it.label === label
+                  );
+              if (idx === -1) return prev;
+              const next = [...prev];
+              const cur = next[idx];
+              if (cur.type === "tool")
+                next[idx] = { ...cur, phase: "done" as const, result: segmentContent };
+              return next;
+            });
+          }
+          // subagent events: optional inline markers (could add as stream items later)
+          if (eventType === "subagent_start" && payload?.agent) {
+            // no-op for now; could push a small "Agent: X" chunk if desired
+          }
+          if (eventType === "subagent_end" && payload?.agent) {
+            // no-op
+          }
+          // end: stream finished successfully — keep tool calls and preview on left, just stop progress
+          if (eventType === "end") {
+            setStreamProgress(null);
+            setRegenerateSpecKey((k) => k + 1);
+            SpecService.getSpecProgressByRecipeId(recipeId).then(setSpecProgress).catch(() => {});
+            router.replace(`/task/${recipeId}/spec`, { scroll: false });
+          }
+          // error: clear stream state and refetch
+          if (eventType === "error") {
+            setStreamProgress(null);
+            setStreamItems([]);
+            setRegenerateSpecKey((k) => k + 1);
+            SpecService.getSpecProgressByRecipeId(recipeId).then(setSpecProgress).catch(() => {});
+            router.replace(`/task/${recipeId}/spec`, { scroll: false });
+          }
+        },
+        onError: async (msg) => {
+          // Don't treat abort as an error - expected when switching streams or regenerating
+          if (/abort/i.test(msg)) return;
+          // On stream error, check if spec is already completed - if so, don't show error toast
+          try {
+            const fallbackStatus = await SpecService.getSpecProgressByRecipeId(recipeId);
+            const genStatus = "generation_status" in fallbackStatus ? fallbackStatus.generation_status : null;
+            setSpecProgress(fallbackStatus);
+            if (genStatus === "completed" || genStatus === "failed") {
+              // Spec finished, stream just wasn't available - no error to show
+              setStreamProgress(null);
+              router.replace(`/task/${recipeId}/spec`, { scroll: false });
+              return;
+            }
+          } catch {
+            // Status check failed, show error
+          }
+          setStreamProgress(null);
+          setStreamItems([]);
+          setError(msg);
+          toast.error("Live stream failed. Showing progress by polling.");
+          router.replace(`/task/${recipeId}/spec`, { scroll: false });
+        },
+      });
+    };
+
+    tryConnectStream();
+
+    return () => {
+      cancelled = true;
+      streamAbortRef.current?.abort();
+    };
+  }, [recipeId, runIdFromUrl]);
+
+  // Poll for spec progress (re-runs when regenerateSpecKey changes so we can restart after regenerate)
   useEffect(() => {
     if (!recipeId) return;
-    if (hasInitializedRef.current) return;
-    
-    hasInitializedRef.current = true;
-    
+    if (runIdFromUrl) return; // When streaming, skip poll until stream ends
+    if (hasSpecPollStartedRef.current) return;
+    hasSpecPollStartedRef.current = true;
+
     let mounted = true;
     let interval: NodeJS.Timeout;
 
     const pollSpecProgress = async () => {
       try {
         console.log("[Spec Page] Starting to poll spec progress for recipeId:", recipeId);
-        
-        // Try to get spec_id from previous response if available
-        // Otherwise use recipe_id
-        let progress: SpecStatusResponse | SpecPlanStatusResponse;
-        let currentSpecId: string | null = null;
-        
-        // Check if we have a spec_id stored
-        const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
-        console.log("[Spec Page] Stored spec_id:", storedSpecId);
-        
-        if (storedSpecId) {
-          currentSpecId = storedSpecId;
-          console.log("[Spec Page] Using stored spec_id, calling getSpecProgressBySpecId");
-          progress = await SpecService.getSpecProgressBySpecId(storedSpecId);
-        } else {
-          // Always use new recipe codegen endpoint - don't fall back to old endpoint
-          console.log("[Spec Page] No stored spec_id, calling getSpecProgressByRecipeId");
-          progress = await SpecService.getSpecProgressByRecipeId(recipeId);
-          console.log("[Spec Page] Received progress response:", progress);
-          
-          // Store spec_id for future polling if available
-          if ('spec_id' in progress && progress.spec_id) {
-            currentSpecId = progress.spec_id;
-            localStorage.setItem(`spec_${recipeId}`, progress.spec_id);
-            console.log("[Spec Page] Stored spec_id:", currentSpecId);
-          }
-        }
-        
+        const progress = await SpecService.getSpecProgressByRecipeId(recipeId);
+        console.log("[Spec Page] Received progress response:", progress);
+
         if (!mounted) return;
 
         setSpecProgress(progress);
         setError(null);
         setIsLoading(false);
 
-        // Determine status based on response type
-        const status = 'spec_gen_status' in progress 
-          ? (progress as any).spec_gen_status 
+        // New API: generation_status is "pending" | "processing" | "completed" | "failed" | "not_started"
+        const status = 'generation_status' in progress
+          ? (progress.generation_status === 'completed' ? 'COMPLETED' : progress.generation_status === 'failed' ? 'FAILED' : progress.generation_status === 'processing' || progress.generation_status === 'pending' ? 'IN_PROGRESS' : 'PENDING')
           : (progress as any).spec_generation_step_status;
 
-        // Stop polling when completed or failed
         if (status === 'COMPLETED' || status === 'FAILED') {
           if (interval) clearInterval(interval);
           if (status === 'COMPLETED') {
             setIsPlanExpanded(false);
           }
         } else {
-          // Continue polling if in progress
           if (interval) clearInterval(interval);
+          let attempts = 0;
+          const POLL_INTERVAL_MS = 5000;
+          const MAX_ATTEMPTS = 120; // 10 minutes at 5s
           interval = setInterval(async () => {
+            if (!mounted || attempts >= MAX_ATTEMPTS) {
+              if (interval) clearInterval(interval);
+              return;
+            }
             try {
-              // Always check localStorage for the latest spec_id (in case it was updated)
-              const latestSpecId = localStorage.getItem(`spec_${recipeId}`) || currentSpecId;
-              
-              let updated: SpecStatusResponse | SpecPlanStatusResponse;
-              if (latestSpecId) {
-                console.log("[Spec Page] Polling with spec_id:", latestSpecId);
-                updated = await SpecService.getSpecProgressBySpecId(latestSpecId);
-              } else {
-                console.log("[Spec Page] Polling with recipeId:", recipeId);
-                updated = await SpecService.getSpecProgressByRecipeId(recipeId);
-                
-                // Store spec_id if we got it from the response
-                if ('spec_id' in updated && updated.spec_id) {
-                  localStorage.setItem(`spec_${recipeId}`, updated.spec_id);
-                  currentSpecId = updated.spec_id;
-                  console.log("[Spec Page] Stored spec_id during polling:", currentSpecId);
-                }
-              }
-              
+              attempts += 1;
+              const updated = await SpecService.getSpecProgressByRecipeId(recipeId);
               if (!mounted) return;
-              
-              console.log("[Spec Page] Updated progress:", updated);
               setSpecProgress(updated);
-              
-              const updatedStatus = 'spec_gen_status' in updated 
-                ? (updated as any).spec_gen_status 
+              const updatedStatus = 'generation_status' in updated
+                ? (updated.generation_status === 'completed' ? 'COMPLETED' : updated.generation_status === 'failed' ? 'FAILED' : 'IN_PROGRESS')
                 : (updated as any).spec_generation_step_status;
-              
-              console.log("[Spec Page] Updated status:", updatedStatus);
-              
               if (updatedStatus === 'COMPLETED' || updatedStatus === 'FAILED') {
                 clearInterval(interval);
-                if (updatedStatus === 'COMPLETED') {
-                  setIsPlanExpanded(false);
-                }
+                if (updatedStatus === 'COMPLETED') setIsPlanExpanded(false);
               }
             } catch (error) {
               console.error("[Spec Page] Error polling spec progress:", error);
-              if (!mounted) return;
-              // Don't clear interval on error - keep trying
             }
-          }, 2000); // Poll every 2 seconds
+          }, POLL_INTERVAL_MS);
         }
       } catch (err: any) {
         if (!mounted) return;
@@ -522,35 +966,93 @@ const SpecPage = () => {
 
     return () => {
       mounted = false;
+      hasSpecPollStartedRef.current = false; // Reset so effect can run again on re-mount or after regenerate
       if (interval) clearInterval(interval);
     };
-  }, [recipeId]);
+  }, [recipeId, regenerateSpecKey, runIdFromUrl]);
 
-  // Calculate progress from API response (support both old and new response formats)
-  const planProgress = specProgress 
-    ? (('progress_percent' in specProgress && specProgress.progress_percent !== null) 
-        ? specProgress.progress_percent 
-        : ('progress_percent' in specProgress ? specProgress.progress_percent : null)) ?? 0
-    : 0;
-  const status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PENDING' | null = specProgress 
-    ? ('spec_gen_status' in specProgress 
-        ? specProgress.spec_gen_status 
-        : ('spec_generation_step_status' in specProgress 
-            ? specProgress.spec_generation_step_status 
-            : null))
+  // Calculate status from backend generation_status (source of truth).
+  // Treat only "pending" and "processing" as in-progress; "completed"/"failed" as terminal; anything else as idle.
+  const rawGenerationStatus: string | null = specProgress
+    ? ("generation_status" in specProgress
+        ? (specProgress as any).generation_status
+        : "spec_gen_status" in specProgress
+          ? (specProgress as any).spec_gen_status
+          : "spec_generation_step_status" in specProgress
+            ? (specProgress as any).spec_generation_step_status
+            : null)
     : null;
-  const isGenerating = status === 'IN_PROGRESS' || status === 'PENDING';
-  const currentStep = specProgress 
-    ? (('step_index' in specProgress && specProgress.step_index !== null)
-        ? specProgress.step_index
-        : ('step_index' in specProgress ? specProgress.step_index : null)) ?? 0
-    : 0;
-  const stepStatuses: Record<string | number, { status: StepStatusValue; message: string }> | Record<number, { status: StepStatusValue; message: string }> | null = specProgress 
-    ? ('step_statuses' in specProgress 
-        ? (specProgress as any).step_statuses 
-        : null) ?? {}
-    : {};
-  const specOutput: SpecOutput | null = specProgress?.spec_output ?? null;
+
+  // Normalize to lowercase for case-insensitive comparison (handles legacy uppercase values)
+  const normalizedStatus = rawGenerationStatus?.toLowerCase();
+  const status = (normalizedStatus === "completed"
+    ? "COMPLETED"
+    : normalizedStatus === "failed"
+      ? "FAILED"
+      : normalizedStatus === "pending" || normalizedStatus === "processing" || normalizedStatus === "in_progress"
+        ? "IN_PROGRESS"
+        : null) as "IN_PROGRESS" | "COMPLETED" | "FAILED" | null;
+
+  const isGenerating = status === "IN_PROGRESS";
+  const errorMessageFromApi = specProgress && typeof (specProgress as any).error_message === 'string' ? (specProgress as any).error_message : null;
+
+  // Normalize spec from potpie-workflows GET /api/v1/recipes/{id}/spec
+  const { plan: normalizedPlan, rawSpec: rawSpecification } = normalizeSpecFromProgress(specProgress ?? undefined);
+  const hasSpecContent = normalizedPlan !== null || rawSpecification !== null;
+
+  const { data: planStatusForLabel } = useQuery({
+    queryKey: ["plan-status", recipeId],
+    queryFn: () => PlanService.getPlanStatusByRecipeId(recipeId!),
+    enabled:
+      !!recipeId &&
+      status === "COMPLETED" &&
+      !isCancelled &&
+      hasSpecContent,
+    staleTime: 30_000,
+  });
+  const planGenForLabel = planStatusForLabel?.generation_status?.toLowerCase();
+  const showReGeneratePlanButton =
+    planGenForLabel === "completed" || planGenForLabel === "failed";
+
+  // Persist stream timeline when spec is completed so it survives refresh
+  useEffect(() => {
+    if (!recipeId || status !== "COMPLETED" || !hasSpecContent) return;
+    if (streamItems.length > 0) {
+      try {
+        sessionStorage.setItem(
+          `${THINKING_STORAGE_KEY}_${recipeId}`,
+          JSON.stringify({ streamItems })
+        );
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [recipeId, status, hasSpecContent, streamItems]);
+
+  // Restore stream timeline from sessionStorage on load when spec is completed (e.g. after refresh)
+  useEffect(() => {
+    if (!recipeId || status !== "COMPLETED" || !hasSpecContent || runIdFromUrl) return;
+    if (streamItems.length > 0) return;
+    if (hasRestoredThinkingRef.current === recipeId) return;
+    hasRestoredThinkingRef.current = recipeId;
+    try {
+      const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY}_${recipeId}`);
+      if (!raw) return;
+      const data = JSON.parse(raw) as { streamItems?: StreamTimelineItem[] };
+      const items = Array.isArray(data.streamItems) ? data.streamItems : [];
+      if (items.length > 0) setStreamItems(items);
+    } catch {
+      // ignore
+    }
+  }, [recipeId, status, hasSpecContent, runIdFromUrl, streamItems.length]);
+
+  // Reset restore ref when recipe changes so we can restore for the new recipe
+  useEffect(() => {
+    if (!recipeId) return;
+    return () => {
+      hasRestoredThinkingRef.current = null;
+    };
+  }, [recipeId]);
 
   // Auto-scroll to bottom when plan is generated
   useEffect(() => {
@@ -564,11 +1066,33 @@ const SpecPage = () => {
     }
   }, [status]);
 
-  if (isLoading && !specProgress) {
+  // Show spec failure as toast (instead of inline banner)
+  const failedToastShownRef = useRef(false);
+  useEffect(() => {
+    if (status !== "FAILED" && !error) {
+      failedToastShownRef.current = false;
+      return;
+    }
+    if (failedToastShownRef.current) return;
+    failedToastShownRef.current = true;
+    const message =
+      status === "FAILED"
+        ? (errorMessageFromApi || "The spec generation process encountered an error. Please try again.")
+        : error || "Something went wrong.";
+    const title = status === "FAILED" ? "Spec Generation Failed" : "Error";
+    toast.error(message, {
+      title,
+      duration: 8000,
+      action: { label: "Retry", onClick: () => window.location.reload() },
+    });
+  }, [status, error, errorMessageFromApi]);
+
+  // When we have run_id we go straight to spec page and show streaming; no loading screen
+  if (recipeId && isLoading && !specProgress && !runIdFromUrl) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-primary-color" />
-        <p className="ml-3 text-primary-color">Loading spec generation...</p>
+      <div className="flex flex-col items-center justify-center min-h-[80vh]">
+        <img src="/images/loader.gif" alt="Loading" className="w-16 h-16 mb-4" />
+        <p className="text-primary-color">Loading spec generation...</p>
       </div>
     );
   }
@@ -582,7 +1106,7 @@ const SpecPage = () => {
             The recipe ID was not found. Please start a new project.
           </p>
           <button
-            onClick={() => router.push("/idea")}
+            onClick={() => router.push("/newchat")}
             className="px-4 py-2 bg-primary-color text-accent-color rounded hover:opacity-90"
           >
             Create New Project
@@ -593,258 +1117,313 @@ const SpecPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      <main className="max-w-3xl mx-auto px-6 py-12">
-        {/* Error Display */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-700">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-xs text-red-600 underline"
-            >
-              Retry
-            </button>
-          </div>
-        )}
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-gray-200 antialiased">
+      {/* Full-width build flow bar — tabs extend to the right edge */}
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
+        <BuildFlowChatHeader
+          recipeId={recipeId}
+          title={`${recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}${
+            (recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""
+          }`}
+          repoName={
+            repoNameFromUrl ||
+            storedRepoContext?.repoName ||
+            projectData?.repo ||
+            "Unknown Repository"
+          }
+          branchName={
+            storedRepoContext?.branchName || projectData?.branch || "main"
+          }
+        />
+      </div>
 
-        {/* Failed State */}
-        {status === 'FAILED' && (
-          <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <X className="w-5 h-5 text-red-600" />
-              <h3 className="text-sm font-semibold text-red-900">
-                Spec Generation Failed
-              </h3>
-            </div>
-            <p className="text-sm text-red-700 mb-3">
-              The spec generation process encountered an error. Please try again.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-        <div className="flex justify-between items-start mb-10">
-          <h1 className="text-2xl font-bold text-primary-color">Plan Spec</h1>
-          {projectData && (
-            <div className="flex items-center gap-2">
-              <Badge icon={Github}>{projectData.repo}</Badge>
-              <Badge icon={GitBranch}>{projectData.branch}</Badge>
-            </div>
-          )}
-        </div>
-        {/* Project Briefing */}
-        <section className="mb-8 pb-8 border-b border-[#D3E5E5]">
-          <div className="space-y-6">
-            <p className="text-base font-medium tracking-tight text-primary-color leading-relaxed">
-              {recipeData?.user_prompt || "Loading..."}
-            </p>
-
-            <div className="grid grid-cols-1 gap-6 pt-2">
-              {/* Questions as Parameters */}
-              {projectData?.questions
-                .filter((q) => answers[q.id])
-                .map((q) => (
-                  <div key={q.id} className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-primary-color">
-                        PARAM
-                      </span>
-                      <p className="text-sm font-bold text-primary-color">
-                        {q.question}
-                      </p>
-                    </div>
-                    <div className="pl-14">
-                      <p className="text-sm font-medium text-primary-color">
-                        {answers[q.id]}
-                      </p>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
+        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
+          {/* Messages — only this section scrolls */}
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
+            {chatMessages.map((msg, i) => (
+              <React.Fragment key={i}>
+                {/* User message */}
+                {msg.role === "user" && (
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%] text-sm rounded-t-xl rounded-bl-xl px-4 py-3 bg-white border border-gray-200 text-gray-900">
+                      {msg.content}
                     </div>
                   </div>
-                ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Dynamic Progress Indicator */}
-        <section className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap className="w-4 h-4 text-primary-color" />
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-primary-color font-sans">
-              Plan Specification
-            </h2>
-          </div>
-          <p className="text-sm text-primary-color mb-6 leading-relaxed">
-            Plan spec is a granular specification of the user prompt and
-            question. These represent the specific goals of the workflow. It
-            also makes approximation on what libraries to use, files to modify
-            and external services that might be used. Make sure that you review
-            the goals of the workflow before your proceed.
-          </p>
-          <div className="bg-zinc-50/50 border border-[#D3E5E5] rounded-xl overflow-hidden">
-            <div
-              onClick={() => setIsPlanExpanded(!isPlanExpanded)}
-              role="button"
-              tabIndex={0}
-              className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-zinc-100/50 transition-colors border-b border-transparent"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 flex items-center justify-center">
-                  {isCancelled ? (
-                    <X className="w-4 h-4 text-primary-color" />
-                  ) : planProgress >= 100 ? (
-                    <Check className="w-4 h-4 text-primary-color" />
-                  ) : (
-                    <Loader2 className="w-4 h-4 text-primary-color animate-spin" />
-                  )}
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-primary-color">
-                    {isCancelled
-                      ? "Stopped"
-                      : status === 'COMPLETED'
-                        ? "Plan Ready"
-                        : status === 'FAILED'
-                          ? "Failed"
-                          : "Architecting System"}
-                  </span>
-                  <span className="text-xs font-mono text-primary-color uppercase tracking-tighter">
-                    Status: {planProgress}% Compiled
-                  </span>
-                </div>
-              </div>
-              <ChevronDown
-                className={`w-4 h-4 text-primary-color transition-transform ${isPlanExpanded ? "" : "-rotate-90"}`}
-              />
-            </div>
-
-            {isPlanExpanded && (
-              <div className="relative px-4 py-8">
-                {/* Connecting Vertical Line */}
-                <div className="absolute left-8 top-8 bottom-8 w-[1px] bg-[#D3E5E5]" />
-
-                <div className="space-y-8 relative">
-                  {PLAN_CHAPTERS.map((step, idx) => {
-                    // Handle both old (Record<number, StepStatus>) and new (Record<string, StepStatus>) formats
-                    const stepStatus = stepStatuses 
-                      ? (typeof stepStatuses[idx] !== 'undefined' 
-                          ? stepStatuses[idx] 
-                          : (stepStatuses as any)[idx.toString()])
-                      : undefined;
-                    const isDone = stepStatus?.status === 'COMPLETED';
-                    const isActive = stepStatus?.status === 'IN_PROGRESS';
-                    const isFailed = stepStatus?.status === 'FAILED';
-                    const Icon = step.icon;
-
-                    return (
-                      <div
-                        key={step.id}
-                        className={`flex items-start gap-5 transition-all duration-300 ${
-                          !isDone && !isActive ? "opacity-30 grayscale" : "opacity-100"
-                        }`}
-                      >
-                        {/* Icon Node */}
-                        <div
-                          className={`relative z-10 w-8 h-8 flex items-center justify-center rounded-lg border transition-all duration-500 bg-background ${
-                            isDone
-                              ? "border-primary-color bg-primary-color text-accent-color shadow-sm"
-                              : isActive
-                                ? "border-primary-color animate-pulse text-primary-color"
-                                : isFailed
-                                  ? "border-red-500 bg-red-50 text-red-500"
-                                  : "border-[#D3E5E5] text-primary-color"
-                          }`}
-                        >
-                          {isDone ? (
-                            <Check className="w-3.5 h-3.5" />
-                          ) : isFailed ? (
-                            <X className="w-3.5 h-3.5" />
-                          ) : (
-                            <Icon className="w-3.5 h-3.5" />
+                )}
+                {/* After first user message: assistant intro, then thinking/stream (no bordered box) */}
+                {msg.role === "user" && i === 0 && (
+                  <>
+                    <div className="flex justify-start items-start">
+                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start">
+                        <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
+                      </div>
+                      <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
+                        Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they&apos;re ready, we can refine them together.
+                      </div>
+                    </div>
+                    {/* Agent output: interleaved thinking/response and tool calls in stream order */}
+                    {(streamProgress || isGenerating || streamItems.length > 0) && (
+                      <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
+                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                        <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
+                          {(streamProgress || isGenerating) && streamItems.length === 0 && (
+                            <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
+                              <span className="inline-block w-4 h-4 rounded-full border-2 border-[#102C2C] border-t-transparent animate-spin" />
+                              {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating specification…"}
+                            </p>
                           )}
-                        </div>
-
-                        {/* Text Content */}
-                        <div className="flex flex-col pt-0.5">
-                          <span
-                            className={`text-xs font-bold uppercase tracking-wider ${
-                              isActive ? "text-primary-color" : "text-primary-color"
-                            }`}
-                          >
-                            {step.title}
-                          </span>
-                          <span className="text-xs text-primary-color mt-0.5 max-w-[240px]">
-                            {stepStatus?.message || step.description}
-                          </span>
+                          <StreamTimeline
+                            items={streamItems}
+                            endRef={streamOutputEndRef}
+                            loading={
+                              streamItems.length > 0 &&
+                              (streamProgress != null || isGenerating) &&
+                              status !== "COMPLETED"
+                            }
+                          />
                         </div>
                       </div>
-                    );
-                  })}
+                    )}
+                  </>
+                )}
+                {/* Assistant message (skip i===1 — shown above as thinking/stream) */}
+                {msg.role === "assistant" && i !== 1 && (
+                  <div className="flex justify-start items-start">
+                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C]">
+                      <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
+                    </div>
+                    <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
+                      {msg.content.length > 400
+                        ? `${msg.content.slice(0, 400).trim()}… View the full specification in the panel on the right.`
+                        : msg.content}
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Chat input — multi-line textarea with send button inside at bottom-right */}
+          <div className="p-4 shrink-0 ">
+            <div className="relative">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendChatMessage();
+                  }
+                }}
+                placeholder="Describe any change that you want...."
+                rows={3}
+                className="w-full min-h-[88px] px-4 py-3 pr-14 pb-12 rounded-xl border border-gray-200 bg-[#FFFDFC] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#102C2C]/20 focus:border-[#102C2C] resize-none"
+              />
+              <button
+                type="button"
+                onClick={handleSendChatMessage}
+                disabled={chatLoading}
+                className="absolute right-2 bottom-4 h-10 w-10 rounded-full bg-[#102C2C] text-[#B6E343] flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {chatLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <SendHorizonal className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Specification panel - show 50% when streaming or when spec is ready (never full-page left) */}
+        <div
+          className="overflow-hidden flex-none flex flex-col max-w-[50%]"
+          style={{
+            width: (specProgress != null || runIdFromUrl || streamProgress || isGenerating || streamItems.length > 0) ? "50%" : "0",
+            minWidth: 0,
+            transition: "width 0.35s ease-out",
+          }}
+        >
+          <aside className="h-full w-full min-w-[280px] flex flex-col">
+            <div className="p-6 border-b border-[#E5E8E6]">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+                  <div className="flex items-center gap-2">
+                  <h2 className="text-[18px] font-bold leading-tight tracking-tight shrink-0" style={{ color: "#022019" }}>
+                    Specification
+                  </h2>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="p-1 rounded-full hover:bg-[#CCD3CF]/30 transition-colors shrink-0"
+                          aria-label="Specification info"
+                        >
+                          <Info className="w-4 h-4" style={{ color: "#022019" }} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipPortal>
+                        <TooltipContent
+                          side="bottom"
+                          align="start"
+                          sideOffset={8}
+                          className="max-w-[280px] bg-white text-gray-900 border border-gray-200 shadow-lg rounded-lg px-4 py-3 text-sm font-normal"
+                        >
+                          Plan Spec is granular specification of the user prompt and the question. These represent the specific goals of the workflow.
+                        </TooltipContent>
+                      </TooltipPortal>
+                    </Tooltip>
+                  </TooltipProvider>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!recipeId || isRegeneratingSpec) return;
+                      setIsRegeneratingSpec(true);
+                      try {
+                        // Call regenerate first to reset recipe state
+                        await SpecService.regenerateSpec(recipeId);
+                        // Clear transient stream state and errors but keep specProgress populated
+                        // so the right pane remains open during regeneration
+                        setError(null);
+                        setStreamProgress(null);
+                        setStreamItems([]);
+                        // Also clear persisted timeline so restore effect cannot rehydrate stale data
+                        try {
+                          sessionStorage.removeItem(`${THINKING_STORAGE_KEY}_${recipeId}`);
+                        } catch {
+                          // ignore storage errors
+                        }
+                        // Then try to start streaming to get run_id for live updates
+                        let runId = "";
+                        try {
+                          const result = await SpecService.startSpecGenerationStream(recipeId, {
+                            consumeStream: false,
+                          });
+                          runId = result.runId;
+                        } catch {
+                          // Streaming endpoint failed - backend may not support it after regenerate
+                          // Fall back to polling
+                        }
+                        toast.success("Spec regeneration started");
+                        if (!runId) {
+                          // No run_id - fall back to polling
+                          setRegenerateSpecKey((k) => k + 1);
+                        } else {
+                          // Navigate with run_id for streaming
+                          router.push(`/task/${recipeId}/spec?run_id=${encodeURIComponent(runId)}`);
+                        }
+                      } catch (err: any) {
+                        console.error("Error regenerating spec:", err);
+                        setError(err?.message ?? "Failed to regenerate spec");
+                        toast.error(err?.message ?? "Failed to regenerate spec");
+                      } finally {
+                        setIsRegeneratingSpec(false);
+                      }
+                    }}
+                    disabled={isRegeneratingSpec}
+                    className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Regenerate spec"
+                  >
+                    {isRegeneratingSpec ? (
+                      <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#022019" }} />
+                    ) : (
+                      <RotateCw className="w-4 h-4" style={{ color: "#022019" }} />
+                    )}
+                  </button>
+                  {status === "COMPLETED" && rawSpecification && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadSpecAsMarkdown(rawSpecification, recipeId);
+                        toast.success("Specification downloaded as Markdown");
+                      }}
+                      className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors shrink-0"
+                      aria-label="Export spec as Markdown"
+                      title="Export as Markdown"
+                    >
+                      <Download className="w-4 h-4" style={{ color: "#022019" }} />
+                    </button>
+                  )}
                 </div>
               </div>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6">
+            {status === "COMPLETED" && !isCancelled && hasSpecContent ? (
+              <div ref={planContentRef}>
+                {normalizedPlan ? (
+                  <PlanTabs plan={normalizedPlan} />
+                ) : rawSpecification ? (
+                  <SpecFallbackView spec={rawSpecification} />
+                ) : null}
+              </div>
+            ) : (streamProgress || isGenerating || (streamItems.length > 0 && status !== "COMPLETED")) ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <img src="/images/loader.gif" alt="Loading" className="w-16 h-16 mb-4" />
+                <p className="text-sm font-medium text-[#102C2C]">Cooking ingredients for spec</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Preparing specification…"}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">Specification will appear here when ready.</p>
             )}
-          </div>
-        </section>
-
-        {/* Implementation Output */}
-          {status === 'COMPLETED' && 
-           !isCancelled && 
-           specOutput && (
-            <section
-              ref={planContentRef}
-              className="animate-in fade-in slide-in-from-bottom-4 duration-500"
-            >
-              <PlanTabs plan={specOutput as unknown as Plan} />
-
-              {/* Action Button */}
-              <div className="mt-12 flex justify-end">
+            </div>
+            {/* Sticky bottom bar with Generate Plan button */}
+            {status === "COMPLETED" && !isCancelled && hasSpecContent && (
+              <div className="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-[#E5E8E6] flex justify-end">
                 <button
                   onClick={async () => {
-                    if (isSubmittingPlan) return;
-                    
-                    setIsSubmittingPlan(true);
+                    if (!recipeId || isGeneratingPlan) return;
+                    setIsGeneratingPlan(true);
+                    startNavigation();
                     try {
-                      // Get spec_id from localStorage or from specProgress
-                      const storedSpecId = localStorage.getItem(`spec_${recipeId}`);
-                      const specId = storedSpecId || (specProgress && 'spec_id' in specProgress ? specProgress.spec_id : null);
-                      
-                      // Submit plan generation request
-                      const response = await PlanService.submitPlanGeneration({
-                        spec_id: specId || undefined,
-                        recipe_id: specId ? undefined : recipeId,
-                      });
-                      
-                      toast.success("Plan generation started successfully");
-                      
-                      // Navigate to plan page with planId
-                      router.push(`/task/${recipeId}/plan?planId=${response.plan_id}${specId ? `&specId=${specId}` : ''}`);
-                    } catch (error: any) {
-                      console.error("Error submitting plan generation:", error);
-                      toast.error(error.message || "Failed to start plan generation");
-                      setIsSubmittingPlan(false);
+                      // Check current plan status to decide action:
+                      // - not_started: start new generation
+                      // - pending/processing: navigate directly (job already in progress)
+                      // - completed/failed: regenerate
+                      let planAction: "submit" | "navigate" | "regenerate" = "submit";
+                      try {
+                        const current = await PlanService.getPlanStatusByRecipeId(recipeId);
+                        const genStatus = current?.generation_status?.toLowerCase();
+                        if (genStatus === "pending" || genStatus === "processing" || genStatus === "in_progress") {
+                          planAction = "navigate";
+                        } else if (genStatus === "completed" || genStatus === "failed") {
+                          planAction = "regenerate";
+                        }
+                      } catch {
+                        // If status lookup fails, assume first-time generation.
+                      }
+
+                      if (planAction === "submit" || planAction === "regenerate") {
+                        const { runId } = await PlanService.startPlanGenerationStream(recipeId, {
+                          consumeStream: false,
+                        });
+                        if (runId && runId.trim()) {
+                          router.push(`/task/${recipeId}/plan?run_id=${encodeURIComponent(runId.trim())}`);
+                        } else {
+                          router.push(`/task/${recipeId}/plan`);
+                        }
+                      } else {
+                        router.push(`/task/${recipeId}/plan`);
+                      }
+                    } catch (err: any) {
+                      console.error("Error starting plan generation:", err);
+                      toast.error(err?.message ?? "Failed to start plan generation");
+                    } finally {
+                      setIsGeneratingPlan(false);
                     }
                   }}
-                  disabled={isSubmittingPlan}
-                  className="px-6 py-2 bg-accent-color text-primary-color hover:opacity-90 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={isGeneratingPlan}
+                  className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                 >
-                  {isSubmittingPlan ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Starting Plan Generation...
-                    </>
-                  ) : (
-                    "Generate Detailed Plan"
-                  )}
+                  {showReGeneratePlanButton ? "RE-GENERATE PLAN" : "GENERATE PLAN"}
                 </button>
               </div>
-            </section>
-          )}
-      </main>
-
-      {/* Floating Interaction Footer */}
+            )}
+          </aside>
+        </div>
+      </div>
     </div>
   );
 };

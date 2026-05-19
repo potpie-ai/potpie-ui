@@ -5,6 +5,114 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const DEFAULT_MARKER_PATTERNS: (string | RegExp)[] = [
+  /--generated diff--/gi,
+];
+
+export function stripAssistantMarkers(
+  text: string | undefined | null,
+  markers: (string | RegExp)[] = DEFAULT_MARKER_PATTERNS
+): string {
+  if (text == null || typeof text !== "string" || !text) return "";
+  let out = text;
+  for (const marker of markers) {
+    if (typeof marker === "string") {
+      const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(escaped, "gi");
+      out = out.replace(re, "");
+    } else {
+      out = out.replace(marker, "");
+    }
+  }
+  return out.trim();
+}
+
+/**
+ * Extract complete JSON objects from a stream buffer (same pattern as ChatService).
+ * Used for parsing streaming JSON responses in SpecService and PlanService.
+ */
+export function extractJsonObjects(input: string): {
+  objects: string[];
+  remaining: string;
+} {
+  const objects: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  let startIndex = -1;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i]!;
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (inString) escapeNext = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === "{") {
+      if (depth === 0) startIndex = i;
+      depth++;
+    } else if (char === "}") {
+      if (depth === 0) continue;
+      depth--;
+      if (depth === 0 && startIndex !== -1) {
+        objects.push(input.slice(startIndex, i + 1));
+        startIndex = -1;
+      }
+    }
+  }
+
+  const remaining =
+    depth > 0 && startIndex !== -1 ? input.slice(startIndex) : "";
+  return { objects, remaining };
+}
+
+/** Parse SSE (event:/data:) blocks from a stream buffer. */
+export function parseSSEBuffer(buffer: string): {
+  events: { eventType: string; data: Record<string, unknown> }[];
+  remaining: string;
+} {
+  const events: { eventType: string; data: Record<string, unknown> }[] = [];
+  const blocks = buffer.split(/\n\n/);
+  const remaining = blocks.pop() ?? "";
+  for (const block of blocks) {
+    if (!block.trim()) continue;
+    let eventType = "message";
+    let data: Record<string, unknown> = {};
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) eventType = line.slice(6).trim();
+      if (line.startsWith("data:")) {
+        const raw = line.slice(5).trim();
+        if (raw) {
+          try {
+            data = JSON.parse(raw) as Record<string, unknown>;
+          } catch {
+            data = { raw };
+          }
+        }
+      }
+    }
+    events.push({ eventType, data });
+  }
+  return { events, remaining };
+}
+
+export function isSSEResponse(contentType: string | null): boolean {
+  return contentType != null && contentType.toLowerCase().includes("text/event-stream");
+}
+
 export const list_system_agents = [
   "codebase_qna_agent",
   "debugging_agent",
@@ -210,25 +318,33 @@ export function parseApiError(error: any): string {
       validationErrors.forEach((err: any) => {
         if (err.loc && err.msg) {
           // Extract the field name from the location path
-          const fieldPath = err.loc.slice(2); // Skip 'body' and 'nodes'
-          const fieldName = fieldPath[fieldPath.length - 1];
-          const nodeId = fieldPath[1]; // Get the node ID
+          const fieldPath = err.loc.slice(2); // Skip 'body' and root field name
+          const fieldName = fieldPath.length > 0 ? fieldPath[fieldPath.length - 1] : null;
+          const nodeId = fieldPath.length > 0 ? fieldPath[0] : "general"; // Get the node ID from first element
 
-          if (!fieldErrors[nodeId]) {
-            fieldErrors[nodeId] = [];
+          const groupKey = nodeId ?? "general";
+          if (!fieldErrors[groupKey]) {
+            fieldErrors[groupKey] = [];
           }
 
-          // Create a more readable error message
-          const readableField = fieldName
-            .replace(/([A-Z])/g, " $1")
-            .toLowerCase();
-          fieldErrors[nodeId].push(`${readableField} is required`);
+          if (fieldName && typeof fieldName === "string") {
+            // Create a more readable error message
+            const readableField = fieldName
+              .replace(/([A-Z])/g, " $1")
+              .toLowerCase();
+            fieldErrors[groupKey].push(`${readableField}: ${err.msg}`);
+          } else {
+            fieldErrors[groupKey].push(err.msg);
+          }
         }
       });
 
       // Format the error message
       const errorMessages = Object.entries(fieldErrors).map(
         ([nodeId, errors]) => {
+          if (nodeId === "general") {
+            return errors.join(", ");
+          }
           const shortNodeId = nodeId.length > 20 ? nodeId.slice(-8) : nodeId;
           return `Node ${shortNodeId}: ${errors.join(", ")}`;
         }
@@ -297,4 +413,116 @@ export function parseApiError(error: any): string {
 
   // Fallback error message
   return "An unexpected error occurred. Please try again.";
+}
+
+/**
+ * Normalize markdown content for preview to prevent width overflow.
+ * - Wraps long unbroken strings (URLs, paths, hashes) by inserting zero-width spaces
+ * - Limits extremely long lines
+ * @param content - Raw markdown string
+ * @param maxLineLength - Maximum unbroken segment length before inserting breaks (default: 80)
+ * @returns Normalized markdown string safe for constrained-width preview
+ */
+/**
+ * Get the event payload from stream SSE data. Handles envelope shape and double-encoded data.
+ */
+export function getStreamEventPayload(data: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (data == null) return {};
+  const raw = (data as Record<string, unknown>)?.data ?? data;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return (data as Record<string, unknown>) ?? {};
+    }
+  }
+  return (raw as Record<string, unknown>) ?? (data as Record<string, unknown>);
+}
+
+/**
+ * Shorten raw ToolCallPart repr (e.g. from backend or cached) to "tool_name(args)" only.
+ * Strips tool_call_id, provider_details, thought_signature so only tool name and args show.
+ */
+export function shortenToolCallPartContent(text: string | undefined | null): string {
+  if (text == null || typeof text !== "string" || !text) return "";
+  let out = text;
+  // Remove , tool_call_id='...'
+  out = out.replace(/,?\s*tool_call_id\s*=\s*['"][^'"]*['"]/g, "");
+  // Remove , provider_details={...} (may contain nested braces and long thought_signature)
+  out = out.replace(/,?\s*provider_details\s*=\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, "");
+  // Replace ToolCallPart(tool_name='X', args= with X(
+  out = out.replace(/ToolCallPart\s*\(\s*tool_name\s*=\s*['"]([^'"]+)['"]\s*,\s*args\s*=/g, "$1(");
+  return out;
+}
+
+export function normalizeMarkdownForPreview(
+  content: string | undefined | null,
+  maxLineLength: number = 80
+): string {
+  if (content == null || typeof content !== "string") return "";
+  if (!content) return "";
+
+  // Shorten any raw ToolCallPart repr to tool_name(args) before display
+  const shortened = shortenToolCallPartContent(content);
+  const toWrap = shortened !== content ? shortened : content;
+
+  // Insert zero-width space (\u200B) into long unbroken segments to allow wrapping
+  // This handles long URLs, file paths, hashes, etc.
+  return toWrap.replace(
+    /(\S{40,})/g,
+    (match) => {
+      // Insert zero-width space every maxLineLength characters
+      let result = "";
+      for (let i = 0; i < match.length; i += maxLineLength) {
+        if (i > 0) result += "\u200B";
+        result += match.slice(i, i + maxLineLength);
+      }
+      return result;
+    }
+  );
+}
+
+/** Detect if content looks like Markdown (headings, bold, code blocks). */
+export function looksLikeMarkdown(text: string): boolean {
+  if (!text || text.length > 5000) return false;
+  const trimmed = text.trim();
+  if (/^#+\s/m.test(trimmed)) return true;
+  if (/\*\*[^*]+\*\*|__[^_]+__/.test(trimmed)) return true;
+  if (/^```[\s\S]*?```/m.test(trimmed)) return true;
+  if (/^\s*[-*+]\s+/m.test(trimmed) && /\n/.test(trimmed)) return true;
+  return false;
+}
+
+/**
+ * Format tool result for display: valid JSON is pretty-printed; otherwise return as-is.
+ * Caller should use JSON view for parseable JSON and markdown/plain for the rest.
+ */
+const AGENT_MODE_LABELS: Record<string, string> = {
+  codebase_qna_agent: "QnA",
+  debugging_agent: "Debug",
+  spec_generation_agent: "SpecGen",
+  code_generation_agent: "CodeGen",
+};
+
+export function getAgentDisplayLabel(agentId: string, fallbackName?: string): string {
+  return AGENT_MODE_LABELS[agentId] || fallbackName || agentId;
+}
+
+export function formatToolResultForDisplay(raw: string): {
+  kind: "json" | "markdown" | "plain";
+  content: string;
+} {
+  if (raw == null || typeof raw !== "string") return { kind: "plain", content: "" };
+  const trimmed = raw.trim();
+  if (!trimmed) return { kind: "plain", content: "" };
+  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return { kind: "json", content: JSON.stringify(parsed, null, 2) };
+    } catch {
+      // not valid JSON
+    }
+  }
+  if (looksLikeMarkdown(trimmed)) return { kind: "markdown", content: trimmed };
+  return { kind: "plain", content: trimmed };
 }

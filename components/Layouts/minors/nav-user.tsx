@@ -1,16 +1,13 @@
 "use client";
 
 import {
-  Bell,
   ChevronRight,
-  CreditCard,
-  LogOut,
-  Receipt,
-  SubscriptIcon,
   CheckCircle2,
   AlertCircle,
   Mail,
+  SubscriptIcon,
 } from "lucide-react";
+import Image from "next/image";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -47,7 +44,32 @@ export function NavUser({
 }) {
   const router = useRouter();
   const [isSendingVerification, setIsSendingVerification] = useState(false);
-  
+
+  const handleOpenPlainChat = () => {
+    // @ts-ignore
+    if (window.Plain) {
+      // @ts-ignore
+      if (window.Plain.isInitialized && window.Plain.isInitialized()) {
+        // @ts-ignore
+        window.Plain.open();
+      } else {
+        console.log("Plain chat not yet initialized, waiting...");
+        // Wait a bit and try again
+        setTimeout(() => {
+          // @ts-ignore
+          if (window.Plain && window.Plain.isInitialized && window.Plain.isInitialized()) {
+            // @ts-ignore
+            window.Plain.open();
+          } else {
+            toast.error("Chat is still loading. Please try again in a moment.");
+          }
+        }, 1000);
+      }
+    } else {
+      toast.error("Chat is not available. Please refresh the page.");
+    }
+  };
+
   const handleResendVerification = async () => {
     if (!auth.currentUser) {
       toast.error("No user found. Please sign in again.");
@@ -59,12 +81,12 @@ export function NavUser({
       toast.info("Your email is already verified!");
       return;
     }
-    
+
     setIsSendingVerification(true);
     try {
       // Get Firebase token for authentication
       const token = await auth.currentUser.getIdToken();
-      
+
       // Call backend API to send verification email to work email
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8000'}/api/v1/account/resend-verification`,
@@ -110,29 +132,29 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="w-full justify-between px-6 py-3 data-[state=open]:bg-transparent data-[state=open]:text-[#00291C] hover:bg-transparent"
+              className="w-full justify-between items-center px-6 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 data-[state=open]:bg-transparent data-[state=open]:text-emerald-950 hover:bg-transparent"
             >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <Avatar className="h-9 w-9 rounded-full">
+              <div className="flex items-center gap-2 flex-1 min-w-0 group-data-[collapsible=icon]:justify-center">
+                <Avatar className="h-9 w-9 rounded-full shrink-0">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-full bg-[#E5EAE8] text-[#00291C]">
+                  <AvatarFallback className="rounded-full bg-slate-200 text-emerald-950">
                     {user.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col flex-1 min-w-0 text-left">
-                  <span className="truncate text-sm font-normal text-[#091828] leading-tight">
+                <div className="flex flex-col flex-1 min-w-0 text-left group-data-[collapsible=icon]:hidden">
+                  <span className="truncate text-sm font-normal text-slate-900 leading-tight">
                     {user.name}
                   </span>
-                  <span className="truncate text-sm font-normal text-[#747575] leading-tight">
+                  <span className="truncate text-sm font-normal text-gray-500 leading-tight">
                     {user.email}
                   </span>
                 </div>
               </div>
-              <ChevronRight className="ml-auto size-5 text-[#00291C] flex-shrink-0" />
+              <ChevronRight className="ml-auto size-5 text-emerald-950 flex-shrink-0 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-muted text-black"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-white text-slate-900 border-border shadow-md"
             side={"right"}
             align="end"
             sideOffset={8}
@@ -145,71 +167,52 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{user.name}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-xs">{user.email}</span>
-                    {user.emailVerified ? (
-                      <span title="Email verified">
-                        <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
-                      </span>
-                    ) : (
-                      <span title="Email not verified">
-                        <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" />
-                      </span>
-                    )}
-                  </div>
+                  <span className="truncate text-xs">{user.email}</span>
                 </div>
               </div>
             </DropdownMenuLabel>
-            {!user.emailVerified && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="hover:bg-accent cursor-pointer text-amber-600 dark:text-amber-400"
-                  onClick={handleResendVerification}
-                  disabled={isSendingVerification}
-                >
-                  <Mail />
-                  {isSendingVerification ? "Sending..." : "Resend Verification Email"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
             <DropdownMenuGroup>
-              <DropdownMenuItem 
-                className="hover:bg-accent cursor-pointer"
-                onClick={() => router.push("/key-management")}
+
+              <DropdownMenuItem
+                className="hover:bg-stone-100 cursor-pointer"
+                onClick={() => router.push("/settings")}
               >
-                <CreditCard />
-                Key Management
+                <Image
+                  src="/images/setting-07.svg"
+                  alt="Settings"
+                  width={18}
+                  height={18}
+                />
+                Settings
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="hover:bg-accent cursor-pointer"
-                onClick={() => router.push("/user-subscription")}
+                className="hover:bg-stone-100 cursor-pointer"
+                onClick={handleOpenPlainChat}
               >
-                <Receipt />
-                Manage Subscription
-              </DropdownMenuItem>
-              <DropdownMenuItem className="hover:bg-accent cursor-pointer">
-                <Link
-                  href={"https://discord.gg/ryk5CMD5v6"}
-                  target="_blank"
-                  className="flex items-center gap-2"
-                >
-                  <Bell />
-                  Support
-                </Link>
+                <Image
+                  src="/images/customer-support.svg"
+                  alt="Support"
+                  width={18}
+                  height={18}
+                />
+                Support
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="bg-zinc-200" />
             <DropdownMenuItem
-              className="hover:bg-accent cursor-pointer"
+              className="hover:bg-stone-100 cursor-pointer"
               onClick={() => {
                 posthog.reset();
                 signOut(auth);
                 router.push("/sign-in");
               }}
             >
-              <LogOut />
+              <Image
+                src="/images/logout-circle-02.svg"
+                alt="Log out"
+                width={18}
+                height={18}
+              />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

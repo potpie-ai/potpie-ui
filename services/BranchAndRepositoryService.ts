@@ -179,7 +179,7 @@ export default class BranchAndRepositoryService {
 
       try {
         const response = await axios.post(
-          `${baseUrl}/api/v1/check-status`,
+          `${baseUrl}/api/v1/parsing-status`,
           { repo_name: repoName, branch_name: branchName, filters },
           { headers }
         );

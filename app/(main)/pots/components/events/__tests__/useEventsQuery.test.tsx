@@ -161,7 +161,12 @@ describe("useRetryEvent", () => {
       const key = (call[0] as { queryKey?: unknown[] })?.queryKey;
       return Array.isArray(key) && key.includes("pot-events") && key.includes("list");
     });
+    const pipelineTargeted = invalidateSpy.mock.calls.some((call) => {
+      const key = (call[0] as { queryKey?: unknown[] })?.queryKey;
+      return Array.isArray(key) && key.includes("pot-ingest-pipeline");
+    });
     expect(targeted).toBe(true);
+    expect(pipelineTargeted).toBe(true);
   });
 });
 
@@ -194,7 +199,12 @@ describe("useBatchRetryEvents", () => {
       const key = (call[0] as { queryKey?: unknown[] })?.queryKey;
       return Array.isArray(key) && key.includes("pot-events") && key.includes("list");
     });
+    const pipelineTargeted = invalidateSpy.mock.calls.some((call) => {
+      const key = (call[0] as { queryKey?: unknown[] })?.queryKey;
+      return Array.isArray(key) && key.includes("pot-ingest-pipeline");
+    });
     expect(targeted).toBe(true);
+    expect(pipelineTargeted).toBe(true);
   });
 
   it("surfaces server errors", async () => {

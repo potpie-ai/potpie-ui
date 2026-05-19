@@ -212,6 +212,7 @@ export type ContextSearchResult = {
 export type ContextGraphGoal =
   | "retrieve"
   | "answer"
+  | "investigate"
   | "neighborhood"
   | "timeline"
   | "aggregate";
@@ -262,7 +263,13 @@ export type ContextGraphQuery = {
   limit?: number;
   consumer_hint?: string;
   intent?: string;
-  source_policy?: "references_only" | "summary" | "snippets" | "verify" | string;
+  source_policy?:
+    | "references_only"
+    | "summary"
+    | "snippets"
+    | "verify"
+    | "deep"
+    | string;
   artifact?: { kind: string; identifier: string } | null;
   budget?: ContextGraphBudget;
 };
@@ -312,6 +319,18 @@ export type ContextAnswerEnvelope = {
   errors?: unknown[];
   meta?: Record<string, unknown>;
   bundle?: unknown;
+  // Present only for goal=investigate (the agentic read loop): the tool
+  // trace the agent followed to reach the answer.
+  agent?: {
+    iterations?: number;
+    steps?: Array<{
+      tool: string;
+      arguments?: Record<string, unknown>;
+      result_kind?: string;
+      result_count?: number;
+    }>;
+    usage?: Record<string, unknown> | null;
+  };
 };
 
 // ---- Graph overview + project graph (used by the Graph tab) -----------------

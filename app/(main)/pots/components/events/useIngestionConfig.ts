@@ -4,6 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import PotService, { type PotIngestionConfig } from "@/services/PotService";
+import { ingestPipelineKey } from "./useIngestPipeline";
 
 export const ingestionConfigKey = (potId: string) =>
   ["pot-ingestion-config", potId] as const;
@@ -37,6 +38,7 @@ export function useForceFlushPot(potId: string) {
     mutationFn: async () => PotService.forceFlushPot(potId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pot-events", "list", potId] });
+      qc.invalidateQueries({ queryKey: ingestPipelineKey(potId) });
     },
   });
 }

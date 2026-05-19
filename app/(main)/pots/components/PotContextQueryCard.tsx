@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { FileSearch, Loader2, Search, Sparkles } from "lucide-react";
+import { Bot, FileSearch, Loader2, Search, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,17 +26,20 @@ type Props = {
   potId: string;
 };
 
-type QueryMode = "answer" | "retrieve";
+type QueryMode = "answer" | "retrieve" | "agentic";
 type QueryResult =
   | ContextGraphResult<ContextAnswerEnvelope>
   | ContextGraphResult<ContextSearchResult[]>;
 
+// Mirrors backend DEFAULT_INTENT_INCLUDES / CONTEXT_RESOLVE_RECIPES
+// (app/src/context-engine/domain/agent_context_port.py). Keep in sync.
 const INTENT_INCLUDE: Record<string, string[]> = {
   feature: [
     "purpose",
     "feature_map",
     "service_map",
     "docs",
+    "tickets",
     "decisions",
     "recent_changes",
     "owners",
@@ -48,6 +51,7 @@ const INTENT_INCLUDE: Record<string, string[]> = {
     "diagnostic_signals",
     "incidents",
     "alerts",
+    "causal_chain",
     "recent_changes",
     "config",
     "deployments",
@@ -73,6 +77,16 @@ const INTENT_INCLUDE: Record<string, string[]> = {
     "owners",
     "source_status",
   ],
+  planning: [
+    "purpose",
+    "feature_map",
+    "service_map",
+    "docs",
+    "tickets",
+    "decisions",
+    "recent_changes",
+    "source_status",
+  ],
   docs: ["docs", "decisions", "source_status"],
   onboarding: [
     "purpose",
@@ -83,6 +97,31 @@ const INTENT_INCLUDE: Record<string, string[]> = {
     "agent_instructions",
     "source_status",
   ],
+  refactor: [
+    "service_map",
+    "repo_map",
+    "recent_changes",
+    "decisions",
+    "owners",
+    "source_status",
+  ],
+  test: [
+    "recent_changes",
+    "decisions",
+    "local_workflows",
+    "scripts",
+    "source_status",
+  ],
+  security: [
+    "service_map",
+    "docs",
+    "decisions",
+    "incidents",
+    "config",
+    "owners",
+    "source_status",
+  ],
+  unknown: ["semantic_search", "recent_changes", "decisions", "source_status"],
 };
 
 function compactJson(value: unknown): string {
@@ -148,37 +187,59 @@ export default function PotContextQueryCard({ potId }: Props) {
     setLoading(true);
     try {
       const scope = repoName.trim() ? { repo_name: repoName.trim() } : {};
-      const data =
-        mode === "answer"
-          ? await PotService.queryContextGraph<ContextAnswerEnvelope>({
-              pot_id: potId,
-              query: q,
-              goal: "answer",
-              strategy: "hybrid",
-              intent,
-              include,
-              source_policy: sourcePolicy,
-              scope,
-              limit,
-              consumer_hint: "potpie-ui",
-              budget: {
-                max_items: limit,
-                timeout_ms: 8000,
-                freshness: "prefer_fresh",
-              },
-            })
-          : await PotService.queryContextGraph<ContextSearchResult[]>({
-              pot_id: potId,
-              query: q,
-              goal: "retrieve",
-              strategy: "semantic",
-              include: ["semantic_search"],
-              source_policy: sourcePolicy,
-              scope,
-              limit,
-              consumer_hint: "potpie-ui",
-              budget: { max_items: limit },
-            });
+      let data: QueryResult;
+      if (mode === "retrieve") {
+        data = await PotService.queryContextGraph<ContextSearchResult[]>({
+          pot_id: potId,
+          query: q,
+          goal: "retrieve",
+          strategy: "semantic",
+          include: ["semantic_search"],
+          source_policy: sourcePolicy,
+          scope,
+          limit,
+          consumer_hint: "potpie-ui",
+          budget: { max_items: limit },
+        });
+      } else if (mode === "agentic") {
+        // The read-side agent drives its own retrieval loop, so it needs a
+        // larger budget than the single-shot resolve path.
+        data = await PotService.queryContextGraph<ContextAnswerEnvelope>({
+          pot_id: potId,
+          query: q,
+          goal: "investigate",
+          strategy: "auto",
+          intent,
+          include,
+          source_policy: sourcePolicy,
+          scope,
+          limit,
+          consumer_hint: "potpie-ui",
+          budget: {
+            max_items: limit,
+            timeout_ms: 30000,
+            freshness: "prefer_fresh",
+          },
+        });
+      } else {
+        data = await PotService.queryContextGraph<ContextAnswerEnvelope>({
+          pot_id: potId,
+          query: q,
+          goal: "answer",
+          strategy: "hybrid",
+          intent,
+          include,
+          source_policy: sourcePolicy,
+          scope,
+          limit,
+          consumer_hint: "potpie-ui",
+          budget: {
+            max_items: limit,
+            timeout_ms: 8000,
+            freshness: "prefer_fresh",
+          },
+        });
+      }
       setResult(data);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to query context");
@@ -203,6 +264,10 @@ export default function PotContextQueryCard({ potId }: Props) {
             <ModeButton active={mode === "answer"} onClick={() => setMode("answer")}>
               <Sparkles className="h-3.5 w-3.5" />
               Resolve
+            </ModeButton>
+            <ModeButton active={mode === "agentic"} onClick={() => setMode("agentic")}>
+              <Bot className="h-3.5 w-3.5" />
+              Agentic
             </ModeButton>
             <ModeButton active={mode === "retrieve"} onClick={() => setMode("retrieve")}>
               <FileSearch className="h-3.5 w-3.5" />
@@ -246,6 +311,7 @@ export default function PotContextQueryCard({ potId }: Props) {
               <SelectItem value="summary">Summary</SelectItem>
               <SelectItem value="snippets">Snippets</SelectItem>
               <SelectItem value="verify">Verify</SelectItem>
+              <SelectItem value="deep">Deep</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={handleQuery} disabled={loading || !query.trim()}>
@@ -278,7 +344,7 @@ export default function PotContextQueryCard({ potId }: Props) {
           />
         </div>
 
-        {mode === "answer" ? (
+        {mode !== "retrieve" ? (
           <div className="flex flex-wrap gap-1">
             {include.slice(0, 9).map((item) => (
               <Badge key={item} variant="secondary" className="text-[10px] font-normal">
@@ -324,12 +390,17 @@ function QueryResultView({ result }: { result: QueryResult }) {
     ? result.meta?.fallbacks
     : [];
 
-  if (result.goal === "answer") {
+  if (result.goal === "answer" || result.goal === "investigate") {
     const envelope = result.result as ContextAnswerEnvelope;
     const evidence = Array.isArray(envelope.evidence) ? envelope.evidence : [];
     const sourceRefs = Array.isArray(envelope.source_refs)
       ? envelope.source_refs
       : [];
+    const agent = envelope.agent;
+    const fallbackReason =
+      typeof result.meta?.fallback === "string"
+        ? (result.meta.fallback as string)
+        : null;
 
     return (
       <div className="rounded-md border bg-background p-4">
@@ -349,6 +420,15 @@ function QueryResultView({ result }: { result: QueryResult }) {
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
           {envelope.answer?.summary || "No answer summary returned."}
         </p>
+
+        {fallbackReason ? (
+          <p className="mt-2 text-xs text-amber-700">
+            Agent unavailable ({fallbackReason}) — fell back to the
+            deterministic resolve path.
+          </p>
+        ) : null}
+
+        {agent ? <AgentTrace agent={agent} /> : null}
 
         <Separator className="my-3" />
 
@@ -484,6 +564,57 @@ function EvidenceList({ items }: { items: Array<Record<string, unknown>> }) {
         );
       })}
     </ul>
+  );
+}
+
+function AgentTrace({
+  agent,
+}: {
+  agent: NonNullable<ContextAnswerEnvelope["agent"]>;
+}) {
+  const steps = Array.isArray(agent.steps) ? agent.steps : [];
+  return (
+    <div className="mt-3 rounded-md border border-border/60 bg-muted/20 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          Agent trace
+        </p>
+        <Badge variant="secondary" className="text-[10px]">
+          {agent.iterations ?? steps.length} tool call
+          {(agent.iterations ?? steps.length) === 1 ? "" : "s"}
+        </Badge>
+      </div>
+      {steps.length === 0 ? (
+        <p className="mt-2 text-xs italic text-muted-foreground">
+          The agent answered without calling any tools.
+        </p>
+      ) : (
+        <ol className="mt-2 space-y-1.5">
+          {steps.map((step, idx) => (
+            <li
+              key={`${step.tool}-${idx}`}
+              className="flex flex-wrap items-center gap-1.5 text-xs"
+            >
+              <Badge variant="outline" className="font-mono text-[10px]">
+                {idx + 1}
+              </Badge>
+              <span className="font-medium">{step.tool}</span>
+              {step.arguments && Object.keys(step.arguments).length > 0 ? (
+                <span
+                  className="truncate font-mono text-[10px] text-muted-foreground"
+                  title={compactJson(step.arguments)}
+                >
+                  {compactJson(step.arguments)}
+                </span>
+              ) : null}
+              <span className="ml-auto text-[10px] text-muted-foreground">
+                {step.result_kind ?? "result"} · {step.result_count ?? 0}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
 

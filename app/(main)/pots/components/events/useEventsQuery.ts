@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-query";
 import PotService, { type PotEvent, type PotEventPage } from "@/services/PotService";
 import { PAGE_SIZE } from "./constants";
+import { ingestPipelineKey } from "./useIngestPipeline";
 
 export type EventsFilters = {
   status: string;
@@ -136,6 +137,7 @@ export function useRetryEvent(potId: string) {
       // Settle phase reconciles with the server regardless of outcome —
       // an error rolls back to whatever the server's latest snapshot is.
       qc.invalidateQueries({ queryKey: ["pot-events", "list", potId] });
+      qc.invalidateQueries({ queryKey: ingestPipelineKey(potId) });
     },
   });
 }
@@ -156,6 +158,7 @@ export function useBatchRetryEvents(potId: string) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["pot-events", "list", potId] });
+      qc.invalidateQueries({ queryKey: ingestPipelineKey(potId) });
     },
   });
 }

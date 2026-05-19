@@ -940,7 +940,7 @@ function GraphVisualizationPanel({
       }
       const cat = categoryForLabels(labels, labelCategoryMap);
       const color = cat
-        ? cssFromTailwindBorder(CATEGORY_META[cat].border)
+        ? cssFromTailwindBorder(categoryMeta(cat).border)
         : "#94a3b8";
       nodes.set(key, {
         id: key,

@@ -95,7 +95,7 @@ describe("useUpdateIngestionConfig", () => {
 describe("useForceFlushPot", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("invalidates the list query on success", async () => {
+  it("invalidates list and pipeline queries on success", async () => {
     const client = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
@@ -115,7 +115,12 @@ describe("useForceFlushPot", () => {
         Array.isArray(k) && k.includes("pot-events") && k.includes("list")
       );
     });
+    const pipelineTargeted = invalidate.mock.calls.some((c) => {
+      const k = (c[0] as { queryKey?: unknown[] })?.queryKey;
+      return Array.isArray(k) && k.includes("pot-ingest-pipeline");
+    });
     expect(targeted).toBe(true);
+    expect(pipelineTargeted).toBe(true);
   });
 
   it("returns batch_id null when nothing pending (no throw)", async () => {

@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  FolderOpen,
   GitBranch,
+  Loader2,
   Pause,
   Play,
   Plus,
@@ -11,6 +13,7 @@ import {
   Search,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 
 function GithubIcon({ className }: { className?: string }) {
@@ -103,6 +106,8 @@ const SOURCE_TYPES: SourceTypeOption[] = [
     requiresIntegrationType: "linear",
   },
 ];
+
+const GITHUB_REPO_PAGE_SIZE = 20;
 
 function extractRepoIdentity(repo: GithubRepo): {
   owner: string;
@@ -199,6 +204,8 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
   const [githubHasMore, setGithubHasMore] = useState(false);
   const [githubOffset, setGithubOffset] = useState(0);
   const [githubSearch, setGithubSearch] = useState("");
+  const githubSearchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const githubRequestIdRef = useRef(0);
   const [attachingRepoKey, setAttachingRepoKey] = useState<string | null>(null);
 
   // Linear picker state
@@ -265,11 +272,29 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
 
   // ---- Picker open/close + per-type bootstrapping --------------------
 
+  const clearGithubSearchDebounce = () => {
+    if (githubSearchDebounceRef.current) {
+      clearTimeout(githubSearchDebounceRef.current);
+      githubSearchDebounceRef.current = null;
+    }
+  };
+
+  const resetGithubPicker = () => {
+    clearGithubSearchDebounce();
+    githubRequestIdRef.current += 1;
+    setGithubSearch("");
+    setGithubRepos([]);
+    setGithubOffset(0);
+    setGithubHasMore(false);
+    setGithubLoading(false);
+  };
+
   const openPicker = (typeId: SourceTypeId) => {
     setPickerType(typeId);
     setPickerOpen(true);
     if (typeId === "github_repository") {
-      void loadGithubPage(true);
+      resetGithubPicker();
+      void loadGithubPage(true, "");
     } else if (typeId === "linear_team") {
       // Auto-select the only Linear integration if there's exactly one.
       const id =
@@ -285,33 +310,76 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
   const closePicker = () => {
     setPickerOpen(false);
     setPickerType(null);
-    setGithubSearch("");
-    setGithubRepos([]);
-    setGithubOffset(0);
-    setGithubHasMore(false);
+    resetGithubPicker();
     setLinearTeams([]);
     setLinearIntegrationId(null);
   };
 
+  const backToTypePicker = () => {
+    if (pickerType === "github_repository") {
+      resetGithubPicker();
+    }
+    setPickerType(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (githubSearchDebounceRef.current) {
+        clearTimeout(githubSearchDebounceRef.current);
+      }
+      githubRequestIdRef.current += 1;
+    };
+  }, []);
+
   // ---- GitHub picker -------------------------------------------------
 
-  const loadGithubPage = async (reset: boolean) => {
+  const loadGithubPage = async (reset: boolean, searchTerm = githubSearch) => {
+    const requestId = githubRequestIdRef.current + 1;
+    githubRequestIdRef.current = requestId;
+    const trimmedSearch = searchTerm.trim().slice(0, 200);
     setGithubLoading(true);
     try {
       const offset = reset ? 0 : githubOffset;
       const page = await BranchAndRepositoryService.searchUserRepositories({
-        search: githubSearch,
-        limit: 20,
+        search: trimmedSearch,
+        limit: GITHUB_REPO_PAGE_SIZE,
         offset,
       });
+      if (githubRequestIdRef.current !== requestId) return;
       setGithubRepos((prev) => (reset ? page.repositories : [...prev, ...page.repositories]));
       setGithubHasMore(page.has_next_page);
       setGithubOffset(offset + page.repositories.length);
     } catch {
-      toast.error("Failed to fetch GitHub repositories");
+      if (githubRequestIdRef.current === requestId) {
+        toast.error("Failed to fetch GitHub repositories");
+      }
     } finally {
-      setGithubLoading(false);
+      if (githubRequestIdRef.current === requestId) {
+        setGithubLoading(false);
+      }
     }
+  };
+
+  const searchGithubRepos = (value: string) => {
+    if (value.length > 200) return;
+    setGithubSearch(value);
+    clearGithubSearchDebounce();
+    githubRequestIdRef.current += 1;
+    setGithubLoading(true);
+    githubSearchDebounceRef.current = setTimeout(() => {
+      void loadGithubPage(true, value.trim());
+    }, 350);
+  };
+
+  const searchGithubReposNow = () => {
+    clearGithubSearchDebounce();
+    void loadGithubPage(true, githubSearch.trim());
+  };
+
+  const clearGithubSearch = () => {
+    clearGithubSearchDebounce();
+    setGithubSearch("");
+    void loadGithubPage(true, "");
   };
 
   const handleAttachGithub = async (repo: GithubRepo) => {
@@ -628,76 +696,105 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
             </div>
           ) : pickerType === "github_repository" ? (
             <div className="space-y-3 py-2">
-              <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Filter your GitHub repositories"
-                  value={githubSearch}
-                  onChange={(e) => setGithubSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void loadGithubPage(true);
-                  }}
-                />
-                <Button size="sm" variant="outline" onClick={() => loadGithubPage(true)}>
-                  Search
-                </Button>
-              </div>
-              <div className="max-h-96 overflow-y-auto space-y-1 border border-border/60 rounded-lg p-2">
-                {githubRepos.length === 0 && !githubLoading ? (
-                  <p className="text-xs text-muted-foreground italic px-2 py-4">
-                    No matching repositories.
-                  </p>
-                ) : (
-                  githubRepos.map((repo, idx) => {
-                    const identity = extractRepoIdentity(repo);
-                    if (!identity) return null;
-                    const key = `${identity.owner}/${identity.repo}`;
-                    const alreadyAttached = attachedScopeKeys.has(`gh:${key.toLowerCase()}`);
-                    return (
-                      <div
-                        key={`${key}-${idx}`}
-                        className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-muted/50"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{key}</p>
-                          {identity.default_branch ? (
-                            <p className="text-[11px] text-muted-foreground">
-                              default: {identity.default_branch}
-                            </p>
-                          ) : null}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant={alreadyAttached ? "ghost" : "outline"}
-                          disabled={alreadyAttached || attachingRepoKey === key}
-                          onClick={() => handleAttachGithub(repo)}
-                        >
-                          {alreadyAttached
-                            ? "Attached"
-                            : attachingRepoKey === key
-                              ? "Adding…"
-                              : "Attach"}
-                        </Button>
-                      </div>
-                    );
-                  })
-                )}
-                {githubLoading ? (
-                  <p className="text-xs text-muted-foreground px-2 py-2">Loading…</p>
+              <div className="max-h-96 flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-200">
+                  <Search className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <Input
+                    placeholder="Search repositories..."
+                    value={githubSearch}
+                    onChange={(e) => searchGithubRepos(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") searchGithubReposNow();
+                    }}
+                    maxLength={200}
+                    className="flex-1 h-8 text-[10px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent px-0"
+                  />
+                  {githubSearch.trim() ? (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-4 w-4 rounded-full hover:bg-zinc-100"
+                      onClick={clearGithubSearch}
+                      aria-label="Clear repository search"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="flex-1 overflow-y-auto min-h-0 p-2">
+                  {githubLoading ? (
+                    <div className="p-7 text-center">
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
+                      <p className="text-[10px] text-zinc-500">
+                        {githubSearch.trim() ? "Searching repositories..." : "Loading repositories..."}
+                      </p>
+                    </div>
+                  ) : githubRepos.length === 0 ? (
+                    <div className="p-7 text-center">
+                      <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
+                      <p className="text-[10px] font-medium text-foreground mb-1">
+                        {githubSearch.trim()
+                          ? `No repositories found matching '${githubSearch.trim()}'`
+                          : "No parsed repositories found"}
+                      </p>
+                      <p className="text-[9px] text-zinc-400">
+                        {githubSearch.trim() ? "Try a different search term" : "Parse a repository to get started"}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {githubRepos.map((repo, idx) => {
+                        const identity = extractRepoIdentity(repo);
+                        if (!identity) return null;
+                        const key = `${identity.owner}/${identity.repo}`;
+                        const alreadyAttached = attachedScopeKeys.has(`gh:${key.toLowerCase()}`);
+                        return (
+                          <div
+                            key={`${key}-${idx}`}
+                            className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 hover:bg-zinc-50"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-[10px] font-medium text-foreground">{key}</p>
+                              {identity.default_branch ? (
+                                <p className="text-[9px] text-zinc-400 mt-0.5 truncate">
+                                  default: {identity.default_branch}
+                                </p>
+                              ) : null}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 shrink-0 border border-zinc-200 bg-white text-[10px] hover:bg-zinc-50"
+                              disabled={alreadyAttached || attachingRepoKey === key}
+                              onClick={() => handleAttachGithub(repo)}
+                            >
+                              {alreadyAttached
+                                ? "Attached"
+                                : attachingRepoKey === key
+                                  ? "Adding…"
+                                  : "Attach"}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                {githubHasMore ? (
+                  <div className="border-t border-zinc-100 bg-white p-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={githubLoading}
+                      onClick={() => loadGithubPage(false, githubSearch)}
+                      className="h-7 w-full gap-1.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Load more
+                    </Button>
+                  </div>
                 ) : null}
               </div>
-              {githubHasMore ? (
-                <div className="flex justify-center">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={githubLoading}
-                    onClick={() => loadGithubPage(false)}
-                  >
-                    Load more
-                  </Button>
-                </div>
-              ) : null}
             </div>
           ) : pickerType === "linear_team" ? (
             <div className="space-y-3 py-2">
@@ -769,7 +866,7 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
 
           <DialogFooter>
             {pickerType !== null ? (
-              <Button variant="ghost" onClick={() => setPickerType(null)}>
+              <Button variant="ghost" onClick={backToTypePicker}>
                 Back
               </Button>
             ) : null}

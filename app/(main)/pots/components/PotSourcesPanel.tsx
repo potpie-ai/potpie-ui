@@ -110,7 +110,6 @@ const SOURCE_TYPES: SourceTypeOption[] = [
 
 const GITHUB_REPO_PAGE_SIZE = 20;
 const GITHUB_PILLS_MAX_HEIGHT_CLASS = "max-h-32";
-const GITHUB_PILLS_EXPANDED_MAX_HEIGHT_CLASS = "max-h-40";
 
 type GithubRepoIdentity = {
   owner: string;
@@ -220,7 +219,6 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
   >({});
   const [addingGithubRepos, setAddingGithubRepos] = useState(false);
   const [selectingAllGithubRepos, setSelectingAllGithubRepos] = useState(false);
-  const [githubPillsExpanded, setGithubPillsExpanded] = useState(false);
   const [githubPillsVisibleCount, setGithubPillsVisibleCount] = useState<number | null>(
     null,
   );
@@ -309,16 +307,14 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     selectedGithubRepoPills.length - (githubPillsVisibleCount ?? selectedGithubRepoPills.length),
   );
 
-  const visibleGithubRepoPills = githubPillsExpanded
-    ? selectedGithubRepoPills
-    : selectedGithubRepoPills.slice(
-        0,
-        githubPillsVisibleCount ?? selectedGithubRepoPills.length,
-      );
+  const visibleGithubRepoPills = selectedGithubRepoPills.slice(
+    0,
+    githubPillsVisibleCount ?? selectedGithubRepoPills.length,
+  );
 
   useLayoutEffect(() => {
-    if (githubPillsExpanded || selectedGithubRepoPills.length === 0) {
-      setGithubPillsVisibleCount(selectedGithubRepoPills.length);
+    if (selectedGithubRepoPills.length === 0) {
+      setGithubPillsVisibleCount(0);
       return;
     }
 
@@ -351,11 +347,10 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     }
 
     setGithubPillsVisibleCount(visible);
-  }, [selectedGithubRepoPills, githubPillsExpanded]);
+  }, [selectedGithubRepoPills]);
 
   useEffect(() => {
     if (selectedGithubRepoPills.length === 0) {
-      setGithubPillsExpanded(false);
       setGithubPillsVisibleCount(null);
     }
   }, [selectedGithubRepoPills.length]);
@@ -469,7 +464,6 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     setSelectedGithubRepos({});
     setAddingGithubRepos(false);
     setSelectingAllGithubRepos(false);
-    setGithubPillsExpanded(false);
     setGithubPillsVisibleCount(null);
   };
 
@@ -977,30 +971,24 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
                 </div>
                 {selectedGithubRepoPills.length > 0 ? (
                   <div className="relative border-b border-zinc-100 bg-zinc-50/50">
-                    {!githubPillsExpanded ? (
-                      <div
-                        ref={githubPillsMeasureRef}
-                        aria-hidden
-                        className={`invisible absolute inset-x-0 top-0 flex flex-wrap gap-1.5 overflow-hidden px-3 py-2 pointer-events-none ${GITHUB_PILLS_MAX_HEIGHT_CLASS}`}
-                      >
-                        {selectedGithubRepoPills.map(({ selectionKey, label }) => (
-                          <span
-                            key={`measure-${selectionKey}`}
-                            data-github-pill
-                            className="inline-flex max-w-full items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 py-0.5 pl-2 pr-1 text-[10px] font-medium text-zinc-700"
-                          >
-                            <span className="max-w-[160px] truncate">{label}</span>
-                            <span className="h-3 w-3 shrink-0" />
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
                     <div
-                      className={`flex flex-wrap gap-1.5 px-3 py-2 ${
-                        githubPillsExpanded
-                          ? `${GITHUB_PILLS_EXPANDED_MAX_HEIGHT_CLASS} overflow-y-auto`
-                          : `${GITHUB_PILLS_MAX_HEIGHT_CLASS} overflow-hidden`
-                      }`}
+                      ref={githubPillsMeasureRef}
+                      aria-hidden
+                      className={`invisible absolute inset-x-0 top-0 flex flex-wrap gap-1.5 overflow-hidden px-3 py-2 pointer-events-none ${GITHUB_PILLS_MAX_HEIGHT_CLASS}`}
+                    >
+                      {selectedGithubRepoPills.map(({ selectionKey, label }) => (
+                        <span
+                          key={`measure-${selectionKey}`}
+                          data-github-pill
+                          className="inline-flex max-w-full items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 py-0.5 pl-2 pr-1 text-[10px] font-medium text-zinc-700"
+                        >
+                          <span className="max-w-[160px] truncate">{label}</span>
+                          <span className="h-3 w-3 shrink-0" />
+                        </span>
+                      ))}
+                    </div>
+                    <div
+                      className={`flex flex-wrap gap-1.5 overflow-hidden px-3 py-2 ${GITHUB_PILLS_MAX_HEIGHT_CLASS}`}
                     >
                       {visibleGithubRepoPills.map(({ selectionKey, label }) => (
                         <span
@@ -1020,15 +1008,10 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
                           </button>
                         </span>
                       ))}
-                      {!githubPillsExpanded && hiddenGithubPillCount > 0 ? (
-                        <button
-                          type="button"
-                          disabled={addingGithubRepos || selectingAllGithubRepos}
-                          onClick={() => setGithubPillsExpanded(true)}
-                          className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
+                      {hiddenGithubPillCount > 0 ? (
+                        <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-500">
                           + {hiddenGithubPillCount} more
-                        </button>
+                        </span>
                       ) : null}
                     </div>
                   </div>

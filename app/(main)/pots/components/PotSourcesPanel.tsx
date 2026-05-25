@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   FolderOpen,
@@ -41,6 +41,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -108,14 +109,18 @@ const SOURCE_TYPES: SourceTypeOption[] = [
 ];
 
 const GITHUB_REPO_PAGE_SIZE = 20;
+const GITHUB_PILLS_MAX_HEIGHT_CLASS = "max-h-32";
+const GITHUB_PILLS_EXPANDED_MAX_HEIGHT_CLASS = "max-h-40";
 
-function extractRepoIdentity(repo: GithubRepo): {
+type GithubRepoIdentity = {
   owner: string;
   repo: string;
   default_branch?: string;
   external_repo_id?: string;
   remote_url?: string;
-} | null {
+};
+
+function extractRepoIdentity(repo: GithubRepo): GithubRepoIdentity | null {
   const fullName = repo.full_name;
   let owner = "";
   let name = "";
@@ -136,6 +141,10 @@ function extractRepoIdentity(repo: GithubRepo): {
     external_repo_id: repo.id != null ? String(repo.id) : undefined,
     remote_url: repo.html_url,
   };
+}
+
+function githubRepoSelectionKey(identity: GithubRepoIdentity): string {
+  return `gh:${identity.owner.toLowerCase()}/${identity.repo.toLowerCase()}`;
 }
 
 function describeSource(s: PotSource): { title: string; subtitle: string | null; url: string | null; avatarUrl: string | null } {
@@ -206,7 +215,16 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
   const [githubSearch, setGithubSearch] = useState("");
   const githubSearchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const githubRequestIdRef = useRef(0);
-  const [attachingRepoKey, setAttachingRepoKey] = useState<string | null>(null);
+  const [selectedGithubRepos, setSelectedGithubRepos] = useState<
+    Record<string, GithubRepoIdentity>
+  >({});
+  const [addingGithubRepos, setAddingGithubRepos] = useState(false);
+  const [selectingAllGithubRepos, setSelectingAllGithubRepos] = useState(false);
+  const [githubPillsExpanded, setGithubPillsExpanded] = useState(false);
+  const [githubPillsVisibleCount, setGithubPillsVisibleCount] = useState<number | null>(
+    null,
+  );
+  const githubPillsMeasureRef = useRef<HTMLDivElement>(null);
 
   // Linear picker state
   const [linearIntegrationId, setLinearIntegrationId] = useState<string | null>(null);
@@ -270,6 +288,167 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     return set;
   }, [sources]);
 
+  const selectedGithubCount = useMemo(
+    () => Object.keys(selectedGithubRepos).length,
+    [selectedGithubRepos],
+  );
+
+  const selectedGithubRepoPills = useMemo(
+    () =>
+      Object.entries(selectedGithubRepos)
+        .map(([selectionKey, identity]) => ({
+          selectionKey,
+          label: `${identity.owner}/${identity.repo}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [selectedGithubRepos],
+  );
+
+  const hiddenGithubPillCount = Math.max(
+    0,
+    selectedGithubRepoPills.length - (githubPillsVisibleCount ?? selectedGithubRepoPills.length),
+  );
+
+  const visibleGithubRepoPills = githubPillsExpanded
+    ? selectedGithubRepoPills
+    : selectedGithubRepoPills.slice(
+        0,
+        githubPillsVisibleCount ?? selectedGithubRepoPills.length,
+      );
+
+  useLayoutEffect(() => {
+    if (githubPillsExpanded || selectedGithubRepoPills.length === 0) {
+      setGithubPillsVisibleCount(selectedGithubRepoPills.length);
+      return;
+    }
+
+    const container = githubPillsMeasureRef.current;
+    if (!container) {
+      setGithubPillsVisibleCount(selectedGithubRepoPills.length);
+      return;
+    }
+
+    const pillNodes = container.querySelectorAll("[data-github-pill]");
+    const total = pillNodes.length;
+    if (total === 0) {
+      setGithubPillsVisibleCount(0);
+      return;
+    }
+
+    const maxBottom = container.getBoundingClientRect().bottom;
+    let visible = total;
+    for (let i = 0; i < total; i += 1) {
+      const pillBottom = pillNodes[i].getBoundingClientRect().bottom;
+      if (pillBottom > maxBottom + 1) {
+        visible = i;
+        break;
+      }
+    }
+
+    const hidden = total - visible;
+    if (hidden > 0) {
+      visible = Math.max(1, visible - 1);
+    }
+
+    setGithubPillsVisibleCount(visible);
+  }, [selectedGithubRepoPills, githubPillsExpanded]);
+
+  useEffect(() => {
+    if (selectedGithubRepoPills.length === 0) {
+      setGithubPillsExpanded(false);
+      setGithubPillsVisibleCount(null);
+    }
+  }, [selectedGithubRepoPills.length]);
+
+  const selectableGithubRepos = useMemo(() => {
+    const selectable: Record<string, GithubRepoIdentity> = {};
+    githubRepos.forEach((repo) => {
+      const identity = extractRepoIdentity(repo);
+      if (!identity) return;
+      const selectionKey = githubRepoSelectionKey(identity);
+      if (attachedScopeKeys.has(selectionKey)) return;
+      selectable[selectionKey] = identity;
+    });
+    return selectable;
+  }, [githubRepos, attachedScopeKeys]);
+
+  const selectableGithubCount = Object.keys(selectableGithubRepos).length;
+
+  const allLoadedGithubReposSelected = useMemo(() => {
+    if (selectableGithubCount === 0) return false;
+    return Object.keys(selectableGithubRepos).every(
+      (selectionKey) => selectedGithubRepos[selectionKey],
+    );
+  }, [selectableGithubRepos, selectableGithubCount, selectedGithubRepos]);
+
+  const canDeselectAllGithubRepos =
+    allLoadedGithubReposSelected && !githubHasMore && selectableGithubCount > 0;
+
+  const displayedGithubRepos = useMemo(
+    () =>
+      githubRepos.filter((repo) => {
+        const identity = extractRepoIdentity(repo);
+        if (!identity) return false;
+        return !attachedScopeKeys.has(githubRepoSelectionKey(identity));
+      }),
+    [githubRepos, attachedScopeKeys],
+  );
+
+  const toggleSelectAllGithubRepos = async () => {
+    if (selectingAllGithubRepos || addingGithubRepos) return;
+
+    if (canDeselectAllGithubRepos) {
+      setSelectedGithubRepos((prev) => {
+        const next = { ...prev };
+        Object.keys(selectableGithubRepos).forEach((selectionKey) => {
+          delete next[selectionKey];
+        });
+        return next;
+      });
+      return;
+    }
+
+    if (selectableGithubCount === 0 && !githubHasMore) return;
+
+    setSelectingAllGithubRepos(true);
+    try {
+      const trimmedSearch = githubSearch.trim().slice(0, 200);
+      let offset = 0;
+      let allRepos: GithubRepo[] = [];
+      let hasMore = true;
+
+      while (hasMore) {
+        const page = await BranchAndRepositoryService.searchUserRepositories({
+          search: trimmedSearch,
+          limit: GITHUB_REPO_PAGE_SIZE,
+          offset,
+        });
+        allRepos = allRepos.concat(page.repositories);
+        hasMore = page.has_next_page;
+        offset += page.repositories.length;
+        if (page.repositories.length === 0) break;
+      }
+
+      setGithubRepos(allRepos);
+      setGithubOffset(allRepos.length);
+      setGithubHasMore(false);
+
+      const selectable: Record<string, GithubRepoIdentity> = {};
+      allRepos.forEach((repo) => {
+        const identity = extractRepoIdentity(repo);
+        if (!identity) return;
+        const selectionKey = githubRepoSelectionKey(identity);
+        if (attachedScopeKeys.has(selectionKey)) return;
+        selectable[selectionKey] = identity;
+      });
+      setSelectedGithubRepos(selectable);
+    } catch {
+      toast.error("Failed to load all repositories");
+    } finally {
+      setSelectingAllGithubRepos(false);
+    }
+  };
+
   // ---- Picker open/close + per-type bootstrapping --------------------
 
   const clearGithubSearchDebounce = () => {
@@ -287,6 +466,11 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     setGithubOffset(0);
     setGithubHasMore(false);
     setGithubLoading(false);
+    setSelectedGithubRepos({});
+    setAddingGithubRepos(false);
+    setSelectingAllGithubRepos(false);
+    setGithubPillsExpanded(false);
+    setGithubPillsVisibleCount(null);
   };
 
   const openPicker = (typeId: SourceTypeId) => {
@@ -382,23 +566,74 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     void loadGithubPage(true, "");
   };
 
-  const handleAttachGithub = async (repo: GithubRepo) => {
+  const toggleGithubRepoSelection = (repo: GithubRepo) => {
     const identity = extractRepoIdentity(repo);
-    if (!identity) {
-      toast.error("Could not read repository identity.");
-      return;
-    }
-    const key = `${identity.owner}/${identity.repo}`;
-    setAttachingRepoKey(key);
+    if (!identity) return;
+    const selectionKey = githubRepoSelectionKey(identity);
+    if (attachedScopeKeys.has(selectionKey)) return;
+
+    setSelectedGithubRepos((prev) => {
+      if (prev[selectionKey]) {
+        const next = { ...prev };
+        delete next[selectionKey];
+        return next;
+      }
+      return { ...prev, [selectionKey]: identity };
+    });
+  };
+
+  const removeSelectedGithubRepo = (selectionKey: string) => {
+    setSelectedGithubRepos((prev) => {
+      if (!prev[selectionKey]) return prev;
+      const next = { ...prev };
+      delete next[selectionKey];
+      return next;
+    });
+  };
+
+  const handleAddSelectedGithubRepos = async () => {
+    const identities = Object.values(selectedGithubRepos);
+    if (identities.length === 0) return;
+
+    setAddingGithubRepos(true);
     try {
-      await PotService.addGithubRepositorySource(potId, identity);
-      toast.success(`Attached ${key}`);
-      await refresh();
-      onPrimaryRepoChanged();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to attach repository");
+      const results = await Promise.allSettled(
+        identities.map((identity) =>
+          PotService.addGithubRepositorySource(potId, identity),
+        ),
+      );
+      const succeeded = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+
+      if (succeeded > 0) {
+        await refresh();
+        onPrimaryRepoChanged();
+      }
+
+      if (failed === 0) {
+        toast.success(
+          succeeded === 1
+            ? `Added ${identities[0].owner}/${identities[0].repo}`
+            : `Added ${succeeded} repositories`,
+        );
+        setSelectedGithubRepos({});
+        closePicker();
+      } else if (succeeded > 0) {
+        toast.error(`Added ${succeeded} of ${results.length} repositories. ${failed} failed.`);
+        setSelectedGithubRepos((prev) => {
+          const next = { ...prev };
+          results.forEach((result, index) => {
+            if (result.status === "fulfilled") {
+              delete next[githubRepoSelectionKey(identities[index])];
+            }
+          });
+          return next;
+        });
+      } else {
+        toast.error("Failed to add selected repositories");
+      }
     } finally {
-      setAttachingRepoKey(null);
+      setAddingGithubRepos(false);
     }
   };
 
@@ -713,47 +948,162 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-4 w-4 rounded-full hover:bg-zinc-100"
+                      className="h-4 w-4 shrink-0 rounded-full hover:bg-zinc-100"
                       onClick={clearGithubSearch}
                       aria-label="Clear repository search"
                     >
                       <X className="h-3 w-3" />
                     </Button>
                   ) : null}
+                  {selectingAllGithubRepos ? (
+                    <span className="shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] text-zinc-400">
+                      Selecting...
+                    </span>
+                  ) : !githubLoading &&
+                    (selectableGithubCount > 0 || githubHasMore) ? (
+                    <button
+                      type="button"
+                      disabled={addingGithubRepos}
+                      onClick={() => void toggleSelectAllGithubRepos()}
+                      className="shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {canDeselectAllGithubRepos
+                        ? `Deselect all (${selectedGithubCount})`
+                        : selectedGithubCount > 0
+                          ? `Select all (${selectedGithubCount})`
+                          : "Select all"}
+                    </button>
+                  ) : null}
                 </div>
+                {selectedGithubRepoPills.length > 0 ? (
+                  <div className="relative border-b border-zinc-100 bg-zinc-50/50">
+                    {!githubPillsExpanded ? (
+                      <div
+                        ref={githubPillsMeasureRef}
+                        aria-hidden
+                        className={`invisible absolute inset-x-0 top-0 flex flex-wrap gap-1.5 overflow-hidden px-3 py-2 pointer-events-none ${GITHUB_PILLS_MAX_HEIGHT_CLASS}`}
+                      >
+                        {selectedGithubRepoPills.map(({ selectionKey, label }) => (
+                          <span
+                            key={`measure-${selectionKey}`}
+                            data-github-pill
+                            className="inline-flex max-w-full items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 py-0.5 pl-2 pr-1 text-[10px] font-medium text-zinc-700"
+                          >
+                            <span className="max-w-[160px] truncate">{label}</span>
+                            <span className="h-3 w-3 shrink-0" />
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div
+                      className={`flex flex-wrap gap-1.5 px-3 py-2 ${
+                        githubPillsExpanded
+                          ? `${GITHUB_PILLS_EXPANDED_MAX_HEIGHT_CLASS} overflow-y-auto`
+                          : `${GITHUB_PILLS_MAX_HEIGHT_CLASS} overflow-hidden`
+                      }`}
+                    >
+                      {visibleGithubRepoPills.map(({ selectionKey, label }) => (
+                        <span
+                          key={selectionKey}
+                          data-github-pill
+                          className="inline-flex max-w-full items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 py-0.5 pl-2 pr-1 text-[10px] font-medium text-zinc-700"
+                        >
+                          <span className="max-w-[160px] truncate">{label}</span>
+                          <button
+                            type="button"
+                            disabled={addingGithubRepos || selectingAllGithubRepos}
+                            onClick={() => removeSelectedGithubRepo(selectionKey)}
+                            className="rounded-full p-0.5 text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Remove ${label}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                      {!githubPillsExpanded && hiddenGithubPillCount > 0 ? (
+                        <button
+                          type="button"
+                          disabled={addingGithubRepos || selectingAllGithubRepos}
+                          onClick={() => setGithubPillsExpanded(true)}
+                          className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          + {hiddenGithubPillCount} more
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex-1 overflow-y-auto min-h-0 p-2">
-                  {githubLoading ? (
+                  {githubLoading || selectingAllGithubRepos ? (
                     <div className="p-7 text-center">
                       <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
                       <p className="text-[10px] text-zinc-500">
-                        {githubSearch.trim() ? "Searching repositories..." : "Loading repositories..."}
+                        {selectingAllGithubRepos
+                          ? "Loading all repositories..."
+                          : githubSearch.trim()
+                            ? "Searching repositories..."
+                            : "Loading repositories..."}
                       </p>
                     </div>
-                  ) : githubRepos.length === 0 ? (
+                  ) : displayedGithubRepos.length === 0 ? (
                     <div className="p-7 text-center">
                       <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
                       <p className="text-[10px] font-medium text-foreground mb-1">
-                        {githubSearch.trim()
-                          ? `No repositories found matching '${githubSearch.trim()}'`
-                          : "No parsed repositories found"}
+                        {githubRepos.length > 0
+                          ? "All matching repositories are already attached"
+                          : githubSearch.trim()
+                            ? `No repositories found matching '${githubSearch.trim()}'`
+                            : "No parsed repositories found"}
                       </p>
                       <p className="text-[9px] text-zinc-400">
-                        {githubSearch.trim() ? "Try a different search term" : "Parse a repository to get started"}
+                        {githubRepos.length > 0
+                          ? "Try a different search term"
+                          : githubSearch.trim()
+                            ? "Try a different search term"
+                            : "Parse a repository to get started"}
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-0.5">
-                      {githubRepos.map((repo, idx) => {
+                      {displayedGithubRepos.map((repo, idx) => {
                         const identity = extractRepoIdentity(repo);
                         if (!identity) return null;
                         const key = `${identity.owner}/${identity.repo}`;
-                        const alreadyAttached = attachedScopeKeys.has(`gh:${key.toLowerCase()}`);
+                        const selectionKey = githubRepoSelectionKey(identity);
+                        const isSelected = Boolean(selectedGithubRepos[selectionKey]);
                         return (
                           <div
                             key={`${key}-${idx}`}
-                            className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 hover:bg-zinc-50"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              if (!addingGithubRepos) {
+                                toggleGithubRepoSelection(repo);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (
+                                !addingGithubRepos &&
+                                (e.key === "Enter" || e.key === " ")
+                              ) {
+                                e.preventDefault();
+                                toggleGithubRepoSelection(repo);
+                              }
+                            }}
+                            className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors cursor-pointer ${
+                              isSelected
+                                ? "bg-zinc-50 border border-zinc-200"
+                                : "hover:bg-zinc-50"
+                            }`}
                           >
-                            <div className="min-w-0">
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={addingGithubRepos}
+                              onCheckedChange={() => toggleGithubRepoSelection(repo)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-3.5 w-3.5 shrink-0 flex items-center justify-center rounded-[3px] [&>span]:flex [&>span]:h-full [&>span]:w-full [&>span]:items-center [&>span]:justify-center [&_svg]:h-2.5 [&_svg]:w-2.5"
+                            />
+                            <div className="min-w-0 flex-1">
                               <p className="truncate text-[10px] font-medium text-foreground">{key}</p>
                               {identity.default_branch ? (
                                 <p className="text-[9px] text-zinc-400 mt-0.5 truncate">
@@ -761,19 +1111,6 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
                                 </p>
                               ) : null}
                             </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 shrink-0 border border-zinc-200 bg-white text-[10px] hover:bg-zinc-50"
-                              disabled={alreadyAttached || attachingRepoKey === key}
-                              onClick={() => handleAttachGithub(repo)}
-                            >
-                              {alreadyAttached
-                                ? "Attached"
-                                : attachingRepoKey === key
-                                  ? "Adding…"
-                                  : "Attach"}
-                            </Button>
                           </div>
                         );
                       })}
@@ -785,7 +1122,7 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={githubLoading}
+                      disabled={githubLoading || selectingAllGithubRepos}
                       onClick={() => loadGithubPage(false, githubSearch)}
                       className="h-7 w-full gap-1.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50"
                     >
@@ -866,13 +1203,26 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
 
           <DialogFooter>
             {pickerType !== null ? (
-              <Button variant="ghost" onClick={backToTypePicker}>
+              <Button variant="ghost" onClick={backToTypePicker} disabled={addingGithubRepos}>
                 Back
               </Button>
             ) : null}
-            <Button variant="outline" onClick={closePicker}>
-              Done
-            </Button>
+            {pickerType === "github_repository" ? (
+              <Button
+                onClick={() => void handleAddSelectedGithubRepos()}
+                disabled={selectedGithubCount === 0 || addingGithubRepos}
+              >
+                {addingGithubRepos
+                  ? "Adding…"
+                  : selectedGithubCount > 0
+                    ? `Add (${selectedGithubCount})`
+                    : "Add"}
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={closePicker}>
+                Done
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

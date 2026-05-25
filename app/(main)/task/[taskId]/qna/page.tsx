@@ -28,7 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { FileText, Info } from "lucide-react";
+import { FileText, Github, GitBranch, Info } from "lucide-react";
 import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 import { hasSpecBeenCompletedOnce } from "@/lib/buildFlow";
 import {

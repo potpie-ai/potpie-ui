@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - staging
 
 env:
   # Must match GCP project hosting AR (e.g. staging-433102). Set in repo/environment secret STAGE_GCLOUD_PROJECT_ID.
@@ -77,7 +77,6 @@ jobs:
           echo "NEXT_PUBLIC_SENTRY_CLIENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_SENTRY_CLIENT_ID }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SENTRY_CLIENT_SECRET=${{ secrets.STAGE_NEXT_PUBLIC_SENTRY_CLIENT_SECRET }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SENTRY_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_SENTRY_REDIRECT_URI }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_LINEAR_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SLACK_SERVER=${{ secrets.STAGE_NEXT_PUBLIC_SLACK_SERVER }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_MULTIMODAL_ENABLED=${{ secrets.STAGE_NEXT_PUBLIC_MULTIMODAL_ENABLED }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID }}" >> $GITHUB_ENV
@@ -117,7 +116,6 @@ jobs:
             --build-arg NEXT_PUBLIC_SENTRY_CLIENT_ID="${{ env.NEXT_PUBLIC_SENTRY_CLIENT_ID }}" \
             --build-arg NEXT_PUBLIC_SENTRY_CLIENT_SECRET="${{ env.NEXT_PUBLIC_SENTRY_CLIENT_SECRET }}" \
             --build-arg NEXT_PUBLIC_SENTRY_REDIRECT_URI="${{ env.NEXT_PUBLIC_SENTRY_REDIRECT_URI }}" \
-            --build-arg NEXT_PUBLIC_LINEAR_REDIRECT_URI="${{ env.NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" \
             --build-arg NEXT_PUBLIC_SLACK_SERVER="${{ env.NEXT_PUBLIC_SLACK_SERVER }}" \
             --build-arg NEXT_PUBLIC_MULTIMODAL_ENABLED="${{ env.NEXT_PUBLIC_MULTIMODAL_ENABLED }}" \
             --build-arg NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID="${{ env.NEXT_PUBLIC_GOOGLE_SSO_CLIENT_ID }}" \

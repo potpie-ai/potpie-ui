@@ -30,6 +30,7 @@ import {
   TestTube,
   ScrollText,
   ChevronDown,
+  ChevronUp,
   FileText,
   Copy,
   Clock,
@@ -360,6 +361,11 @@ const CodeFileCard = ({
         <span className="text-xs font-medium text-[#022019] truncate">
           {change.path}
         </span>
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-[#022019] shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-[#022019] shrink-0" />
+        )}
       </button>
       {isExpanded && (
         <div className="min-h-[280px]">
@@ -2203,7 +2209,7 @@ export default function VerticalTaskExecution() {
   if (!planId && isLoadingPlanItems) {
     return (
       <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-        <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+        <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
           <BuildFlowChatHeader
             recipeId={recipeId}
             title={codePageHeaderTitle}
@@ -2310,8 +2316,8 @@ export default function VerticalTaskExecution() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-gray-200 antialiased">
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
         <BuildFlowChatHeader
           recipeId={recipeId}
           title={codePageHeaderTitle}
@@ -2331,7 +2337,7 @@ export default function VerticalTaskExecution() {
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {msg.role === "assistant" && (
-                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
+                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C]">
                       <Image
                         src="/images/logo.svg"
                         width={24}
@@ -2689,7 +2695,7 @@ export default function VerticalTaskExecution() {
 
         {/* Right: Code generation */}
         <div className="overflow-hidden flex-none flex flex-col w-1/2 min-w-0">
-          <aside className="h-full w-full min-w-[320px] flex flex-col border-l border-[#E5E8E6]">
+          <aside className="h-full w-full min-w-[320px] flex flex-col">
             <div className="p-6 border-b border-[#E5E8E6] bg-white">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0">

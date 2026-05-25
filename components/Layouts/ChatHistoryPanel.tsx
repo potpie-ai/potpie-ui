@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   ChevronDown,
   ChevronUp,
+  Plus,
 } from "lucide-react";
 import Image from "next/image";
 import { toast } from "@/components/ui/sonner";
@@ -505,6 +506,13 @@ export function ChatHistoryPanel() {
     [pathname]
   );
 
+  const isActiveRecipe = useCallback(
+    (recipeId: string) => {
+      return pathname.startsWith(`/task/${recipeId}`);
+    },
+    [pathname]
+  );
+
   const toggleRepository = useCallback((repository: string) => {
     setExpandedRepositories((prev) => {
       const next = new Set(prev);
@@ -516,6 +524,24 @@ export function ChatHistoryPanel() {
       return next;
     });
   }, []);
+
+  const handleRepoQuickStart = useCallback(
+    (repository: string, branch?: string, event?: React.MouseEvent) => {
+      event?.stopPropagation();
+      const repoName = repository?.trim();
+      if (!repoName || repoName === "No repository") {
+        toast.error("Repository is not available for quick start");
+        return;
+      }
+
+      const params = new URLSearchParams({ repo: repoName });
+      if (branch?.trim()) {
+        params.set("branch", branch.trim());
+      }
+      router.push(`/newchat?${params.toString()}`);
+    },
+    [router]
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -571,7 +597,19 @@ export function ChatHistoryPanel() {
               </p>
             </div>
           ) : (
-            groupedItems.map((group) => (
+            groupedItems.map((group) => {
+              const distinctBranches = Array.from(
+                new Set(
+                  group.items
+                    .map((item: any) =>
+                      typeof item.branch === "string" ? item.branch.trim() : ""
+                    )
+                    .filter((branch: string) => branch.length > 0)
+                )
+              );
+              const quickStartBranch =
+                distinctBranches.length === 1 ? distinctBranches[0] : undefined;
+              return (
               <div key={group.repository}>
                 <div className="flex items-center justify-between gap-2 px-2 py-1 text-sm text-black">
                   <div className="flex items-center gap-2 min-w-0">
@@ -590,23 +628,40 @@ export function ChatHistoryPanel() {
                       {getRepositoryDisplayName(group.repository)}
                     </span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-4 w-4 shrink-0"
-                    onClick={() => toggleRepository(group.repository)}
-                    aria-label={
-                      expandedRepositories.has(group.repository)
-                        ? `Collapse ${group.repository}`
-                        : `Expand ${group.repository}`
-                    }
-                  >
-                    {expandedRepositories.has(group.repository) ? (
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      onClick={(event) =>
+                        handleRepoQuickStart(
+                          group.repository,
+                          quickStartBranch,
+                          event
+                        )
+                      }
+                      aria-label={`Quick start ${group.repository}`}
+                    >
+                      <Plus className="h-3.5 w-3.5 text-[#B6E343]" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      onClick={() => toggleRepository(group.repository)}
+                      aria-label={
+                        expandedRepositories.has(group.repository)
+                          ? `Collapse ${group.repository}`
+                          : `Expand ${group.repository}`
+                      }
+                    >
+                      {expandedRepositories.has(group.repository) ? (
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
                 {expandedRepositories.has(group.repository) &&
@@ -614,7 +669,9 @@ export function ChatHistoryPanel() {
                   const rowKey = item.type === "recipe" ? `recipe-${item.id}` : item.id;
                   const isRecipe = item.type === "recipe";
                   const isPinned = !isRecipe && pinnedChats.has(item.id);
-                  const isActive = !isRecipe && isActiveChat(item.id);
+                  const isActive = isRecipe
+                    ? isActiveRecipe(item.id)
+                    : isActiveChat(item.id);
                   const isHovered = hoveredChatId === rowKey;
                   const isDropdownOpen = openDropdownId === rowKey;
 
@@ -625,7 +682,7 @@ export function ChatHistoryPanel() {
                       onMouseEnter={() => setHoveredChatId(rowKey)}
                       onMouseLeave={() => setHoveredChatId(null)}
                       className={cn(
-                        "group ml-4 flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
+                        "group ml-4 mr-2 flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
                         isActive
                           ? "bg-[#F4F4F4] text-primary font-medium"
                           : "hover:bg-[#F4F4F4] text-zinc-700"
@@ -765,7 +822,8 @@ export function ChatHistoryPanel() {
                   );
                 })}
               </div>
-            ))
+            );
+            })
           )}
         </div>
       </ScrollArea>
@@ -907,11 +965,13 @@ export function ChatHistoryPanel() {
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[425px]" showX={false}>
-          <DialogHeader>
-            <DialogTitle className="text-center">Delete chat</DialogTitle>
+          <DialogHeader className="gap-1">
+            <DialogTitle className="text-left text-foreground">
+              Delete chat
+            </DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground text-center">
+          <div className="pt-1 pb-4">
+            <p className="text-sm text-black text-left">
               Are you sure you want to delete &quot;{selectedChat?.title || "this chat"}
               &quot;? This action cannot be undone.
             </p>

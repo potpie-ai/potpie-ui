@@ -33,11 +33,11 @@ export default function LinearIntegrationPage() {
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
       // The /linear/callback path is what Linear is registered to redirect to;
       // /linear/initiate validates that we pass it the same value.
-      const redirectUri =
-        process.env.NEXT_PUBLIC_LINEAR_REDIRECT_URI ||
-        `${baseUrl}/api/v1/integrations/linear/callback`;
+      const redirectUri = `${baseUrl}/api/v1/integrations/linear/callback`;
+
 
       // Server-side initiation: backend reads the authenticated user from
       // the Bearer token, signs that user_id into state, and hands us

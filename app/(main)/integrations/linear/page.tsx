@@ -29,9 +29,15 @@ export default function LinearIntegrationPage() {
 
       // Step 1: Direct redirect to backend OAuth initiation endpoint
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+<<<<<<< Updated upstream
       const redirectUri =
         process.env.NEXT_PUBLIC_LINEAR_REDIRECT_URI ||
         "http://localhost:8001/integrations/linear/redirect";
+=======
+      // The /linear/callback path is what Linear is registered to redirect to;
+      // /linear/initiate validates that we pass it the same value.
+      const redirectUri = `${baseUrl}/api/v1/integrations/linear/callback`;
+>>>>>>> Stashed changes
 
       console.log("📡 Redirecting to backend OAuth initiation:");
       console.log(

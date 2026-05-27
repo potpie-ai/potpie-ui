@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  Github,
-  GitBranch,
   Check,
   Loader2,
   ChevronDown,
@@ -23,7 +22,6 @@ import {
   RotateCcw,
   RotateCw,
   Wrench,
-  ArrowLeft,
   Download,
 } from "lucide-react";
 import SpecService from "@/services/SpecService";
@@ -62,6 +60,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import Image from "next/image";
+import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 
 interface FileItem {
   path: string;
@@ -373,13 +372,6 @@ function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
     </div>
   );
 }
-
-const Badge = ({ children, icon: Icon }: { children: React.ReactNode; icon?: React.ComponentType<{ className?: string }> }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 border border-[#E5E8E6] rounded text-xs font-medium text-primary-color">
-    {Icon && <Icon className="w-3.5 h-3.5" />}
-    {children}
-  </div>
-);
 
 const PlanTabs = ({ plan }: { plan: Plan }) => {
   // Combine all items from all categories
@@ -1008,6 +1000,20 @@ const SpecPage = () => {
   const { plan: normalizedPlan, rawSpec: rawSpecification } = normalizeSpecFromProgress(specProgress ?? undefined);
   const hasSpecContent = normalizedPlan !== null || rawSpecification !== null;
 
+  const { data: planStatusForLabel } = useQuery({
+    queryKey: ["plan-status", recipeId],
+    queryFn: () => PlanService.getPlanStatusByRecipeId(recipeId!),
+    enabled:
+      !!recipeId &&
+      status === "COMPLETED" &&
+      !isCancelled &&
+      hasSpecContent,
+    staleTime: 30_000,
+  });
+  const planGenForLabel = planStatusForLabel?.generation_status?.toLowerCase();
+  const showReGeneratePlanButton =
+    planGenForLabel === "completed" || planGenForLabel === "failed";
+
   // Persist stream timeline when spec is completed so it survives refresh
   useEffect(() => {
     if (!recipeId || status !== "COMPLETED" || !hasSpecContent) return;
@@ -1111,39 +1117,29 @@ const SpecPage = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-zinc-100 antialiased">
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
-        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-r-[1px] border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
-          {/* Chat header */}
-          <div className="px-6 pt-4 pb-2 shrink-0 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (!recipeId) return;
-                router.push(`/task/${recipeId}/qna`);
-              }}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary-color px-0 py-0.5 rounded-md hover:underline w-fit"
-            >
-              <ArrowLeft className="w-3 h-3" />
-              Back to questions
-            </button>
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-lg font-bold text-primary-color truncate capitalize">
-                {recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}
-                {(recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""}
-              </h1>
-              <div className="flex items-center gap-2 shrink-0 mt-1 sm:mt-0">
-                <Badge icon={Github}>
-                  {repoNameFromUrl || storedRepoContext?.repoName || projectData?.repo || "Unknown Repository"}
-                </Badge>
-                <Badge icon={GitBranch}>
-                  {storedRepoContext?.branchName || projectData?.branch || "main"}
-                </Badge>
-              </div>
-            </div>
-          </div>
+    <div className="h-screen flex flex-col overflow-hidden bg-background text-primary-color font-sans selection:bg-gray-200 antialiased">
+      {/* Full-width build flow bar — tabs extend to the right edge */}
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
+        <BuildFlowChatHeader
+          recipeId={recipeId}
+          title={`${recipeData?.user_prompt?.slice(0, 50) || "Chat Name"}${
+            (recipeData?.user_prompt?.length ?? 0) > 50 ? "…" : ""
+          }`}
+          repoName={
+            repoNameFromUrl ||
+            storedRepoContext?.repoName ||
+            projectData?.repo ||
+            "Unknown Repository"
+          }
+          branchName={
+            storedRepoContext?.branchName || projectData?.branch || "main"
+          }
+        />
+      </div>
 
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Left: Chat area — fixed height so only messages scroll; input always visible */}
+        <div className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 overflow-hidden border-r border-[#E5E8E6] bg-[#FAF8F7] chat-panel-contained">
           {/* Messages — only this section scrolls */}
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
             {chatMessages.map((msg, i) => (
@@ -1159,18 +1155,18 @@ const SpecPage = () => {
                 {/* After first user message: assistant intro, then thinking/stream (no bordered box) */}
                 {msg.role === "user" && i === 0 && (
                   <>
-                    <div className="flex justify-start">
-                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start">
+                    <div className="flex justify-start items-start">
+                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start">
                         <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                       </div>
-                      <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+                      <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
                         Turning your idea into a structured specification. Your goals and requirements will appear in the panel on the right—once they&apos;re ready, we can refine them together.
                       </div>
                     </div>
                     {/* Agent output: interleaved thinking/response and tool calls in stream order */}
                     {(streamProgress || isGenerating || streamItems.length > 0) && (
                       <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
-                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                         <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
                           {(streamProgress || isGenerating) && streamItems.length === 0 && (
                             <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
@@ -1194,11 +1190,11 @@ const SpecPage = () => {
                 )}
                 {/* Assistant message (skip i===1 — shown above as thinking/stream) */}
                 {msg.role === "assistant" && i !== 1 && (
-                  <div className="flex justify-start">
-                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
+                  <div className="flex justify-start items-start">
+                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C]">
                       <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                     </div>
-                    <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+                    <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
                       {msg.content.length > 400
                         ? `${msg.content.slice(0, 400).trim()}… View the full specification in the panel on the right.`
                         : msg.content}
@@ -1247,7 +1243,7 @@ const SpecPage = () => {
             transition: "width 0.35s ease-out",
           }}
         >
-          <aside className="h-full w-full min-w-[280px] flex flex-col border-l border-l-[1px] border-[#E5E8E6]">
+          <aside className="h-full w-full min-w-[280px] flex flex-col">
             <div className="p-6 border-b border-[#E5E8E6]">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
@@ -1399,12 +1395,18 @@ const SpecPage = () => {
                         // If status lookup fails, assume first-time generation.
                       }
 
-                      if (planAction === "regenerate") {
-                        await PlanService.regeneratePlan(recipeId);
-                      } else if (planAction === "submit") {
-                        await PlanService.submitPlanGeneration({ recipe_id: recipeId });
+                      if (planAction === "submit" || planAction === "regenerate") {
+                        const { runId } = await PlanService.startPlanGenerationStream(recipeId, {
+                          consumeStream: false,
+                        });
+                        if (runId && runId.trim()) {
+                          router.push(`/task/${recipeId}/plan?run_id=${encodeURIComponent(runId.trim())}`);
+                        } else {
+                          router.push(`/task/${recipeId}/plan`);
+                        }
+                      } else {
+                        router.push(`/task/${recipeId}/plan`);
                       }
-                      router.push(`/task/${recipeId}/plan`);
                     } catch (err: any) {
                       console.error("Error starting plan generation:", err);
                       toast.error(err?.message ?? "Failed to start plan generation");
@@ -1415,7 +1417,7 @@ const SpecPage = () => {
                   disabled={isGeneratingPlan}
                   className="shrink-0 px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90"
                 >
-                  GENERATE PLAN
+                  {showReGeneratePlanButton ? "RE-GENERATE PLAN" : "GENERATE PLAN"}
                 </button>
               </div>
             )}

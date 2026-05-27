@@ -19,6 +19,7 @@ import ChatService, {
   type ToolCall,
   type LoadedMessage,
 } from "@/services/ChatService";
+import MediaService from "@/services/MediaService";
 import { SessionInfo } from "@/lib/types/session";
 import { isMultimodalEnabled } from "@/lib/utils";
 import { useDispatch, useSelector } from "react-redux";
@@ -542,30 +543,50 @@ const createChatAdapter = (
         throw new Error("Message must contain text");
       }
 
-      // Extract custom config (selectedNodes)
+      // Extract custom config (selectedNodes and attachmentIds)
       interface RunConfig {
         custom?: {
           selectedNodes?: unknown[];
+          attachmentIds?: string[];
         };
       }
       const runConfig = (context as { runConfig?: RunConfig }).runConfig;
       const selectedNodes =
         (runConfig?.custom?.selectedNodes as unknown[]) || [];
+      const attachmentIds =
+        (runConfig?.custom?.attachmentIds as string[]) || [];
 
-      // Extract images from message attachments (the assistant-ui way)
+      // Extract files for multipart upload and collect non-image attachment IDs.
       const images: File[] = [];
+      const messageAttachmentIds: string[] = [];
       if (isMultimodalEnabled() && lastMessage.role === "user") {
         const userMessage = lastMessage as ThreadUserMessage;
         if (userMessage.attachments) {
-          userMessage.attachments.forEach((attachment) => {
-            if (
-              attachment.type === "image" &&
-              "file" in attachment &&
-              attachment.file
-            ) {
+          for (const attachment of userMessage.attachments) {
+            if ("file" in attachment && attachment.file) {
+              // Backend upload handler accepts any file type from this multipart field.
               images.push(attachment.file);
+
+              if (attachment.type === "image") {
+                continue;
+              }
             }
-          });
+
+            if (attachment.type !== "image" && attachment.id) {
+              messageAttachmentIds.push(attachment.id);
+              continue;
+            }
+
+            if (attachment.type !== "image" && "file" in attachment && attachment.file) {
+              try {
+                const uploaded = await MediaService.uploadFile(attachment.file);
+                messageAttachmentIds.push(uploaded.id);
+              } catch (error) {
+                console.error("[Runtime] Failed to upload document attachment:", error);
+                toast.error(`Failed to upload ${attachment.file.name}`);
+              }
+            }
+          }
         }
       }
 
@@ -687,7 +708,8 @@ const createChatAdapter = (
             }
           },
           streamingStateRef.current.sessionId || undefined,
-          abortSignal ?? undefined
+          abortSignal ?? undefined,
+          [...attachmentIds, ...messageAttachmentIds]
         )
           .then((result) => {
             // Store final session ID
@@ -974,17 +996,19 @@ const createHistoryAdapter = (chatId: string): ThreadHistoryAdapter => {
 };
 
 // Create Attachments Adapter
-// This adapter handles file attachments (images)
+// This adapter handles composer file attachments.
 const createAttachmentsAdapter = (): AttachmentAdapter => {
   // Track object URLs so we can revoke them and prevent memory leaks
   const objectUrls = new Map<string, string>();
 
   return {
-    accept: "image/*",
+    accept:
+      "image/*,.pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.rtf,.xlsx,.xls,.ppt,.pptx",
     async add({ file }: { file: File }): Promise<PendingAttachment> {
       // Create object URL for preview
       const objectUrl = URL.createObjectURL(file);
       const attachmentId = crypto.randomUUID();
+      const isImage = file.type.startsWith("image/");
 
       // Store the URL so we can revoke it later
       objectUrls.set(attachmentId, objectUrl);
@@ -992,17 +1016,19 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
       // Return the pending attachment object
       const attachment: PendingAttachment = {
         id: attachmentId,
-        type: "image",
+        type: isImage ? "image" : "file",
         name: file.name,
         contentType: file.type,
         status: { type: "requires-action", reason: "composer-send" },
         file,
-        content: [
-          {
-            type: "image",
-            image: objectUrl,
-          },
-        ],
+        content: isImage
+          ? [
+              {
+                type: "image",
+                image: objectUrl,
+              },
+            ]
+          : [],
       };
 
       return attachment;
@@ -1024,7 +1050,27 @@ const createAttachmentsAdapter = (): AttachmentAdapter => {
         objectUrls.delete(attachment.id);
       }
 
-      // IMPORTANT: Preserve the file property so runtime can extract it later
+      const isImage = attachment.type === "image";
+      if (!isImage && attachment.file) {
+        try {
+          const uploaded = await MediaService.uploadFile(attachment.file);
+          return {
+            id: uploaded.id,
+            type: "document",
+            name: attachment.name,
+            contentType: attachment.contentType,
+            status: { type: "complete" },
+            file: attachment.file,
+            content: attachment.content || [],
+          };
+        } catch (error) {
+          console.error("[Runtime] Failed to upload attachment in adapter:", error);
+          toast.error(`Failed to upload ${attachment.name}`);
+          throw error;
+        }
+      }
+
+      // Preserve image file property so runtime can stream upload it via images[].
       const completeAttachment: CompleteAttachment = {
         id: attachment.id,
         type: attachment.type,
@@ -1323,7 +1369,14 @@ export function usePendingMessageHandler(
           return;
         }
 
-        composer.setText(pendingMessage);
+        composer.setText(pendingMessage.text);
+        if (pendingMessage.attachmentIds?.length) {
+          composer.setRunConfig({
+            custom: {
+              attachmentIds: pendingMessage.attachmentIds,
+            },
+          });
+        }
 
         // Trigger send
         await composer.send();

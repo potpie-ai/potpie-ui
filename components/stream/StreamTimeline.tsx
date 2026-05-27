@@ -14,7 +14,7 @@ import { cn, normalizeMarkdownForPreview } from "@/lib/utils";
 
 const TOOL_RESULT_PREVIEW_LENGTH = 52;
 /** Height of the stream area so it extends down toward the chat input */
-const STREAM_TIMELINE_HEIGHT = "min(70vh, 560px)";
+export const STREAM_TIMELINE_DEFAULT_MAX_HEIGHT = "min(70vh, 560px)";
 
 function toolResultPreview(result: string | undefined): string {
   if (!result || !result.trim()) return "";
@@ -40,10 +40,14 @@ type StreamTimelineProps = {
   endRef?: React.RefObject<HTMLDivElement>;
   /** Show loading dots at the end while agent is still responding */
   loading?: boolean;
+  /** Override scroll container max-height (default: min(70vh, 560px)) */
+  maxHeight?: string;
+  /** Use a shorter max-height for expanded tool result bodies */
+  compactToolResults?: boolean;
 };
 
 /** Bouncing dots shown at the end of the stream while the agent is still responding */
-function LoadingDots({ className }: { className?: string }) {
+export function LoadingDots({ className }: { className?: string }) {
   return (
     <div
       className={cn("flex items-center gap-1.5 py-2 min-h-[28px]", className)}
@@ -61,7 +65,13 @@ function LoadingDots({ className }: { className?: string }) {
   );
 }
 
-function TimelineItemRow({ item }: { item: StreamTimelineItem }) {
+function TimelineItemRow({
+  item,
+  compactToolResults,
+}: {
+  item: StreamTimelineItem;
+  compactToolResults?: boolean;
+}) {
   if (item.type === "chunk") {
     return (
       <div
@@ -125,7 +135,8 @@ function TimelineItemRow({ item }: { item: StreamTimelineItem }) {
             <AccordionContent className="overflow-hidden">
               <div
                 className={cn(
-                  "max-h-48 overflow-y-auto overflow-x-hidden",
+                  compactToolResults ? "max-h-24" : "max-h-48",
+                  "overflow-y-auto overflow-x-hidden",
                   "border-t border-zinc-100 bg-zinc-50/80 p-3 text-xs text-zinc-700",
                   "[scrollbar-width:thin]"
                 )}
@@ -149,6 +160,8 @@ export function StreamTimeline({
   className,
   endRef,
   loading = false,
+  maxHeight = STREAM_TIMELINE_DEFAULT_MAX_HEIGHT,
+  compactToolResults = false,
 }: StreamTimelineProps) {
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -179,15 +192,19 @@ export function StreamTimeline({
     <div
       ref={scrollContainerRef}
       className={cn(
-        "overflow-y-auto overflow-x-hidden space-y-2 min-w-0",
+        "overflow-y-auto overflow-x-hidden space-y-2 min-w-0 bg-transparent",
         "[scrollbar-width:thin]",
         className
       )}
-      style={{ maxHeight: STREAM_TIMELINE_HEIGHT }}
+      style={{ maxHeight }}
       data-stream-timeline
     >
       {items.map((item) => (
-        <TimelineItemRow key={item.id} item={item} />
+        <TimelineItemRow
+          key={item.id}
+          item={item}
+          compactToolResults={compactToolResults}
+        />
       ))}
       {loading && <LoadingDots />}
       {endRef && <div ref={endRef} aria-hidden />}

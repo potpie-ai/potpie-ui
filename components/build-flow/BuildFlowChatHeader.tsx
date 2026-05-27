@@ -38,7 +38,7 @@ export function BuildFlowChatHeader({
         >
           {title}
         </h1>
-        <div className="mt-1.5 flex flex-row flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#506561]">
+        <div className="mt-0.5 flex flex-row flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#506561]">
           <span className="flex min-w-0 items-center gap-1.5">
             <Github className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
             <span className="truncate">{repoName || "Unknown Repository"}</span>

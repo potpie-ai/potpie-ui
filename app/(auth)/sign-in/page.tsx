@@ -26,6 +26,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { LinkProviderDialog } from "@/components/auth/LinkProviderDialog";
 import type { SSOLoginResponse } from "@/types/auth";
 import { authClient } from "@/lib/sso/unified-auth";
+import {
+  CliAuthError,
+  completeCliAuthentication,
+  isValidCliCallbackUrl,
+} from "@/lib/auth/cli-callback";
+import { cliSuccessPath } from "@/lib/auth/cli-success";
 import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
 
 export default function Signin() {
@@ -35,6 +41,10 @@ export default function Signin() {
   const agent_id = searchParams.get("agent_id");
   const redirectUrl = searchParams.get("redirect");
   const redirect_uri = searchParams.get("redirect_uri");
+  const cliCallbackRaw = searchParams.get("cli_callback");
+  const cliCallback = isValidCliCallbackUrl(cliCallbackRaw)
+    ? cliCallbackRaw!.trim()
+    : null;
 
   // SSO state
   const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(
@@ -44,6 +54,28 @@ export default function Signin() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
   const [currentTestimonial, setCurrentTestimonial] = React.useState(0);
+  const [cliAuthPending, setCliAuthPending] = React.useState(false);
+
+  const tryCompleteCliAuth = React.useCallback(async (): Promise<boolean> => {
+    if (!cliCallback) {
+      return false;
+    }
+    setCliAuthPending(true);
+    try {
+      await completeCliAuthentication(cliCallback);
+      router.replace(cliSuccessPath("potpie"));
+      return true;
+    } catch (error: unknown) {
+      const message =
+        error instanceof CliAuthError
+          ? error.message
+          : "CLI authentication failed. Please try again.";
+      toast.error(message);
+      return true;
+    } finally {
+      setCliAuthPending(false);
+    }
+  }, [cliCallback, router]);
 
   // Extract agent_id from redirect URL if present
   let redirectAgent_id = "";
@@ -80,10 +112,13 @@ export default function Signin() {
 
   const googleProvider = new GoogleAuthProvider();
 
-  const handleExternalRedirect = (
+  const handleExternalRedirect = async (
     token: string,
     customToken?: string | null,
   ) => {
+    if (await tryCompleteCliAuth()) {
+      return;
+    }
     if (finalAgent_id) {
       window.location.href = `/shared-agent?agent_id=${finalAgent_id}`;
     } else if (source === "vscode") {
@@ -126,14 +161,18 @@ export default function Signin() {
             return;
           }
 
+          if (await tryCompleteCliAuth()) {
+            return;
+          }
+
           if (source === "vscode") {
             if (userSignup.token) {
               const customToken =
                 userSignup.customToken ?? (await AuthService.getCustomToken());
-              handleExternalRedirect(userSignup.token, customToken);
+              await handleExternalRedirect(userSignup.token, customToken);
             }
           } else if (finalAgent_id) {
-            handleExternalRedirect("");
+            await handleExternalRedirect("");
           } else {
             router.push("/newchat");
           }
@@ -270,15 +309,19 @@ export default function Signin() {
               return;
             }
 
+            if (await tryCompleteCliAuth()) {
+              return;
+            }
+
             if (source === "vscode") {
               if (userSignup.token) {
                 const customToken =
                   userSignup.customToken ??
                   (await AuthService.getCustomToken());
-                handleExternalRedirect(userSignup.token, customToken);
+                await handleExternalRedirect(userSignup.token, customToken);
               }
             } else if (finalAgent_id) {
-              handleExternalRedirect("");
+              await handleExternalRedirect("");
             } else {
               window.location.href = "/newchat";
             }
@@ -381,12 +424,16 @@ export default function Signin() {
             return;
           }
 
+          if (await tryCompleteCliAuth()) {
+            return;
+          }
+
           if (source === "vscode") {
             const customToken =
               response.firebase_token ?? (await AuthService.getCustomToken());
-            handleExternalRedirect(firebaseIdToken, customToken);
+            await handleExternalRedirect(firebaseIdToken, customToken);
           } else if (finalAgent_id) {
-            handleExternalRedirect("");
+            await handleExternalRedirect("");
           } else {
             window.location.href = "/newchat";
           }
@@ -406,7 +453,10 @@ export default function Signin() {
       });
   };
 
-  const handleSSOLinked = () => {
+  const handleSSOLinked = async () => {
+    if (await tryCompleteCliAuth()) {
+      return;
+    }
     if (source === "vscode") {
       const user = auth.currentUser;
       if (!user) {
@@ -430,6 +480,21 @@ export default function Signin() {
       router.push("/newchat");
     }
   };
+
+  if (cliAuthPending && cliCallback) {
+    return (
+      <div className="relative flex h-screen w-full items-center justify-center bg-[#022D2C] px-6 font-sans">
+        <div className="max-w-md rounded-2xl bg-[#FFF9F5] p-8 text-center shadow-lg">
+          <h1 className="text-2xl font-medium text-[#022D2C]">
+            Completing CLI sign-in
+          </h1>
+          <p className="mt-3 text-base text-[#656969]">
+            Sending your session to the CLI. This may take a moment…
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-screen w-full font-sans bg-[#022D2C] overflow-hidden">
@@ -487,6 +552,13 @@ export default function Signin() {
                   <h1 className="text-center text-2xl font-medium text-[#022D2C]">
                     Sign in to your account
                   </h1>
+                  {cliCallback && (
+                    <p className="text-center text-sm text-[#656969]">
+                      {cliAuthPending
+                        ? "Completing CLI authentication…"
+                        : "Sign in to connect the Potpie CLI."}
+                    </p>
+                  )}
                 </div>
 
                 {/* Social buttons (interactive, styled to match) */}

@@ -21,6 +21,10 @@ export async function completeCliAuthentication(
   if (!isValidCliCallbackUrl(cliCallback)) {
     throw new CliAuthError("Invalid CLI callback URL.");
   }
+  const state = getCliAuthStateFromUrl();
+  if (!state) {
+    throw new CliAuthError("Missing CLI auth state.");
+  }
 
   const user = auth.currentUser;
   if (!user) {
@@ -77,6 +81,7 @@ export async function completeCliAuthentication(
     body: JSON.stringify({
       custom_token: customToken,
       firebase_api_key: firebaseApiKey.trim(),
+      state,
     }),
   });
 
@@ -87,4 +92,11 @@ export async function completeCliAuthentication(
   }
 
   return customToken;
+}
+
+function getCliAuthStateFromUrl(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return new URLSearchParams(window.location.search).get("state")?.trim() || "";
 }

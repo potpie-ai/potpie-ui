@@ -10,7 +10,7 @@ export function isValidCliCallbackUrl(raw: string | null | undefined): boolean {
     if (url.protocol !== "http:") {
       return false;
     }
-    if (url.hostname !== "localhost") {
+    if (url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
       return false;
     }
     if (url.username || url.password) {

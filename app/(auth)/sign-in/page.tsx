@@ -27,11 +27,8 @@ import { LinkProviderDialog } from "@/components/auth/LinkProviderDialog";
 import type { SSOLoginResponse } from "@/types/auth";
 import { authClient } from "@/lib/sso/unified-auth";
 import {
-  CliAuthError,
-  completeCliAuthentication,
   isValidCliCallbackUrl,
 } from "@/lib/auth/cli-callback";
-import { cliSuccessPath } from "@/lib/auth/cli-success";
 import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
 
 export default function Signin() {
@@ -54,28 +51,14 @@ export default function Signin() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
   const [currentTestimonial, setCurrentTestimonial] = React.useState(0);
-  const [cliAuthPending, setCliAuthPending] = React.useState(false);
 
   const tryCompleteCliAuth = React.useCallback(async (): Promise<boolean> => {
     if (!cliCallback) {
       return false;
     }
-    setCliAuthPending(true);
-    try {
-      await completeCliAuthentication(cliCallback);
-      router.replace(cliSuccessPath("potpie"));
-      return true;
-    } catch (error: unknown) {
-      const message =
-        error instanceof CliAuthError
-          ? error.message
-          : "CLI authentication failed. Please try again.";
-      toast.error(message);
-      return true;
-    } finally {
-      setCliAuthPending(false);
-    }
-  }, [cliCallback, router]);
+    // Auth layout owns CLI completion to avoid duplicate POSTs/toasts.
+    return true;
+  }, [cliCallback]);
 
   // Extract agent_id from redirect URL if present
   let redirectAgent_id = "";
@@ -481,21 +464,6 @@ export default function Signin() {
     }
   };
 
-  if (cliAuthPending && cliCallback) {
-    return (
-      <div className="relative flex h-screen w-full items-center justify-center bg-[#022D2C] px-6 font-sans">
-        <div className="max-w-md rounded-2xl bg-[#FFF9F5] p-8 text-center shadow-lg">
-          <h1 className="text-2xl font-medium text-[#022D2C]">
-            Completing CLI sign-in
-          </h1>
-          <p className="mt-3 text-base text-[#656969]">
-            Sending your session to the CLI. This may take a moment…
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative h-screen w-full font-sans bg-[#022D2C] overflow-hidden">
       {/* Background vector */}
@@ -554,9 +522,7 @@ export default function Signin() {
                   </h1>
                   {cliCallback && (
                     <p className="text-center text-sm text-[#656969]">
-                      {cliAuthPending
-                        ? "Completing CLI authentication…"
-                        : "Sign in to connect the Potpie CLI."}
+                      Sign in to connect the Potpie CLI.
                     </p>
                   )}
                 </div>

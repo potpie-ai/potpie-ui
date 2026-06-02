@@ -79,4 +79,40 @@ describe("completeCliAuthentication", () => {
       state: "state-123",
     });
   });
+
+  it("deduplicates concurrent runs for the same callback+state", async () => {
+    let customTokenCalls = 0;
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        customTokenCalls += 1;
+        await Promise.resolve();
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({ customToken: "header.payload.signature" }),
+        };
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.NEXT_PUBLIC_BASE_URL = "https://api.potpie.example";
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY = "firebase-key";
+    window.history.pushState(
+      {},
+      "",
+      "/sign-in?cli_callback=http://127.0.0.1:9123/random-path&state=state-456",
+    );
+
+    const [first, second] = await Promise.all([
+      completeCliAuthentication("http://127.0.0.1:9123/random-path"),
+      completeCliAuthentication("http://127.0.0.1:9123/random-path"),
+    ]);
+
+    expect(first).toBe("header.payload.signature");
+    expect(second).toBe("header.payload.signature");
+    expect(customTokenCalls).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

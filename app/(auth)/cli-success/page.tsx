@@ -1,12 +1,13 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   cliSuccessCopy,
   normalizeCliAuthProvider,
 } from "@/lib/auth/cli-success";
 
-export default function CliSuccessPage() {
+function CliSuccessContent() {
   const searchParams = useSearchParams();
   const provider = normalizeCliAuthProvider(searchParams.get("provider"));
   const { title, body } = cliSuccessCopy(provider);
@@ -18,5 +19,23 @@ export default function CliSuccessPage() {
         <p className="mt-3 text-base text-[#656969]">{body}</p>
       </div>
     </div>
+  );
+}
+
+export default function CliSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="relative flex h-screen w-full items-center justify-center bg-[#022D2C] px-6 font-sans">
+          <div className="max-w-md rounded-2xl bg-[#FFF9F5] p-8 text-center shadow-lg">
+            <h1 className="text-2xl font-medium text-[#022D2C]">
+              Finishing sign in...
+            </h1>
+          </div>
+        </div>
+      }
+    >
+      <CliSuccessContent />
+    </Suspense>
   );
 }

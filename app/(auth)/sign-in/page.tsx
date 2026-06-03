@@ -26,6 +26,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { LinkProviderDialog } from "@/components/auth/LinkProviderDialog";
 import type { SSOLoginResponse } from "@/types/auth";
 import { authClient } from "@/lib/sso/unified-auth";
+import { isValidCliCallbackUrl } from "@/lib/auth/cli-callback";
 import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
 
 export default function Signin() {
@@ -35,6 +36,10 @@ export default function Signin() {
   const agent_id = searchParams.get("agent_id");
   const redirectUrl = searchParams.get("redirect");
   const redirect_uri = searchParams.get("redirect_uri");
+  const cliCallbackRaw = searchParams.get("cli_callback");
+  const cliCallback = isValidCliCallbackUrl(cliCallbackRaw)
+    ? cliCallbackRaw!.trim()
+    : null;
 
   // SSO state
   const [linkingData, setLinkingData] = React.useState<SSOLoginResponse | null>(
@@ -44,6 +49,24 @@ export default function Signin() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
   const [currentTestimonial, setCurrentTestimonial] = React.useState(0);
+
+  const tryCompleteCliAuth = React.useCallback(async (): Promise<boolean> => {
+    if (!cliCallback) {
+      return false;
+    }
+    // Auth layout owns CLI completion to avoid duplicate POSTs/toasts.
+    return true;
+  }, [cliCallback]);
+
+  const appendCliCallback = React.useCallback(
+    (params: URLSearchParams) => {
+      if (cliCallback) {
+        params.set("cli_callback", cliCallback);
+      }
+      return params;
+    },
+    [cliCallback],
+  );
 
   // Extract agent_id from redirect URL if present
   let redirectAgent_id = "";
@@ -80,10 +103,13 @@ export default function Signin() {
 
   const googleProvider = new GoogleAuthProvider();
 
-  const handleExternalRedirect = (
+  const handleExternalRedirect = async (
     token: string,
     customToken?: string | null,
   ) => {
+    if (await tryCompleteCliAuth()) {
+      return;
+    }
     if (finalAgent_id) {
       window.location.href = `/shared-agent?agent_id=${finalAgent_id}`;
     } else if (source === "vscode") {
@@ -113,16 +139,22 @@ export default function Signin() {
             ).toLowerCase();
             const prompt = urlSearchParams.get("prompt") || "";
 
-            const onboardingParams = new URLSearchParams({
-              uid: user.uid,
-              ...(user.email && { email: user.email }),
-              ...(user.displayName && { name: user.displayName }),
-              ...(plan && { plan }),
-              ...(prompt && { prompt }),
-              ...(finalAgent_id && { agent_id: finalAgent_id }),
-            });
+            const onboardingParams = appendCliCallback(
+              new URLSearchParams({
+                uid: user.uid,
+                ...(user.email && { email: user.email }),
+                ...(user.displayName && { name: user.displayName }),
+                ...(plan && { plan }),
+                ...(prompt && { prompt }),
+                ...(finalAgent_id && { agent_id: finalAgent_id }),
+              }),
+            );
 
             window.location.href = `/onboarding?${onboardingParams.toString()}`;
+            return;
+          }
+
+          if (await tryCompleteCliAuth()) {
             return;
           }
 
@@ -130,10 +162,10 @@ export default function Signin() {
             if (userSignup.token) {
               const customToken =
                 userSignup.customToken ?? (await AuthService.getCustomToken());
-              handleExternalRedirect(userSignup.token, customToken);
+              await handleExternalRedirect(userSignup.token, customToken);
             }
           } else if (finalAgent_id) {
-            handleExternalRedirect("");
+            await handleExternalRedirect("");
           } else {
             router.push("/newchat");
           }
@@ -222,7 +254,7 @@ export default function Signin() {
               ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
-              const onboardingParams = new URLSearchParams();
+              const onboardingParams = appendCliCallback(new URLSearchParams());
               if (result.user.uid)
                 onboardingParams.append("uid", result.user.uid);
               if (result.user.email)
@@ -254,7 +286,7 @@ export default function Signin() {
               ).toLowerCase();
               const prompt = urlSearchParams.get("prompt") || "";
 
-              const onboardingParams = new URLSearchParams();
+              const onboardingParams = appendCliCallback(new URLSearchParams());
               if (result.user.uid)
                 onboardingParams.append("uid", result.user.uid);
               if (result.user.email)
@@ -270,15 +302,19 @@ export default function Signin() {
               return;
             }
 
+            if (await tryCompleteCliAuth()) {
+              return;
+            }
+
             if (source === "vscode") {
               if (userSignup.token) {
                 const customToken =
                   userSignup.customToken ??
                   (await AuthService.getCustomToken());
-                handleExternalRedirect(userSignup.token, customToken);
+                await handleExternalRedirect(userSignup.token, customToken);
               }
             } else if (finalAgent_id) {
-              handleExternalRedirect("");
+              await handleExternalRedirect("");
             } else {
               window.location.href = "/newchat";
             }
@@ -332,7 +368,8 @@ export default function Signin() {
               sub: user.uid,
               name: user.displayName || "",
               given_name: user.displayName?.split(" ")[0] || "",
-              family_name: user.displayName?.split(" ").slice(1).join(" ") || "",
+              family_name:
+                user.displayName?.split(" ").slice(1).join(" ") || "",
               picture: user.photoURL || "",
             },
           );
@@ -368,25 +405,31 @@ export default function Signin() {
             const onboardingName =
               response.display_name || user.displayName || "";
 
-            const onboardingParams = new URLSearchParams({
-              ...(onboardingUid && { uid: onboardingUid }),
-              ...(onboardingEmail && { email: onboardingEmail }),
-              ...(onboardingName && { name: onboardingName }),
-              ...(plan && { plan }),
-              ...(prompt && { prompt }),
-              ...(finalAgent_id && { agent_id: finalAgent_id }),
-            });
+            const onboardingParams = appendCliCallback(
+              new URLSearchParams({
+                ...(onboardingUid && { uid: onboardingUid }),
+                ...(onboardingEmail && { email: onboardingEmail }),
+                ...(onboardingName && { name: onboardingName }),
+                ...(plan && { plan }),
+                ...(prompt && { prompt }),
+                ...(finalAgent_id && { agent_id: finalAgent_id }),
+              }),
+            );
 
             window.location.href = `/onboarding?${onboardingParams.toString()}`;
+            return;
+          }
+
+          if (await tryCompleteCliAuth()) {
             return;
           }
 
           if (source === "vscode") {
             const customToken =
               response.firebase_token ?? (await AuthService.getCustomToken());
-            handleExternalRedirect(firebaseIdToken, customToken);
+            await handleExternalRedirect(firebaseIdToken, customToken);
           } else if (finalAgent_id) {
-            handleExternalRedirect("");
+            await handleExternalRedirect("");
           } else {
             window.location.href = "/newchat";
           }
@@ -406,7 +449,10 @@ export default function Signin() {
       });
   };
 
-  const handleSSOLinked = () => {
+  const handleSSOLinked = async () => {
+    if (await tryCompleteCliAuth()) {
+      return;
+    }
     if (source === "vscode") {
       const user = auth.currentUser;
       if (!user) {
@@ -469,8 +515,6 @@ export default function Signin() {
                   priority
                 />
               </Link>
-
-
             </div>
 
             {/* Form content */}
@@ -487,6 +531,11 @@ export default function Signin() {
                   <h1 className="text-center text-2xl font-medium text-[#022D2C]">
                     Sign in to your account
                   </h1>
+                  {cliCallback && (
+                    <p className="text-center text-sm text-[#656969]">
+                      Sign in to connect the Potpie CLI.
+                    </p>
+                  )}
                 </div>
 
                 {/* Social buttons (interactive, styled to match) */}
@@ -497,8 +546,18 @@ export default function Signin() {
                     className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#EBEBEB] bg-white hover:bg-black/[0.02] transition-colors"
                     aria-label="Continue with GitHub"
                   >
-                    <svg height="20" width="20" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg">
-                      <path fill="#24292f" fillRule="evenodd" clipRule="evenodd" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z" />
+                    <svg
+                      height="20"
+                      width="20"
+                      viewBox="0 0 98 96"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        fill="#24292f"
+                        fillRule="evenodd"
+                        clipRule="evenodd"
+                        d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"
+                      />
                     </svg>
                   </button>
                   <button

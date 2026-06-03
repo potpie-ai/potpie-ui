@@ -18,12 +18,12 @@ export function cliSuccessCopy(provider: CliAuthProvider): {
   if (provider === "github") {
     return {
       title: "GitHub connected",
-      body: "Successfully logged in to GitHub. You may return to your CLI.",
+      body: "Successfully connected GitHub for Potpie CLI. You can close this window and return to your terminal.",
     };
   }
   return {
-    title: "Logged in to Potpie",
-    body: "Successfully logged in. You may return to your CLI.",
+    title: "You're all set",
+    body: "Successfully signed in to Potpie CLI. You can close this window and return to your terminal.",
   };
 }
 

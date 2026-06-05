@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect } from "react";
 import AuthService from "@/services/AuthService";
 import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
+import { getSafeInternalPath } from "@/lib/auth/safe-redirect";
 
 export default function AuthLayout({
   children,
@@ -74,13 +75,13 @@ export default function AuthLayout({
         !window.location.pathname.startsWith("/sign-up") &&
         !window.location.pathname.startsWith("/link-github")
       ) {
+        // Only ever follow same-origin internal paths — never an attacker-
+        // supplied absolute URL (open redirect, potpie-ai/potpie#596).
+        const safePath = getSafeInternalPath(redirectUrl, "/");
         if (process.env.NODE_ENV === "development") {
-          console.log(
-            "redirecting to",
-            redirectUrl ? decodeURIComponent(redirectUrl) : "/",
-          );
+          console.log("redirecting to", safePath);
         }
-        router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
+        router.push(safePath);
       }
     }
   }, [user, source, redirectUrl, redirect_uri, agent_id, router]);

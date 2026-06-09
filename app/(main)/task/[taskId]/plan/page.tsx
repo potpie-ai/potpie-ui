@@ -7,6 +7,7 @@ import {
   Check,
   Loader2,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   FileCode,
@@ -283,6 +284,8 @@ const PlanPage = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [selectedPhaseIndex, setSelectedPhaseIndex] = useState(0);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([0]));
+  const [collapsedArchitectureDiagrams, setCollapsedArchitectureDiagrams] =
+    useState<Set<string>>(new Set());
   const [isRegeneratingPlan, setIsRegeneratingPlan] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasChatInitializedRef = useRef(false);
@@ -598,15 +601,31 @@ const PlanPage = () => {
   }, [streamItems.length]);
 
   // When we land on the plan page with "not_started" status, start plan generation (run_id comes from GET plan response, then we connect to stream)
-  const hasTriggeredPlanGenRef = useRef(false);
+  const hasTriggeredPlanGenRef = useRef(!!runIdFromUrl);
+  if (runIdFromUrl && !hasTriggeredPlanGenRef.current) {
+    hasTriggeredPlanGenRef.current = true;
+  }
+  
   useEffect(() => {
     if (!recipeId || isLoadingStatus || runIdFromUrl || hasTriggeredPlanGenRef.current) return;
     if (statusData?.generation_status !== "not_started") return;
 
     hasTriggeredPlanGenRef.current = true;
-    PlanService.submitPlanGeneration({ recipe_id: recipeId })
-      .then(() => invalidatePlanStatusAndBuildFlowNav())
-      .catch(() => {});
+
+    // Live re-check to avoid triggering on stale 'not_started' cache immediately after a stream ends
+    PlanService.getPlanStatusByRecipeId(recipeId).then((freshStatus) => {
+      if (freshStatus.generation_status !== "not_started") {
+        hasTriggeredPlanGenRef.current = false;
+        return;
+      }
+      return PlanService.submitPlanGeneration({ recipe_id: recipeId })
+        .then(() => invalidatePlanStatusAndBuildFlowNav())
+        .catch((err) => {
+          hasTriggeredPlanGenRef.current = false;
+        });
+    }).catch((err) => {
+      hasTriggeredPlanGenRef.current = false;
+    });
   }, [recipeId, isLoadingStatus, statusData, runIdFromUrl, invalidatePlanStatusAndBuildFlowNav]);
 
   // Extract plan items from phases (new API)
@@ -712,8 +731,8 @@ const PlanPage = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#FAF8F7] text-[#000000] font-sans antialiased">
-      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FAF8F7] px-6 pt-4 pb-3">
+    <div className="h-screen flex flex-col overflow-hidden bg-[#FAF8F7] text-[#000000] font-sans selection:bg-gray-200 antialiased">
+      <div className="shrink-0 border-b border-[#E5E8E6] bg-[#FFFFFF] px-6 pt-4 pb-4">
         <BuildFlowChatHeader
           recipeId={recipeId}
           variant="plan"
@@ -742,18 +761,18 @@ const PlanPage = () => {
                 {msg.role === "user" && i === 0 && (
                   <>
                     {/* Assistant intro message (above thinking) */}
-                    <div className="flex justify-start">
-                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start">
+                    <div className="flex justify-start items-start">
+                      <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start">
                         <Image src="/images/logo.svg" width={24} height={24} alt="Potpie Logo" className="w-6 h-6" />
                       </div>
-                      <div className="max-w-[85%] text-sm px-4 py-3 text-gray-900">
+                      <div className="max-w-[85%] text-sm px-4 pt-0 pb-3 text-gray-900">
                         Your implementation plan is ready. Review the phases below and tell me what you&apos;d like to change—we&apos;ll nail it before moving to code.
                       </div>
                     </div>
                     {/* Agent output: interleaved thinking and tool calls */}
                     {(streamProgress || isGenerating || streamItems.length > 0) && (
                       <div className="flex justify-start w-full overflow-hidden" style={{ contain: "inline-size" }}>
-                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
+                        <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C] self-start opacity-0" aria-hidden />
                         <div className="min-w-0 flex-1 overflow-hidden" style={{ width: "calc(100% - 52px)" }}>
                           {(streamProgress || isGenerating) && streamItems.length === 0 && (
                             <p className="text-xs text-zinc-500 flex items-center gap-2 mb-2">
@@ -777,7 +796,7 @@ const PlanPage = () => {
                 )}
                 {msg.role === "assistant" && i !== 1 && (
                   <div className="flex justify-start">
-                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 mt-0.5 flex items-center justify-center bg-[#102C2C]">
+                    <div className="w-10 h-10 rounded-lg shrink-0 mr-3 flex items-center justify-center bg-[#102C2C]">
                       <Image src="/images/logo.svg" width={24} height={24} alt="Potpie" className="w-6 h-6" />
                     </div>
                     <div className="max-w-[85%] text-sm rounded-t-xl rounded-br-xl px-4 py-3 text-gray-900">
@@ -890,7 +909,7 @@ const PlanPage = () => {
         </div>
 
         {/* Right: Phase Plan panel (top bar matches Spec page) */}
-        <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0 border-l border-[#E5E8E6]">
+        <aside className="w-1/2 max-w-[50%] flex flex-col min-w-0 min-h-0">
           <div className="p-6 border-b border-[#E5E8E6] bg-[#FFFDFC] shrink-0">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
@@ -1056,32 +1075,71 @@ const PlanPage = () => {
                   <TabsContent value="architecture" className="mt-4 pt-2 pb-12 pr-4">
                     <div className="py-5 pr-2 space-y-6">
                       {phase.diagrams && phase.diagrams.length > 0 ? (
-                        phase.diagrams.map((d) => (
-                          <div
-                            key={d.diagram_id}
-                            className="border rounded-lg p-4 overflow-x-auto bg-[#FFFDFC]"
-                            style={{ borderColor: "#CCD3CF" }}
-                          >
-                            <h4 className="text-sm font-semibold text-[#022019] mb-1">{d.title}</h4>
-                            {d.description && (
-                              <p className="text-xs text-[#374151] mb-3 leading-relaxed">{d.description}</p>
-                            )}
-                            {d.mermaid_code ? (
-                              looksLikeMermaid(d.mermaid_code) ? (
-                                <MermaidDiagram chart={d.mermaid_code} />
-                              ) : (
-                                <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap break-words m-0 p-0">
-                                  {d.mermaid_code}
-                                </pre>
-                              )
-                            ) : (
-                              <p className="text-xs text-zinc-500 italic">No diagram content.</p>
-                            )}
-                            {d.validation_error && (
-                              <p className="text-xs text-amber-700 mt-2">Validation: {d.validation_error}</p>
-                            )}
-                          </div>
-                        ))
+                        phase.diagrams.map((d) => {
+                          const diagramKey = `${selectedPhaseIndex}-${d.diagram_id}`;
+                          const isCollapsed =
+                            collapsedArchitectureDiagrams.has(diagramKey);
+                          return (
+                            <div
+                              key={d.diagram_id}
+                              className="border rounded-lg p-4 overflow-x-auto bg-[#FFFDFC]"
+                              style={{ borderColor: "#CCD3CF" }}
+                            >
+                              <div className="flex items-start justify-between gap-3 mb-1">
+                                <h4 className="text-sm font-semibold text-[#022019]">
+                                  {d.title}
+                                </h4>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCollapsedArchitectureDiagrams((prev) => {
+                                      const next = new Set(prev);
+                                      if (isCollapsed) {
+                                        next.delete(diagramKey);
+                                      } else {
+                                        next.add(diagramKey);
+                                      }
+                                      return next;
+                                    })
+                                  }
+                                  className="shrink-0 rounded-sm p-1 text-[#747575] hover:text-[#022019] hover:bg-zinc-100 transition-colors"
+                                  aria-label={`${isCollapsed ? "Open" : "Collapse"} ${d.title} diagram`}
+                                  title={isCollapsed ? "Open diagram" : "Collapse diagram"}
+                                >
+                                  {isCollapsed ? (
+                                    <ChevronDown className="w-4 h-4" />
+                                  ) : (
+                                    <ChevronUp className="w-4 h-4" />
+                                  )}
+                                </button>
+                              </div>
+                              {d.description && (
+                                <p className="text-xs text-[#374151] mb-3 leading-relaxed">
+                                  {d.description}
+                                </p>
+                              )}
+                              {!isCollapsed &&
+                                (d.mermaid_code ? (
+                                  looksLikeMermaid(d.mermaid_code) ? (
+                                    <MermaidDiagram chart={d.mermaid_code} />
+                                  ) : (
+                                    <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap break-words m-0 p-0">
+                                      {d.mermaid_code}
+                                    </pre>
+                                  )
+                                ) : (
+                                  <p className="text-xs text-zinc-500 italic">
+                                    No diagram content.
+                                  </p>
+                                ))}
+                              {d.validation_error && (
+                                <p className="text-xs text-amber-700 mt-2">
+                                  Validation: {d.validation_error}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })
                       ) : (
                         <p className="text-sm text-[#374151] leading-relaxed">
                           No architecture diagram available for this phase.

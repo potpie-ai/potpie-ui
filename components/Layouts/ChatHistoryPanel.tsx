@@ -7,6 +7,9 @@ import { useDispatch } from "react-redux";
 import debounce from "debounce";
 import {
   MoreHorizontal,
+  ChevronDown,
+  ChevronUp,
+  Plus,
 } from "lucide-react";
 import Image from "next/image";
 import { toast } from "@/components/ui/sonner";
@@ -81,6 +84,9 @@ export function ChatHistoryPanel() {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [pinnedChats, setPinnedChats] = useState<Set<string>>(new Set());
+  const [expandedRepositories, setExpandedRepositories] = useState<Set<string>>(
+    new Set()
+  );
 
   // Dialog states
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -222,6 +228,33 @@ export function ChatHistoryPanel() {
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     return [...[...pinned].sort(sortByCreated), ...[...unpinned].sort(sortByCreated)];
   }, [filteredItems, pinnedChats]);
+
+  const groupedItems = useMemo(() => {
+    const groups = new Map<string, any[]>();
+
+    orderedItems.forEach((item: any) => {
+      const repositoryName =
+        (item.repository && String(item.repository).trim()) || "No repository";
+
+      if (!groups.has(repositoryName)) {
+        groups.set(repositoryName, []);
+      }
+      groups.get(repositoryName)?.push(item);
+    });
+
+    return Array.from(groups.entries()).map(([repository, items]) => ({
+      repository,
+      items,
+    }));
+  }, [orderedItems]);
+
+  const getRepositoryDisplayName = useCallback((repository: string) => {
+    if (!repository) return "No repository";
+    const trimmed = repository.trim();
+    if (!trimmed) return "No repository";
+    const parts = trimmed.split("/");
+    return parts[parts.length - 1] || trimmed;
+  }, []);
 
   const handleItemClick = useCallback(
     (item: any) => {
@@ -473,6 +506,43 @@ export function ChatHistoryPanel() {
     [pathname]
   );
 
+  const isActiveRecipe = useCallback(
+    (recipeId: string) => {
+      return pathname.startsWith(`/task/${recipeId}`);
+    },
+    [pathname]
+  );
+
+  const toggleRepository = useCallback((repository: string) => {
+    setExpandedRepositories((prev) => {
+      const next = new Set(prev);
+      if (next.has(repository)) {
+        next.delete(repository);
+      } else {
+        next.add(repository);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleRepoQuickStart = useCallback(
+    (repository: string, branch?: string, event?: React.MouseEvent) => {
+      event?.stopPropagation();
+      const repoName = repository?.trim();
+      if (!repoName || repoName === "No repository") {
+        toast.error("Repository is not available for quick start");
+        return;
+      }
+
+      const params = new URLSearchParams({ repo: repoName });
+      if (branch?.trim()) {
+        params.set("branch", branch.trim());
+      }
+      router.push(`/newchat?${params.toString()}`);
+    },
+    [router]
+  );
+
   return (
     <div className="flex flex-col h-full">
       {/* Header with Search Icon */}
@@ -510,7 +580,7 @@ export function ChatHistoryPanel() {
 
       {/* Chat List */}
       <ScrollArea className="h-[360px] px-4">
-        <div className="space-y-0.5 pb-2">
+        <div className="space-y-[8px] pb-2">
           {isLoading || recipesLoading ? (
             // Loading skeletons
             Array.from({ length: 5 }).map((_, i) => (
@@ -518,7 +588,7 @@ export function ChatHistoryPanel() {
                 <Skeleton className="h-5 w-full" />
               </div>
             ))
-          ) : orderedItems.length === 0 ? (
+          ) : groupedItems.length === 0 ? (
             <div className="px-4 py-4 text-center">
               <p className="text-xs text-muted-foreground">
                 {debouncedSearchTerm
@@ -527,147 +597,232 @@ export function ChatHistoryPanel() {
               </p>
             </div>
           ) : (
-            orderedItems.map((item: any) => {
-              const rowKey = item.type === "recipe" ? `recipe-${item.id}` : item.id;
-              const isRecipe = item.type === "recipe";
-              const isPinned = !isRecipe && pinnedChats.has(item.id);
-              const isActive = !isRecipe && isActiveChat(item.id);
-              const isHovered = hoveredChatId === rowKey;
-              const isDropdownOpen = openDropdownId === rowKey;
-
+            groupedItems.map((group) => {
+              const distinctBranches = Array.from(
+                new Set(
+                  group.items
+                    .map((item: any) =>
+                      typeof item.branch === "string" ? item.branch.trim() : ""
+                    )
+                    .filter((branch: string) => branch.length > 0)
+                )
+              );
+              const quickStartBranch =
+                distinctBranches.length === 1 ? distinctBranches[0] : undefined;
               return (
-                <div
-                  key={rowKey}
-                  onClick={() => handleItemClick(item)}
-                  onMouseEnter={() => setHoveredChatId(rowKey)}
-                  onMouseLeave={() => setHoveredChatId(null)}
-                  className={cn(
-                    "group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
-                    isActive
-                      ? "bg-[#F4F4F4] text-primary font-medium"
-                      : "hover:bg-[#F4F4F4] text-zinc-700"
-                  )}
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                    {isRecipe && (
-                      <span
-                        className="shrink-0 rounded px-1 py-0.5 text-[0.65rem] font-semibold bg-blue-100 text-blue-900"
-                        title="Build flow"
-                      >
-                        Build
-                      </span>
-                    )}
-                    <span className="truncate text-sm block max-w-[160px]" style={{ fontFamily: 'Uncut Sans, sans-serif' }}>
-                      {item.title || (isRecipe ? "Untitled build" : "Untitled Chat")}
+              <div key={group.repository}>
+                <div className="flex items-center justify-between gap-2 px-2 py-1 text-sm text-black">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Image
+                      src="/images/folder-02.svg"
+                      alt="Repository folder"
+                      width={14}
+                      height={14}
+                      className="shrink-0"
+                    />
+                    <span
+                      className="truncate font-medium"
+                      style={{ fontFamily: "Uncut Sans, sans-serif" }}
+                      title={group.repository}
+                    >
+                      {getRepositoryDisplayName(group.repository)}
                     </span>
-                    {isPinned && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-primary">
-                        <line x1="12" y1="17" x2="12" y2="22"/>
-                        <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/>
-                      </svg>
-                    )}
                   </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      onClick={(event) =>
+                        handleRepoQuickStart(
+                          group.repository,
+                          quickStartBranch,
+                          event
+                        )
+                      }
+                      aria-label={`Quick start ${group.repository}`}
+                    >
+                      <Plus className="h-3.5 w-3.5 text-[#B6E343]" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      onClick={() => toggleRepository(group.repository)}
+                      aria-label={
+                        expandedRepositories.has(group.repository)
+                          ? `Collapse ${group.repository}`
+                          : `Expand ${group.repository}`
+                      }
+                    >
+                      {expandedRepositories.has(group.repository) ? (
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
 
-                  {!isRecipe && (
+                {expandedRepositories.has(group.repository) &&
+                  group.items.map((item: any) => {
+                  const rowKey = item.type === "recipe" ? `recipe-${item.id}` : item.id;
+                  const isRecipe = item.type === "recipe";
+                  const isPinned = !isRecipe && pinnedChats.has(item.id);
+                  const isActive = isRecipe
+                    ? isActiveRecipe(item.id)
+                    : isActiveChat(item.id);
+                  const isHovered = hoveredChatId === rowKey;
+                  const isDropdownOpen = openDropdownId === rowKey;
+
+                  return (
                     <div
+                      key={rowKey}
+                      onClick={() => handleItemClick(item)}
+                      onMouseEnter={() => setHoveredChatId(rowKey)}
+                      onMouseLeave={() => setHoveredChatId(null)}
                       className={cn(
-                        "relative shrink-0 transition-opacity duration-150",
-                        (isHovered || isDropdownOpen) ? "opacity-100" : "opacity-0"
+                        "group ml-4 mr-2 flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
+                        isActive
+                          ? "bg-[#F4F4F4] text-primary font-medium"
+                          : "hover:bg-[#F4F4F4] text-zinc-700"
                       )}
                     >
-                      <DropdownMenu
-                        open={isDropdownOpen}
-                        onOpenChange={(open) => setOpenDropdownId(open ? rowKey : null)}
-                      >
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={(e) => e.stopPropagation()}
+                      <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                        {!isRecipe && (
+                          <span
+                            className="shrink-0 rounded px-1 py-[1px] text-[0.6rem] font-light text-zinc-900"
+                            style={{ backgroundColor: "#DAF1A1" }}
+                            title="Chat"
                           >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          side="right"
-                          align="start"
-                          className="w-40 bg-[#FFFFFF] border-[#E6E8E9]"
+                            chat
+                          </span>
+                        )}
+                        {isRecipe && (
+                          <span
+                            className="shrink-0 rounded px-1 py-[1px] text-[0.6rem] font-light bg-blue-100 text-blue-900"
+                            title="Build flow"
+                          >
+                            Build
+                          </span>
+                        )}
+                        <span className="truncate text-sm block max-w-[120px]" style={{ fontFamily: 'Uncut Sans, sans-serif' }}>
+                          {item.title || (isRecipe ? "Untitled build" : "Untitled Chat")}
+                        </span>
+                        {isPinned && (
+                          <Image
+                            src="/images/pin.svg"
+                            alt="Pinned"
+                            width={12}
+                            height={12}
+                            className="shrink-0"
+                          />
+                        )}
+                      </div>
+
+                      {!isRecipe && (
+                        <div
+                          className={cn(
+                            "relative shrink-0 transition-opacity duration-150",
+                            (isHovered || isDropdownOpen) ? "opacity-100" : "opacity-0"
+                          )}
                         >
-                          <DropdownMenuItem
-                            onClick={(e) => openShareDialog(item as Chat, e)}
-                            className="focus:bg-[#F4F4F4] cursor-pointer"
+                          <DropdownMenu
+                            open={isDropdownOpen}
+                            onOpenChange={(open) => setOpenDropdownId(open ? rowKey : null)}
                           >
-                            <Image
-                              src="/images/share-03.svg"
-                              alt="Share"
-                              width={16}
-                              height={16}
-                              className="mr-2"
-                            />
-                            <span>Share</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => openRenameDialog(item as Chat, e)}
-                            className="focus:bg-[#F4F4F4] cursor-pointer"
-                          >
-                            <Image
-                              src="/images/pen-01.svg"
-                              alt="Rename"
-                              width={16}
-                              height={16}
-                              className="mr-2"
-                            />
-                            <span>Rename</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => handlePinChat(item.id, e)}
-                            className="focus:bg-[#F4F4F4] cursor-pointer"
-                          >
-                            {isPinned ? (
-                              <>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              side="right"
+                              align="start"
+                              className="w-40 bg-[#FFFFFF] border-[#E6E8E9]"
+                            >
+                              <DropdownMenuItem
+                                onClick={(e) => openShareDialog(item as Chat, e)}
+                                className="focus:bg-[#F4F4F4] cursor-pointer"
+                              >
                                 <Image
-                                  src="/images/unpin.svg"
-                                  alt="Unpin"
+                                  src="/images/share-03.svg"
+                                  alt="Share"
                                   width={16}
                                   height={16}
                                   className="mr-2"
                                 />
-                                <span>Unpin Chat</span>
-                              </>
-                            ) : (
-                              <>
+                                <span>Share</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => openRenameDialog(item as Chat, e)}
+                                className="focus:bg-[#F4F4F4] cursor-pointer"
+                              >
                                 <Image
-                                  src="/images/pin.svg"
-                                  alt="Pin"
+                                  src="/images/pen-01.svg"
+                                  alt="Rename"
                                   width={16}
                                   height={16}
                                   className="mr-2"
                                 />
-                                <span>Pin Chat</span>
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-[#E6E8E9]" />
-                          <DropdownMenuItem
-                            onClick={(e) => openDeleteDialog(item as Chat, e)}
-                            className="text-red-600 focus:text-red-600 focus:bg-[#F4F4F4] cursor-pointer"
-                          >
-                            <Image
-                              src="/images/delete-02.svg"
-                              alt="Delete"
-                              width={16}
-                              height={16}
-                              className="mr-2"
-                            />
-                            <span>Delete Chat</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                                <span>Rename</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => handlePinChat(item.id, e)}
+                                className="focus:bg-[#F4F4F4] cursor-pointer"
+                              >
+                                {isPinned ? (
+                                  <>
+                                    <Image
+                                      src="/images/unpin.svg"
+                                      alt="Unpin"
+                                      width={16}
+                                      height={16}
+                                      className="mr-2"
+                                    />
+                                    <span>Unpin Chat</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Image
+                                      src="/images/pin.svg"
+                                      alt="Pin"
+                                      width={16}
+                                      height={16}
+                                      className="mr-2"
+                                    />
+                                    <span>Pin Chat</span>
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="bg-[#E6E8E9]" />
+                              <DropdownMenuItem
+                                onClick={(e) => openDeleteDialog(item as Chat, e)}
+                                className="text-red-600 focus:text-red-600 focus:bg-[#F4F4F4] cursor-pointer"
+                              >
+                                <Image
+                                  src="/images/delete-02.svg"
+                                  alt="Delete"
+                                  width={16}
+                                  height={16}
+                                  className="mr-2"
+                                />
+                                <span>Delete Chat</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
+                  );
+                })}
+              </div>
+            );
             })
           )}
         </div>
@@ -810,11 +965,13 @@ export function ChatHistoryPanel() {
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[425px]" showX={false}>
-          <DialogHeader>
-            <DialogTitle className="text-center">Delete chat</DialogTitle>
+          <DialogHeader className="gap-1">
+            <DialogTitle className="text-left text-foreground">
+              Delete chat
+            </DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground text-center">
+          <div className="pt-1 pb-4">
+            <p className="text-sm text-black text-left">
               Are you sure you want to delete &quot;{selectedChat?.title || "this chat"}
               &quot;? This action cannot be undone.
             </p>

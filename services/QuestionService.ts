@@ -417,6 +417,7 @@ export default class QuestionService {
           if (!reader || !options.onEvent) return;
           let buffer = "";
           try {
+            let sawTerminalEvent = false;
             while (true) {
               // Check abort signal before each read
               if (options.signal?.aborted) {
@@ -448,8 +449,17 @@ export default class QuestionService {
                 if (eventId) data.eventId = eventId;
                 console.log("[QuestionService.connectQuestionsStream] Parsed event:", eventType, data);
                 options.onEvent?.(eventType, data);
-                if (eventType === "end" || eventType === "error") return;
+                if (eventType === "end" || eventType === "error") {
+                  sawTerminalEvent = true;
+                  return;
+                }
               }
+            }
+            if (!sawTerminalEvent) {
+              options.onEvent?.("end", {
+                status: "completed",
+                message: "Stream ended",
+              });
             }
           } finally {
             // Ensure reader is released

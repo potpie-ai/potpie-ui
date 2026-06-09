@@ -89,9 +89,11 @@ const ThreadScrollToBottom: FC = () => {
       <TooltipIconButton
         tooltip="Scroll to bottom"
         variant="outline"
-        className="aui-thread-scroll-to-bottom absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible dark:bg-background dark:hover:bg-accent"
+        className="aui-thread-scroll-to-bottom absolute -top-12 z-10 self-center rounded-full p-4 text-[#022D2C] disabled:invisible dark:bg-background dark:hover:bg-accent"
       >
-        <ArrowDownIcon />
+        <span aria-hidden className="text-base leading-none font-semibold">
+          ↓
+        </span>
       </TooltipIconButton>
     </ThreadPrimitive.ScrollToBottom>
   );

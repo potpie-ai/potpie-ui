@@ -110,6 +110,10 @@ export default function NewChatPage() {
 
   const [repoSearch, setRepoSearch] = useState<string>("");
   const [branchSearch, setBranchSearch] = useState<string>("");
+  const [hasPrefilledRepoFromQuery, setHasPrefilledRepoFromQuery] =
+    useState(false);
+  const [hasResolvedBranchFromQuery, setHasResolvedBranchFromQuery] =
+    useState(false);
 
   const [isLocalhost, setIsLocalhost] = useState(false);
   useEffect(() => {
@@ -121,6 +125,8 @@ export default function NewChatPage() {
   }, []);
 
   const isDemoMode = searchParams.get("demo") === "true";
+  const quickStartRepoQuery = searchParams.get("repo")?.trim() || "";
+  const quickStartBranchQuery = searchParams.get("branch")?.trim() || "";
 
 
   const {
@@ -257,6 +263,127 @@ export default function NewChatPage() {
   }, [repositories, repoSearch]);
 
   useEffect(() => {
+    setHasPrefilledRepoFromQuery(false);
+    setHasResolvedBranchFromQuery(false);
+  }, [quickStartRepoQuery, quickStartBranchQuery]);
+
+  useEffect(() => {
+    if (!quickStartRepoQuery || hasPrefilledRepoFromQuery) {
+      return;
+    }
+    if (reposLoading) {
+      return;
+    }
+
+    const normalize = (name: string) =>
+      name.trim().toLowerCase().replace(/\.git$/i, "");
+    const normalizedQuery = normalize(quickStartRepoQuery);
+
+    const matchedRepo = repositories.find((repo: Repo) => {
+      const fullName = normalize(repo.full_name || "");
+      const repoName = normalize(repo.name || "");
+      return fullName === normalizedQuery || repoName === normalizedQuery;
+    });
+
+    if (!matchedRepo) {
+      toast.error("Repository not found in linked repositories");
+      setState((prev) => ({
+        ...prev,
+        selectedRepo: null,
+        selectedBranch: null,
+      }));
+      setHasPrefilledRepoFromQuery(true);
+      setHasResolvedBranchFromQuery(true);
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      selectedRepo: matchedRepo.id?.toString() || prev.selectedRepo,
+      selectedBranch: null,
+    }));
+    setHasPrefilledRepoFromQuery(true);
+  }, [
+    quickStartRepoQuery,
+    hasPrefilledRepoFromQuery,
+    reposLoading,
+    repositories,
+  ]);
+
+  useEffect(() => {
+    if (!quickStartRepoQuery || !hasPrefilledRepoFromQuery || hasResolvedBranchFromQuery) {
+      return;
+    }
+    if (!state.selectedRepo || branchesLoading) {
+      return;
+    }
+
+    const selectedRepoData = repositories.find(
+      (repo: Repo) => repo.id?.toString() === state.selectedRepo
+    );
+    if (!selectedRepoData) {
+      return;
+    }
+
+    const availableBranches = Array.isArray(branches) ? branches : [];
+    let resolvedBranch = "";
+
+    if (quickStartBranchQuery) {
+      if (
+        availableBranches.length > 0 &&
+        availableBranches.includes(quickStartBranchQuery)
+      ) {
+        resolvedBranch = quickStartBranchQuery;
+      } else {
+        toast.error(
+          `Branch '${quickStartBranchQuery}' not found. Using fallback branch.`
+        );
+      }
+    }
+
+    if (
+      !resolvedBranch &&
+      selectedRepoData.default_branch &&
+      (availableBranches.length > 0 &&
+        availableBranches.includes(selectedRepoData.default_branch))
+    ) {
+      resolvedBranch = selectedRepoData.default_branch;
+    }
+
+    if (!resolvedBranch) {
+      if (availableBranches.includes("main")) {
+        resolvedBranch = "main";
+      } else if (availableBranches.length > 0) {
+        resolvedBranch = availableBranches[0];
+      } else {
+        resolvedBranch = selectedRepoData.default_branch || "main";
+      }
+    }
+
+    setState((prev) =>
+      prev.selectedBranch === resolvedBranch
+        ? prev
+        : { ...prev, selectedBranch: resolvedBranch }
+    );
+    if (resolvedBranch) {
+      setHasResolvedBranchFromQuery(true);
+    }
+
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
+  }, [
+    quickStartRepoQuery,
+    quickStartBranchQuery,
+    hasPrefilledRepoFromQuery,
+    hasResolvedBranchFromQuery,
+    state.selectedRepo,
+    branchesLoading,
+    branches,
+    repositories,
+  ]);
+
+  useEffect(() => {
     if (isDemoMode && repositories.length > 0) {
       setState((prev) => {
         if (prev.selectedRepo) return prev;
@@ -358,6 +485,7 @@ export default function NewChatPage() {
       let runId: string | undefined;
       try {
         const result = await QuestionService.startQuestionsGenerationStream(recipeId, {
+          streamTokens: true,
           consumeStream: false,
         });
         if (result.runId?.trim()) runId = result.runId.trim();
@@ -966,7 +1094,11 @@ export default function NewChatPage() {
         user.uid,
         title,
         projectId,
-        agentId
+        agentId,
+        false,
+        undefined,
+        undefined,
+        state.attachmentIds.length > 0 ? state.attachmentIds : undefined
       );
       if (repoName && branchName) {
         dispatch(
@@ -980,7 +1112,13 @@ export default function NewChatPage() {
       }
       dispatch(setChat({ agentId }));
       if (state.input.trim()) {
-        dispatch(setPendingMessage(getCleanInput(state.input)));
+        dispatch(
+          setPendingMessage({
+            text: getCleanInput(state.input),
+            attachmentIds:
+              state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+          })
+        );
       }
       router.push(`/chat/${conversationResponse.conversation_id}`);
       return true;

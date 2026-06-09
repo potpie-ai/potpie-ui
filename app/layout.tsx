@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
@@ -19,9 +18,27 @@ const UncutSans = localFont({
   display: "swap",
 });
 
-const RobotoMono = Roboto_Mono({
-  subsets: ["latin"],
+const RobotoMono = localFont({
+  src: [
+    {
+      path: "../public/fonts/RobotoMono-VariableFont_wght.ttf",
+      weight: "100 700",
+      style: "normal",
+    },
+  ],
   variable: "--font-roboto-mono",
+  display: "swap",
+});
+
+const DmMono = localFont({
+  src: [
+    {
+      path: "../public/fonts/DMMono-Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  variable: "--font-dm-mono",
   display: "swap",
 });
 
@@ -47,7 +64,8 @@ export default function RootLayout({
           "min-h-screen font-mulish antialiased ",
           GeistSans.className,
           UncutSans.variable,
-          RobotoMono.variable
+          RobotoMono.variable,
+          DmMono.variable
         )}
       >
         <LayoutProviders>{children}</LayoutProviders>

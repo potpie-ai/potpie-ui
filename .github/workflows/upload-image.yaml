@@ -11,23 +11,62 @@ env:
   CLOUD_RUN_SERVICE: potpie-frontend-stage # Add this line for Cloud Run service name
 
 jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm run build
+
   setup-build-publish-deploy:
+    needs: [quality-gates]
     name: Setup, Build, Publish, and Deploy
     runs-on: ubuntu-latest
     environment: staging
     permissions:
       contents: "read"
       id-token: "write"
+    env:
+      STAGE_GCP_WIF_PROVIDER: ${{ secrets.STAGE_GCP_WIF_PROVIDER }}
+      STAGE_GCP_WIF_SERVICE_ACCOUNT: ${{ secrets.STAGE_GCP_WIF_SERVICE_ACCOUNT }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: false
 
       # Setup gcloud CLI
       - id: "auth"
-        uses: "google-github-actions/auth@v3"
+        if: env.STAGE_GCP_WIF_PROVIDER != '' && env.STAGE_GCP_WIF_SERVICE_ACCOUNT != ''
+        uses: "google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed" # v2
+        with:
+          workload_identity_provider: "${{ secrets.STAGE_GCP_WIF_PROVIDER }}"
+          service_account: "${{ secrets.STAGE_GCP_WIF_SERVICE_ACCOUNT }}"
+
+      - id: "auth-key-fallback"
+        if: env.STAGE_GCP_WIF_PROVIDER == '' || env.STAGE_GCP_WIF_SERVICE_ACCOUNT == ''
+        uses: "google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed" # v2
         with:
           credentials_json: "${{ secrets.STAGE_GKE_SA_KEY }}"
 
@@ -70,25 +109,23 @@ jobs:
           echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FIREBASE_APP_ID=" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_BASE_URL=${{ secrets.UPLOAD_BASE_BACKEND_URL }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SKIP_PRO_CHECK=true" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_GITHUB_APP_NAME=${{ secrets.STAGE_NEXT_PUBLIC_GITHUB_APP_NAME }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_CONVERSATION_BASE_URL=${{ secrets.UPLOAD_BASE_BACKEND_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_KEY }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.STAGE_NEXT_PUBLIC_POSTHOG_HOST }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_POTPIE_PLUS_URL=${{ secrets.STAGE_NEXT_PUBLIC_POTPIE_PLUS_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_APP_URL=${{ secrets.UPLOAD_BASE_APP_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUBSCRIPTION_BASE_URL=" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_HMAC_SECRET_KEY=${{ secrets.STAGE_NEXT_PUBLIC_HMAC_SECRET_KEY }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_FORMBRICKS_API_HOST=${{ secrets.STAGE_NEXT_PUBLIC_FORMBRICKS_API_HOST }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_WORKFLOWS_URL=${{ secrets.UPLOAD_BASE_WORKFLOWS_URL }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SENTRY_CLIENT_ID=${{ secrets.STAGE_NEXT_PUBLIC_SENTRY_CLIENT_ID }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SENTRY_CLIENT_SECRET=${{ secrets.STAGE_NEXT_PUBLIC_SENTRY_CLIENT_SECRET }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL=${{ secrets.UPLOAD_BASE_WORKFLOWS_WEBHOOK_URL }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SENTRY_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_SENTRY_REDIRECT_URI }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_LINEAR_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_JIRA_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_JIRA_REDIRECT_URI }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_CONFLUENCE_REDIRECT_URI=${{ secrets.STAGE_NEXT_PUBLIC_CONFLUENCE_REDIRECT_URI }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SLACK_SERVER=${{ secrets.STAGE_NEXT_PUBLIC_SLACK_SERVER }}" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_LOGIN_PASSWORD=${{ secrets.STAGE_NEXT_PUBLIC_LOGIN_PASSWORD }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_MULTIMODAL_ENABLED=${{ secrets.UPLOAD_NEXT_PUBLIC_MULTIMODAL_ENABLED }}" >> $GITHUB_ENV
 
       # Build the Docker image
@@ -105,25 +142,23 @@ jobs:
             --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
             --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
             --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ env.NEXT_PUBLIC_FIREBASE_APP_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="${{ env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}" \
             --build-arg NEXT_PUBLIC_BASE_URL="${{ env.NEXT_PUBLIC_BASE_URL }}" \
-            --build-arg NEXT_PUBLIC_SKIP_PRO_CHECK="${{ env.NEXT_PUBLIC_SKIP_PRO_CHECK }}" \
             --build-arg NEXT_PUBLIC_GITHUB_APP_NAME="${{ env.NEXT_PUBLIC_GITHUB_APP_NAME }}" \
             --build-arg NEXT_PUBLIC_CONVERSATION_BASE_URL="${{ env.NEXT_PUBLIC_CONVERSATION_BASE_URL }}" \
             --build-arg NEXT_PUBLIC_POSTHOG_KEY="${{ env.NEXT_PUBLIC_POSTHOG_KEY }}" \
             --build-arg NEXT_PUBLIC_POSTHOG_HOST="${{ env.NEXT_PUBLIC_POSTHOG_HOST }}" \
-            --build-arg NEXT_PUBLIC_POTPIE_PLUS_URL="${{ env.NEXT_PUBLIC_POTPIE_PLUS_URL }}" \
             --build-arg NEXT_PUBLIC_APP_URL="${{ env.NEXT_PUBLIC_APP_URL }}" \
             --build-arg NEXT_PUBLIC_SUBSCRIPTION_BASE_URL="${{ env.NEXT_PUBLIC_SUBSCRIPTION_BASE_URL }}" \
-            --build-arg NEXT_PUBLIC_HMAC_SECRET_KEY="${{ env.NEXT_PUBLIC_HMAC_SECRET_KEY }}" \
             --build-arg NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID="${{ env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID }}" \
             --build-arg NEXT_PUBLIC_FORMBRICKS_API_HOST="${{ env.NEXT_PUBLIC_FORMBRICKS_API_HOST }}" \
             --build-arg NEXT_PUBLIC_WORKFLOWS_URL="${{ env.NEXT_PUBLIC_WORKFLOWS_URL }}" \
-            --build-arg NEXT_PUBLIC_SENTRY_CLIENT_ID="${{ env.NEXT_PUBLIC_SENTRY_CLIENT_ID }}" \
-            --build-arg NEXT_PUBLIC_SENTRY_CLIENT_SECRET="${{ env.NEXT_PUBLIC_SENTRY_CLIENT_SECRET }}" \
+            --build-arg NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL="${{ env.NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL }}" \
             --build-arg NEXT_PUBLIC_SENTRY_REDIRECT_URI="${{ env.NEXT_PUBLIC_SENTRY_REDIRECT_URI }}" \
             --build-arg NEXT_PUBLIC_LINEAR_REDIRECT_URI="${{ env.NEXT_PUBLIC_LINEAR_REDIRECT_URI }}" \
+            --build-arg NEXT_PUBLIC_JIRA_REDIRECT_URI="${{ env.NEXT_PUBLIC_JIRA_REDIRECT_URI }}" \
+            --build-arg NEXT_PUBLIC_CONFLUENCE_REDIRECT_URI="${{ env.NEXT_PUBLIC_CONFLUENCE_REDIRECT_URI }}" \
             --build-arg NEXT_PUBLIC_SLACK_SERVER="${{ env.NEXT_PUBLIC_SLACK_SERVER }}" \
-            --build-arg NEXT_PUBLIC_LOGIN_PASSWORD="${{ env.NEXT_PUBLIC_LOGIN_PASSWORD }}" \
             --build-arg NEXT_PUBLIC_MULTIMODAL_ENABLED="${{ env.NEXT_PUBLIC_MULTIMODAL_ENABLED }}" \
             -f Dockerfile .
 

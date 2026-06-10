@@ -52,8 +52,13 @@ export const WORK_EVENT_LABELS: Record<string, string> = {
 // connectors). The raw snake_case name is still shown as a secondary chip
 // so power users can correlate with logs — this is just the human gloss.
 export const TOOL_LABELS: Record<string, string> = {
-  // read-only graph lookups
+  // read-only graph lookups (reader-backed surface)
   context_search: "Searched the graph",
+  context_coding_preferences: "Checked coding preferences",
+  context_infra_topology: "Reviewed infra topology",
+  context_timeline: "Checked the timeline",
+  context_prior_bugs: "Looked up prior bugs",
+  // legacy read-tool names — kept so pre-rebuild events still render a label
   context_recent_changes: "Checked recent changes",
   context_file_owners: "Looked up file owners",
   context_graph_overview: "Reviewed graph overview",

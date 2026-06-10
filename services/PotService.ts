@@ -175,6 +175,31 @@ export type PotEventPage = {
   next_cursor: string | null;
 };
 
+// One row in the activity timeline (what changed, when, by/affecting what).
+// Backed by the canonical timeline reader over Activity claims; `verb_class`
+// is the event kind, `timestamp` is the event's occurred_at.
+export type PotActivityItem = {
+  id: string;
+  activity_key: string | null;
+  timestamp: string | null;
+  verb_class: string | null; // code_change | deployment | alert | discussion | decision
+  title: string | null;
+  predicate: string | null; // TOUCHED | PERFORMED_BY | MENTIONS
+  subject_key: string | null;
+  object_key: string | null;
+  source_system: string | null;
+  source_ref: string | null;
+  evidence_strength: string | null;
+  score: number | null;
+};
+
+export type PotActivityTimeline = {
+  pot_id: string;
+  items: PotActivityItem[];
+  coverage: string | null; // overall_confidence: high | medium | low | unknown
+  window: { since: string | null; until: string | null };
+};
+
 export type PotIngestPipeline = {
   pot_id: string;
   mode: "immediate" | "windowed";
@@ -194,19 +219,6 @@ export type RawIngestionResult = {
   status: string;
   pot_id: string;
   error: string | null;
-};
-
-export type ContextSearchResult = {
-  uuid: string;
-  name?: string | null;
-  summary?: string | null;
-  fact?: string | null;
-  source_refs?: Array<string | Record<string, unknown>>;
-  score?: number | null;
-  created_at?: string;
-  valid_at?: string;
-  invalid_at?: string;
-  expired_at?: string;
 };
 
 export type ContextGraphGoal =
@@ -333,77 +345,7 @@ export type ContextAnswerEnvelope = {
   };
 };
 
-// ---- Graph overview + project graph (used by the Graph tab) -----------------
-
-export type GraphLabelRow = {
-  label: string;
-  category: string;
-  description: string;
-  count: number;
-  required_properties: string[];
-  lifecycle_states: string[];
-  populated: boolean;
-};
-
-export type GraphCategoryRow = {
-  category: string;
-  label_count: number;
-  populated_label_count: number;
-  entity_count: number;
-  labels: GraphLabelRow[];
-};
-
-export type GraphEdgeRow = {
-  edge_type: string;
-  count: number;
-  description?: string;
-  predicate_family: string | null;
-  populated?: boolean;
-};
-
-export type PredicateFamilyRow = {
-  family: string;
-  members: string[];
-  count: number;
-};
-
-export type TopEntityRow = {
-  entity_key: string;
-  labels: string[];
-  name: string | null;
-  degree: number;
-};
-
-export type GraphOverview = {
-  pot_id: string;
-  message: string;
-  ontology_version: string;
-  totals: {
-    entities: number;
-    edges: number;
-    entities_without_canonical_label: number;
-    canonical_entities: number;
-    canonical_edges: number;
-    drift_edges: number;
-  };
-  schema_coverage: {
-    populated_labels: number;
-    total_labels: number;
-    coverage_ratio: number;
-    drift_ratio: number;
-    by_category: GraphCategoryRow[];
-    by_label: GraphLabelRow[];
-    unknown_labels: Record<string, number>;
-  };
-  edge_coverage: {
-    canonical: GraphEdgeRow[];
-    non_canonical: GraphEdgeRow[];
-    predicate_families: PredicateFamilyRow[];
-  };
-  lifecycle_distribution: Record<string, number>;
-  top_entities_by_degree: TopEntityRow[];
-  open_conflicts: Array<Record<string, unknown>>;
-};
+// ---- Project graph (used by the Graph tab) ----------------------------------
 
 export type ProjectGraphNode = {
   id: string;
@@ -437,6 +379,157 @@ export type ProjectGraph = {
   edges: ProjectGraphEdge[];
   message: string;
 };
+
+// ---- infra_topology envelope → ProjectGraph --------------------------------
+// The structural `project_graph` reader was removed with Graphiti. Topology is
+// now served by the `infra_topology` P9 reader, which returns one item per
+// canonical edge: `payload = { predicate, subject_key, object_key, environment,
+// ... }`. We rebuild the {nodes, edges} shape the canvas renders from those
+// edge rows. `OWNED_BY` is in the reader's predicate set, so this covers
+// ownership too — no separate owners leg is needed.
+
+type TopologyEdgePayload = {
+  predicate?: string;
+  subject_key?: string;
+  object_key?: string;
+  fact?: string;
+  environment?: string | null;
+  source_ref?: string | null;
+  source_system?: string | null;
+  valid_at?: string | null;
+  evidence_strength?: string | null;
+};
+
+type AgentEnvelopeItem = {
+  include?: string;
+  candidate_key?: string;
+  score?: number;
+  payload?: TopologyEdgePayload;
+};
+
+type AgentEnvelopeResult = { items?: AgentEnvelopeItem[] };
+
+// Canonical entity-key prefix → ontology label (mirrors the identity policies in
+// app/src/context-engine/domain/ontology.py).
+const ENTITY_KEY_LABEL: Record<string, string> = {
+  // canonical single-segment prefixes
+  service: "Service",
+  repo: "Repository",
+  environment: "Environment",
+  datastore: "DataStore",
+  cluster: "Cluster",
+  team: "Team",
+  person: "Person",
+  document: "Document",
+  observation: "Observation",
+  quality: "QualityIssue",
+  // two-segment namespaces that show up in raw / soft-downgraded data
+  "github:repo": "Repository",
+  "github:user": "Person",
+  "github:org": "Team",
+  "timeline:activity": "Activity",
+  "timeline:period": "Period",
+};
+
+function entityLabelFromKey(key: string): string {
+  const parts = key.split(":");
+  const two = parts.length >= 2 ? `${parts[0]}:${parts[1]}`.toLowerCase() : "";
+  if (two && ENTITY_KEY_LABEL[two]) return ENTITY_KEY_LABEL[two];
+  const prefix = (parts[0] ?? "").toLowerCase();
+  return (
+    ENTITY_KEY_LABEL[prefix] ??
+    (prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : "Entity")
+  );
+}
+
+// Both the semantic infra_topology reader and the raw_graph visualization read
+// return edge-shaped item payloads; accept either.
+const EDGE_INCLUDE_FAMILIES = new Set(["infra_topology", "raw_graph"]);
+
+function entityNameFromKey(key: string): string {
+  const idx = key.indexOf(":");
+  return idx >= 0 ? key.slice(idx + 1) : key;
+}
+
+function topologyEnvelopeToProjectGraph(
+  result: AgentEnvelopeResult | undefined | null,
+  potId: string,
+  limit: number,
+): ProjectGraph {
+  const items = Array.isArray(result?.items) ? result!.items! : [];
+  const nodes = new Map<string, ProjectGraphNode>();
+  const edges: ProjectGraphEdge[] = [];
+  const seenEdges = new Set<string>();
+
+  const ensureNode = (key: string): ProjectGraphNode => {
+    let node = nodes.get(key);
+    if (!node) {
+      node = {
+        id: key,
+        entity_key: key,
+        labels: [entityLabelFromKey(key)],
+        properties: { name: entityNameFromKey(key) },
+        relationships: [],
+      };
+      nodes.set(key, node);
+    }
+    return node;
+  };
+
+  for (const item of items) {
+    if (item.include && !EDGE_INCLUDE_FAMILIES.has(item.include)) continue;
+    const p = item.payload ?? {};
+    const from = p.subject_key;
+    const to = p.object_key;
+    const type = p.predicate;
+    if (!from || !to || !type) continue;
+
+    const subject = ensureNode(from);
+    const object = ensureNode(to);
+
+    const edgeId = `${from}|${type}|${to}`;
+    if (seenEdges.has(edgeId)) continue;
+    seenEdges.add(edgeId);
+
+    edges.push({
+      from,
+      type,
+      to,
+      properties: {
+        ...(p.environment ? { environment: p.environment } : {}),
+        ...(p.source_ref ? { source_ref: p.source_ref } : {}),
+        ...(p.source_system ? { source_system: p.source_system } : {}),
+        ...(p.evidence_strength
+          ? { evidence_strength: p.evidence_strength }
+          : {}),
+        ...(p.valid_at ? { valid_at: p.valid_at } : {}),
+      },
+    });
+    subject.relationships.push({
+      type,
+      direction: "out",
+      target_key: to,
+      target_labels: object.labels,
+      target_name: entityNameFromKey(to),
+    });
+    object.relationships.push({
+      type,
+      direction: "in",
+      source_key: from,
+      source_labels: subject.labels,
+      source_name: entityNameFromKey(from),
+    });
+  }
+
+  return {
+    pot_id: potId,
+    pr_number: null,
+    limit,
+    nodes: Array.from(nodes.values()),
+    edges,
+    message: "",
+  };
+}
 
 function errorMessage(error: unknown, fallback: string) {
   if (axios.isAxiosError(error)) {
@@ -857,6 +950,53 @@ export default class PotService {
     }
   }
 
+  static async getActivityTimeline(
+    potId: string,
+    options: {
+      service?: string[];
+      window?: string; // "24h" | "7d" | "14d" | "30d" | "90d"
+      since?: string;
+      until?: string;
+      verb_class?: string[];
+      limit?: number;
+      include_invalidated?: boolean;
+    } = {},
+  ): Promise<PotActivityTimeline> {
+    const headers = await getHeaders();
+    const params: Record<string, string | number | boolean | string[]> = {};
+    if (options.service && options.service.length > 0)
+      params.service = options.service;
+    if (options.window) params.window = options.window;
+    if (options.since) params.since = options.since;
+    if (options.until) params.until = options.until;
+    if (options.verb_class && options.verb_class.length > 0)
+      params.verb_class = options.verb_class;
+    if (options.limit != null) params.limit = options.limit;
+    if (options.include_invalidated)
+      params.include_invalidated = options.include_invalidated;
+    try {
+      const response = await axios.get(
+        `${baseUrl()}/api/v1/context/pots/${potId}/timeline`,
+        {
+          headers,
+          params,
+          paramsSerializer: (p) => {
+            const q = new URLSearchParams();
+            Object.entries(p).forEach(([k, v]) => {
+              if (Array.isArray(v))
+                v.forEach((item) => q.append(k, String(item)));
+              else if (v != null) q.append(k, String(v));
+            });
+            return q.toString();
+          },
+        },
+      );
+      return response.data as PotActivityTimeline;
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error fetching activity timeline"));
+    }
+  }
+
   static async getEvent(eventId: string): Promise<PotEvent> {
     const headers = await getHeaders();
     try {
@@ -1014,20 +1154,6 @@ export default class PotService {
     }
   }
 
-  static async getGraphOverview(
-    potId: string,
-    options: { top_entities_limit?: number } = {},
-  ): Promise<GraphOverview> {
-    const envelope = await this.queryContextGraph<GraphOverview>({
-      pot_id: potId,
-      goal: "aggregate",
-      strategy: "exact",
-      include: ["graph_overview"],
-      limit: options.top_entities_limit ?? 20,
-    });
-    return envelope.result;
-  }
-
   static async getProjectGraph(
     potId: string,
     body: {
@@ -1039,71 +1165,36 @@ export default class PotService {
       include?: string[];
       pr_number?: number;
       limit?: number;
+      raw?: boolean;
     } = {},
   ): Promise<ProjectGraph> {
-    // The Phase 3 reader registry treats `include` as reader-family routing;
-    // prepend the `project_graph` family so the structural traversal reader
-    // is invoked. The reader itself still consumes the remaining keys as
-    // project-map label buckets (service_map, feature_map, deployments, …).
-    const userIncludes = (body.include ?? []).filter((k) => k !== "project_graph");
-    const include = ["project_graph", ...userIncludes];
-    const envelope = await this.queryContextGraph<ProjectGraph>({
+    // Topology is served by the `infra_topology` P9 reader (the structural
+    // `project_graph` reader + per-family include buckets were removed with
+    // Graphiti). Each returned item is a canonical edge; we rebuild the
+    // {nodes, edges} graph from them. `infra_topology` ignores repo_name /
+    // pr_number / features; `services` anchors the traversal (empty = full
+    // project topology) and `environment` filters it.
+    //
+    // `raw: true` switches to the `raw_graph` read — the WHOLE canonical
+    // partition incl. generic RELATED_TO edges and soft-downgraded data — so
+    // the explorer can show pots whose edges aren't (yet) canonical topology.
+    const limit = body.limit ?? 25;
+    const envelope = await this.queryContextGraph<AgentEnvelopeResult>({
       pot_id: potId,
-      goal: "neighborhood",
-      strategy: "traversal",
-      include,
-      limit: body.limit ?? 25,
+      goal: "retrieve",
+      strategy: "auto",
+      include: [body.raw ? "raw_graph" : "infra_topology"],
+      limit,
       scope: {
-        services: body.services ?? [],
-        features: body.features ?? [],
-        ...(body.repo_name ? { repo_name: body.repo_name } : {}),
+        ...(body.services && body.services.length
+          ? { services: body.services }
+          : {}),
         ...(body.environment ? { environment: body.environment } : {}),
-        ...(body.user ? { user: body.user } : {}),
-        ...(body.pr_number ? { pr_number: body.pr_number } : {}),
       },
     });
-    // With multiple registered families the registry returns
-    // `{ kind: "multi", result: { <family>: payload } }`. Defensively unwrap
-    // the project_graph leg so callers always see the same shape.
-    const raw = envelope.result as ProjectGraph | Record<string, ProjectGraph>;
-    if (raw && typeof raw === "object" && !Array.isArray((raw as ProjectGraph).nodes)) {
-      const multi = raw as Record<string, ProjectGraph>;
-      if (multi.project_graph && Array.isArray(multi.project_graph.nodes)) {
-        return multi.project_graph;
-      }
-    }
-    return raw as ProjectGraph;
+    return topologyEnvelopeToProjectGraph(envelope.result, potId, limit);
   }
 
-  static async searchContext(
-    potId: string,
-    body: {
-      query: string;
-      limit?: number;
-      node_labels?: string[];
-      repo_name?: string;
-      source_description?: string;
-      include_invalidated?: boolean;
-      as_of?: string;
-    },
-  ): Promise<ContextSearchResult[]> {
-    const envelope = await this.queryContextGraph<ContextSearchResult[]>({
-      pot_id: potId,
-      query: body.query,
-      goal: "retrieve",
-      strategy: "semantic",
-      include: ["semantic_search"],
-      limit: body.limit ?? 8,
-      scope: {
-        ...(body.repo_name ? { repo_name: body.repo_name } : {}),
-      },
-      node_labels: body.node_labels ?? [],
-      source_descriptions: body.source_description ? [body.source_description] : [],
-      include_invalidated: body.include_invalidated ?? false,
-      ...(body.as_of ? { as_of: body.as_of } : {}),
-    });
-    return envelope.result;
-  }
 
   static async queryContextGraph<T = unknown>(
     body: ContextGraphQuery,

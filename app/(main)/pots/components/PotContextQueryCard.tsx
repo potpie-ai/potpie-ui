@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { Bot, FileSearch, Loader2, Search, Sparkles } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Bot, Loader2, Search, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,109 +19,32 @@ import { cn } from "@/lib/utils";
 import PotService, {
   ContextAnswerEnvelope,
   ContextGraphResult,
-  ContextSearchResult,
 } from "@/services/PotService";
 
 type Props = {
   potId: string;
 };
 
-type QueryMode = "answer" | "retrieve" | "agentic";
-type QueryResult =
-  | ContextGraphResult<ContextAnswerEnvelope>
-  | ContextGraphResult<ContextSearchResult[]>;
+// Resolve = deterministic resolve_context + synthesis (goal=answer).
+// Agentic = the read-side agent loop over the 4 read tools (goal=investigate).
+// The old "Evidence" (goal=retrieve, include=[semantic_search]) mode was
+// dropped: the semantic_search reader was removed with Graphiti.
+type QueryMode = "answer" | "agentic";
+type QueryResult = ContextGraphResult<ContextAnswerEnvelope>;
 
-// Mirrors backend DEFAULT_INTENT_INCLUDES / CONTEXT_RESOLVE_RECIPES
-// (app/src/context-engine/domain/agent_context_port.py). Keep in sync.
+// Mirrors the live reader-backed DEFAULT_INTENT_INCLUDES in
+// app/src/context-engine/domain/agent_context_port.py. Includes resolve through
+// the P9 readers (coding_preferences / infra_topology / timeline / prior_bugs);
+// owners / decisions / docs are in the vocabulary but not yet reader-backed, so
+// they degrade to `unsupported_include` rather than erroring. Keep in sync with
+// the backend. (Sending an empty include + the intent lets the backend expand
+// these itself; we mirror them here only to show the user what is fetched.)
 const INTENT_INCLUDE: Record<string, string[]> = {
-  feature: [
-    "purpose",
-    "feature_map",
-    "service_map",
-    "docs",
-    "tickets",
-    "decisions",
-    "recent_changes",
-    "owners",
-    "preferences",
-    "source_status",
-  ],
-  debugging: [
-    "prior_fixes",
-    "diagnostic_signals",
-    "incidents",
-    "alerts",
-    "causal_chain",
-    "recent_changes",
-    "config",
-    "deployments",
-    "owners",
-    "source_status",
-  ],
-  review: [
-    "artifact",
-    "discussions",
-    "owners",
-    "recent_changes",
-    "decisions",
-    "preferences",
-    "source_status",
-  ],
-  operations: [
-    "deployments",
-    "runbooks",
-    "alerts",
-    "incidents",
-    "scripts",
-    "config",
-    "owners",
-    "source_status",
-  ],
-  planning: [
-    "purpose",
-    "feature_map",
-    "service_map",
-    "docs",
-    "tickets",
-    "decisions",
-    "recent_changes",
-    "source_status",
-  ],
-  docs: ["docs", "decisions", "source_status"],
-  onboarding: [
-    "purpose",
-    "repo_map",
-    "service_map",
-    "docs",
-    "local_workflows",
-    "agent_instructions",
-    "source_status",
-  ],
-  refactor: [
-    "service_map",
-    "repo_map",
-    "recent_changes",
-    "decisions",
-    "owners",
-    "source_status",
-  ],
-  test: [
-    "recent_changes",
-    "decisions",
-    "local_workflows",
-    "scripts",
-    "source_status",
-  ],
-  security: [
-    "service_map",
-    "docs",
-    "decisions",
-    "incidents",
-    "config",
-    "owners",
-    "source_status",
-  ],
-  unknown: ["semantic_search", "recent_changes", "decisions", "source_status"],
+  feature: ["coding_preferences", "infra_topology", "decisions", "owners", "docs"],
+  debugging: ["prior_bugs", "infra_topology", "timeline"],
+  operations: ["infra_topology", "timeline", "owners"],
+  onboarding: ["infra_topology", "coding_preferences", "docs", "owners"],
+  review: ["coding_preferences", "decisions", "timeline", "owners"],
 };
 
 function compactJson(value: unknown): string {
@@ -187,59 +110,25 @@ export default function PotContextQueryCard({ potId }: Props) {
     setLoading(true);
     try {
       const scope = repoName.trim() ? { repo_name: repoName.trim() } : {};
-      let data: QueryResult;
-      if (mode === "retrieve") {
-        data = await PotService.queryContextGraph<ContextSearchResult[]>({
-          pot_id: potId,
-          query: q,
-          goal: "retrieve",
-          strategy: "semantic",
-          include: ["semantic_search"],
-          source_policy: sourcePolicy,
-          scope,
-          limit,
-          consumer_hint: "potpie-ui",
-          budget: { max_items: limit },
-        });
-      } else if (mode === "agentic") {
-        // The read-side agent drives its own retrieval loop, so it needs a
-        // larger budget than the single-shot resolve path.
-        data = await PotService.queryContextGraph<ContextAnswerEnvelope>({
-          pot_id: potId,
-          query: q,
-          goal: "investigate",
-          strategy: "auto",
-          intent,
-          include,
-          source_policy: sourcePolicy,
-          scope,
-          limit,
-          consumer_hint: "potpie-ui",
-          budget: {
-            max_items: limit,
-            timeout_ms: 30000,
-            freshness: "prefer_fresh",
-          },
-        });
-      } else {
-        data = await PotService.queryContextGraph<ContextAnswerEnvelope>({
-          pot_id: potId,
-          query: q,
-          goal: "answer",
-          strategy: "hybrid",
-          intent,
-          include,
-          source_policy: sourcePolicy,
-          scope,
-          limit,
-          consumer_hint: "potpie-ui",
-          budget: {
-            max_items: limit,
-            timeout_ms: 8000,
-            freshness: "prefer_fresh",
-          },
-        });
-      }
+      const data = await PotService.queryContextGraph<ContextAnswerEnvelope>({
+        pot_id: potId,
+        query: q,
+        // Agentic drives its own retrieval loop (more budget); Resolve is a
+        // single-shot deterministic resolve + synthesis.
+        goal: mode === "agentic" ? "investigate" : "answer",
+        strategy: mode === "agentic" ? "auto" : "hybrid",
+        intent,
+        include,
+        source_policy: sourcePolicy,
+        scope,
+        limit,
+        consumer_hint: "potpie-ui",
+        budget: {
+          max_items: limit,
+          timeout_ms: mode === "agentic" ? 30000 : 8000,
+          freshness: "prefer_fresh",
+        },
+      });
       setResult(data);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to query context");
@@ -269,10 +158,6 @@ export default function PotContextQueryCard({ potId }: Props) {
               <Bot className="h-3.5 w-3.5" />
               Agentic
             </ModeButton>
-            <ModeButton active={mode === "retrieve"} onClick={() => setMode("retrieve")}>
-              <FileSearch className="h-3.5 w-3.5" />
-              Evidence
-            </ModeButton>
           </div>
         </div>
       </CardHeader>
@@ -290,7 +175,7 @@ export default function PotContextQueryCard({ potId }: Props) {
             placeholder="Ask about decisions, fixes, owners, or project context"
             disabled={loading}
           />
-          <Select value={intent} onValueChange={setIntent} disabled={mode === "retrieve"}>
+          <Select value={intent} onValueChange={setIntent}>
             <SelectTrigger className="h-10">
               <SelectValue placeholder="Intent" />
             </SelectTrigger>
@@ -344,15 +229,13 @@ export default function PotContextQueryCard({ potId }: Props) {
           />
         </div>
 
-        {mode !== "retrieve" ? (
-          <div className="flex flex-wrap gap-1">
-            {include.slice(0, 9).map((item) => (
-              <Badge key={item} variant="secondary" className="text-[10px] font-normal">
-                {item}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap gap-1">
+          {include.slice(0, 9).map((item) => (
+            <Badge key={item} variant="secondary" className="text-[10px] font-normal">
+              {item}
+            </Badge>
+          ))}
+        </div>
 
         {result ? <QueryResultView result={result} /> : null}
       </CardContent>
@@ -367,7 +250,7 @@ function ModeButton({
 }: {
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -390,138 +273,75 @@ function QueryResultView({ result }: { result: QueryResult }) {
     ? result.meta?.fallbacks
     : [];
 
-  if (result.goal === "answer" || result.goal === "investigate") {
-    const envelope = result.result as ContextAnswerEnvelope;
-    const evidence = Array.isArray(envelope.evidence) ? envelope.evidence : [];
-    const sourceRefs = Array.isArray(envelope.source_refs)
-      ? envelope.source_refs
-      : [];
-    const agent = envelope.agent;
-    const fallbackReason =
-      typeof result.meta?.fallback === "string"
-        ? (result.meta.fallback as string)
-        : null;
-
-    return (
-      <div className="rounded-md border bg-background p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{result.kind}</Badge>
-          {envelope.coverage?.status ? (
-            <Badge variant="secondary">Coverage {envelope.coverage.status}</Badge>
-          ) : null}
-          {envelope.quality?.status ? (
-            <Badge variant="secondary">Quality {envelope.quality.status}</Badge>
-          ) : null}
-          {typeof envelope.confidence !== "undefined" ? (
-            <Badge variant="secondary">Confidence {String(envelope.confidence)}</Badge>
-          ) : null}
-        </div>
-
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
-          {envelope.answer?.summary || "No answer summary returned."}
-        </p>
-
-        {fallbackReason ? (
-          <p className="mt-2 text-xs text-amber-700">
-            Agent unavailable ({fallbackReason}) — fell back to the
-            deterministic resolve path.
-          </p>
-        ) : null}
-
-        {agent ? <AgentTrace agent={agent} /> : null}
-
-        <Separator className="my-3" />
-
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <CountTile label="Changes" value={envelope.answer?.recent_changes} />
-          <CountTile label="Decisions" value={envelope.answer?.decisions} />
-          <CountTile label="Owners" value={envelope.answer?.owners} />
-          <CountTile label="Evidence" value={evidence} />
-        </div>
-
-        <EvidenceList items={evidence} />
-
-        {sourceRefs.length > 0 ? (
-          <div className="mt-3">
-            <p className="text-xs font-medium text-muted-foreground">Source refs</p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {sourceRefs.slice(0, 12).map((ref, idx) => (
-                <Badge
-                  key={sourceRefKey(ref, idx)}
-                  variant="outline"
-                  className="max-w-full truncate font-mono text-[10px]"
-                  title={compactJson(ref)}
-                >
-                  {sourceRefLabel(ref)}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <Fallbacks fallbacks={[...metaFallbacks, ...(envelope.fallbacks ?? [])]} />
-      </div>
-    );
-  }
-
-  const rows = Array.isArray(result.result)
-    ? (result.result as ContextSearchResult[])
+  const envelope = result.result as ContextAnswerEnvelope;
+  const evidence = Array.isArray(envelope?.evidence) ? envelope.evidence : [];
+  const sourceRefs = Array.isArray(envelope?.source_refs)
+    ? envelope.source_refs
     : [];
+  const agent = envelope?.agent;
+  const fallbackReason =
+    typeof result.meta?.fallback === "string"
+      ? (result.meta.fallback as string)
+      : null;
 
   return (
     <div className="rounded-md border bg-background p-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">{result.kind}</Badge>
-        <span className="text-xs text-muted-foreground">{rows.length} result(s)</span>
+        {envelope?.coverage?.status ? (
+          <Badge variant="secondary">Coverage {envelope.coverage.status}</Badge>
+        ) : null}
+        {envelope?.quality?.status ? (
+          <Badge variant="secondary">Quality {envelope.quality.status}</Badge>
+        ) : null}
+        {typeof envelope?.confidence !== "undefined" ? (
+          <Badge variant="secondary">Confidence {String(envelope.confidence)}</Badge>
+        ) : null}
       </div>
-      {rows.length === 0 ? (
-        <p className="mt-3 text-sm italic text-muted-foreground">
-          No matching graph evidence returned.
+
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+        {envelope?.answer?.summary || "No answer summary returned."}
+      </p>
+
+      {fallbackReason ? (
+        <p className="mt-2 text-xs text-amber-700">
+          Agent unavailable ({fallbackReason}) — fell back to the
+          deterministic resolve path.
         </p>
-      ) : (
-        <ul className="mt-3 space-y-2">
-          {rows.map((row, idx) => {
-            const body = row.fact || row.summary;
-            return (
-              <li
-                key={row.uuid || idx}
-                className="rounded-md border border-border/60 bg-muted/20 p-3"
+      ) : null}
+
+      {agent ? <AgentTrace agent={agent} /> : null}
+
+      <Separator className="my-3" />
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <CountTile label="Changes" value={envelope?.answer?.recent_changes} />
+        <CountTile label="Decisions" value={envelope?.answer?.decisions} />
+        <CountTile label="Owners" value={envelope?.answer?.owners} />
+        <CountTile label="Evidence" value={evidence} />
+      </div>
+
+      <EvidenceList items={evidence} />
+
+      {sourceRefs.length > 0 ? (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-muted-foreground">Source refs</p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {sourceRefs.slice(0, 12).map((ref, idx) => (
+              <Badge
+                key={sourceRefKey(ref, idx)}
+                variant="outline"
+                className="max-w-full truncate font-mono text-[10px]"
+                title={compactJson(ref)}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 truncate text-sm font-medium" title={row.name || row.uuid}>
-                    {row.name || row.uuid}
-                  </p>
-                  {typeof row.score === "number" ? (
-                    <Badge variant="secondary" className="font-mono text-[10px]">
-                      {row.score.toFixed(2)}
-                    </Badge>
-                  ) : null}
-                </div>
-                {body ? (
-                  <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
-                    {body}
-                  </p>
-                ) : null}
-                {row.source_refs?.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {row.source_refs.slice(0, 4).map((ref, refIdx) => (
-                      <Badge
-                        key={sourceRefKey(ref, refIdx)}
-                        variant="outline"
-                        className="font-mono text-[10px]"
-                        title={compactJson(ref)}
-                      >
-                        {sourceRefLabel(ref)}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <Fallbacks fallbacks={metaFallbacks} />
+                {sourceRefLabel(ref)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <Fallbacks fallbacks={[...metaFallbacks, ...(envelope?.fallbacks ?? [])]} />
     </div>
   );
 }

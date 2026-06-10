@@ -41,7 +41,7 @@ const AllChats = () => {
 
   const { data: recipes, isLoading: recipesLoading, error: recipesError, refetch: refetchRecipes } = useQuery<any[]>({
     queryKey: ["all-recipes", user?.email ?? null],
-    queryFn: () => RecipeService.getAllRecipes(0, 100, user?.email ?? null),
+    queryFn: () => RecipeService.getAllRecipes(0, 100),
   });
 
   const handleSave = async (chatId: string) => {

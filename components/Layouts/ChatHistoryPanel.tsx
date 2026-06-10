@@ -160,7 +160,7 @@ export function ChatHistoryPanel() {
 
   const { data: recipes = [], isLoading: recipesLoading } = useQuery({
     queryKey: ["all-recipes", user?.email ?? null],
-    queryFn: () => RecipeService.getAllRecipes(0, 100, user?.email ?? null),
+    queryFn: () => RecipeService.getAllRecipes(0, 100),
     staleTime: 60000,
     retry: false,
   });

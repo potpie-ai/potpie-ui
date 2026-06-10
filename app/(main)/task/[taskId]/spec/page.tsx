@@ -1443,18 +1443,44 @@ const SpecPage = () => {
                         // If status lookup fails, assume first-time generation.
                       }
 
-                      if (planAction === "submit" || planAction === "regenerate") {
-                        const { runId } = await PlanService.startPlanGenerationStream(recipeId, {
-                          consumeStream: false,
-                        });
-                        if (runId && runId.trim()) {
-                          router.push(`/task/${recipeId}/plan?run_id=${encodeURIComponent(runId.trim())}`);
-                        } else {
-                          router.push(`/task/${recipeId}/plan`);
+                      let planRunId = "";
+                      if (planAction === "regenerate") {
+                        await PlanService.regeneratePlan(recipeId);
+                      } else if (planAction === "submit") {
+                        try {
+                          const result = await PlanService.startPlanGenerationStream(
+                            recipeId,
+                            {
+                              consumeStream: false,
+                            },
+                          );
+                          planRunId = result.runId?.trim() || "";
+                        } catch (streamError) {
+                          let currentPlanStatus;
+                          try {
+                            currentPlanStatus = await PlanService.getPlanStatusByRecipeId(recipeId);
+                          } catch {
+                            throw streamError;
+                          }
+
+                          const currentStatus = currentPlanStatus?.generation_status?.toLowerCase();
+                          const currentRunId = currentPlanStatus?.run_id?.trim() || "";
+                          if (currentStatus === "not_started") {
+                            await PlanService.submitPlanGeneration({
+                              recipe_id: recipeId,
+                            });
+                          } else if (currentRunId) {
+                            planRunId = currentRunId;
+                          } else {
+                            throw streamError;
+                          }
                         }
-                      } else {
-                        router.push(`/task/${recipeId}/plan`);
                       }
+                      router.push(
+                        planRunId
+                          ? `/task/${recipeId}/plan?run_id=${encodeURIComponent(planRunId)}`
+                          : `/task/${recipeId}/plan`,
+                      );
                     } catch (err: any) {
                       console.error("Error starting plan generation:", err);
                       toast.error(err?.message ?? "Failed to start plan generation");

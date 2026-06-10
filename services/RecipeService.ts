@@ -35,25 +35,14 @@ export interface AllRecipesResponse {
 }
 
 export default class RecipeService {
-  private static readonly DEMO_VISIBLE_EMAILS = new Set([
-    "tools@potpie.ai",
-    "nandan@potpie.ai",
-  ]);
-
   private static getBaseUrl() {
     // Use workflows URL directly for recipe operations
     return process.env.NEXT_PUBLIC_WORKFLOWS_URL;
   }
 
-  private static shouldIncludeDemoRecipe(email?: string | null) {
-    const normalizedEmail = email?.trim().toLowerCase();
-    return !!normalizedEmail && this.DEMO_VISIBLE_EMAILS.has(normalizedEmail);
-  }
-
   static async getAllRecipes(
     start: number = 0,
-    limit: number = 100,
-    userEmail?: string | null
+    limit: number = 100
   ): Promise<Recipe[]> {
     try {
       const headers = await getHeaders();
@@ -71,12 +60,10 @@ export default class RecipeService {
         ...recipe,
         recipe_id: recipe.id || recipe.recipe_id,
       }));
-      return this.shouldIncludeDemoRecipe(userEmail)
-        ? [getDemoRecipe(), ...normalizedRecipes]
-        : normalizedRecipes;
+      return [getDemoRecipe(), ...normalizedRecipes];
     } catch (error) {
       console.error("Error fetching recipes:", error);
-      return this.shouldIncludeDemoRecipe(userEmail) ? [getDemoRecipe()] : [];
+      return [getDemoRecipe()];
     }
   }
 

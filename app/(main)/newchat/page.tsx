@@ -25,7 +25,11 @@ import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
 import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
 import { useGithubAppPopup } from "../idea/hooks/useGithubAppPopup";
 import {
+  DEMO_PROJECT_ID,
   DEMO_QUESTION_RUN_ID,
+  DEMO_REPO_BRANCH,
+  DEMO_REPO_FULL_NAME,
+  DEMO_REPO_ID,
   getDemoCreateRecipeResponse,
   isDemoBuildFlowActive,
   isRedisDlqDemoRequest,
@@ -147,9 +151,25 @@ export default function NewChatPage() {
   });
 
   const repositories = useMemo(() => {
-    if (!allRepositories || allRepositories.length === 0) return [];
-    return allRepositories;
-  }, [allRepositories]);
+    const repos: Repo[] = allRepositories?.length ? allRepositories : [];
+    const hasDemoRepo = repos.some(
+      (repo: Repo) =>
+        (repo.full_name || repo.name)?.trim().toLowerCase() ===
+        DEMO_REPO_FULL_NAME
+    );
+    const demoMatchesSearch =
+      !repoSearch ||
+      DEMO_REPO_FULL_NAME.includes(repoSearch.trim().toLowerCase());
+    if (hasDemoRepo || !demoMatchesSearch) return repos;
+    const demoRepo: Repo = {
+      id: DEMO_REPO_ID,
+      name: "redis",
+      full_name: DEMO_REPO_FULL_NAME,
+      url: `https://github.com/${DEMO_REPO_FULL_NAME}`,
+      default_branch: DEMO_REPO_BRANCH,
+    };
+    return [demoRepo, ...repos];
+  }, [allRepositories, repoSearch]);
 
   const selectedRepoName = useMemo(() => {
     if (!state.selectedRepo || !repositories.length) return null;
@@ -164,6 +184,12 @@ export default function NewChatPage() {
     queryKey: ["user-branch", selectedRepoName, branchSearch],
     queryFn: () => {
       if (!selectedRepoName) return Promise.resolve([]);
+      if (selectedRepoName.trim().toLowerCase() === DEMO_REPO_FULL_NAME) {
+        if (!state.selectedBranch) {
+          setState((prev) => ({ ...prev, selectedBranch: DEMO_REPO_BRANCH }));
+        }
+        return Promise.resolve([DEMO_REPO_BRANCH]);
+      }
       const regex = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)/;
       const match = selectedRepoName.match(regex);
       if (match) {
@@ -1292,6 +1318,28 @@ export default function NewChatPage() {
       const repoFullName = selectedRepoData.full_name || selectedRepoData.name;
       const repoNameOnly =
         repoFullName?.split("/").pop() || selectedRepoData.name;
+      // Demo build flow: skip project readiness/parsing so it works on any account.
+      if (isRedisDlqDemoRequest(repoFullName, branchName, cleanInput)) {
+        setState((prev) => ({ ...prev, projectId: DEMO_PROJECT_ID }));
+        dispatch(
+          setRepoAndBranchForTask({
+            taskId: DEMO_PROJECT_ID,
+            repoName: repoSlug.trim(),
+            branchName,
+            projectId: DEMO_PROJECT_ID,
+          })
+        );
+        createRecipeMutation.mutate({
+          userPrompt: cleanInput,
+          projectId: DEMO_PROJECT_ID,
+          additionalLinks: undefined,
+          attachmentIds:
+            state.attachmentIds.length > 0 ? state.attachmentIds : undefined,
+          repoName: repoFullName,
+          branchName,
+        });
+        return;
+      }
       const readyProject = projects?.find((project: any) => {
         if (!project.repo_name || project.status !== "ready") return false;
         return projectRepoMatches(

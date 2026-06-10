@@ -29,6 +29,9 @@ export const DEMO_CONVERSATION_ID = "c2f5f4e1-9b7a-4d4d-8b0d-71359f5d4288";
 export const DEMO_PLAN_ITEM_ID = "f84fd0c0-9d26-4780-8c0c-8bce5d339a70";
 export const DEMO_RECIPE_TITLE = "Dead Letter Q Support";
 export const DEMO_PR_URL = "https://github.com/potpietools/redis/pull/8";
+export const DEMO_REPO_ID = "demo-potpietools-redis";
+export const DEMO_REPO_FULL_NAME = "potpietools/redis";
+export const DEMO_REPO_BRANCH = "unstable";
 
 type DemoState = {
   questionsStarted: boolean;
@@ -130,8 +133,8 @@ export function isRedisDlqDemoRequest(
   const normalizedPrompt = prompt?.trim().toLowerCase() ?? "";
 
   return (
-    normalizedRepo === "potpietools/redis" &&
-    normalizedBranch === "unstable" &&
+    normalizedRepo === DEMO_REPO_FULL_NAME &&
+    normalizedBranch === DEMO_REPO_BRANCH &&
     normalizedPrompt.includes("add") &&
     normalizedPrompt.includes("dlq")
   );

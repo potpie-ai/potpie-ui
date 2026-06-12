@@ -22,6 +22,7 @@ overrides:
   prismjs: ^1.30.0
   dompurify: ^3.4.2
   lodash-es: ^4.18.1
+  '@grpc/grpc-js': 1.9.16
 
 importers:
 
@@ -817,8 +818,8 @@ packages:
     peerDependencies:
       zod: 3.x
 
-  '@grpc/grpc-js@1.9.15':
-    resolution: {integrity: sha512-nqE7Hc0AzI+euzUwDAy0aY5hCp10r734gMGRdU+qOPX0XSceI2ULrcXB5U2xSc5VkWwalCj4M7GzCAygZl2KoQ==}
+  '@grpc/grpc-js@1.9.16':
+    resolution: {integrity: sha512-wE4Ut/olIzfKqp631XrG+wbF0v1vWFN4YL9FyXC2LJiG33DsV7PLzURjrCvY/6je2ntdRkeLpPDluzSRGaVltQ==}
     engines: {node: ^8.13.0 || >=10.10.0}
 
   '@grpc/proto-loader@0.7.15':
@@ -5813,7 +5814,7 @@ snapshots:
       '@firebase/logger': 0.4.4
       '@firebase/util': 1.12.1
       '@firebase/webchannel-wrapper': 1.0.3
-      '@grpc/grpc-js': 1.9.15
+      '@grpc/grpc-js': 1.9.16
       '@grpc/proto-loader': 0.7.15
       tslib: 2.8.1
 
@@ -5988,7 +5989,7 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
-  '@grpc/grpc-js@1.9.15':
+  '@grpc/grpc-js@1.9.16':
     dependencies:
       '@grpc/proto-loader': 0.7.15
       '@types/node': 20.19.30

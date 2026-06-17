@@ -132,7 +132,8 @@
       "prismjs": "^1.30.0",
       "dompurify": "^3.4.2",
       "lodash-es": "^4.18.1",
-      "@grpc/grpc-js": "1.9.16"
+      "@grpc/grpc-js": "1.9.16",
+      "@opentelemetry/core": "2.8.0"
     }
   }
 }

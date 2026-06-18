@@ -281,7 +281,7 @@ export function AppSidebar() {
                       tooltip={link.title}
                     >
                       {link.showProModal || isWorkflowsLink ? (
-                        <button
+                        <div
                           className="flex gap-2 items-center w-full overflow-hidden"
                           onClick={handleClick}
                         >
@@ -292,7 +292,7 @@ export function AppSidebar() {
                               {link.description}
                             </span>
                           )}
-                        </button>
+                        </div>
                       ) : (
                         <Link
                           href={link.href}

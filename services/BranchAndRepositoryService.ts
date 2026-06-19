@@ -298,8 +298,8 @@ export default class BranchAndRepositoryService {
         }
         
         const response = await axios.post(
-          `${baseUrl}/api/v1/check-status`,
-          payload,
+          `${baseUrl}/api/v1/parsing-status`,
+          { repo_name: repoName, branch_name: branchName, filters },
           { headers }
         );
         return response.data;

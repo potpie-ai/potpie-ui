@@ -10,7 +10,7 @@ import { AppSidebar } from "@/components/Layouts/Sidebar";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/state/store";
 import { setBranchName, setRepoName } from "@/lib/state/Reducers/RepoAndBranch";
-
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 
@@ -54,6 +54,7 @@ export default function RootLayout({
 
 
 function MainContent({ children }: { children: React.ReactNode }) {
+
   return (
     <main
       className={cn(
@@ -61,7 +62,11 @@ function MainContent({ children }: { children: React.ReactNode }) {
         `${GeistSans.variable} ${GeistMono.variable}`
       )}
     >
+      <div className="md:hidden p-2">
+        <SidebarTrigger />
+      </div>
       {children}
     </main>
   );
 }
+

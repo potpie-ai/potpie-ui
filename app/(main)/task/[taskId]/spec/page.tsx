@@ -65,6 +65,14 @@ import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader
 interface FileItem {
   path: string;
   type: string;
+  purpose?: string;
+}
+
+interface GuardrailItem {
+  type?: string;
+  statement: string;
+  rationale?: string;
+  consequences?: string[];
 }
 
 interface PlanItem {
@@ -78,6 +86,12 @@ interface PlanItem {
   requirementDependencies?: string[];
   /** External services/APIs — from API external_dependencies */
   externalConnections?: string[];
+  /** Display priority from functional_requirements[].priority */
+  priority?: string;
+  /** Safety/detail notes from functional_requirements[].guardrails */
+  guardrails?: GuardrailItem[];
+  /** Testable checks from functional_requirements[].acceptance_criteria */
+  acceptanceCriteria?: string[];
   context?: string;
   [key: string]: any;
 }
@@ -98,20 +112,45 @@ function normalizePlanItem(item: any, idx: number, prefix: string): PlanItem {
   const rawLibs = Array.isArray(item?.libraries) ? item.libraries : Array.isArray(item?.packages) ? item.packages : Array.isArray(item?.dependencies) ? item.dependencies : [];
   const rawReqDeps = Array.isArray(item?.requirement_dependencies) ? item.requirement_dependencies : [];
   const rawConns = Array.isArray(item?.externalConnections) ? item.externalConnections : Array.isArray(item?.external_connections) ? item.external_connections : Array.isArray(item?.external_dependencies) ? item.external_dependencies : [];
+  const rawGuardrails = Array.isArray(item?.guardrails) ? item.guardrails : [];
+  const rawAcceptanceCriteria = Array.isArray(item?.acceptance_criteria) ? item.acceptance_criteria : [];
   const dependencies = rawLibs.map((d: any) => typeof d === "string" ? d : (d && typeof d === "object" && "name" in d ? String(d.name) : String(d)));
   const requirementDependencies = rawReqDeps
     .map((d: any) => typeof d === "string" ? d : (d?.id ?? d?.name ?? String(d)))
     .filter((depId: string) => depId && String(depId).trim() !== "" && String(depId) !== String(id));
   const externalConnections = rawConns.map((c: any) => typeof c === "string" ? c : (c && typeof c === "object" && "name" in c ? String(c.name) : String(c)));
+  const guardrails = rawGuardrails
+    .map((g: any) => {
+      if (typeof g === "string") {
+        return { statement: g };
+      }
+      const statement = g?.statement ?? g?.text;
+      if (!statement) return null;
+      return {
+        type: typeof g?.type === "string" ? g.type : undefined,
+        statement: String(statement),
+        rationale: typeof g?.rationale === "string" ? g.rationale : undefined,
+        consequences: Array.isArray(g?.consequences) ? g.consequences.map((c: any) => String(c)) : undefined,
+      };
+    })
+    .filter((guardrail): guardrail is GuardrailItem => guardrail !== null);
+  const acceptanceCriteria = rawAcceptanceCriteria.map((c: any) => typeof c === "string" ? c : (c?.text ?? JSON.stringify(c)));
   const context = item?.context ?? "";
   return {
     id: String(id),
     title: String(title),
     details: typeof details === "string" ? details : typeof details === "object" ? JSON.stringify(details) : "",
-    files: files.map((f: any) => ({ path: f?.path ?? f?.file_path ?? String(f), type: f?.type ?? "modify" })),
+    files: files.map((f: any) => ({
+      path: f?.path ?? f?.file_path ?? String(f),
+      type: f?.type ?? "modify",
+      purpose: typeof f?.purpose === "string" ? f.purpose : typeof f?.reason === "string" ? f.reason : typeof f?.description === "string" ? f.description : undefined,
+    })),
     dependencies,
     requirementDependencies: requirementDependencies.length > 0 ? requirementDependencies : undefined,
     externalConnections,
+    priority: typeof item?.priority === "string" ? item.priority : undefined,
+    guardrails: guardrails.length > 0 ? guardrails : undefined,
+    acceptanceCriteria: acceptanceCriteria.length > 0 ? acceptanceCriteria : undefined,
     context: typeof context === "string" ? context : "",
   };
 }
@@ -127,7 +166,11 @@ function specOutputToPlan(raw: SpecificationOutput): Plan {
       const desc = item?.description ?? item?.details ?? "";
       const fileImpact = item?.file_impact ?? item?.file_impact_summary ?? item?.files;
       const files = Array.isArray(fileImpact)
-        ? fileImpact.map((f: any) => ({ path: f?.path ?? f?.file_path ?? String(f), type: (f?.type ?? "modify") === "create" ? "Create" : "modify" }))
+        ? fileImpact.map((f: any) => ({
+          path: f?.path ?? f?.file_path ?? String(f),
+          type: f?.action ?? f?.type ?? "modify",
+          purpose: typeof f?.purpose === "string" ? f.purpose : typeof f?.reason === "string" ? f.reason : typeof f?.description === "string" ? f.description : undefined,
+        }))
         : typeof fileImpact === "string" ? [{ path: fileImpact, type: "modify" as string }] : [];
       // API "dependencies" = IDs of *other* requirements this one depends on (exclude self)
       const rawDeps = Array.isArray(item?.dependencies) ? item.dependencies : [];
@@ -140,6 +183,25 @@ function specOutputToPlan(raw: SpecificationOutput): Plan {
       const libraries = rawLibs.map((d: any) => typeof d === "string" ? d : (d?.name != null ? String(d.name) : String(d)));
       const rawExt = Array.isArray(item?.external_dependencies) ? item.external_dependencies : [];
       const extStrings = rawExt.map((e: any) => typeof e === "string" ? e : (e?.name != null ? String(e.name) : String(e)));
+      const rawGuardrails = Array.isArray(item?.guardrails) ? item.guardrails : [];
+      const guardrails = rawGuardrails
+        .map((g: any) => {
+          if (typeof g === "string") {
+            return { statement: g };
+          }
+          const statement = g?.statement ?? g?.text;
+          if (!statement) return null;
+          return {
+            type: typeof g?.type === "string" ? g.type : undefined,
+            statement: String(statement),
+            rationale: typeof g?.rationale === "string" ? g.rationale : undefined,
+            consequences: Array.isArray(g?.consequences) ? g.consequences.map((c: any) => String(c)) : undefined,
+          };
+        })
+        .filter((guardrail): guardrail is GuardrailItem => guardrail !== null);
+      const acceptanceCriteria = Array.isArray(item?.acceptance_criteria)
+        ? item.acceptance_criteria.map((c: any) => typeof c === "string" ? c : (c?.text ?? JSON.stringify(c)))
+        : [];
       addItems.push({
         id: String(id),
         title: String(title),
@@ -148,6 +210,9 @@ function specOutputToPlan(raw: SpecificationOutput): Plan {
         dependencies: libraries,
         requirementDependencies: requirementDeps,
         externalConnections: extStrings,
+        priority: typeof item?.priority === "string" ? item.priority : undefined,
+        guardrails: guardrails.length > 0 ? guardrails : undefined,
+        acceptanceCriteria: acceptanceCriteria.length > 0 ? acceptanceCriteria : undefined,
         context: item?.acceptance_criteria ? (Array.isArray(item.acceptance_criteria) ? item.acceptance_criteria.join("\n") : String(item.acceptance_criteria)) : "",
       });
     });
@@ -373,6 +438,36 @@ function SpecFallbackView({ spec }: { spec: SpecificationOutput }) {
   );
 }
 
+const priorityChipClass = (priority: string) => {
+  const normalized = priority.toLowerCase();
+  if (normalized.includes("high") || normalized.includes("critical")) {
+    return "border-rose-100 bg-rose-50/60 text-rose-600";
+  }
+  if (normalized.includes("medium")) {
+    return "border-amber-100 bg-amber-50/60 text-amber-700";
+  }
+  if (normalized.includes("low")) {
+    return "border-emerald-100 bg-emerald-50/60 text-emerald-700";
+  }
+  return "border-[#E5E8E6] bg-zinc-50 text-zinc-600";
+};
+
+const shouldShowRequirementId = (id: string) => /^(FR|NFR|REQ)-\d+/i.test(id);
+
+const isSpecThinkingHeading = (value: string) => {
+  const text = value.trim();
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  return wordCount >= 2 && wordCount <= 8 && /^[A-Z]/.test(text) && !/[.!?]$/.test(text);
+};
+
+const formatSpecThinkingMarkdown = (content: string) =>
+  content
+    .replace(/[ \t]*- ?bold\s+([^\n]+?)\s+- ?bold[ \t]*/gi, (_match, heading: string) => {
+      const normalizedHeading = heading.trim();
+      return normalizedHeading ? `\n\n**${normalizedHeading}**\n\n` : "";
+    })
+    .replace(/\n{3,}/g, "\n\n");
+
 const PlanTabs = ({ plan }: { plan: Plan }) => {
   // Combine all items from all categories
   const allItems = [...plan.add, ...plan.modify, ...plan.fix];
@@ -385,21 +480,33 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
         defaultValue={defaultOpenValues}
         className="space-y-4"
       >
-        {allItems.map((item) => (
+        {allItems.map((item) => {
+          const visibleFiles = item.files ?? [];
+
+          return (
           <AccordionItem
             key={item.id}
             value={item.id}
             className="bg-background border border-[#E5E8E6] transition-all rounded-lg overflow-hidden data-[state=open]:border-[#E5E8E6] data-[state=open]:shadow-sm border-[#E5E8E6] hover:border-[#E5E8E6]"
           >
             <AccordionTrigger className="p-4 flex justify-between items-start cursor-pointer select-none hover:no-underline [&>svg]:hidden [&[data-state=open] svg:last-child]:rotate-180">
-              <div className="flex gap-3 flex-1 min-w-0">
+              <div className="flex gap-3 flex-1 min-w-0 items-start">
                 <FileCode className="w-4 h-4 mt-1 flex-shrink-0 text-primary-color" />
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {shouldShowRequirementId(item.id) && (
+                      <span className="inline-flex h-5 items-center rounded border border-[#E5E8E6] bg-zinc-50 px-1.5 font-mono text-[10px] font-medium leading-none text-zinc-500">
+                        {item.id}
+                      </span>
+                    )}
                     <h4 className="text-sm font-semibold text-foreground font-sans leading-snug">
                       {item.title}
                     </h4>
-
+                    {item.priority && (
+                      <span className={`inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-medium leading-none capitalize ${priorityChipClass(item.priority)}`}>
+                        {item.priority}
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm text-muted-foreground leading-relaxed font-sans text-left [&_p]:my-2 [&_p]:leading-relaxed [&_p]:text-left [&_p]:text-muted-foreground">
                     <SharedMarkdown content={item.details ?? ""} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left" />
@@ -412,8 +519,8 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
             </AccordionTrigger>
 
             <AccordionContent className="px-5 pb-6 pt-5 space-y-6 border-t border-t-[1px] border-[#E5E8E6] font-sans">
-              {/* Depends on (requirement IDs), Libraries, External dependencies — no Target Files per API */}
-              {((item.requirementDependencies?.length ?? 0) > 0 || (item.dependencies?.length ?? 0) > 0 || (item.externalConnections?.length ?? 0) > 0) && (
+              {/* Depends on, impacted files, libraries, and external dependencies */}
+              {((item.requirementDependencies?.length ?? 0) > 0 || (item.files?.length ?? 0) > 0 || (item.dependencies?.length ?? 0) > 0 || (item.externalConnections?.length ?? 0) > 0) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                   {/* Depends on (requirement IDs from API "dependencies") */}
                   {(item.requirementDependencies?.length ?? 0) > 0 && (
@@ -430,6 +537,42 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                           >
                             {typeof reqId === "string" ? reqId : String(reqId)}
                           </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Impacted files (from API file_impact) */}
+                  {(item.files?.length ?? 0) > 0 && (
+                    <div className="space-y-2 md:col-span-2 max-w-3xl">
+                      <p className="text-[11px] font-medium text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                        <FileText className="w-3 h-3" />
+                        Impacted files
+                      </p>
+                      <div className="rounded-md border border-[#E5E8E6] bg-zinc-50/40 divide-y divide-[#E5E8E6]">
+                        {visibleFiles.map((file, i) => (
+                          <div
+                            key={`${file.path}-${i}`}
+                            className="flex min-w-0 items-start justify-between gap-3 px-3 py-2"
+                          >
+                            <span className="min-w-0">
+                              <span
+                                className="block truncate font-mono text-[12px] leading-5 text-primary-color/90"
+                                title={file.path}
+                              >
+                                {file.path}
+                              </span>
+                              {file.purpose && (
+                                <span className="block truncate text-[10px] leading-3 text-zinc-400">
+                                  {file.purpose}
+                                </span>
+                              )}
+                            </span>
+                            {file.type && (
+                              <span className="mt-0.5 shrink-0 font-sans text-[9px] uppercase tracking-wide text-zinc-400">
+                                {file.type}
+                              </span>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -475,23 +618,77 @@ const PlanTabs = ({ plan }: { plan: Plan }) => {
                 </div>
               )}
 
-              {/* Context */}
-              {item.context && (
+              {/* Verification */}
+              {((item.acceptanceCriteria?.length ?? 0) > 0 || item.context) && (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold mt-4 text-primary-color uppercase tracking-wide flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5" />
+                    Verification
+                    <span className="normal-case tracking-normal font-normal text-zinc-400">
+                      How we know this is done
+                    </span>
+                  </p>
+                  {(item.acceptanceCriteria?.length ?? 0) > 0 ? (
+                    <div className="rounded-md border border-[#E5E8E6] bg-zinc-50/40">
+                      {item.acceptanceCriteria?.map((criterion, i) => (
+                        <div
+                          key={i}
+                          className="flex min-w-0 gap-2.5 border-b border-[#E5E8E6] px-3 py-2.5 last:border-b-0"
+                        >
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-color/60" />
+                          <span className="min-w-0 flex-1 whitespace-normal break-words text-sm leading-relaxed text-muted-foreground">
+                            {criterion}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-zinc-50 border border-[#E5E8E6] rounded-md p-4">
+                      <div className="text-sm text-muted-foreground leading-relaxed">
+                        <SharedMarkdown content={item.context ?? ""} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left [&_p]:mb-2 [&_p:last-child]:mb-0" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Guardrails */}
+              {(item.guardrails?.length ?? 0) > 0 && (
                 <div className="space-y-3">
                   <p className="text-xs font-semibold mt-4 text-primary-color uppercase tracking-wide flex items-center gap-1.5">
                     <Info className="w-3.5 h-3.5" />
-                    Context
+                    Guardrails
                   </p>
-                  <div className="bg-zinc-50 border border-[#E5E8E6] rounded-md p-4">
-                    <div className="text-sm text-muted-foreground leading-relaxed">
-                      <SharedMarkdown content={item.context} className="text-muted-foreground [&_p]:text-muted-foreground [&_*]:text-left [&_p]:mb-2 [&_p:last-child]:mb-0" />
-                    </div>
+                  <div className="space-y-3">
+                    {item.guardrails?.map((guardrail, i) => (
+                      <div key={i} className="bg-zinc-50 border border-[#E5E8E6] rounded-md p-4 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {guardrail.type && (
+                            <span className="inline-flex h-5 items-center rounded-full border border-[#E5E8E6] bg-white px-2 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                              {guardrail.type.replace(/_/g, " ")}
+                            </span>
+                          )}
+                          <p className="text-sm font-medium text-foreground">{guardrail.statement}</p>
+                        </div>
+                        {guardrail.rationale && (
+                          <p className="text-sm leading-relaxed text-muted-foreground">{guardrail.rationale}</p>
+                        )}
+                        {(guardrail.consequences?.length ?? 0) > 0 && (
+                          <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
+                            {guardrail.consequences?.map((consequence, consequenceIndex) => (
+                              <li key={consequenceIndex}>{consequence}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </AccordionContent>
           </AccordionItem>
-        ))}
+        );
+        })}
       </Accordion>
     </div>
   );
@@ -1087,6 +1284,16 @@ const SpecPage = () => {
     });
   }, [status, error, errorMessageFromApi]);
 
+  const displayedStreamItems = useMemo(
+    () =>
+      streamItems.map((item) =>
+        item.type === "chunk"
+          ? { ...item, content: formatSpecThinkingMarkdown(item.content) }
+          : item
+      ),
+    [streamItems]
+  );
+
   // When we have run_id we go straight to spec page and show streaming; no loading screen
   if (recipeId && isLoading && !specProgress && !runIdFromUrl) {
     return (
@@ -1175,7 +1382,7 @@ const SpecPage = () => {
                             </p>
                           )}
                           <StreamTimeline
-                            items={streamItems}
+                            items={displayedStreamItems}
                             endRef={streamOutputEndRef}
                             loading={
                               streamItems.length > 0 &&

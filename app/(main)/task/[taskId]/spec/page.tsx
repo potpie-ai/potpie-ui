@@ -460,13 +460,24 @@ const isSpecThinkingHeading = (value: string) => {
   return wordCount >= 2 && wordCount <= 8 && /^[A-Z]/.test(text) && !/[.!?]$/.test(text);
 };
 
-const formatSpecThinkingMarkdown = (content: string) =>
-  content
+const formatSpecThinkingMarkdown = (content: string) => {
+  let out = content
     .replace(/[ \t]*- ?bold\s+([^\n]+?)\s+- ?bold[ \t]*/gi, (_match, heading: string) => {
       const normalizedHeading = heading.trim();
       return normalizedHeading ? `\n\n**${normalizedHeading}**\n\n` : "";
-    })
-    .replace(/\n{3,}/g, "\n\n");
+    });
+
+  out = out.replace(
+    /([^\n])(\n(\*\*[^*\n]+\*\*|__[^_\n]+__)[ \t]*(?:\n|$))/g,
+    (_m, before, headingLine) => `${before}\n${headingLine}`
+  );
+  out = out.replace(
+    /(\S)(\*\*[^*\n]+\*\*|__[^_\n]+__)(\n|$)/g,
+    (_m, charBefore, heading, lineEnd) => `${charBefore}\n\n${heading}${lineEnd}`
+  );
+
+  return out.replace(/\n{3,}/g, "\n\n");
+};
 
 const PlanTabs = ({ plan }: { plan: Plan }) => {
   // Combine all items from all categories

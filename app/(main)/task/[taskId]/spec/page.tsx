@@ -120,7 +120,7 @@ function normalizePlanItem(item: any, idx: number, prefix: string): PlanItem {
     .filter((depId: string) => depId && String(depId).trim() !== "" && String(depId) !== String(id));
   const externalConnections = rawConns.map((c: any) => typeof c === "string" ? c : (c && typeof c === "object" && "name" in c ? String(c.name) : String(c)));
   const guardrails = rawGuardrails
-    .map((g: any) => {
+    .map((g: any): GuardrailItem | null => {
       if (typeof g === "string") {
         return { statement: g };
       }
@@ -133,7 +133,7 @@ function normalizePlanItem(item: any, idx: number, prefix: string): PlanItem {
         consequences: Array.isArray(g?.consequences) ? g.consequences.map((c: any) => String(c)) : undefined,
       };
     })
-    .filter((guardrail): guardrail is GuardrailItem => guardrail !== null);
+    .filter((guardrail: GuardrailItem | null): guardrail is GuardrailItem => guardrail !== null);
   const acceptanceCriteria = rawAcceptanceCriteria.map((c: any) => typeof c === "string" ? c : (c?.text ?? JSON.stringify(c)));
   const context = item?.context ?? "";
   return {
@@ -185,7 +185,7 @@ function specOutputToPlan(raw: SpecificationOutput): Plan {
       const extStrings = rawExt.map((e: any) => typeof e === "string" ? e : (e?.name != null ? String(e.name) : String(e)));
       const rawGuardrails = Array.isArray(item?.guardrails) ? item.guardrails : [];
       const guardrails = rawGuardrails
-        .map((g: any) => {
+        .map((g: any): GuardrailItem | null => {
           if (typeof g === "string") {
             return { statement: g };
           }
@@ -198,7 +198,7 @@ function specOutputToPlan(raw: SpecificationOutput): Plan {
             consequences: Array.isArray(g?.consequences) ? g.consequences.map((c: any) => String(c)) : undefined,
           };
         })
-        .filter((guardrail): guardrail is GuardrailItem => guardrail !== null);
+        .filter((guardrail: GuardrailItem | null): guardrail is GuardrailItem => guardrail !== null);
       const acceptanceCriteria = Array.isArray(item?.acceptance_criteria)
         ? item.acceptance_criteria.map((c: any) => typeof c === "string" ? c : (c?.text ?? JSON.stringify(c)))
         : [];

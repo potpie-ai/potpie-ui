@@ -13,6 +13,8 @@
  * Very long URLs (>2KB) may be truncated by some servers; ensure the callback
  * server allows long query strings if both JWTs are needed.
  */
+import { isLoopbackCallbackUrl } from "@/lib/auth/safe-redirect";
+
 const VSCODE_CALLBACK_BASE_DEFAULT = "http://localhost:54333/auth/callback";
 
 export function buildVSCodeCallbackUrl(
@@ -21,7 +23,10 @@ export function buildVSCodeCallbackUrl(
   redirectUri?: string | null,
 ): string {
   let base = VSCODE_CALLBACK_BASE_DEFAULT;
-  if (redirectUri && redirectUri.trim() !== "") {
+  // The auth token is appended to `base`, so only honour a caller-supplied
+  // redirect_uri when it targets a loopback callback. A non-loopback value
+  // would exfiltrate the token to an attacker (potpie-ai/potpie#596).
+  if (redirectUri && redirectUri.trim() !== "" && isLoopbackCallbackUrl(redirectUri)) {
     try {
       base = decodeURIComponent(redirectUri).replace(/\?.*$/, "");
     } catch {

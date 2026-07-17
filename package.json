@@ -128,7 +128,7 @@
       "undici": "^6.21.2",
       "@isaacs/brace-expansion": "^5.0.1",
       "brace-expansion": "^2.0.2",
-      "js-yaml": "^4.1.1",
+      "js-yaml": "^4.2.0",
       "prismjs": "^1.30.0",
       "dompurify": "^3.4.11",
       "lodash-es": "^4.18.1",
